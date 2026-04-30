@@ -4,26 +4,30 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
+const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7〜21時
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10...55分
+
 export default function ShiftCreateScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   
+  // ★ 追加: カレンダー内の時間表示切り替え
+  const [showTimeInCalendar, setShowTimeInCalendar] = useState(false);
+
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [requests, setRequests] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
-  
-  // ★ 追加：祝日データの管理
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -34,14 +38,19 @@ export default function ShiftCreateScreen() {
 
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [editingStaffName, setEditingStaffName] = useState('');
+  
   const [tempStart, setTempStart] = useState('14:00');
   const [tempEnd, setTempEnd] = useState('18:30');
   const [timeSelectTarget, setTimeSelectTarget] = useState<'start' | 'end'>('start');
-  const [newTimeInput, setNewTimeInput] = useState('');
+
+  // ★ 新規追加用のスクロールピッカーステート
+  const [newStartHour, setNewStartHour] = useState(14);
+  const [newStartMinute, setNewStartMinute] = useState(0);
+  const [newEndHour, setNewEndHour] = useState(18);
+  const [newEndMinute, setNewEndMinute] = useState(30);
 
   useEffect(() => {
     const fetchData = async () => {
-      // 祝日データの自動取得
       try {
         const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
         const data = await res.json();
@@ -55,7 +64,8 @@ export default function ShiftCreateScreen() {
       if (masterSnap.exists() && masterSnap.data().times) {
         setMasterTimes(masterSnap.data().times);
       } else {
-        const defaultTimes = ['11:00', '13:30', '14:00', '14:15', '14:45', '18:15', '18:30', '20:00'];
+        // デフォルトをセット形式に変更
+        const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
         setMasterTimes(defaultTimes);
         await setDoc(masterRef, { times: defaultTimes }, { merge: true });
       }
@@ -133,9 +143,7 @@ export default function ShiftCreateScreen() {
     };
     if (isUnavailable) {
       if (Platform.OS === 'web') {
-        if (window.confirm(`${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`)) {
-          proceedAdd();
-        }
+        if (window.confirm(`${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`)) proceedAdd();
       } else {
         Alert.alert('確認', `${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`, [
           { text: 'キャンセル', style: 'cancel' },
@@ -156,19 +164,30 @@ export default function ShiftCreateScreen() {
     setTempStart(start);
     setTempEnd(end);
     setTimeSelectTarget('start');
-    setNewTimeInput('');
     setTimePickerVisible(true);
   };
 
+  const handleMasterTimeSelect = (t: string) => {
+    if (t.includes('-')) {
+      const [s, e] = t.split('-');
+      setTempStart(s);
+      setTempEnd(e);
+    } else {
+      // 過去の単一時間データが残っていた場合のフォールバック
+      if (timeSelectTarget === 'start') setTempStart(t);
+      else setTempEnd(t);
+    }
+  };
+
   const handleAddMasterTime = async () => {
-    if (!newTimeInput.trim()) return;
-    if (masterTimes.includes(newTimeInput.trim())) {
+    const newSet = `${String(newStartHour).padStart(2, '0')}:${String(newStartMinute).padStart(2, '0')}-${String(newEndHour).padStart(2, '0')}:${String(newEndMinute).padStart(2, '0')}`;
+    
+    if (masterTimes.includes(newSet)) {
       Alert.alert('エラー', 'すでに候補にあります');
       return;
     }
-    const newTimes = [...masterTimes, newTimeInput.trim()].sort();
+    const newTimes = [...masterTimes, newSet].sort();
     setMasterTimes(newTimes);
-    setNewTimeInput('');
     await setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
   };
 
@@ -198,7 +217,7 @@ export default function ShiftCreateScreen() {
       for (let i = 1; i <= daysInMonth; i++) {
         const d = new Date(year, month - 1, i).getDay();
         const dateStrForHoliday = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        const isPublicHoliday = !!publicHolidays[dateStrForHoliday]; // PDF出力時の祝日判定
+        const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
         
         const color = (d === 0 || isPublicHoliday) ? 'red' : d === 6 ? 'blue' : '#000';
         const bg = (d === 0 || isPublicHoliday) ? '#FFE4E1' : d === 6 ? '#E0FFFF' : '#E8F5E9'; 
@@ -266,9 +285,17 @@ export default function ShiftCreateScreen() {
       </View>
 
       <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
-        <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
+          <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
+          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
+        </View>
+        
+        {/* ★ 時間表示の切り替えボタン */}
+        <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
+          <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={16} color={COLORS.primary} style={{marginRight: 4}} />
+          <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={{ paddingHorizontal: 8 }}>
@@ -283,24 +310,31 @@ export default function ShiftCreateScreen() {
             const assignedCount = (assignedShifts[item.dateStr] || []).length;
             const isEventDay = !!eventsData[item.dateStr];
             
-            // ★ 土日祝の色判定
+            // 出勤可能人数の計算
+            let unavailableCount = 0;
+            allStaff.forEach(staff => {
+              const req = requests[`${staff.name}_${item.dateStr}`];
+              if (req === '✕' || req === '午前✕' || req === '午後✕') unavailableCount++;
+            });
+            const availableCount = allStaff.length - unavailableCount;
+
             const d = new Date(item.dateStr);
             const isSunday = d.getDay() === 0;
             const isSaturday = d.getDay() === 6;
             const isPublicHoliday = !!publicHolidays[item.dateStr];
 
             let dateColor = COLORS.text;
-            if (isSunday || isPublicHoliday) {
-              dateColor = 'red';
-            } else if (isSaturday) {
-              dateColor = 'blue';
-            }
+            if (isSunday || isPublicHoliday) dateColor = 'red';
+            else if (isSaturday) dateColor = 'blue';
 
             return (
               <TouchableOpacity key={item.dateStr} style={styles.calCell} onPress={() => openDayModal(item.dateStr)}>
                 <View style={styles.cellTopRow}>
                   <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
-                  {assignedCount > 0 && <Text style={styles.cellCountText}>{assignedCount}名</Text>}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.availableCountText}>可:{availableCount}</Text>
+                    {assignedCount > 0 && <Text style={styles.cellCountText}>{assignedCount}名</Text>}
+                  </View>
                 </View>
                 
                 {isEventDay && (
@@ -309,11 +343,13 @@ export default function ShiftCreateScreen() {
                   </View>
                 )}
 
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 4 }}>
+                <View style={{ flex: 1, marginTop: 4 }}>
                   {(assignedShifts[item.dateStr] || []).map((st, i) => (
-                    <Text key={i} style={styles.cellStaffText} numberOfLines={1}>{st.name} {st.start}-{st.end}</Text>
+                    <Text key={i} style={styles.cellStaffText}>
+                      {st.name}{showTimeInCalendar ? `\n${st.start}-${st.end}` : ''}
+                    </Text>
                   ))}
-                </ScrollView>
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -377,6 +413,7 @@ export default function ShiftCreateScreen() {
                   </TouchableOpacity>
                 </View>
               ))}
+              <View style={{height: 40}} />
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -386,6 +423,7 @@ export default function ShiftCreateScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* --- 時間変更＆候補追加モーダル --- */}
       <Modal visible={timePickerVisible} transparent animationType="fade">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
@@ -403,33 +441,72 @@ export default function ShiftCreateScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{maxHeight: 200, marginVertical: 16}} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{maxHeight: 180, marginVertical: 8}} showsVerticalScrollIndicator={false}>
               <View style={styles.masterTimesGrid}>
                 {masterTimes.map(t => (
-                  <TouchableOpacity key={t} style={styles.masterTimeBtn} onPress={() => {
-                    if (timeSelectTarget === 'start') setTempStart(t);
-                    else setTempEnd(t);
-                  }}>
+                  <TouchableOpacity key={t} style={styles.masterTimeBtn} onPress={() => handleMasterTimeSelect(t)}>
                     <Text style={styles.masterTimeText}>{t}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
 
-            <View style={styles.addTimeBox}>
-              <TextInput 
-                placeholder="新しい時刻(例:14:45)" 
-                value={newTimeInput} 
-                onChangeText={setNewTimeInput} 
-                style={styles.addTimeInput} 
-                keyboardType="numbers-and-punctuation"
-              />
-              <TouchableOpacity style={styles.addTimeSubmit} onPress={handleAddMasterTime}>
-                <Text style={{color: COLORS.white, fontWeight: 'bold'}}>候補に追加</Text>
-              </TouchableOpacity>
+            {/* ★ 新しい時刻セットの追加UI (スクロール式) */}
+            <View style={styles.addTimeContainer}>
+              <Text style={styles.addTimeTitle}>新しい候補 (開始〜終了) を作成</Text>
+              <View style={styles.pickerColumns}>
+                {/* 開始時間 */}
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {HOURS.map(h => (
+                      <TouchableOpacity key={`sh-${h}`} style={[styles.pickerItem, newStartHour === h && styles.pickerItemActive]} onPress={() => setNewStartHour(h)}>
+                        <Text style={[styles.pickerItemText, newStartHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <Text style={styles.pickerColon}>:</Text>
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {MINUTES.map(m => (
+                      <TouchableOpacity key={`sm-${m}`} style={[styles.pickerItem, newStartMinute === m && styles.pickerItemActive]} onPress={() => setNewStartMinute(m)}>
+                        <Text style={[styles.pickerItemText, newStartMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                
+                <Text style={styles.pickerColon}>〜</Text>
+                
+                {/* 終了時間 */}
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {HOURS.map(h => (
+                      <TouchableOpacity key={`eh-${h}`} style={[styles.pickerItem, newEndHour === h && styles.pickerItemActive]} onPress={() => setNewEndHour(h)}>
+                        <Text style={[styles.pickerItemText, newEndHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <Text style={styles.pickerColon}>:</Text>
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                    {MINUTES.map(m => (
+                      <TouchableOpacity key={`em-${m}`} style={[styles.pickerItem, newEndMinute === m && styles.pickerItemActive]} onPress={() => setNewEndMinute(m)}>
+                        <Text style={[styles.pickerItemText, newEndMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* ★ はみ出ないように「追加」だけに修正 */}
+                <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddMasterTime}>
+                  <Text style={{color: COLORS.white, fontWeight: 'bold'}}>追加</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <View style={{flexDirection:'row', gap: 12, marginTop: 20}}>
+            <View style={{flexDirection:'row', gap: 12, marginTop: 16}}>
               <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#CCC'}]} onPress={()=>setTimePickerVisible(false)}><Text>キャンセル</Text></TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, {backgroundColor: COLORS.primary}]} onPress={saveTimeEdit}><Text style={{color: COLORS.white, fontWeight:'bold'}}>変更を確定</Text></TouchableOpacity>
             </View>
@@ -449,18 +526,27 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 4 },
-  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  monthText: { fontSize: 20, fontWeight: 'bold' },
   
+  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
+  
+  toggleTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0FFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#AFEEEE' },
+  toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
+
   calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold' },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCellEmpty: { width: '14.28%', aspectRatio: 0.8 },
-  calCell: { width: '14.28%', aspectRatio: 0.8, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
-  cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  
+  // ★ minHeight に変更し、内容に合わせて伸びるようにする
+  calCellEmpty: { width: '14.28%', minHeight: 80 },
+  calCell: { width: '14.28%', minHeight: 80, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  
+  cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calDayText: { fontSize: 12, fontWeight: 'bold' },
+  availableCountText: { fontSize: 9, color: COLORS.textLight, marginBottom: 2 },
   cellCountText: { fontSize: 10, color: COLORS.primary, fontWeight: 'bold' },
-  cellStaffText: { fontSize: 8, color: '#333', marginBottom: 2 },
+  
+  cellStaffText: { fontSize: 9, color: '#333', marginBottom: 4, lineHeight: 12 },
   
   eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
   eventBadgeText: { fontSize: 8, color: COLORS.white, fontWeight: 'bold', textAlign: 'center' },
@@ -488,24 +574,33 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
-  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  pickerContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24 },
-  pickerTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  pickerContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20 },
+  pickerTitle: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 16 },
   
-  timeTargetRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 16 },
-  timeTargetBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderWidth: 2, borderColor: 'transparent', borderRadius: 12, backgroundColor: '#F5F5F5', marginHorizontal: 8 },
+  timeTargetRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 12 },
+  timeTargetBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderWidth: 2, borderColor: 'transparent', borderRadius: 12, backgroundColor: '#F5F5F5', marginHorizontal: 4 },
   timeTargetBtnActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary + '10' },
-  timeTargetLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 4 },
-  timeTargetValue: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  timeTargetLabel: { fontSize: 10, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 2 },
+  timeTargetValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
   timeTargetValueActive: { color: COLORS.primary },
   
-  masterTimesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  masterTimeBtn: { width: '30%', backgroundColor: '#FFFDF5', borderWidth: 1, borderColor: '#F3E5AB', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  masterTimeText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  masterTimesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  masterTimeBtn: { width: '48%', backgroundColor: '#FFFDF5', borderWidth: 1, borderColor: '#F3E5AB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  masterTimeText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   
-  addTimeBox: { flexDirection: 'row', marginTop: 8, gap: 8 },
-  addTimeInput: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 16 },
-  addTimeSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 8 },
+  // 新しい時刻の追加UI用スタイル
+  addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
+  addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
+  pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 100 },
+  pickerColumnWrapper: { flex: 1, height: '100%', maxWidth: 45, backgroundColor: COLORS.white, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border },
+  pickerScroll: { flex: 1 },
+  pickerItem: { paddingVertical: 8, alignItems: 'center' },
+  pickerItemActive: { backgroundColor: COLORS.primary + '20' },
+  pickerItemText: { fontSize: 14, color: COLORS.textLight },
+  pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 16 },
+  pickerColon: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginHorizontal: 2 },
+  addOptionSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 14, borderRadius: 6, marginLeft: 8 },
   
-  modalBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 8 },
+  modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
 });
