@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "keniesgakudoapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",
@@ -15,24 +14,10 @@
       "config": {
         "pwa": {
           "manifest": {
-            "name": "ケーニーズ学童クラブ",
-            "short_name": "ケーニーズ学童クラブ",
             "display": "standalone",
             "start_url": "/",
             "background_color": "#ffffff",
-            "theme_color": "#FF69B4",
-            "icons": [
-              {
-                "src": "./assets/images/icon.png",
-                "sizes": "192x192",
-                "type": "image/png"
-              },
-              {
-                "src": "./assets/images/icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
+            "theme_color": "#FF69B4"
           }
         }
       }
