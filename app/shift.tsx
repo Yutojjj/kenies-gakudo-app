@@ -19,7 +19,6 @@ export default function ShiftScreen() {
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
   const [stampModalVisible, setStampModalVisible] = useState(false);
 
-  // ★ シフト表（エクセル風）に必要な全体データ
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [allRequests, setAllRequests] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
@@ -36,7 +35,6 @@ export default function ShiftScreen() {
           .then(data => setPublicHolidays(data))
           .catch(e => console.warn('祝日API取得失敗', e));
 
-        // 自分の提出用データ
         const staffName = name || '不明なスタッフ';
         const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', staffName));
         const unsubMy = onSnapshot(qMyShifts, (snapshot) => {
@@ -49,12 +47,10 @@ export default function ShiftScreen() {
         });
         unsubscribes.push(unsubMy);
 
-        // 全スタッフの取得
         const qStaff = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(qStaff);
         setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
 
-        // 全員の提出データ
         const unsubAllReq = onSnapshot(collection(db, 'shifts'), (s) => {
           const reqData: Record<string, string> = {};
           s.forEach(d => {
@@ -65,7 +61,6 @@ export default function ShiftScreen() {
         });
         unsubscribes.push(unsubAllReq);
 
-        // 確定したシフトデータ
         const unsubAssigned = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
           const asData: Record<string, AssignedStaff[]> = {};
           s.forEach(d => { asData[d.id] = d.data().staff || []; });
@@ -168,7 +163,6 @@ export default function ShiftScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      {/* ★ ヘッダー領域に「表を見る」ボタンを配置 */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10 }}>
         <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>シフト提出</Text>
         <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
@@ -255,7 +249,7 @@ export default function ShiftScreen() {
       </TouchableOpacity>
 
       {/* ==========================================
-          ★ エクセル風 シフト表モーダル
+          ★ 1画面完全フィット(土日細い版)のシフト表
           ========================================== */}
       <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.ssModalContainer}>
@@ -271,31 +265,35 @@ export default function ShiftScreen() {
           
           <View style={styles.ssMonthNav}>
             <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
-              <Text style={styles.ssMonthBtnText}>前の月にする</Text>
+              <Text style={styles.ssMonthBtnText}>前の月</Text>
             </TouchableOpacity>
             <Text style={styles.ssMonthTitle}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
             <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
-              <Text style={styles.ssMonthBtnText}>次の月にする</Text>
+              <Text style={styles.ssMonthBtnText}>次の月</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView horizontal style={styles.ssHorizontalScroll}>
-            <ScrollView style={styles.ssVerticalScroll}>
+          <View style={styles.ssTableContainer}>
+            <ScrollView style={styles.ssVerticalScroll} showsVerticalScrollIndicator={false}>
               <View style={styles.spreadsheet}>
                 
                 <View style={styles.ssRow}>
-                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: 70 }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
-                  {weeks.map((w, i) => (
-                    <View key={i} style={[styles.ssHeaderCell, { width: 90 }]}>
-                      <Text style={[styles.ssHeaderText, i === 0 ? {color: 'red'} : i === 6 ? {color: 'blue'} : {}]}>{w}</Text>
-                    </View>
-                  ))}
+                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: '16%' }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
+                  {weeks.map((w, i) => {
+                    // ★ 土日の幅を6%、平日を14.4%に設定
+                    const cellWidth = (i === 0 || i === 6) ? '6%' : '14.4%';
+                    return (
+                      <View key={i} style={[styles.ssHeaderCell, { width: cellWidth }]}>
+                        <Text style={[styles.ssHeaderText, i === 0 ? {color: 'red'} : i === 6 ? {color: 'blue'} : {}]}>{w}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
 
                 {spreadsheetWeeks.map((week, wIdx) => (
                   <React.Fragment key={wIdx}>
                     <View style={styles.ssRow}>
-                      <View style={[styles.ssDateCell, { width: 70, backgroundColor: '#FFF0F5' }]}></View>
+                      <View style={[styles.ssDateCell, { width: '16%', backgroundColor: '#FFF0F5' }]}></View>
                       {week.map((day, dIdx) => {
                         let isSun = false, isSat = false, isPubHoliday = false;
                         if (day) {
@@ -304,10 +302,11 @@ export default function ShiftScreen() {
                           isSat = d.getDay() === 6;
                           isPubHoliday = !!publicHolidays[day.dateStr];
                         }
+                        const cellWidth = (dIdx === 0 || dIdx === 6) ? '6%' : '14.4%';
                         const textColor = (isSun || isPubHoliday) ? 'red' : isSat ? 'blue' : COLORS.text;
                         const bgColor = (isSun || isPubHoliday) ? '#FFE4E1' : isSat ? '#E0FFFF' : '#E8F5E9';
                         return (
-                          <View key={dIdx} style={[styles.ssDateCell, { width: 90, backgroundColor: bgColor }]}>
+                          <View key={dIdx} style={[styles.ssDateCell, { width: cellWidth, backgroundColor: bgColor }]}>
                             <Text style={[styles.ssDateText, { color: textColor }]}>{day ? day.day : ''}</Text>
                           </View>
                         );
@@ -316,33 +315,35 @@ export default function ShiftScreen() {
 
                     {allStaff.map(staff => (
                       <View key={staff.id} style={styles.ssRow}>
-                        <View style={[styles.ssNameCell, { width: 70, backgroundColor: staff.name === name ? '#FFDAB9' : '#FFC0CB' }]}>
-                          <Text style={[styles.ssNameText, staff.name === name && { color: COLORS.primary }]}>{staff.name}</Text>
+                        <View style={[styles.ssNameCell, { width: '16%', backgroundColor: staff.name === name ? '#FFDAB9' : '#FFC0CB' }]}>
+                          <Text style={[styles.ssNameText, staff.name === name && { color: COLORS.primary }]} adjustsFontSizeToFit numberOfLines={1}>{staff.name}</Text>
                         </View>
                         {week.map((day, dIdx) => {
                           let content = '';
                           let bgColor = '#FFFFFF';
                           let isBold = false;
+                          const cellWidth = (dIdx === 0 || dIdx === 6) ? '6%' : '14.4%';
                           
                           if (day) {
                             const assigned = assignedShifts[day.dateStr]?.find(s => s.name === staff.name);
                             const req = allRequests[`${staff.name}_${day.dateStr}`];
                             
                             if (assigned) {
-                              content = `${assigned.start}-${assigned.end}`;
+                              content = `${assigned.start}\n|\n${assigned.end}`; 
                               bgColor = '#FFD700'; 
                               isBold = true;
                             } else if (req) {
-                              content = req;
+                              // 土日枠は狭いので表示を省略・簡略化
+                              content = (dIdx === 0 || dIdx === 6) ? '✕' : req; 
                               bgColor = req === '✕' ? '#E0E0E0' : req === '午前✕' ? '#E0FFFF' : '#FFFACD';
                             }
                           } else {
-                            bgColor = '#F5F5F5';
+                            bgColor = '#F5F5F5'; 
                           }
 
                           return (
-                            <View key={dIdx} style={[styles.ssDataCell, { width: 90, backgroundColor: bgColor }]}>
-                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold', fontSize: 11 }]}>{content}</Text>
+                            <View key={dIdx} style={[styles.ssDataCell, { width: cellWidth, backgroundColor: bgColor }]}>
+                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold' }]} adjustsFontSizeToFit numberOfLines={3}>{content}</Text>
                             </View>
                           );
                         })}
@@ -350,10 +351,10 @@ export default function ShiftScreen() {
                     ))}
                   </React.Fragment>
                 ))}
-
+                <View style={{height: 40}} />
               </View>
             </ScrollView>
-          </ScrollView>
+          </View>
         </SafeAreaView>
       </Modal>
 
@@ -453,29 +454,29 @@ const styles = StyleSheet.create({
   stampTextDemo: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   stampSelectText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1 },
 
-  // ★ エクセル風スプレッドシートのスタイル
+  // ★ 1画面完全フィット(土日細い版)のスタイル
   ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
   ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
   ssMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E6E6FA', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#9370DB' },
   ssMonthBtn: { backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9370DB' },
   ssMonthBtnText: { fontSize: 12, fontWeight: 'bold', color: '#9370DB' },
-  ssMonthTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  ssMonthTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   
-  ssHorizontalScroll: { flex: 1, backgroundColor: '#F0F0F0' },
+  ssTableContainer: { flex: 1, backgroundColor: '#F0F0F0' },
   ssVerticalScroll: { flex: 1 },
-  spreadsheet: { padding: 10 },
+  spreadsheet: { padding: 2 }, 
   
-  ssRow: { flexDirection: 'row' },
-  ssHeaderCell: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
-  ssHeaderText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  ssRow: { flexDirection: 'row', width: '100%' },
+  ssHeaderCell: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
+  ssHeaderText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
   
-  ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
-  ssDateText: { fontSize: 16, fontWeight: 'bold' },
+  ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
+  ssDateText: { fontSize: 14, fontWeight: 'bold' },
   
-  ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 12 },
-  ssNameText: { fontSize: 12, fontWeight: 'bold', color: '#333' },
+  ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
+  ssNameText: { fontSize: 10, fontWeight: 'bold', color: '#333', textAlign: 'center', paddingHorizontal: 2 },
   
-  ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
-  ssDataText: { fontSize: 10, color: '#333', textAlign: 'center' },
+  ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
+  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 12 },
 });
