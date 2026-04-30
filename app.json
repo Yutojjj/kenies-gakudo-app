@@ -10,33 +10,21 @@
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",
-      "config": {
-        "pwa": {
-          "manifest": {
-            "name": "ケーニーズ学童クラブ",
-            "short_name": "ケーニーズ",
-            "display": "standalone",
-            "start_url": "/",
-            "background_color": "#ffffff",
-            "theme_color": "#FF69B4",
-            "icons": [
-              {
-                "src": "./assets/images/icon.png",
-                "sizes": "192x192",
-                "type": "image/png"
-              },
-              {
-                "src": "./assets/images/icon.png",
-                "sizes": "512x512",
-                "type": "image/png"
-              }
-            ]
-          }
-        }
-      }
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
   }
 }
