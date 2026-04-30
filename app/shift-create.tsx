@@ -19,7 +19,6 @@ export default function ShiftCreateScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   
-  // ★ 追加: カレンダー内の時間表示切り替え
   const [showTimeInCalendar, setShowTimeInCalendar] = useState(false);
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
@@ -43,11 +42,13 @@ export default function ShiftCreateScreen() {
   const [tempEnd, setTempEnd] = useState('18:30');
   const [timeSelectTarget, setTimeSelectTarget] = useState<'start' | 'end'>('start');
 
-  // ★ 新規追加用のスクロールピッカーステート
   const [newStartHour, setNewStartHour] = useState(14);
   const [newStartMinute, setNewStartMinute] = useState(0);
   const [newEndHour, setNewEndHour] = useState(18);
   const [newEndMinute, setNewEndMinute] = useState(30);
+
+  // ★ エクセル風シフト表モーダルのステート
+  const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -64,7 +65,6 @@ export default function ShiftCreateScreen() {
       if (masterSnap.exists() && masterSnap.data().times) {
         setMasterTimes(masterSnap.data().times);
       } else {
-        // デフォルトをセット形式に変更
         const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
         setMasterTimes(defaultTimes);
         await setDoc(masterRef, { times: defaultTimes }, { merge: true });
@@ -104,6 +104,7 @@ export default function ShiftCreateScreen() {
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+  
   const generateDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -115,6 +116,16 @@ export default function ShiftCreateScreen() {
       days.push({ day: i, dateStr: `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}` });
     }
     return days;
+  };
+
+  // ★ シフト表（スプレッドシート）用の週ごとの配列分割
+  const generateWeeksForSpreadsheet = () => {
+    const days = generateDays();
+    const weeks = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    return weeks;
   };
 
   const openDayModal = (dateStr: string) => {
@@ -173,7 +184,6 @@ export default function ShiftCreateScreen() {
       setTempStart(s);
       setTempEnd(e);
     } else {
-      // 過去の単一時間データが残っていた場合のフォールバック
       if (timeSelectTarget === 'start') setTempStart(t);
       else setTempEnd(t);
     }
@@ -181,7 +191,6 @@ export default function ShiftCreateScreen() {
 
   const handleAddMasterTime = async () => {
     const newSet = `${String(newStartHour).padStart(2, '0')}:${String(newStartMinute).padStart(2, '0')}-${String(newEndHour).padStart(2, '0')}:${String(newEndMinute).padStart(2, '0')}`;
-    
     if (masterTimes.includes(newSet)) {
       Alert.alert('エラー', 'すでに候補にあります');
       return;
@@ -275,13 +284,24 @@ export default function ShiftCreateScreen() {
 
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
+  const spreadsheetWeeks = generateWeeksForSpreadsheet();
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
-        <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}><Ionicons name="document-text" size={20} color={COLORS.white} /><Text style={styles.pdfBtnText}>PDF出力</Text></TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* ★ エクセル風の表を見るボタン */}
+          <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={[styles.pdfBtn, { backgroundColor: COLORS.secondary }]}>
+            <Ionicons name="grid-outline" size={20} color={COLORS.white} />
+            <Text style={styles.pdfBtnText}>表を見る</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
+            <Ionicons name="document-text" size={20} color={COLORS.white} />
+            <Text style={styles.pdfBtnText}>PDF出力</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.monthSelector}>
@@ -290,8 +310,6 @@ export default function ShiftCreateScreen() {
           <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
         </View>
-        
-        {/* ★ 時間表示の切り替えボタン */}
         <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
           <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={16} color={COLORS.primary} style={{marginRight: 4}} />
           <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
@@ -310,7 +328,6 @@ export default function ShiftCreateScreen() {
             const assignedCount = (assignedShifts[item.dateStr] || []).length;
             const isEventDay = !!eventsData[item.dateStr];
             
-            // 出勤可能人数の計算
             let unavailableCount = 0;
             allStaff.forEach(staff => {
               const req = requests[`${staff.name}_${item.dateStr}`];
@@ -356,7 +373,115 @@ export default function ShiftCreateScreen() {
         </View>
       </ScrollView>
 
-      {/* --- モーダル群 --- */}
+      {/* ==========================================
+          ★ エクセル風 シフト表モーダル
+          ========================================== */}
+      <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.ssModalContainer}>
+          <View style={styles.ssModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="grid" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.ssModalTitle}>月別シフト表</Text>
+            </View>
+            <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
+              <Ionicons name="close-circle" size={32} color={COLORS.textLight} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.ssMonthNav}>
+            <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
+              <Text style={styles.ssMonthBtnText}>前の月にする</Text>
+            </TouchableOpacity>
+            <Text style={styles.ssMonthTitle}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
+            <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
+              <Text style={styles.ssMonthBtnText}>次の月にする</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal style={styles.ssHorizontalScroll}>
+            <ScrollView style={styles.ssVerticalScroll}>
+              <View style={styles.spreadsheet}>
+                
+                {/* ヘッダー行 (曜日) */}
+                <View style={styles.ssRow}>
+                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: 70 }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
+                  {weeks.map((w, i) => (
+                    <View key={i} style={[styles.ssHeaderCell, { width: 90 }]}>
+                      <Text style={[styles.ssHeaderText, i === 0 ? {color: 'red'} : i === 6 ? {color: 'blue'} : {}]}>{w}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* 週ごとのループ */}
+                {spreadsheetWeeks.map((week, wIdx) => (
+                  <React.Fragment key={wIdx}>
+                    {/* 日付行 */}
+                    <View style={styles.ssRow}>
+                      <View style={[styles.ssDateCell, { width: 70, backgroundColor: '#FFF0F5' }]}></View>
+                      {week.map((day, dIdx) => {
+                        let isSun = false, isSat = false, isPubHoliday = false;
+                        if (day) {
+                          const d = new Date(day.dateStr);
+                          isSun = d.getDay() === 0;
+                          isSat = d.getDay() === 6;
+                          isPubHoliday = !!publicHolidays[day.dateStr];
+                        }
+                        const textColor = (isSun || isPubHoliday) ? 'red' : isSat ? 'blue' : COLORS.text;
+                        const bgColor = (isSun || isPubHoliday) ? '#FFE4E1' : isSat ? '#E0FFFF' : '#E8F5E9';
+                        return (
+                          <View key={dIdx} style={[styles.ssDateCell, { width: 90, backgroundColor: bgColor }]}>
+                            <Text style={[styles.ssDateText, { color: textColor }]}>{day ? day.day : ''}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* スタッフ行 */}
+                    {allStaff.map(staff => (
+                      <View key={staff.id} style={styles.ssRow}>
+                        <View style={[styles.ssNameCell, { width: 70 }]}>
+                          <Text style={styles.ssNameText}>{staff.name}</Text>
+                        </View>
+                        {week.map((day, dIdx) => {
+                          let content = '';
+                          let bgColor = '#FFFFFF';
+                          let isBold = false;
+                          
+                          if (day) {
+                            const assigned = assignedShifts[day.dateStr]?.find(s => s.name === staff.name);
+                            const req = requests[`${staff.name}_${day.dateStr}`];
+                            
+                            if (assigned) {
+                              content = `${assigned.start}-${assigned.end}`;
+                              bgColor = '#FFD700'; // エクセル風の黄色
+                              isBold = true;
+                            } else if (req) {
+                              content = req; // '✕', '午前✕', '午後✕'
+                              bgColor = req === '✕' ? '#E0E0E0' : req === '午前✕' ? '#E0FFFF' : '#FFFACD';
+                            }
+                          } else {
+                            bgColor = '#F5F5F5'; // 存在しない日付（パディング）
+                          }
+
+                          return (
+                            <View key={dIdx} style={[styles.ssDataCell, { width: 90, backgroundColor: bgColor }]}>
+                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold', fontSize: 11 }]}>{content}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </React.Fragment>
+                ))}
+
+              </View>
+            </ScrollView>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+
+      {/* --- 以降は既存の編集・作成モーダル群 --- */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <SafeAreaView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -423,7 +548,6 @@ export default function ShiftCreateScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* --- 時間変更＆候補追加モーダル --- */}
       <Modal visible={timePickerVisible} transparent animationType="fade">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
@@ -451,11 +575,9 @@ export default function ShiftCreateScreen() {
               </View>
             </ScrollView>
 
-            {/* ★ 新しい時刻セットの追加UI (スクロール式) */}
             <View style={styles.addTimeContainer}>
               <Text style={styles.addTimeTitle}>新しい候補 (開始〜終了) を作成</Text>
               <View style={styles.pickerColumns}>
-                {/* 開始時間 */}
                 <View style={styles.pickerColumnWrapper}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
                     {HOURS.map(h => (
@@ -478,7 +600,6 @@ export default function ShiftCreateScreen() {
                 
                 <Text style={styles.pickerColon}>〜</Text>
                 
-                {/* 終了時間 */}
                 <View style={styles.pickerColumnWrapper}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
                     {HOURS.map(h => (
@@ -499,7 +620,6 @@ export default function ShiftCreateScreen() {
                   </ScrollView>
                 </View>
 
-                {/* ★ はみ出ないように「追加」だけに修正 */}
                 <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddMasterTime}>
                   <Text style={{color: COLORS.white, fontWeight: 'bold'}}>追加</Text>
                 </TouchableOpacity>
@@ -524,8 +644,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   backBtn: { marginRight: 16 },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 4 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
+  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
   
   monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
@@ -537,7 +657,6 @@ const styles = StyleSheet.create({
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold' },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   
-  // ★ minHeight に変更し、内容に合わせて伸びるようにする
   calCellEmpty: { width: '14.28%', minHeight: 80 },
   calCell: { width: '14.28%', minHeight: 80, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
   
@@ -551,6 +670,7 @@ const styles = StyleSheet.create({
   eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
   eventBadgeText: { fontSize: 8, color: COLORS.white, fontWeight: 'bold', textAlign: 'center' },
 
+  // モーダル共通
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: COLORS.white, height: '85%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border },
@@ -589,7 +709,6 @@ const styles = StyleSheet.create({
   masterTimeBtn: { width: '48%', backgroundColor: '#FFFDF5', borderWidth: 1, borderColor: '#F3E5AB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   masterTimeText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   
-  // 新しい時刻の追加UI用スタイル
   addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
   addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
   pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 100 },
@@ -603,4 +722,30 @@ const styles = StyleSheet.create({
   addOptionSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 14, borderRadius: 6, marginLeft: 8 },
   
   modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
+
+  // ★ エクセル風スプレッドシートのスタイル
+  ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
+  ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  ssMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E6E6FA', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#9370DB' },
+  ssMonthBtn: { backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9370DB' },
+  ssMonthBtnText: { fontSize: 12, fontWeight: 'bold', color: '#9370DB' },
+  ssMonthTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  
+  ssHorizontalScroll: { flex: 1, backgroundColor: '#F0F0F0' },
+  ssVerticalScroll: { flex: 1 },
+  spreadsheet: { padding: 10 },
+  
+  ssRow: { flexDirection: 'row' },
+  ssHeaderCell: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
+  ssHeaderText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  
+  ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
+  ssDateText: { fontSize: 16, fontWeight: 'bold' },
+  
+  ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 12 },
+  ssNameText: { fontSize: 12, fontWeight: 'bold', color: '#333' },
+  
+  ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
+  ssDataText: { fontSize: 10, color: '#333', textAlign: 'center' },
 });

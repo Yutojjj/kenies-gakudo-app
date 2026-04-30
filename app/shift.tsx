@@ -1,46 +1,92 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
 type ShiftType = '✕' | '午前✕' | '午後✕';
+type Staff = { id: string, name: string };
+type AssignedStaff = { name: string, start: string, end: string };
 
 export default function ShiftScreen() {
   const { name } = useLocalSearchParams<{ name: string }>();
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  // 日付文字列 ('YYYY-MM-DD') をキーにしたシフトデータ
-  const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
-  
-  // 現在選択されているスタンプの種類（デフォルトは「✕」）
-  const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
-  
-  // 右下アクションボタンのポップアップ管理
-  const [stampModalVisible, setStampModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
+  const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
+  const [stampModalVisible, setStampModalVisible] = useState(false);
 
-  // --- Firestoreから自分のシフトデータをリアルタイム取得 ---
+  // ★ シフト表（エクセル風）に必要な全体データ
+  const [allStaff, setAllStaff] = useState<Staff[]>([]);
+  const [allRequests, setAllRequests] = useState<Record<string, string>>({});
+  const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
+  const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
+  const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
+
   useEffect(() => {
-    const staffName = name || '不明なスタッフ';
-    const q = query(collection(db, 'shifts'), where('staffName', '==', staffName));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data: Record<string, ShiftType> = {};
-      snapshot.forEach((doc) => {
-        const item = doc.data();
-        data[item.dateStr] = item.type;
-      });
-      setShiftData(data);
-      setLoading(false);
-    });
+    let unsubscribes: (() => void)[] = [];
 
-    return () => unsubscribe();
+    const fetchAllData = async () => {
+      try {
+        fetch('https://holidays-jp.github.io/api/v1/date.json')
+          .then(res => res.json())
+          .then(data => setPublicHolidays(data))
+          .catch(e => console.warn('祝日API取得失敗', e));
+
+        // 自分の提出用データ
+        const staffName = name || '不明なスタッフ';
+        const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', staffName));
+        const unsubMy = onSnapshot(qMyShifts, (snapshot) => {
+          const data: Record<string, ShiftType> = {};
+          snapshot.forEach((doc) => {
+            const item = doc.data();
+            data[item.dateStr] = item.type;
+          });
+          setShiftData(data);
+        });
+        unsubscribes.push(unsubMy);
+
+        // 全スタッフの取得
+        const qStaff = query(collection(db, 'accounts'), where('role', '==', 'staff'));
+        const snap = await getDocs(qStaff);
+        setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+
+        // 全員の提出データ
+        const unsubAllReq = onSnapshot(collection(db, 'shifts'), (s) => {
+          const reqData: Record<string, string> = {};
+          s.forEach(d => {
+            const data = d.data();
+            reqData[`${data.staffName}_${data.dateStr}`] = data.type;
+          });
+          setAllRequests(reqData);
+        });
+        unsubscribes.push(unsubAllReq);
+
+        // 確定したシフトデータ
+        const unsubAssigned = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
+          const asData: Record<string, AssignedStaff[]> = {};
+          s.forEach(d => { asData[d.id] = d.data().staff || []; });
+          setAssignedShifts(asData);
+          setLoading(false);
+        });
+        unsubscribes.push(unsubAssigned);
+
+      } catch (error) {
+        console.error("データ取得エラー", error);
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
   }, [name]);
 
-  // --- カレンダー生成ロジック ---
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
@@ -59,11 +105,19 @@ export default function ShiftScreen() {
     return days;
   };
 
+  const generateWeeksForSpreadsheet = () => {
+    const days = generateCalendarDays();
+    const weeks = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    return weeks;
+  };
+
   const changeMonth = (offset: number) => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
   };
 
-  // --- タップ操作 (Firestoreに即時保存/削除) ---
   const handleDayPress = async (dateStr: string) => {
     const staffName = name || '不明なスタッフ';
     const docId = `${staffName}_${dateStr}`;
@@ -71,7 +125,6 @@ export default function ShiftScreen() {
 
     const currentStamp = shiftData[dateStr];
 
-    // UIを先に更新（Optimistic Update）
     setShiftData(prev => {
       if (currentStamp === activeStamp) {
         const newData = { ...prev };
@@ -81,7 +134,6 @@ export default function ShiftScreen() {
       return { ...prev, [dateStr]: activeStamp };
     });
 
-    // データベースを更新
     try {
       if (currentStamp === activeStamp) {
         await deleteDoc(docRef);
@@ -94,12 +146,10 @@ export default function ShiftScreen() {
         });
       }
     } catch (error) {
-      console.error(error);
       Alert.alert('エラー', '保存に失敗しました。');
     }
   };
 
-  // --- 右下ボタンからのスタンプ選択 ---
   const selectStamp = (stamp: ShiftType) => {
     setActiveStamp(stamp);
     setStampModalVisible(false);
@@ -109,34 +159,38 @@ export default function ShiftScreen() {
     Alert.alert('提出完了', 'シフトの希望を提出しました。');
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </SafeAreaView>
-    );
-  }
+  if (loading) return <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
 
   const days = generateCalendarDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
+  const spreadsheetWeeks = generateWeeksForSpreadsheet();
 
   return (
     <SafeAreaView style={styles.container}>
       
-      {/* 選択中のスタンプを表示するバナー */}
+      {/* ★ ヘッダー領域に「表を見る」ボタンを配置 */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10 }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>シフト提出</Text>
+        <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
+          <Ionicons name="grid-outline" size={18} color={COLORS.white} />
+          <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.stampBanner}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Ionicons name="create-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
           <Text style={styles.bannerText}>現在選択中：</Text>
         </View>
-        <View style={styles.activeStampBadge}>
+        <View style={[
+          styles.activeStampBadge,
+          activeStamp === '✕' ? styles.stampBadgeAll : activeStamp === '午前✕' ? styles.stampBadgeAM : styles.stampBadgePM
+        ]}>
           <Text style={styles.activeStampText}>{activeStamp}</Text>
         </View>
       </View>
 
       <ScrollView style={styles.scrollArea}>
-        
-        {/* 月切り替えナビゲーション */}
         <View style={styles.monthSelector}>
           <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthBtn}>
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
@@ -147,7 +201,6 @@ export default function ShiftScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* カレンダー本体 */}
         <View style={styles.calendarContainer}>
           <View style={styles.calHeaderRow}>
             {weeks.map((w, i) => (
@@ -188,25 +241,123 @@ export default function ShiftScreen() {
           </View>
         </View>
 
-        {/* 保存ボタン */}
         <View style={styles.submitContainer}>
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
             <Ionicons name="send" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
             <Text style={styles.submitBtnText}>シフトを提出する</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
 
-      {/* 右下のアクションボタン (スタンプ切り替え) */}
       <TouchableOpacity style={styles.fab} onPress={() => setStampModalVisible(true)}>
         <Ionicons name="options-outline" size={24} color={COLORS.white} />
         <Text style={styles.fabText}>種類変更</Text>
       </TouchableOpacity>
 
-      {/* =========================================================
-          ポップアップ：スタンプ（✕）の種類選択
-          ========================================================= */}
+      {/* ==========================================
+          ★ エクセル風 シフト表モーダル
+          ========================================== */}
+      <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.ssModalContainer}>
+          <View style={styles.ssModalHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="grid" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.ssModalTitle}>月別シフト表</Text>
+            </View>
+            <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
+              <Ionicons name="close-circle" size={32} color={COLORS.textLight} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.ssMonthNav}>
+            <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
+              <Text style={styles.ssMonthBtnText}>前の月にする</Text>
+            </TouchableOpacity>
+            <Text style={styles.ssMonthTitle}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
+            <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
+              <Text style={styles.ssMonthBtnText}>次の月にする</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal style={styles.ssHorizontalScroll}>
+            <ScrollView style={styles.ssVerticalScroll}>
+              <View style={styles.spreadsheet}>
+                
+                <View style={styles.ssRow}>
+                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: 70 }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
+                  {weeks.map((w, i) => (
+                    <View key={i} style={[styles.ssHeaderCell, { width: 90 }]}>
+                      <Text style={[styles.ssHeaderText, i === 0 ? {color: 'red'} : i === 6 ? {color: 'blue'} : {}]}>{w}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {spreadsheetWeeks.map((week, wIdx) => (
+                  <React.Fragment key={wIdx}>
+                    <View style={styles.ssRow}>
+                      <View style={[styles.ssDateCell, { width: 70, backgroundColor: '#FFF0F5' }]}></View>
+                      {week.map((day, dIdx) => {
+                        let isSun = false, isSat = false, isPubHoliday = false;
+                        if (day) {
+                          const d = new Date(day.dateStr);
+                          isSun = d.getDay() === 0;
+                          isSat = d.getDay() === 6;
+                          isPubHoliday = !!publicHolidays[day.dateStr];
+                        }
+                        const textColor = (isSun || isPubHoliday) ? 'red' : isSat ? 'blue' : COLORS.text;
+                        const bgColor = (isSun || isPubHoliday) ? '#FFE4E1' : isSat ? '#E0FFFF' : '#E8F5E9';
+                        return (
+                          <View key={dIdx} style={[styles.ssDateCell, { width: 90, backgroundColor: bgColor }]}>
+                            <Text style={[styles.ssDateText, { color: textColor }]}>{day ? day.day : ''}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {allStaff.map(staff => (
+                      <View key={staff.id} style={styles.ssRow}>
+                        <View style={[styles.ssNameCell, { width: 70, backgroundColor: staff.name === name ? '#FFDAB9' : '#FFC0CB' }]}>
+                          <Text style={[styles.ssNameText, staff.name === name && { color: COLORS.primary }]}>{staff.name}</Text>
+                        </View>
+                        {week.map((day, dIdx) => {
+                          let content = '';
+                          let bgColor = '#FFFFFF';
+                          let isBold = false;
+                          
+                          if (day) {
+                            const assigned = assignedShifts[day.dateStr]?.find(s => s.name === staff.name);
+                            const req = allRequests[`${staff.name}_${day.dateStr}`];
+                            
+                            if (assigned) {
+                              content = `${assigned.start}-${assigned.end}`;
+                              bgColor = '#FFD700'; 
+                              isBold = true;
+                            } else if (req) {
+                              content = req;
+                              bgColor = req === '✕' ? '#E0E0E0' : req === '午前✕' ? '#E0FFFF' : '#FFFACD';
+                            }
+                          } else {
+                            bgColor = '#F5F5F5';
+                          }
+
+                          return (
+                            <View key={dIdx} style={[styles.ssDataCell, { width: 90, backgroundColor: bgColor }]}>
+                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold', fontSize: 11 }]}>{content}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </React.Fragment>
+                ))}
+
+              </View>
+            </ScrollView>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* --- スタンプ選択モーダル --- */}
       <Modal visible={stampModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -254,19 +405,20 @@ export default function ShiftScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   
-  stampBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFDF5', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F3E5AB' },
+  viewBoardBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  viewBoardBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
+
+  stampBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFDF5', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F3E5AB', marginTop: 10 },
   bannerText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
-  activeStampBadge: { backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
-  activeStampText: { color: COLORS.white, fontWeight: 'bold', fontSize: 14 },
+  activeStampBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
+  activeStampText: { color: COLORS.text, fontWeight: 'bold', fontSize: 14 },
 
   scrollArea: { flex: 1 },
 
-  // 月切り替え
   monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
   monthBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   monthText: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
 
-  // カレンダー
   calendarContainer: { paddingHorizontal: 12, paddingBottom: 20 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 12 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
@@ -277,31 +429,53 @@ const styles = StyleSheet.create({
   calDayText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 4, textAlign: 'center' },
   cellContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
-  // スタンプバッジ
   stampBadge: { paddingHorizontal: 4, paddingVertical: 4, borderRadius: 6, width: '100%', alignItems: 'center', justifyContent: 'center' },
-  stampBadgeAll: { backgroundColor: '#FFE4E1' }, // 1日休みは赤系
-  stampBadgeAM: { backgroundColor: '#E0FFFF' },  // 午前休みは青系
-  stampBadgePM: { backgroundColor: '#FFFACD' },  // 午後休みは黄系
+  stampBadgeAll: { backgroundColor: '#FFE4E1' }, 
+  stampBadgeAM: { backgroundColor: '#E0FFFF' },  
+  stampBadgePM: { backgroundColor: '#FFFACD' },  
   stampText: { fontSize: 11, fontWeight: 'bold', color: COLORS.text },
 
   submitContainer: { padding: 20, paddingBottom: 100 },
   submitBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
-  // FAB (アクションボタン)
   fab: { position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.secondary, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
 
-  // モーダル共通
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { width: '100%', backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
   modalDesc: { fontSize: 13, color: COLORS.textLight, marginBottom: 24 },
 
-  // スタンプ選択リスト
   stampSelectBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: COLORS.border },
   stampIconDemo: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginRight: 16, width: 80, alignItems: 'center' },
   stampTextDemo: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   stampSelectText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+
+  // ★ エクセル風スプレッドシートのスタイル
+  ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
+  ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  ssMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E6E6FA', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#9370DB' },
+  ssMonthBtn: { backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9370DB' },
+  ssMonthBtnText: { fontSize: 12, fontWeight: 'bold', color: '#9370DB' },
+  ssMonthTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  
+  ssHorizontalScroll: { flex: 1, backgroundColor: '#F0F0F0' },
+  ssVerticalScroll: { flex: 1 },
+  spreadsheet: { padding: 10 },
+  
+  ssRow: { flexDirection: 'row' },
+  ssHeaderCell: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
+  ssHeaderText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  
+  ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
+  ssDateText: { fontSize: 16, fontWeight: 'bold' },
+  
+  ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 12 },
+  ssNameText: { fontSize: 12, fontWeight: 'bold', color: '#333' },
+  
+  ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
+  ssDataText: { fontSize: 10, color: '#333', textAlign: 'center' },
 });
