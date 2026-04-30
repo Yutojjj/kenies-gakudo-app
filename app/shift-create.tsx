@@ -402,7 +402,6 @@ export default function ShiftCreateScreen() {
                 <View style={styles.ssRow}>
                   <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: '16%' }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
                   {weeks.map((w, i) => {
-                    // ★ 土日の幅を6%、平日を14.4%に設定
                     const cellWidth = (i === 0 || i === 6) ? '6%' : '14.4%';
                     return (
                       <View key={i} style={[styles.ssHeaderCell, { width: cellWidth }]}>
@@ -451,11 +450,11 @@ export default function ShiftCreateScreen() {
                             const req = requests[`${staff.name}_${day.dateStr}`];
                             
                             if (assigned) {
-                              content = `${assigned.start}\n|\n${assigned.end}`; 
+                              // ★ 縦に伸びすぎないように「開:〇〇 \n 終:〇〇」の2行にまとめる
+                              content = `開:${assigned.start}\n終:${assigned.end}`; 
                               bgColor = '#FFD700'; 
                               isBold = true;
                             } else if (req) {
-                              // 土日枠は狭いので表示を省略・簡略化
                               content = (dIdx === 0 || dIdx === 6) ? '✕' : req; 
                               bgColor = req === '✕' ? '#E0E0E0' : req === '午前✕' ? '#E0FFFF' : '#FFFACD';
                             }
@@ -465,7 +464,8 @@ export default function ShiftCreateScreen() {
 
                           return (
                             <View key={dIdx} style={[styles.ssDataCell, { width: cellWidth, backgroundColor: bgColor }]}>
-                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold' }]} adjustsFontSizeToFit numberOfLines={3}>{content}</Text>
+                              {/* ★ numberOfLines={2} で確実に2行で切る */}
+                              <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold' }]} adjustsFontSizeToFit numberOfLines={2}>{content}</Text>
                             </View>
                           );
                         })}
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
   
   modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
 
-  // ★ 1画面完全フィット(土日細い版)のスタイル
+  // ★ 1画面完全フィット(土日細い版・時間表示改行対応)のスタイル
   ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
   ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
@@ -746,5 +746,5 @@ const styles = StyleSheet.create({
   ssNameText: { fontSize: 10, fontWeight: 'bold', color: '#333', textAlign: 'center', paddingHorizontal: 2 },
   
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
-  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 12 },
+  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 }, // ★ 行間を少し詰める
 });
