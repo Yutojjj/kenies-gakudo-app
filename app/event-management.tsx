@@ -43,7 +43,6 @@ export default function EventManagementScreen() {
   const [extGrade, setExtGrade] = useState('');
 
   useEffect(() => {
-    // 祝日データの取得
     fetch('https://holidays-jp.github.io/api/v1/date.json')
       .then(res => res.json())
       .then(data => setPublicHolidays(data))
@@ -336,17 +335,22 @@ const styles = StyleSheet.create({
   calHeaderRow: { flexDirection: 'row', marginBottom: 8 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCellEmpty: { width: '14.28%', aspectRatio: 0.65 },
-  // ★ 利用者カレンダーと同じ縦長比率に統一
+  
+  // ★ 修正: aspectRatioを外し、minHeightで自動拡張させる
+  calCellEmpty: { 
+    width: '14.28%', 
+    minHeight: 60 
+  },
   calCell: { 
     width: '14.28%', 
-    aspectRatio: 0.65, 
+    minHeight: 70, 
     borderWidth: 0.5, 
     borderColor: COLORS.border, 
     padding: 2, 
     backgroundColor: COLORS.white,
     justifyContent: 'flex-start'
   },
+  
   calCellActive: { backgroundColor: '#F0F8FF' },
   calDayText: { fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
   cellContent: { flex: 1 },

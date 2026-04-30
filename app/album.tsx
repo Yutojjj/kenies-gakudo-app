@@ -15,6 +15,14 @@ const ALL_TABS: TabType[] = ['月', '火', '水', '木', '金', 'イベント'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
+// ★ 追加: ローカル時間での日付文字列 (YYYY-MM-DD) を取得するヘルパー関数
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function AlbumScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
@@ -36,7 +44,6 @@ export default function AlbumScreen() {
   
   const [albumPhotos, setAlbumPhotos] = useState<Record<string, { id: string, uri: string, storagePath?: string }[]>>({});
   
-  // ★写真の表示/非表示を管理するステート（初期値は全て false = たたまれている）
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -116,8 +123,17 @@ export default function AlbumScreen() {
     }
   };
 
-  const handleAddToday = () => pickImages('今日', new Date().toISOString().split('T')[0]);
-  const handleAddPast = () => pickImages(pastDate.toISOString().split('T')[0], pastDate.toISOString().split('T')[0]);
+  // ★ 修正: toISOString() ではなく、ローカルの時刻文字列を使う
+  const handleAddToday = () => {
+    const todayStr = getLocalDateString(new Date());
+    pickImages('今日', todayStr);
+  };
+  
+  const handleAddPast = () => {
+    const pastDateStr = getLocalDateString(pastDate);
+    pickImages(pastDateStr, pastDateStr);
+  };
+
   const handleAddEvent = () => {
     if (!eventNameInput.trim()) return Alert.alert('エラー', 'イベント名を入力してください');
     pickImages(eventNameInput.trim(), `EVENT_${eventNameInput.trim()}`);
@@ -158,7 +174,7 @@ export default function AlbumScreen() {
           if (dateObj.getTime() < createdTime) canView = false;
         }
         if (canView) {
-          const dateStr = dateObj.toISOString().split('T')[0];
+          const dateStr = getLocalDateString(dateObj); // ★ 修正
           dates.push({
             key: dateStr,
             label: `${viewMonth}月${dateObj.getDate()}日(${activeTab})`,
@@ -299,7 +315,6 @@ export default function AlbumScreen() {
                 const isExpanded = !!expandedDates[item.key];
                 return (
                   <View key={item.key} style={styles.dateSection}>
-                    {/* ★日付ヘッダー部分をボタンに変更し、「表示する/たたむ」を実装 */}
                     <TouchableOpacity style={styles.dateHeaderContainer} onPress={() => toggleExpand(item.key)} activeOpacity={0.7}>
                       <Text style={styles.dateHeader}>{item.label}</Text>
                       <View style={styles.expandBadge}>
@@ -308,7 +323,6 @@ export default function AlbumScreen() {
                       </View>
                     </TouchableOpacity>
 
-                    {/* ★開いている時だけ写真グリッドを表示 */}
                     {isExpanded && (
                       item.photos.length > 0 ? (
                         <View style={styles.photoGrid}>
@@ -334,7 +348,6 @@ export default function AlbumScreen() {
         </View>
       )}
 
-      {/* モーダル群 (カレンダー, イベント, 全画面写真) は変更なしなのでそのまま記載 */}
       <Modal visible={calendarModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -432,7 +445,6 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#9370DB' },
   dateSection: { marginBottom: 12 },
   
-  // ★日付ヘッダーのデザイン変更
   dateHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   dateHeader: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
   expandBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },

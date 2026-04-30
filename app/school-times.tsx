@@ -25,31 +25,24 @@ export default function SchoolTimesScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   
-  // アカウント管理で登録された候補リスト
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
   const [masterGrades, setMasterGrades] = useState<string[]>([]);
-  // よく使う時刻のマスターリスト
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
 
-  // 保存されている下校時刻データ
   const [schoolTimes, setSchoolTimes] = useState<Record<string, any>>({});
   const [activeSchool, setActiveSchool] = useState<string>('');
 
-  // 時刻選択モーダル用ステート
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerMode, setPickerMode] = useState<'single' | 'stamping'>('single');
   const [activeCell, setActiveCell] = useState<{ grade: string, day: string } | null>(null);
   
-  // 時刻追加用ステート（時・分を個別に管理）
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
 
-  // 連投（スタンプ）モード用ステート
   const [isStampingMode, setIsStampingMode] = useState(false);
   const [stampingTime, setStampingTime] = useState('');
 
   useEffect(() => {
-    // 1. マスターデータを取得
     const fetchMasterData = async () => {
       try {
         const masterRef = doc(db, 'settings', 'master_data');
@@ -60,7 +53,6 @@ export default function SchoolTimesScreen() {
           setMasterSchools(schools);
           setMasterGrades(data.grades || []);
           
-          // 時刻のマスターデータがあれば取得、なければ初期値
           const times = data.times || ['14:30', '15:00', '15:30'];
           setMasterTimes(times);
           
@@ -76,7 +68,6 @@ export default function SchoolTimesScreen() {
     };
     fetchMasterData();
 
-    // 2. 登録済みの下校時間を監視
     const unsubscribe = onSnapshot(collection(db, 'school_times'), (snapshot) => {
       const data: Record<string, any> = {};
       snapshot.forEach(doc => {
@@ -113,7 +104,6 @@ export default function SchoolTimesScreen() {
     }
   };
 
-  // --- 時刻選択・マスター操作関連 ---
   const openTimePickerForSingle = (grade: string, day: string) => {
     setPickerMode('single');
     setActiveCell({ grade, day });
@@ -127,11 +117,9 @@ export default function SchoolTimesScreen() {
 
   const selectTime = (timeValue: string) => {
     if (pickerMode === 'stamping') {
-      // 連投モードを開始
       setStampingTime(timeValue);
       setIsStampingMode(true);
     } else {
-      // 単一セルの入力
       if (activeCell) {
         handleTimeChange(activeCell.grade, activeCell.day, timeValue);
       }
@@ -153,7 +141,9 @@ export default function SchoolTimesScreen() {
   const handleDeleteTime = (timeValue: string) => {
     if (Platform.OS === 'web') {
       if (window.confirm(`${timeValue} を候補から削除しますか？`)) {
-        
+          const newTimes = masterTimes.filter(t => t !== timeValue);
+          setMasterTimes(newTimes);
+          setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
       }
       return;
     }
@@ -195,7 +185,6 @@ export default function SchoolTimesScreen() {
         </ScrollView>
       </View>
 
-      {/* 連投モード中のお知らせバナー */}
       {isStampingMode && (
         <View style={styles.stampingBanner}>
           <Text style={styles.stampingText}>
@@ -232,7 +221,6 @@ export default function SchoolTimesScreen() {
                         ]} 
                         onPress={() => {
                           if (isStampingMode) {
-                            // ★ 同じ値なら消す（トグル）、違う値なら上書き
                             if (val === stampingTime) {
                               handleTimeChange(grade, day, '');
                             } else {
@@ -262,16 +250,15 @@ export default function SchoolTimesScreen() {
         )}
       </ScrollView>
 
-      {/* 丸型のアクションボタン(FAB) */}
       {!isStampingMode && activeSchool !== '' && (
         <TouchableOpacity style={styles.fab} onPress={openTimePickerForStamping}>
           <Ionicons name="color-wand" size={32} color={COLORS.white} />
         </TouchableOpacity>
       )}
 
-      {/* --- 時刻候補選択・追加モーダル --- */}
       <Modal visible={pickerVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          {/* ★ 修正: 全体をScrollViewではなく固定Viewにし、必要な場所だけスクロールさせる */}
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -282,8 +269,8 @@ export default function SchoolTimesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 250, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
-              {/* クリア（未設定に戻す）ボタン */}
+            {/* 既存の時刻リスト (ここはスクロール可) */}
+            <ScrollView style={styles.existingTimesList} showsVerticalScrollIndicator={false}>
               <TouchableOpacity style={styles.clearBtn} onPress={() => selectTime('')}>
                 <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
                 <Text style={styles.clearBtnText}>{pickerMode === 'stamping' ? '「未設定に戻す」を連投' : '未設定に戻す'}</Text>
@@ -294,37 +281,47 @@ export default function SchoolTimesScreen() {
                   <TouchableOpacity style={styles.optionBtn} onPress={() => selectTime(timeVal)}>
                     <Text style={styles.optionText}>{timeVal}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDeleteTime(timeVal)} style={{ padding: 8 }}>
-                    <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                  <TouchableOpacity onPress={() => handleDeleteTime(timeVal)} style={{ padding: 12 }}>
+                    <Ionicons name="trash-outline" size={24} color={COLORS.danger} />
                   </TouchableOpacity>
                 </View>
               ))}
               {masterTimes.length === 0 && (
-                <Text style={{ textAlign: 'center', color: COLORS.textLight, marginTop: 20 }}>候補がありません</Text>
+                <Text style={{ textAlign: 'center', color: COLORS.textLight, marginVertical: 20 }}>候補がありません</Text>
               )}
             </ScrollView>
 
-            {/* 新しい時刻の追加UI（時・分のスクロール選択） */}
+            {/* ★ 修正: 時刻の追加用UI（安全にスクロールできるように高さを固定） */}
             <View style={styles.addTimeContainer}>
               <Text style={styles.addTimeTitle}>新しい時刻を候補に追加</Text>
               <View style={styles.pickerColumns}>
-                <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
-                  {HOURS.map(h => (
-                    <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
-                      <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {/* 時 */}
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    {HOURS.map(h => (
+                      <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
+                        <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                
                 <Text style={styles.pickerColon}>:</Text>
-                <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
-                  {MINUTES.map(m => (
-                    <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
-                      <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                
+                {/* 分 */}
+                <View style={styles.pickerColumnWrapper}>
+                  <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    {MINUTES.map(m => (
+                      <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
+                        <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
                 <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddTime}>
-                  <Text style={{ color: COLORS.white, fontWeight: 'bold' }}>追加</Text>
+                  <Ionicons name="add" size={20} color={COLORS.white} />
+                  <Text style={{ color: COLORS.white, fontWeight: 'bold', marginLeft: 4 }}>追加</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -354,21 +351,9 @@ const styles = StyleSheet.create({
   stampingEndBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   stampingEndText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
   
-  // 右下の丸型アクションボタン(FAB)
   fab: { 
-    position: 'absolute', 
-    right: 20, 
-    bottom: 40, 
-    backgroundColor: COLORS.primary, 
-    width: 64, 
-    height: 64, 
-    borderRadius: 32, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    shadowColor: COLORS.primary, 
-    shadowOpacity: 0.4, 
-    shadowRadius: 8, 
-    elevation: 5 
+    position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, 
+    alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 
   },
 
   scrollArea: { flex: 1, padding: 16 },
@@ -388,26 +373,37 @@ const styles = StyleSheet.create({
   saveBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 16, alignItems: 'center', justifyContent: 'center', margin: 16, borderRadius: 8 },
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
-  // モーダル関連
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalContent: { width: '100%', maxHeight: '90%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20, overflow: 'hidden' }, // overflow: hiddenを追加
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  
+  existingTimesList: { flex: 1, marginBottom: 16 }, // リスト部分のスタイル調整
+  
   clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: '#FFF0F0', borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#FFE0E0' },
   clearBtnText: { color: COLORS.danger, fontWeight: 'bold', marginLeft: 8 },
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 8 },
-  optionBtn: { flex: 1, paddingVertical: 8 },
-  optionText: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
+  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 4 },
+  optionBtn: { flex: 1, paddingVertical: 12 },
+  optionText: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   
-  // 新規時刻追加（スクロール）UI用
-  addTimeContainer: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderColor: COLORS.border },
+  // ★ 新規時刻追加UI用のスタイル更新
+  addTimeContainer: { 
+    paddingTop: 16, 
+    borderTopWidth: 1, 
+    borderColor: COLORS.border,
+    backgroundColor: '#FAFAFA', // 背景色をつけて区別
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    borderRadius: 12
+  },
   addTimeTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
-  pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 120 },
-  pickerScroll: { width: 60 },
-  pickerItem: { paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 140 }, // 高さを固定
+  pickerColumnWrapper: { flex: 1, height: '100%', maxWidth: 80, backgroundColor: COLORS.white, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border }, // 枠をつける
+  pickerScroll: { flex: 1 },
+  pickerItem: { paddingVertical: 12, alignItems: 'center' },
   pickerItemActive: { backgroundColor: COLORS.primary + '20' },
   pickerItemText: { fontSize: 18, color: COLORS.textLight },
-  pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 20 },
-  pickerColon: { fontSize: 20, fontWeight: 'bold', color: COLORS.textLight, marginHorizontal: 8 },
-  addOptionSubmit: { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8, marginLeft: 16 }
+  pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 22 },
+  pickerColon: { fontSize: 24, fontWeight: 'bold', color: COLORS.text, marginHorizontal: 8 },
+  addOptionSubmit: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 16, borderRadius: 8, marginLeft: 12, shadowColor: '#000', elevation: 2 }
 });

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, deleteField, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -17,7 +17,8 @@ type ChildInfo = {
   days?: Record<string, boolean>; 
 };
 type LessonTemplate = { id: string; name: string; time: string; };
-type DailyData = { pickupTime?: string | null; lesson?: LessonTemplate; };
+// ★ 修正: lesson を単一オブジェクトから配列に変更
+type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; };
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -32,6 +33,8 @@ export default function ScheduleScreen() {
   const [activeChildIdx, setActiveChildIdx] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
   
+  const [parentDocId, setParentDocId] = useState('');
+
   const [scheduleData, setScheduleData] = useState<Record<string, DailyData>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
@@ -39,25 +42,30 @@ export default function ScheduleScreen() {
   const [holidays, setHolidays] = useState<any[]>([]); 
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   
-  // ★ 追加：イベントデータの管理
-  const [eventsData, setEventsData] = useState<Record<string, string>>({});
+  const [eventsData, setEventsData] = useState<Record<string, any>>({});
+  const [participantData, setParticipantData] = useState<Record<string, any>>({});
 
-  const [lessonTemplates, setLessonTemplates] = useState<LessonTemplate[]>([
-    { id: '1', name: 'ピアノ', time: '16:00' },
-    { id: '2', name: 'スイミング', time: '17:30' }
-  ]);
+  const [lessonTemplates, setLessonTemplates] = useState<LessonTemplate[]>([]);
   const [isStampingMode, setIsStampingMode] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
 
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
-  const [templateSelectMode, setTemplateSelectMode] = useState<'stamping' | 'singleDay'>('stamping');
+  const [templateSelectMode, setTemplateSelectMode] = useState<'stamping' | 'singleDay' | 'edit'>('stamping');
   const [editModalVisible, setEditModalVisible] = useState(false);
+  
+  const [eventModalVisible, setEventModalVisible] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
   const [timePickerVisible, setTimePickerVisible] = useState(false);
+  // ★ 修正: lessonの変更時は対象のLessonTemplateも保持する
   const [timePickerTarget, setTimePickerTarget] = useState<'pickup' | 'lesson'>('pickup');
+  const [editingLessonIndex, setEditingLessonIndex] = useState<number>(-1);
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
+
+  const [lessonAddVisible, setLessonAddVisible] = useState(false);
+  const [newLessonName, setNewLessonName] = useState('');
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,6 +86,11 @@ export default function ScheduleScreen() {
           const docSnap = snapshot.docs[0];
           const data = docSnap.data();
           const parentId = docSnap.id;
+          setParentDocId(parentId);
+          
+          if (data.lessonTemplates) {
+            setLessonTemplates(data.lessonTemplates);
+          }
           
           const loadedChildren: ChildInfo[] = [];
           
@@ -118,9 +131,23 @@ export default function ScheduleScreen() {
             const sData: Record<string, DailyData> = {};
             sSnap.forEach(d => {
               const item = d.data();
-              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson };
+              // ★ 修正: 古い単一lessonデータも配列に変換して保持
+              let lessons: LessonTemplate[] = [];
+              if (item.lessons) {
+                  lessons = item.lessons;
+              } else if (item.lesson) {
+                  lessons = [item.lesson];
+              }
+              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons };
             });
             setScheduleData(sData);
+          });
+          
+          onSnapshot(doc(db, 'accounts', parentId), (accSnap) => {
+             if(accSnap.exists()) {
+                 const accData = accSnap.data();
+                 if(accData.lessonTemplates) setLessonTemplates(accData.lessonTemplates);
+             }
           });
         }
 
@@ -144,11 +171,20 @@ export default function ScheduleScreen() {
           }
         });
 
-        // ★ 追加：イベントデータの取得
         onSnapshot(collection(db, 'events'), (snap) => {
-          const eData: Record<string, string> = {};
-          snap.forEach(d => { eData[d.id] = d.data().title; });
+          const eData: Record<string, any> = {};
+          snap.forEach(d => { eData[d.id] = d.data(); });
           setEventsData(eData);
+        });
+        
+        onSnapshot(collection(db, 'event_participants'), (snap) => {
+           const pData: Record<string, any> = {};
+           snap.forEach(d => {
+               const item = d.data();
+               if (!pData[item.eventId]) pData[item.eventId] = {};
+               pData[item.eventId][item.childId] = item.status;
+           });
+           setParticipantData(pData);
         });
 
       } catch (error) {
@@ -159,6 +195,40 @@ export default function ScheduleScreen() {
     };
     fetchData();
   }, [name]);
+
+  const saveLessonTemplate = async () => {
+    if (!newLessonName.trim()) {
+      Alert.alert('エラー', '習い事の名前を入力してください。');
+      return;
+    }
+    const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
+    let newTemplates = [...lessonTemplates];
+
+    if (editingTemplateId) {
+      newTemplates = newTemplates.map(t => t.id === editingTemplateId ? { ...t, name: newLessonName, time: timeStr } : t);
+    } else {
+      newTemplates.push({ id: Date.now().toString(), name: newLessonName, time: timeStr });
+    }
+
+    try {
+      await setDoc(doc(db, 'accounts', parentDocId), { lessonTemplates: newTemplates }, { merge: true });
+      setLessonAddVisible(false);
+      setNewLessonName('');
+      setEditingTemplateId(null);
+    } catch(e) {
+      Alert.alert('エラー', '習い事の保存に失敗しました。');
+    }
+  };
+
+  const deleteLessonTemplate = (id: string) => {
+    Alert.alert('削除確認', 'この習い事の項目を削除しますか？\n(※すでに登録済みのスケジュールは消えません)', [
+      { text: 'キャンセル' },
+      { text: '削除', style: 'destructive', onPress: async () => {
+         const newTemplates = lessonTemplates.filter(t => t.id !== id);
+         await setDoc(doc(db, 'accounts', parentDocId), { lessonTemplates: newTemplates }, { merge: true });
+      }}
+    ]);
+  };
 
   const saveToFirestore = async (dateStr: string, data: Partial<DailyData>) => {
     const child = children[activeChildIdx];
@@ -172,12 +242,43 @@ export default function ScheduleScreen() {
     });
 
     try {
-      await setDoc(doc(db, 'schedules', docId), {
-        parentId, childId: child.id, dateStr, ...data, updatedAt: new Date()
-      }, { merge: true });
+      // ★ 修正: nullを保存して擬似的に削除する仕様に変更 (deleteFieldを使わない安全な方法)
+      const saveData: any = { parentId, childId: child.id, dateStr, updatedAt: new Date() };
+      
+      if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
+      if (data.lessons !== undefined) saveData.lessons = data.lessons;
+
+      await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
     } catch (e) {
       Alert.alert('エラー', 'データの保存に失敗しました');
     }
+  };
+  
+  const toggleEventParticipation = async (eventId: string, isAttending: boolean) => {
+     const child = children[activeChildIdx];
+     if (!child) return;
+     
+     const docId = `${eventId}_${child.id}`;
+     try {
+         if (isAttending) {
+            await setDoc(doc(db, 'event_participants', docId), {
+                eventId,
+                childId: child.id,
+                childName: child.name,
+                status: '参加',
+                updatedAt: new Date()
+            });
+         } else {
+             // ★ 修正: Firebaseの deleteDoc() はそのまま使用可能。
+             // エラーが出ていた場合は import { deleteDoc } from 'firebase/firestore'; が不足していた可能性があります（追記済み）
+             const { deleteDoc } = require('firebase/firestore');
+             await deleteDoc(doc(db, 'event_participants', docId));
+         }
+         setEventModalVisible(false);
+         Alert.alert('完了', isAttending ? '参加を申し込みました' : '参加をキャンセルしました');
+     } catch(e) {
+         Alert.alert('エラー', '操作に失敗しました');
+     }
   };
 
   const getAutoPickupTime = (dateStr: string, child: ChildInfo) => {
@@ -186,7 +287,6 @@ export default function ScheduleScreen() {
     
     if (dayOfWeekStr === '日' || dayOfWeekStr === '土') return null;
     if (publicHolidays[dateStr]) return null;
-    
     if (!child.isStaffChild && child.days && !child.days[dayOfWeekStr]) return null;
 
     const isHoliday = holidays.some(h => dateStr >= h.start && dateStr <= h.end);
@@ -229,7 +329,7 @@ export default function ScheduleScreen() {
     const autoPickup = child ? getAutoPickupTime(dateStr, child) : null;
     const finalPickup = userOverride.pickupTime !== undefined ? userOverride.pickupTime : autoPickup;
     
-    return { pickupTime: finalPickup, lesson: userOverride.lesson };
+    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: userOverride.lessons || [] };
   };
 
   const changeMonth = (offset: number) => {
@@ -238,18 +338,33 @@ export default function ScheduleScreen() {
 
   const handleDayPress = (dateStr: string) => {
     if (isStampingMode && activeTemplate) {
+      // ★ 複数選択(トグル)対応: すでに同じIDがあれば削除、なければ追加
       const key = getScheduleKey(dateStr);
-      const currentLesson = scheduleData[key]?.lesson;
-      const newLesson = currentLesson?.id === activeTemplate.id ? undefined : activeTemplate;
-      saveToFirestore(dateStr, { lesson: newLesson });
+      const currentLessons = scheduleData[key]?.lessons || [];
+      const existingIdx = currentLessons.findIndex(l => l.id === activeTemplate.id);
+      
+      let newLessons = [...currentLessons];
+      if (existingIdx >= 0) {
+          // すでにある場合は解除(削除)
+          newLessons.splice(existingIdx, 1);
+      } else {
+          // ない場合は追加
+          newLessons.push(activeTemplate);
+      }
+      saveToFirestore(dateStr, { lessons: newLessons });
     } else {
       setSelectedDateStr(dateStr);
-      setEditModalVisible(true);
+      if (eventsData[dateStr]) {
+          setEventModalVisible(true);
+      } else {
+          setEditModalVisible(true);
+      }
     }
   };
 
-  const openTimePicker = (target: 'pickup' | 'lesson', defaultTime: string) => {
+  const openTimePicker = (target: 'pickup' | 'lesson', defaultTime: string, lessonIndex: number = -1) => {
     setTimePickerTarget(target);
+    setEditingLessonIndex(lessonIndex);
     if (defaultTime) {
       const [h, m] = defaultTime.split(':').map(Number);
       setTempHour(h); setTempMinute(m);
@@ -263,46 +378,53 @@ export default function ScheduleScreen() {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
     const current = scheduleData[key] || {};
+    
     if (timePickerTarget === 'pickup') {
       saveToFirestore(selectedDateStr, { pickupTime: timeStr });
-    } else {
-      saveToFirestore(selectedDateStr, { lesson: current.lesson ? { ...current.lesson, time: timeStr } : undefined });
+    } else if (timePickerTarget === 'lesson' && editingLessonIndex >= 0) {
+      // 特定の習い事の時間を変更
+      const updatedLessons = [...(current.lessons || [])];
+      updatedLessons[editingLessonIndex] = { ...updatedLessons[editingLessonIndex], time: timeStr };
+      saveToFirestore(selectedDateStr, { lessons: updatedLessons });
     }
     setTimePickerVisible(false);
   };
 
-  const deleteItem = async (target: 'pickup' | 'lesson') => {
+  // ★ 修正: deleteField を使わず、配列の更新や null をセットすることで削除を表現する
+  const deleteItem = async (target: 'pickup' | 'lesson', lessonIndex: number = -1) => {
     const child = children[activeChildIdx];
     if (!child) return;
-    const docId = `${child.id}_${selectedDateStr}`;
+    const key = getScheduleKey(selectedDateStr);
+    const current = scheduleData[key] || {};
 
-    setScheduleData(prev => {
-      const current = { ...prev[docId] };
-      if (target === 'pickup') {
-        delete current.pickupTime;
-      } else {
-        delete current.lesson;
-      }
-      return { ...prev, [docId]: current };
-    });
-
-    try {
-      await setDoc(doc(db, 'schedules', docId), {
-        [target === 'pickup' ? 'pickupTime' : 'lesson']: deleteField(),
-        updatedAt: new Date()
-      }, { merge: true });
-    } catch (e) {
-      console.log('削除エラー', e);
+    if (target === 'pickup') {
+       saveToFirestore(selectedDateStr, { pickupTime: null }); // nullを渡すことで自動計算に戻る
+    } else if (target === 'lesson' && lessonIndex >= 0) {
+       const updatedLessons = [...(current.lessons || [])];
+       updatedLessons.splice(lessonIndex, 1);
+       saveToFirestore(selectedDateStr, { lessons: updatedLessons });
     }
   };
 
   const handleSelectTemplate = (template: LessonTemplate) => {
-    if (templateSelectMode === 'stamping') {
+    if (templateSelectMode === 'edit') {
+        setEditingTemplateId(template.id);
+        setNewLessonName(template.name);
+        const [h, m] = template.time.split(':').map(Number);
+        setTempHour(h); setTempMinute(m);
+        setLessonAddVisible(true);
+    } else if (templateSelectMode === 'stamping') {
       setActiveTemplate(template);
       setIsStampingMode(true);
       setTemplateModalVisible(false);
     } else {
-      saveToFirestore(selectedDateStr, { lesson: template });
+      // 単一の日付に追加（すでにある場合は追加しない）
+      const key = getScheduleKey(selectedDateStr);
+      const currentLessons = scheduleData[key]?.lessons || [];
+      if (!currentLessons.find(l => l.id === template.id)) {
+          const newLessons = [...currentLessons, template];
+          saveToFirestore(selectedDateStr, { lessons: newLessons });
+      }
       setTemplateModalVisible(false);
     }
   };
@@ -338,7 +460,7 @@ export default function ScheduleScreen() {
             const isSunday = d.getDay() === 0;
             const isSaturday = d.getDay() === 6;
             const isPublicHoliday = !!publicHolidays[item.dateStr]; 
-            const isEventDay = !!eventsData[item.dateStr]; // ★ イベントがあるか判定
+            const isEventDay = !!eventsData[item.dateStr]; 
 
             let dateColor = COLORS.text;
             if (isSunday || isPublicHoliday) {
@@ -354,19 +476,20 @@ export default function ScheduleScreen() {
                 </Text>
                 
                 <View style={styles.cellContent}>
-                  {/* ★ イベント表示バッジを追加 */}
                   {isEventDay && (
                     <View style={styles.eventBadge}>
-                      <Text style={styles.eventBadgeText} numberOfLines={1}>{eventsData[item.dateStr]}</Text>
+                      <Text style={styles.eventBadgeText} numberOfLines={1}>{eventsData[item.dateStr].title}</Text>
                     </View>
                   )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
-                  {cellData.lesson && (
-                    <View style={styles.lessonBadge}>
-                      <Text style={styles.lessonText}>{cellData.lesson.name}</Text>
-                      <Text style={styles.lessonTimeText}>{cellData.lesson.time}</Text>
-                    </View>
-                  )}
+                  
+                  {/* ★ 複数習い事の表示 */}
+                  {cellData.lessons && cellData.lessons.length > 0 && cellData.lessons.map((lesson, idx) => (
+                      <View key={`les-${idx}`} style={styles.lessonBadge}>
+                        <Text style={styles.lessonText}>{lesson.name}</Text>
+                        <Text style={styles.lessonTimeText}>{lesson.time}</Text>
+                      </View>
+                  ))}
                 </View>
               </TouchableOpacity>
             );
@@ -425,7 +548,7 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
       )}
 
-      {/* --- モーダル群 --- */}
+      {/* --- 通常の予定編集モーダル --- */}
       <Modal visible={editModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.editModalContent}>
@@ -439,70 +562,131 @@ export default function ScheduleScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.editSection}>
-              <View style={styles.editSectionHeader}>
-                <Ionicons name="home-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.editSectionTitle}>利用(お迎え)時間</Text>
-              </View>
-              <View style={styles.editCard}>
-                {getCellData(selectedDateStr).pickupTime ? (
-                  <>
-                    <Text style={styles.editTimeText}>{getCellData(selectedDateStr).pickupTime}</Text>
-                    <View style={styles.editActions}>
-                      <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('pickup', getCellData(selectedDateStr).pickupTime!)}>
-                        <Text style={styles.btnTextPrimary}>変更</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('pickup')}>
-                        <Text style={styles.btnTextDanger}>削除(自動に戻す)</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.noDataText}>利用予定はありません</Text>
-                    <TouchableOpacity style={styles.addSmallBtn} onPress={() => openTimePicker('pickup', '15:00')}>
-                      <Ionicons name="add" size={16} color={COLORS.white} />
-                      <Text style={styles.addSmallBtnText}>手動で追加</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.editSection}>
+                  <View style={styles.editSectionHeader}>
+                    <Ionicons name="home-outline" size={20} color={COLORS.primary} />
+                    <Text style={styles.editSectionTitle}>利用(お迎え)時間</Text>
+                  </View>
+                  <View style={styles.editCard}>
+                    {getCellData(selectedDateStr).pickupTime ? (
+                      <>
+                        <Text style={styles.editTimeText}>{getCellData(selectedDateStr).pickupTime}</Text>
+                        <View style={styles.editActions}>
+                          <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('pickup', getCellData(selectedDateStr).pickupTime!)}>
+                            <Text style={styles.btnTextPrimary}>変更</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('pickup')}>
+                            <Text style={styles.btnTextDanger}>削除</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.noDataText}>利用予定はありません</Text>
+                        <TouchableOpacity style={styles.addSmallBtn} onPress={() => openTimePicker('pickup', '15:00')}>
+                          <Ionicons name="add" size={16} color={COLORS.white} />
+                          <Text style={styles.addSmallBtnText}>手動で追加</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
 
-            <View style={styles.editSection}>
-              <View style={styles.editSectionHeader}>
-                <Ionicons name="bus-outline" size={20} color={COLORS.info} />
-                <Text style={styles.editSectionTitle}>習い事</Text>
-              </View>
-              <View style={styles.editCard}>
-                {getCellData(selectedDateStr).lesson ? (
-                  <>
-                    <View>
-                      <Text style={styles.editLessonName}>{getCellData(selectedDateStr).lesson?.name}</Text>
-                      <Text style={styles.editTimeText}>送り: {getCellData(selectedDateStr).lesson?.time}</Text>
-                    </View>
-                    <View style={styles.editActions}>
-                      <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('lesson', getCellData(selectedDateStr).lesson!.time)}>
-                        <Text style={styles.btnTextPrimary}>時間変更</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('lesson')}>
-                        <Text style={styles.btnTextDanger}>削除</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.noDataText}>習い事はありません</Text>
-                    <TouchableOpacity style={styles.addSmallBtn} onPress={() => { setTemplateSelectMode('singleDay'); setTemplateModalVisible(true); }}>
-                      <Ionicons name="add" size={16} color={COLORS.white} />
-                      <Text style={styles.addSmallBtnText}>追加</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            </View>
+                {/* ★ 複数習い事のリスト表示 */}
+                <View style={styles.editSection}>
+                  <View style={styles.editSectionHeader}>
+                    <Ionicons name="bus-outline" size={20} color={COLORS.info} />
+                    <Text style={styles.editSectionTitle}>習い事</Text>
+                  </View>
+                  
+                  {getCellData(selectedDateStr).lessons && getCellData(selectedDateStr).lessons!.length > 0 ? (
+                      getCellData(selectedDateStr).lessons!.map((lesson, idx) => (
+                          <View key={`edit-les-${idx}`} style={[styles.editCard, {marginBottom: 8}]}>
+                            <View>
+                              <Text style={styles.editLessonName}>{lesson.name}</Text>
+                              <Text style={styles.editTimeText}>送り: {lesson.time}</Text>
+                            </View>
+                            <View style={styles.editActions}>
+                              <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('lesson', lesson.time, idx)}>
+                                <Text style={styles.btnTextPrimary}>変更</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('lesson', idx)}>
+                                <Text style={styles.btnTextDanger}>削除</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                      ))
+                  ) : (
+                      <View style={styles.editCard}>
+                        <Text style={styles.noDataText}>習い事はありません</Text>
+                      </View>
+                  )}
+                  
+                  {/* 追加ボタンを常に表示 */}
+                  <TouchableOpacity style={[styles.saveBtn, {marginTop: 8, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} onPress={() => { setTemplateSelectMode('singleDay'); setTemplateModalVisible(true); }}>
+                      <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
+                      <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>この日に習い事を追加</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{height: 20}} />
+            </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* イベント詳細・参加モーダル */}
+      <Modal visible={eventModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+              <View style={styles.editModalContent}>
+                  <View style={styles.modalHeader}>
+                      <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                          <Ionicons name="star" size={24} color="#DAA520" style={{marginRight: 8}} />
+                          <Text style={styles.modalTitle}>{selectedDateStr} のイベント</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setEventModalVisible(false)}>
+                          <Ionicons name="close" size={28} color={COLORS.textLight} />
+                      </TouchableOpacity>
+                  </View>
+                  
+                  {eventsData[selectedDateStr] && (
+                      <View style={{marginBottom: 24}}>
+                          <Text style={{fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 12}}>
+                              {eventsData[selectedDateStr].title}
+                          </Text>
+                          <Text style={{fontSize: 16, color: COLORS.text, lineHeight: 24, backgroundColor: '#F9F9F9', padding: 12, borderRadius: 8}}>
+                              {eventsData[selectedDateStr].description || '詳細情報はありません'}
+                          </Text>
+                      </View>
+                  )}
+
+                  <View style={{borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 20}}>
+                      <Text style={{fontWeight: 'bold', marginBottom: 12, color: COLORS.textLight, textAlign: 'center'}}>
+                          {children[activeChildIdx]?.name} さんの参加状況
+                      </Text>
+                      
+                      {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? (
+                          <View style={{alignItems: 'center'}}>
+                              <View style={{flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', padding: 12, borderRadius: 8, marginBottom: 16}}>
+                                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                                  <Text style={{fontSize: 16, fontWeight: 'bold', color: '#4CAF50', marginLeft: 8}}>参加申し込み済み</Text>
+                              </View>
+                              <TouchableOpacity style={[styles.saveBtn, {backgroundColor: '#FFEBEE', width: '100%'}]} onPress={() => toggleEventParticipation(selectedDateStr, false)}>
+                                  <Text style={{color: COLORS.danger, fontWeight: 'bold'}}>参加をキャンセルする</Text>
+                              </TouchableOpacity>
+                          </View>
+                      ) : (
+                          <TouchableOpacity style={[styles.saveBtn, {width: '100%'}]} onPress={() => toggleEventParticipation(selectedDateStr, true)}>
+                              <Text style={styles.saveBtnText}>このイベントに参加する</Text>
+                          </TouchableOpacity>
+                      )}
+                      
+                      <TouchableOpacity style={{marginTop: 20, alignItems: 'center', padding: 12}} onPress={() => {setEventModalVisible(false); setTimeout(()=>setEditModalVisible(true), 300);}}>
+                          <Text style={{color: COLORS.primary, textDecorationLine: 'underline'}}>お迎え・習い事の時間を設定する</Text>
+                      </TouchableOpacity>
+                  </View>
+              </View>
+          </View>
       </Modal>
 
       <Modal visible={timePickerVisible} transparent animationType="slide">
@@ -542,12 +726,23 @@ export default function ScheduleScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.templateContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>習い事を選択</Text>
-              <TouchableOpacity onPress={() => { setTemplateModalVisible(false); }}>
-                <Ionicons name="close" size={28} color={COLORS.textLight} />
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                  {templateSelectMode === 'edit' ? '習い事を編集・削除' : '習い事を選択'}
+              </Text>
+              <View style={{flexDirection: 'row', gap: 16}}>
+                  <TouchableOpacity onPress={() => setTemplateSelectMode(prev => prev === 'edit' ? 'stamping' : 'edit')}>
+                      <Ionicons name={templateSelectMode === 'edit' ? "checkmark" : "settings-outline"} size={24} color={COLORS.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setTemplateModalVisible(false); }}>
+                    <Ionicons name="close" size={28} color={COLORS.textLight} />
+                  </TouchableOpacity>
+              </View>
             </View>
+            
             <ScrollView style={styles.templateList} showsVerticalScrollIndicator={false}>
+              {lessonTemplates.length === 0 && (
+                  <Text style={{textAlign: 'center', color: COLORS.textLight, marginVertical: 20}}>登録された習い事はありません</Text>
+              )}
               {lessonTemplates.map(t => (
                 <View key={t.id} style={styles.templateCardWrapper}>
                   <TouchableOpacity style={styles.templateCard} onPress={() => handleSelectTemplate(t)}>
@@ -555,13 +750,72 @@ export default function ScheduleScreen() {
                       <Text style={styles.templateName}>{t.name}</Text>
                       <Text style={styles.templateTime}>送り: {t.time}</Text>
                     </View>
-                    <Ionicons name={templateSelectMode === 'stamping' ? "color-wand-outline" : "checkmark-circle-outline"} size={24} color={COLORS.primary} />
+                    {templateSelectMode === 'edit' ? (
+                        <View style={{flexDirection: 'row', gap: 16}}>
+                            <Ionicons name="pencil" size={20} color={COLORS.primary} />
+                            <TouchableOpacity onPress={() => deleteLessonTemplate(t.id)}>
+                                <Ionicons name="trash" size={20} color={COLORS.danger} />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <Ionicons name={templateSelectMode === 'stamping' ? "color-wand-outline" : "checkmark-circle-outline"} size={24} color={COLORS.primary} />
+                    )}
                   </TouchableOpacity>
                 </View>
               ))}
+              
+              <TouchableOpacity style={[styles.saveBtn, {marginTop: 16, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} 
+                                onPress={() => { setEditingTemplateId(null); setNewLessonName(''); setTempHour(16); setTempMinute(0); setLessonAddVisible(true); }}>
+                  <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
+                  <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>新しい習い事を追加</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
+      </Modal>
+      
+      <Modal visible={lessonAddVisible} transparent animationType="slide">
+          <View style={styles.pickerOverlay}>
+              <View style={styles.pickerContent}>
+                  <Text style={styles.pickerTitle}>{editingTemplateId ? '習い事を編集' : '習い事を追加'}</Text>
+                  
+                  <Text style={{fontWeight: 'bold', marginBottom: 8}}>習い事の名前</Text>
+                  <TextInput 
+                      style={{borderWidth: 1, borderColor: COLORS.border, padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 20}}
+                      placeholder="例: スイミング"
+                      value={newLessonName}
+                      onChangeText={setNewLessonName}
+                  />
+
+                  <Text style={{fontWeight: 'bold', marginBottom: 8}}>送迎時間</Text>
+                  <View style={styles.pickerColumns}>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                      {HOURS.map(h => (
+                        <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
+                          <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                    <Text style={styles.pickerColon}>:</Text>
+                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                      {MINUTES.map(m => (
+                        <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
+                          <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.pickerFooter}>
+                    <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setLessonAddVisible(false)}>
+                      <Text style={styles.pickerCancelText}>キャンセル</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.pickerConfirmBtn} onPress={saveLessonTemplate}>
+                      <Text style={styles.pickerConfirmText}>保存する</Text>
+                    </TouchableOpacity>
+                  </View>
+              </View>
+          </View>
       </Modal>
 
     </SafeAreaView>
@@ -690,15 +944,17 @@ const styles = StyleSheet.create({
   },
   calCellEmpty: { 
     width: '14.28%', 
-    aspectRatio: 0.7 
+    minHeight: 60 // ★ 空セルの最小高さを指定
   },
+  // ★ 修正: aspectRatioを削除し、minHeightを指定することで中身に合わせて縦に伸びるようにする
   calCell: { 
     width: '14.28%', 
-    aspectRatio: 0.65, 
+    minHeight: 70, 
     borderWidth: 0.5, 
     borderColor: COLORS.border, 
     padding: 2, 
-    backgroundColor: COLORS.white 
+    backgroundColor: COLORS.white,
+    justifyContent: 'flex-start'
   },
   calCellStamping: { 
     backgroundColor: '#FAFAFA' 
@@ -712,14 +968,16 @@ const styles = StyleSheet.create({
     flex: 1 
   },
   eventBadge: { 
-    backgroundColor: COLORS.primary, 
+    backgroundColor: '#FFFACD', 
+    borderColor: '#DAA520',
+    borderWidth: 1,
     borderRadius: 4, 
     padding: 2, 
     marginBottom: 2 
   },
   eventBadgeText: { 
     fontSize: 8, 
-    color: COLORS.white, 
+    color: '#DAA520', 
     fontWeight: 'bold', 
     textAlign: 'center' 
   },
@@ -738,7 +996,8 @@ const styles = StyleSheet.create({
   lessonBadge: { 
     backgroundColor: '#E0FFFF', 
     borderRadius: 4, 
-    padding: 2 
+    padding: 2,
+    marginBottom: 2
   },
   lessonText: { 
     fontSize: 9, 
@@ -792,6 +1051,7 @@ const styles = StyleSheet.create({
   },
   editModalContent: { 
     width: '100%', 
+    maxHeight: '90%',
     backgroundColor: COLORS.white, 
     borderRadius: 16, 
     padding: 20 
@@ -911,7 +1171,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24, 
     borderTopRightRadius: 24, 
     padding: 24, 
-    height: 400 
+    height: 480 
   },
   pickerTitle: { 
     fontSize: 18, 
@@ -924,7 +1184,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    flex: 1 
+    height: 150
   },
   pickerScroll: { 
     width: 80, 
@@ -983,5 +1243,18 @@ const styles = StyleSheet.create({
     fontSize: 16, 
     fontWeight: 'bold', 
     color: COLORS.white 
+  },
+  saveBtn: { 
+    flexDirection: 'row', 
+    backgroundColor: COLORS.primary, 
+    padding: 16, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderRadius: 8 
+  },
+  saveBtnText: { 
+    color: COLORS.white, 
+    fontSize: 16, 
+    fontWeight: 'bold' 
   }
 });
