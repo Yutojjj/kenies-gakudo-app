@@ -3,8 +3,10 @@
     "name": "ケーニーズ学童クラブ",
     "slug": "kenies-gakudo-app",
     "version": "1.0.0",
+    "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "keniesgakudoapp",
+    "userInterfaceStyle": "automatic",
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",
@@ -21,10 +23,7 @@
       }
     },
     "plugins": [
-      "expo-router",
-      "expo-image-picker",
-      "expo-sharing",
-      "expo-print"
+      "expo-router"
     ]
   }
 }
