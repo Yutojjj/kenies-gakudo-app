@@ -3,27 +3,20 @@
     "name": "ケーニーズ学童クラブ",
     "slug": "kenies-gakudo-app",
     "version": "1.0.0",
-    "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "keniesgakudoapp",
-    "userInterfaceStyle": "automatic",
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",
-      "bundler": "metro",
+      "description": "ケーニーズ学童クラブ",
       "config": {
         "pwa": {
           "manifest": {
             "display": "standalone",
-            "start_url": "/",
             "background_color": "#ffffff",
             "theme_color": "#FF69B4"
           }
         }
       }
-    },
-    "plugins": [
-      "expo-router"
-    ]
+    }
   }
 }
