@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -132,10 +132,16 @@ export default function ShiftCreateScreen() {
       setCurrentDayAssigned([...currentDayAssigned, { name: staffName, start: '14:00', end: '18:30' }]);
     };
     if (isUnavailable) {
-      Alert.alert('確認', `${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`, [
-        { text: 'キャンセル', style: 'cancel' },
-        { text: '追加する', style: 'destructive', onPress: proceedAdd }
-      ]);
+      if (Platform.OS === 'web') {
+        if (window.confirm(`${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`)) {
+          proceedAdd();
+        }
+      } else {
+        Alert.alert('確認', `${staffName}さんは「出勤不可(✕)」を提出していますが、シフトに追加しますか？`, [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '追加する', style: 'destructive', onPress: proceedAdd }
+        ]);
+      }
     } else {
       proceedAdd();
     }

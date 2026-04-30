@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
 
@@ -25,10 +25,19 @@ export default function AccountManagementScreen() {
   }, []);
 
   const handleDelete = (id: string) => {
+    // Web では Alert.alert のボタンが動作しないため window.confirm を使用
+    if (Platform.OS === 'web') {
+      if (window.confirm('このアカウントを完全に削除しますか？')) {
+        deleteDoc(doc(db, 'accounts', id))
+          .then(() => setSelectedAccount(null))
+          .catch(() => window.alert('削除に失敗しました。'));
+      }
+      return;
+    }
     Alert.alert('削除確認', 'このアカウントを完全に削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: async () => {
-        try { await deleteDoc(doc(db, 'accounts', id)); setSelectedAccount(null); } 
+        try { await deleteDoc(doc(db, 'accounts', id)); setSelectedAccount(null); }
         catch (error) { Alert.alert('エラー', '削除に失敗しました。'); }
       }}
     ]);

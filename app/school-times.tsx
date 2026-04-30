@@ -3,15 +3,16 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -150,6 +151,12 @@ export default function SchoolTimesScreen() {
   };
 
   const handleDeleteTime = (timeValue: string) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${timeValue} を候補から削除しますか？`)) {
+        
+      }
+      return;
+    }
     Alert.alert('削除確認', `${timeValue} を候補から削除しますか？`, [
       { text: 'キャンセル' },
       { 

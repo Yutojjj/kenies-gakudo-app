@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -45,6 +45,13 @@ export default function MenuScreen() {
   const closeSettings = () => { Animated.timing(slideAnim, { toValue: width, duration: 300, useNativeDriver: true }).start(() => setSettingsVisible(false)); };
 
   const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('ログアウトしますか？')) {
+        await AsyncStorage.removeItem('loggedInUser');
+        router.replace('/');
+      }
+      return;
+    }
     Alert.alert('ログアウト', 'ログアウトしますか？', [
       { text: 'キャンセル', style: 'cancel' },
       { text: 'ログアウト', style: 'destructive', onPress: async () => { await AsyncStorage.removeItem('loggedInUser'); router.replace('/'); }}

@@ -3,16 +3,17 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -113,7 +114,14 @@ export default function EventManagementScreen() {
     }
   };
 
-  const deleteEvent = () => {
+  const deleteEvent = async () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('削除確認\nこのイベントを削除しますか？')) {
+        await deleteDoc(doc(db, 'events', selectedDateStr));
+        setModalVisible(false);
+      }
+      return;
+    }
     Alert.alert('削除確認', 'このイベントを削除しますか？', [
       { text: 'キャンセル' },
       { text: '削除', style: 'destructive', onPress: async () => {

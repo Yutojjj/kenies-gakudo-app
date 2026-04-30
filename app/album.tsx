@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 
@@ -173,7 +173,25 @@ export default function AlbumScreen() {
 
   const handleSavePhoto = () => Alert.alert('保存完了', '端末のアルバムに保存しました。');
 
-  const handleDeletePhoto = () => {
+  const handleDeletePhoto = async () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('この写真をクラウドから完全に削除しますか？')) {
+        if (selectedPhoto) {
+          try {
+            if (selectedPhoto.storagePath) {
+              const storageRef = ref(storage, selectedPhoto.storagePath);
+              await deleteObject(storageRef);
+            }
+            await deleteDoc(doc(db, 'albums', selectedPhoto.id));
+            setSelectedPhoto(null);
+          } catch (e) {
+            console.error("Delete error:", e);
+            window.alert('削除に失敗しました。');
+          }
+        }
+      }
+      return;
+    }
     Alert.alert('削除確認', 'この写真をクラウドから完全に削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: async () => {
