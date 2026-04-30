@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
 
@@ -10,10 +10,26 @@ export default function AccountManagementScreen() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // 基本フィルター
   const [filterRole, setFilterRole] = useState<'all' | 'user' | 'staff'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // 詳細絞り込み用ステート
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [selectedUsageTypes, setSelectedUsageTypes] = useState<string[]>([]);
+  
+  // 詳細絞り込み用マスターデータ
+  const [masterSchools, setMasterSchools] = useState<string[]>([]);
+  const [masterGrades, setMasterGrades] = useState<string[]>([]);
+  const USAGE_TYPES = ['定期利用', '回数券', '不定期'];
+
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
 
   useEffect(() => {
+    // アカウント一覧の取得
     const q = query(collection(db, 'accounts'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -21,11 +37,27 @@ export default function AccountManagementScreen() {
     }, (error) => {
       console.error(error); Alert.alert('エラー', 'データの取得に失敗しました。'); setLoading(false);
     });
+
+    // 学校・学年のマスターデータ取得（絞り込みの選択肢用）
+    const fetchMasterData = async () => {
+      try {
+        const masterRef = doc(db, 'settings', 'master_data');
+        const masterSnap = await getDoc(masterRef);
+        if (masterSnap.exists()) {
+          const data = masterSnap.data();
+          if (data.schools) setMasterSchools(data.schools);
+          if (data.grades) setMasterGrades(data.grades);
+        }
+      } catch (error) {
+        console.error("Master data fetch error:", error);
+      }
+    };
+    fetchMasterData();
+
     return () => unsubscribe();
   }, []);
 
   const handleDelete = (id: string) => {
-    // Web では Alert.alert のボタンが動作しないため window.confirm を使用
     if (Platform.OS === 'web') {
       if (window.confirm('このアカウントを完全に削除しますか？')) {
         deleteDoc(doc(db, 'accounts', id))
@@ -45,7 +77,75 @@ export default function AccountManagementScreen() {
 
   const handleEdit = (id: string) => { setSelectedAccount(null); router.push({ pathname: '/account/form', params: { id } }); };
 
-  const filteredAccounts = accounts.filter(acc => filterRole === 'all' ? true : acc.role === filterRole);
+  // --- 絞り込み処理 ---
+  const toggleFilterArray = (currentArray: string[], value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+    if (currentArray.includes(value)) {
+      setter(currentArray.filter(item => item !== value));
+    } else {
+      setter([...currentArray, value]);
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedSchools([]);
+    setSelectedGrades([]);
+    setSelectedUsageTypes([]);
+  };
+
+  // 表示するデータのフィルタリング
+  const filteredAccounts = accounts.filter(acc => {
+    // 1. タブ（Role）での絞り込み
+    if (filterRole !== 'all' && acc.role !== filterRole) return false;
+    
+    // 2. 検索バーでの絞り込み (名前 or ニックネーム)
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = acc.name?.toLowerCase().includes(q);
+      const matchKana = acc.nicknameKana?.toLowerCase().includes(q);
+      
+      // 兄弟の名前やニックネームも検索対象に含める場合
+      let matchSibling = false;
+      if (acc.siblings && Array.isArray(acc.siblings)) {
+        matchSibling = acc.siblings.some((sib: any) => 
+          sib.name?.toLowerCase().includes(q) || sib.nicknameKana?.toLowerCase().includes(q)
+        );
+      }
+      
+      if (!matchName && !matchKana && !matchSibling) return false;
+    }
+
+    // 3. 詳細絞り込み（学校、学年、利用形態）※スタッフは基本的に弾かれるか、条件なしなら表示
+    const hasDetailedFilters = selectedSchools.length > 0 || selectedGrades.length > 0 || selectedUsageTypes.length > 0;
+    
+    if (hasDetailedFilters) {
+      // スタッフは学校等の属性を持たないため、詳細フィルターがかかっている場合は除外する
+      if (acc.role === 'staff') return false;
+
+      let isMatchMain = true;
+      if (selectedSchools.length > 0 && !selectedSchools.includes(acc.school)) isMatchMain = false;
+      if (selectedGrades.length > 0 && !selectedGrades.includes(acc.grade)) isMatchMain = false;
+      if (selectedUsageTypes.length > 0 && !selectedUsageTypes.includes(acc.usageType)) isMatchMain = false;
+
+      // 本人がマッチしていればOK
+      if (isMatchMain) return true;
+
+      // 本人がマッチしなくても、兄弟がマッチしていれば親アカウントごと表示する
+      if (acc.siblings && Array.isArray(acc.siblings)) {
+        const isMatchSibling = acc.siblings.some((sib: any) => {
+          let sibMatch = true;
+          if (selectedSchools.length > 0 && !selectedSchools.includes(sib.school)) sibMatch = false;
+          if (selectedGrades.length > 0 && !selectedGrades.includes(sib.grade)) sibMatch = false;
+          if (selectedUsageTypes.length > 0 && !selectedUsageTypes.includes(sib.usageType)) sibMatch = false;
+          return sibMatch;
+        });
+        if (isMatchSibling) return true;
+      }
+      
+      return false; // 本人も兄弟も条件に合わない
+    }
+
+    return true;
+  });
 
   const getSkillsText = (skills: any) => {
     if (!skills) return 'なし';
@@ -56,12 +156,41 @@ export default function AccountManagementScreen() {
     return activeSkills.length > 0 ? activeSkills.join(', ') : 'なし';
   };
 
+  const activeFilterCount = selectedSchools.length + selectedGrades.length + selectedUsageTypes.length;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.filterContainer}>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'all' && styles.filterBtnActive]} onPress={() => setFilterRole('all')}><Text style={[styles.filterText, filterRole === 'all' && styles.filterTextActive]}>すべて</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'user' && styles.filterBtnActive]} onPress={() => setFilterRole('user')}><Text style={[styles.filterText, filterRole === 'user' && styles.filterTextActive]}>利用者</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'staff' && styles.filterBtnActive]} onPress={() => setFilterRole('staff')}><Text style={[styles.filterText, filterRole === 'staff' && styles.filterTextActive]}>スタッフ</Text></TouchableOpacity>
+      </View>
+
+      {/* 検索バー ＆ 詳細絞り込みボタン */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color={COLORS.textLight} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="名前やニックネームで検索"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity 
+          style={[styles.detailedFilterBtn, activeFilterCount > 0 && styles.detailedFilterBtnActive]} 
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Ionicons name="filter" size={20} color={activeFilterCount > 0 ? COLORS.white : COLORS.primary} />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}><Text style={styles.filterBadgeText}>{activeFilterCount}</Text></View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -89,6 +218,7 @@ export default function AccountManagementScreen() {
 
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/account/form')}><Ionicons name="add" size={32} color={COLORS.white} /></TouchableOpacity>
 
+      {/* --- アカウント詳細モーダル --- */}
       <Modal visible={!!selectedAccount} transparent={true} animationType="fade" onRequestClose={() => setSelectedAccount(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -116,7 +246,6 @@ export default function AccountManagementScreen() {
                       <View style={styles.detailRow}><Ionicons name="business-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>雇用形態:</Text><Text style={styles.detailData}>{selectedAccount.empType}</Text></View>
                       <View style={styles.detailRow}><Ionicons name="options-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>スキル:</Text><Text style={styles.detailData}>{getSkillsText(selectedAccount.skills)}</Text></View>
                       
-                      {/* ★ スタッフの子供情報（複数対応） */}
                       {selectedAccount.hasChild && (selectedAccount.staffChildren || selectedAccount.childName) && (
                         <View style={styles.detailRow}>
                           <Ionicons name="people-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/>
@@ -158,6 +287,71 @@ export default function AccountManagementScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* --- 詳細絞り込みモーダル --- */}
+      <Modal visible={filterModalVisible} transparent={true} animationType="slide">
+        <View style={styles.filterModalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>詳細絞り込み</Text>
+              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.textLight} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+              <Text style={styles.filterSectionTitle}>学校名 (複数選択可)</Text>
+              <View style={styles.filterChipContainer}>
+                {masterSchools.map(school => (
+                  <TouchableOpacity 
+                    key={school} 
+                    style={[styles.filterChip, selectedSchools.includes(school) && styles.filterChipActive]}
+                    onPress={() => toggleFilterArray(selectedSchools, school, setSelectedSchools)}
+                  >
+                    <Text style={[styles.filterChipText, selectedSchools.includes(school) && styles.filterChipTextActive]}>{school}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.filterSectionTitle}>学年 (複数選択可)</Text>
+              <View style={styles.filterChipContainer}>
+                {masterGrades.map(grade => (
+                  <TouchableOpacity 
+                    key={grade} 
+                    style={[styles.filterChip, selectedGrades.includes(grade) && styles.filterChipActive]}
+                    onPress={() => toggleFilterArray(selectedGrades, grade, setSelectedGrades)}
+                  >
+                    <Text style={[styles.filterChipText, selectedGrades.includes(grade) && styles.filterChipTextActive]}>{grade}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.filterSectionTitle}>利用形態 (複数選択可)</Text>
+              <View style={styles.filterChipContainer}>
+                {USAGE_TYPES.map(usage => (
+                  <TouchableOpacity 
+                    key={usage} 
+                    style={[styles.filterChip, selectedUsageTypes.includes(usage) && styles.filterChipActive]}
+                    onPress={() => toggleFilterArray(selectedUsageTypes, usage, setSelectedUsageTypes)}
+                  >
+                    <Text style={[styles.filterChipText, selectedUsageTypes.includes(usage) && styles.filterChipTextActive]}>{usage}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={{height: 20}}/>
+            </ScrollView>
+
+            <View style={styles.filterModalFooter}>
+              <TouchableOpacity style={styles.clearFilterBtn} onPress={clearFilters}>
+                <Text style={styles.clearFilterText}>クリア</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyFilterBtn} onPress={() => setFilterModalVisible(false)}>
+                <Text style={styles.applyFilterText}>絞り込む</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -170,6 +364,18 @@ const styles = StyleSheet.create({
   filterBtnActive: { backgroundColor: COLORS.primary },
   filterText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
   filterTextActive: { color: COLORS.white },
+  
+  // 検索バー＆詳細フィルターボタン
+  searchRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 12 },
+  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: COLORS.text },
+  clearSearchBtn: { padding: 4 },
+  detailedFilterBtn: { width: 44, height: 44, backgroundColor: COLORS.white, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center' },
+  detailedFilterBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  filterBadge: { position: 'absolute', top: -6, right: -6, backgroundColor: COLORS.danger, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  filterBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold' },
+
   listContainer: { padding: 16, paddingBottom: 100 },
   accountCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 12, padding: 20, marginBottom: 12, shadowColor: COLORS.primary, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, borderWidth: 1 },
   cardStaff: { backgroundColor: '#FAFAFA', borderColor: '#EAEAEA' }, 
@@ -205,4 +411,21 @@ const styles = StyleSheet.create({
   modalBtnTextWhite: { color: COLORS.white, fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
   modalDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0' },
   modalBtnTextDanger: { color: COLORS.danger, fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
+
+  // 詳細絞り込みモーダル
+  filterModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  filterModalContent: { backgroundColor: COLORS.white, height: '80%', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  filterModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: COLORS.border, paddingBottom: 16, marginBottom: 16 },
+  filterModalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  filterSectionTitle: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 12, marginTop: 16 },
+  filterChipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  filterChipActive: { backgroundColor: COLORS.primary + '20', borderColor: COLORS.primary },
+  filterChipText: { fontSize: 14, color: COLORS.text },
+  filterChipTextActive: { color: COLORS.primary, fontWeight: 'bold' },
+  filterModalFooter: { flexDirection: 'row', gap: 12, paddingTop: 16, borderTopWidth: 1, borderColor: COLORS.border, paddingBottom: 20 },
+  clearFilterBtn: { flex: 1, paddingVertical: 14, borderRadius: 8, alignItems: 'center', backgroundColor: '#F0F0F0' },
+  clearFilterText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16 },
+  applyFilterBtn: { flex: 2, paddingVertical: 14, borderRadius: 8, alignItems: 'center', backgroundColor: COLORS.primary },
+  applyFilterText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
 });
