@@ -2,11 +2,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput, // ★ ここが抜け落ちていたため追加しました
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
-// --- 型定義 ---
+const customAlert = (title: string, message?: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 type ChildInfo = { 
   id: string; 
   name: string; 
@@ -17,7 +35,6 @@ type ChildInfo = {
   days?: Record<string, boolean>; 
 };
 type LessonTemplate = { id: string; name: string; time: string; };
-// ★ 修正: lesson を単一オブジェクトから配列に変更
 type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; };
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
@@ -26,6 +43,7 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function ScheduleScreen() {
   const router = useRouter();
+  // リストなどから飛んできたときに対象となる児童の名前（同じ名前の兄弟などは一意のIDで判定します）
   const { name } = useLocalSearchParams<{ name: string }>();
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -57,7 +75,6 @@ export default function ScheduleScreen() {
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
   const [timePickerVisible, setTimePickerVisible] = useState(false);
-  // ★ 修正: lessonの変更時は対象のLessonTemplateも保持する
   const [timePickerTarget, setTimePickerTarget] = useState<'pickup' | 'lesson'>('pickup');
   const [editingLessonIndex, setEditingLessonIndex] = useState<number>(-1);
   const [tempHour, setTempHour] = useState(15);
@@ -79,43 +96,66 @@ export default function ScheduleScreen() {
         }
 
         const targetName = name || '';
-        const q = query(collection(db, 'accounts'), where('name', '==', targetName));
-        const snapshot = await getDocs(q);
         
-        if (!snapshot.empty) {
-          const docSnap = snapshot.docs[0];
-          const data = docSnap.data();
-          const parentId = docSnap.id;
-          setParentDocId(parentId);
-          
-          if (data.lessonTemplates) {
-            setLessonTemplates(data.lessonTemplates);
-          }
+        // ★ ④ 兄弟も含めて名前が一致する親ドキュメントを探す
+        const qAccounts = query(collection(db, 'accounts'));
+        const snapshot = await getDocs(qAccounts);
+        
+        let foundParentId = '';
+        let foundData: any = null;
+        
+        snapshot.docs.forEach(docSnap => {
+           const d = docSnap.data();
+           if (d.name === targetName || 
+               (d.childName && d.childName === targetName) || 
+               (d.siblings && d.siblings.some((s:any) => s.name === targetName)) ||
+               (d.staffChildren && d.staffChildren.some((c:any) => c.name === targetName))) {
+               foundParentId = docSnap.id;
+               foundData = d;
+           }
+        });
+
+        if (foundData) {
+          setParentDocId(foundParentId);
+          if (foundData.lessonTemplates) setLessonTemplates(foundData.lessonTemplates);
           
           const loadedChildren: ChildInfo[] = [];
           
-          if (data.role === 'staff' && data.hasChild) {
-            loadedChildren.push({
-              id: parentId, 
-              name: data.childName || 'スタッフの子', 
-              grade: data.childGrade || '', 
-              school: data.childSchool || '', 
-              isStaffChild: true, 
-              parentName: data.name
-            });
-          } else if (data.role === 'user') {
+          if (foundData.role === 'staff' && foundData.hasChild) {
+             if (foundData.staffChildren && foundData.staffChildren.length > 0) {
+                 foundData.staffChildren.forEach((child: any, idx: number) => {
+                     loadedChildren.push({
+                         id: child.id || `${foundParentId}_staffchild_${idx}`,
+                         name: child.name,
+                         school: child.school || '',
+                         grade: child.grade || '',
+                         isStaffChild: true,
+                         parentName: foundData.name
+                     });
+                 });
+             } else if (foundData.childName) {
+                 loadedChildren.push({
+                     id: `${foundParentId}_staffchild_0`,
+                     name: foundData.childName,
+                     school: foundData.childSchool || '',
+                     grade: foundData.childGrade || '',
+                     isStaffChild: true,
+                     parentName: foundData.name
+                 });
+             }
+          } else if (foundData.role === 'user') {
             loadedChildren.push({ 
-              id: parentId, 
-              name: data.name, 
-              grade: data.grade || '', 
-              school: data.school || '', 
+              id: foundParentId, 
+              name: foundData.name, 
+              grade: foundData.grade || '', 
+              school: foundData.school || '', 
               isStaffChild: false,
-              days: data.days || {} 
+              days: foundData.days || {} 
             });
-            if (data.siblings && Array.isArray(data.siblings)) {
-              data.siblings.forEach((sib: any, idx: number) => {
+            if (foundData.siblings && Array.isArray(foundData.siblings)) {
+              foundData.siblings.forEach((sib: any, idx: number) => {
                 loadedChildren.push({ 
-                  id: `${parentId}_sib_${idx}`, 
+                  id: sib.id || `${foundParentId}_sib_${idx}`, 
                   name: sib.name, 
                   grade: sib.grade || '', 
                   school: sib.school || '', 
@@ -126,12 +166,15 @@ export default function ScheduleScreen() {
             }
           }
           setChildren(loadedChildren);
+          
+          // 開いた時に、渡された名前の子のタブをアクティブにする
+          const targetIndex = loadedChildren.findIndex(c => c.name === targetName);
+          if (targetIndex !== -1) setActiveChildIdx(targetIndex);
 
-          onSnapshot(query(collection(db, 'schedules'), where('parentId', '==', parentId)), (sSnap) => {
+          onSnapshot(query(collection(db, 'schedules'), where('parentId', '==', foundParentId)), (sSnap) => {
             const sData: Record<string, DailyData> = {};
             sSnap.forEach(d => {
               const item = d.data();
-              // ★ 修正: 古い単一lessonデータも配列に変換して保持
               let lessons: LessonTemplate[] = [];
               if (item.lessons) {
                   lessons = item.lessons;
@@ -143,7 +186,7 @@ export default function ScheduleScreen() {
             setScheduleData(sData);
           });
           
-          onSnapshot(doc(db, 'accounts', parentId), (accSnap) => {
+          onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
              if(accSnap.exists()) {
                  const accData = accSnap.data();
                  if(accData.lessonTemplates) setLessonTemplates(accData.lessonTemplates);
@@ -189,7 +232,6 @@ export default function ScheduleScreen() {
 
       } catch (error) {
         console.error("データ取得エラー:", error);
-      } finally {
       }
     };
     fetchData();
@@ -197,7 +239,7 @@ export default function ScheduleScreen() {
 
   const saveLessonTemplate = async () => {
     if (!newLessonName.trim()) {
-      Alert.alert('エラー', '習い事の名前を入力してください。');
+      customAlert('エラー', '習い事の名前を入力してください。');
       return;
     }
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
@@ -215,11 +257,18 @@ export default function ScheduleScreen() {
       setNewLessonName('');
       setEditingTemplateId(null);
     } catch(e) {
-      Alert.alert('エラー', '習い事の保存に失敗しました。');
+      customAlert('エラー', '習い事の保存に失敗しました。');
     }
   };
 
   const deleteLessonTemplate = (id: string) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('この習い事の項目を削除しますか？\n(※すでに登録済みのスケジュールは消えません)')) {
+         const newTemplates = lessonTemplates.filter(t => t.id !== id);
+         setDoc(doc(db, 'accounts', parentDocId), { lessonTemplates: newTemplates }, { merge: true });
+      }
+      return;
+    }
     Alert.alert('削除確認', 'この習い事の項目を削除しますか？\n(※すでに登録済みのスケジュールは消えません)', [
       { text: 'キャンセル' },
       { text: '削除', style: 'destructive', onPress: async () => {
@@ -232,7 +281,6 @@ export default function ScheduleScreen() {
   const saveToFirestore = async (dateStr: string, data: Partial<DailyData>) => {
     const child = children[activeChildIdx];
     if (!child) return;
-    const parentId = children[0].id; 
     const docId = `${child.id}_${dateStr}`;
     
     setScheduleData(prev => {
@@ -241,15 +289,14 @@ export default function ScheduleScreen() {
     });
 
     try {
-      // ★ 修正: nullを保存して擬似的に削除する仕様に変更 (deleteFieldを使わない安全な方法)
-      const saveData: any = { parentId, childId: child.id, dateStr, updatedAt: new Date() };
+      const saveData: any = { parentId: parentDocId, childId: child.id, dateStr, updatedAt: new Date() };
       
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
 
       await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
     } catch (e) {
-      Alert.alert('エラー', 'データの保存に失敗しました');
+      customAlert('エラー', 'データの保存に失敗しました');
     }
   };
   
@@ -268,15 +315,13 @@ export default function ScheduleScreen() {
                 updatedAt: new Date()
             });
          } else {
-             // ★ 修正: Firebaseの deleteDoc() はそのまま使用可能。
-             // エラーが出ていた場合は import { deleteDoc } from 'firebase/firestore'; が不足していた可能性があります（追記済み）
              const { deleteDoc } = require('firebase/firestore');
              await deleteDoc(doc(db, 'event_participants', docId));
          }
          setEventModalVisible(false);
-         Alert.alert('完了', isAttending ? '参加を申し込みました' : '参加をキャンセルしました');
+         customAlert('完了', isAttending ? '参加を申し込みました' : '参加をキャンセルしました');
      } catch(e) {
-         Alert.alert('エラー', '操作に失敗しました');
+         customAlert('エラー', '操作に失敗しました');
      }
   };
 
@@ -337,17 +382,14 @@ export default function ScheduleScreen() {
 
   const handleDayPress = (dateStr: string) => {
     if (isStampingMode && activeTemplate) {
-      // ★ 複数選択(トグル)対応: すでに同じIDがあれば削除、なければ追加
       const key = getScheduleKey(dateStr);
       const currentLessons = scheduleData[key]?.lessons || [];
       const existingIdx = currentLessons.findIndex(l => l.id === activeTemplate.id);
       
       let newLessons = [...currentLessons];
       if (existingIdx >= 0) {
-          // すでにある場合は解除(削除)
           newLessons.splice(existingIdx, 1);
       } else {
-          // ない場合は追加
           newLessons.push(activeTemplate);
       }
       saveToFirestore(dateStr, { lessons: newLessons });
@@ -381,7 +423,6 @@ export default function ScheduleScreen() {
     if (timePickerTarget === 'pickup') {
       saveToFirestore(selectedDateStr, { pickupTime: timeStr });
     } else if (timePickerTarget === 'lesson' && editingLessonIndex >= 0) {
-      // 特定の習い事の時間を変更
       const updatedLessons = [...(current.lessons || [])];
       updatedLessons[editingLessonIndex] = { ...updatedLessons[editingLessonIndex], time: timeStr };
       saveToFirestore(selectedDateStr, { lessons: updatedLessons });
@@ -389,7 +430,6 @@ export default function ScheduleScreen() {
     setTimePickerVisible(false);
   };
 
-  // ★ 修正: deleteField を使わず、配列の更新や null をセットすることで削除を表現する
   const deleteItem = async (target: 'pickup' | 'lesson', lessonIndex: number = -1) => {
     const child = children[activeChildIdx];
     if (!child) return;
@@ -397,7 +437,7 @@ export default function ScheduleScreen() {
     const current = scheduleData[key] || {};
 
     if (target === 'pickup') {
-       saveToFirestore(selectedDateStr, { pickupTime: null }); // nullを渡すことで自動計算に戻る
+       saveToFirestore(selectedDateStr, { pickupTime: null });
     } else if (target === 'lesson' && lessonIndex >= 0) {
        const updatedLessons = [...(current.lessons || [])];
        updatedLessons.splice(lessonIndex, 1);
@@ -417,7 +457,6 @@ export default function ScheduleScreen() {
       setIsStampingMode(true);
       setTemplateModalVisible(false);
     } else {
-      // 単一の日付に追加（すでにある場合は追加しない）
       const key = getScheduleKey(selectedDateStr);
       const currentLessons = scheduleData[key]?.lessons || [];
       if (!currentLessons.find(l => l.id === template.id)) {
@@ -427,7 +466,6 @@ export default function ScheduleScreen() {
       setTemplateModalVisible(false);
     }
   };
-
 
   if (children.length === 0) {
     return (
@@ -479,7 +517,6 @@ export default function ScheduleScreen() {
                   )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
                   
-                  {/* ★ 複数習い事の表示 */}
                   {cellData.lessons && cellData.lessons.length > 0 && cellData.lessons.map((lesson, idx) => (
                       <View key={`les-${idx}`} style={styles.lessonBadge}>
                         <Text style={styles.lessonText}>{lesson.name}</Text>
@@ -544,7 +581,6 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
       )}
 
-      {/* --- 通常の予定編集モーダル --- */}
       <Modal visible={editModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.editModalContent}>
@@ -589,7 +625,6 @@ export default function ScheduleScreen() {
                   </View>
                 </View>
 
-                {/* ★ 複数習い事のリスト表示 */}
                 <View style={styles.editSection}>
                   <View style={styles.editSectionHeader}>
                     <Ionicons name="bus-outline" size={20} color={COLORS.info} />
@@ -619,7 +654,6 @@ export default function ScheduleScreen() {
                       </View>
                   )}
                   
-                  {/* 追加ボタンを常に表示 */}
                   <TouchableOpacity style={[styles.saveBtn, {marginTop: 8, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} onPress={() => { setTemplateSelectMode('singleDay'); setTemplateModalVisible(true); }}>
                       <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
                       <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>この日に習い事を追加</Text>
@@ -631,7 +665,6 @@ export default function ScheduleScreen() {
         </View>
       </Modal>
 
-      {/* イベント詳細・参加モーダル */}
       <Modal visible={eventModalVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
               <View style={styles.editModalContent}>
@@ -940,9 +973,8 @@ const styles = StyleSheet.create({
   },
   calCellEmpty: { 
     width: '14.28%', 
-    minHeight: 60 // ★ 空セルの最小高さを指定
+    minHeight: 60 
   },
-  // ★ 修正: aspectRatioを削除し、minHeightを指定することで中身に合わせて縦に伸びるようにする
   calCell: { 
     width: '14.28%', 
     minHeight: 70, 

@@ -3,20 +3,37 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
+// --- Web/Native 共通の安全なアラート関数 ---
+const customAlert = (title: string, message?: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 type ChildInfo = { id: string; name: string; };
 type EventData = { id: string; dateStr: string; title: string; description: string; };
+
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function EventListScreen() {
   const router = useRouter();
@@ -32,7 +49,6 @@ export default function EventListScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. ログインユーザーの子供を取得
         const targetName = name || '';
         const q = query(collection(db, 'accounts'), where('name', '==', targetName));
         const snapshot = await getDocs(q);
@@ -63,16 +79,21 @@ export default function EventListScreen() {
           setChildren(loadedChildren);
         }
 
-        // 2. 開催予定のイベントを取得（過去のイベントは省略可能ですが今回は全取得）
         const unsubEvents = onSnapshot(collection(db, 'events'), (snap) => {
           const evList: EventData[] = [];
-          snap.forEach(d => evList.push(d.data() as EventData));
-          // 日付順にソート
+          const todayStr = getLocalDateString(new Date());
+
+          snap.forEach(d => {
+            const evData = d.data() as EventData;
+            // 今日以降のイベントのみリストに追加
+            if (evData.dateStr >= todayStr) {
+              evList.push(evData);
+            }
+          });
           evList.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
           setEvents(evList);
         });
 
-        // 3. 参加状況を取得
         const unsubParts = onSnapshot(collection(db, 'event_participants'), (snap) => {
           const pData: Record<string, Record<string, string>> = {};
           snap.forEach(d => {
@@ -108,7 +129,7 @@ export default function EventListScreen() {
         updatedAt: new Date()
       }, { merge: true });
     } catch (e) {
-      Alert.alert('エラー', '保存に失敗しました');
+      customAlert('エラー', '保存に失敗しました');
     }
   };
 
@@ -190,137 +211,28 @@ export default function EventListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.background 
-  },
-  center: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 20, 
-    backgroundColor: COLORS.white, 
-    borderBottomWidth: 1, 
-    borderColor: COLORS.border 
-  },
-  backBtn: { 
-    marginRight: 16 
-  },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: COLORS.text 
-  },
-  scrollArea: { 
-    flex: 1, 
-    padding: 16 
-  },
-  instruction: { 
-    fontSize: 14, 
-    color: COLORS.textLight, 
-    marginBottom: 16, 
-    fontWeight: 'bold',
-    textAlign: 'center'
-  },
-  noEventText: { 
-    textAlign: 'center', 
-    color: COLORS.textLight, 
-    marginTop: 40 
-  },
-  eventCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  dateBadge: {
-    backgroundColor: COLORS.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginRight: 12
-  },
-  dateText: {
-    color: COLORS.primary,
-    fontWeight: 'bold',
-    fontSize: 14
-  },
-  eventTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    flex: 1
-  },
-  eventDesc: {
-    fontSize: 14,
-    color: COLORS.textLight,
-    lineHeight: 20,
-    marginBottom: 16,
-    backgroundColor: '#F9F9F9',
-    padding: 12,
-    borderRadius: 8
-  },
-  participantSection: {
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
-    paddingTop: 16
-  },
-  childRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  childName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    flex: 1
-  },
-  actionBtns: {
-    flexDirection: 'row',
-    gap: 8
-  },
-  statusBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.white
-  },
-  statusBtnActiveY: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary
-  },
-  statusBtnActiveN: {
-    backgroundColor: COLORS.danger,
-    borderColor: COLORS.danger
-  },
-  statusBtnText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: COLORS.textLight
-  },
-  statusBtnTextActiveY: {
-    color: COLORS.white
-  },
-  statusBtnTextActiveN: {
-    color: COLORS.white
-  }
+  container: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  backBtn: { marginRight: 16 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  scrollArea: { flex: 1, padding: 16 },
+  instruction: { fontSize: 14, color: COLORS.textLight, marginBottom: 16, fontWeight: 'bold', textAlign: 'center' },
+  noEventText: { textAlign: 'center', color: COLORS.textLight, marginTop: 40 },
+  eventCard: { backgroundColor: COLORS.white, borderRadius: 16, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3, borderWidth: 1, borderColor: COLORS.border },
+  eventHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  dateBadge: { backgroundColor: COLORS.primary + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginRight: 12 },
+  dateText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 14 },
+  eventTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  eventDesc: { fontSize: 14, color: COLORS.textLight, lineHeight: 20, marginBottom: 16, backgroundColor: '#F9F9F9', padding: 12, borderRadius: 8 },
+  participantSection: { borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 16 },
+  childRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  childName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  actionBtns: { flexDirection: 'row', gap: 8 },
+  statusBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white },
+  statusBtnActiveY: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  statusBtnActiveN: { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
+  statusBtnText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
+  statusBtnTextActiveY: { color: COLORS.white },
+  statusBtnTextActiveN: { color: COLORS.white }
 });

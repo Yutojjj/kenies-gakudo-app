@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,6 +17,28 @@ import {
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
+// --- Web/Native 共通の安全なアラート関数 ---
+const customAlert = (title: string, message?: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
+const customConfirm = (title: string, message: string, onConfirm: () => void) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: 'OK', style: 'destructive', onPress: onConfirm }
+    ]);
+  }
+};
+
 type EventData = { id: string; dateStr: string; title: string; description: string; externalParticipants: any[]; };
 type Participant = { id: string; childName: string; status: string; };
 
@@ -24,8 +46,10 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function EventManagementScreen() {
   const router = useRouter();
+  const { role } = useLocalSearchParams<{ role: string }>();
+  const isAdmin = role === 'admin';
+
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
   
   const [events, setEvents] = useState<Record<string, EventData>>({});
   const [participantsMap, setParticipantsMap] = useState<Record<string, Participant[]>>({});
@@ -100,36 +124,29 @@ export default function EventManagementScreen() {
   };
 
   const saveEvent = async () => {
-    if (!eventTitle) return Alert.alert('エラー', 'イベント名を入力してください');
+    if (!isAdmin) return;
+    if (!eventTitle) return customAlert('エラー', 'イベント名を入力してください');
     try {
       const ev = events[selectedDateStr] || { id: selectedDateStr, dateStr: selectedDateStr, externalParticipants: [] };
       await setDoc(doc(db, 'events', selectedDateStr), { ...ev, title: eventTitle, description: eventDesc }, { merge: true });
-      Alert.alert('保存完了', 'イベント情報を保存しました');
+      customAlert('保存完了', 'イベント情報を保存しました');
       setModalVisible(false);
     } catch (e) {
-      Alert.alert('エラー', '保存に失敗しました');
+      customAlert('エラー', '保存に失敗しました');
     }
   };
 
   const deleteEvent = async () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('削除確認\nこのイベントを削除しますか？')) {
-        await deleteDoc(doc(db, 'events', selectedDateStr));
-        setModalVisible(false);
-      }
-      return;
-    }
-    Alert.alert('削除確認', 'このイベントを削除しますか？', [
-      { text: 'キャンセル' },
-      { text: '削除', style: 'destructive', onPress: async () => {
-          await deleteDoc(doc(db, 'events', selectedDateStr));
-          setModalVisible(false);
-      }}
-    ]);
+    if (!isAdmin) return;
+    customConfirm('削除確認', 'このイベントを削除しますか？', async () => {
+      await deleteDoc(doc(db, 'events', selectedDateStr));
+      setModalVisible(false);
+    });
   };
 
   const addExternalParticipant = async () => {
-    if (!extName) return Alert.alert('エラー', '氏名を入力してください');
+    if (!isAdmin) return;
+    if (!extName) return customAlert('エラー', '氏名を入力してください');
     try {
       const ev = events[selectedDateStr] || { id: selectedDateStr, dateStr: selectedDateStr, title: eventTitle, description: eventDesc, externalParticipants: [] };
       const newExt = { id: Date.now().toString(), name: extName, school: extSchool, grade: extGrade };
@@ -137,11 +154,12 @@ export default function EventManagementScreen() {
       await setDoc(doc(db, 'events', selectedDateStr), { ...ev, externalParticipants: updatedExtList }, { merge: true });
       setExtName(''); setExtSchool(''); setExtGrade('');
     } catch (e) {
-      Alert.alert('エラー', '追加に失敗しました');
+      customAlert('エラー', '追加に失敗しました');
     }
   };
 
   const removeExternalParticipant = async (extId: string) => {
+    if (!isAdmin) return;
     const ev = events[selectedDateStr];
     const updatedExtList = ev.externalParticipants.filter(p => p.id !== extId);
     await setDoc(doc(db, 'events', selectedDateStr), { externalParticipants: updatedExtList }, { merge: true });
@@ -161,7 +179,7 @@ export default function EventManagementScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>イベント管理</Text>
+        <Text style={styles.headerTitle}>イベント管理 {isAdmin ? '' : '(閲覧のみ)'}</Text>
       </View>
 
       <View style={styles.monthSelector}>
@@ -231,7 +249,7 @@ export default function EventManagementScreen() {
 
             <ScrollView style={{ flex: 1, padding: 20 }} showsVerticalScrollIndicator={false}>
               <Text style={styles.label}>イベント名</Text>
-              <TextInput style={styles.input} value={eventTitle} onChangeText={setEventTitle} placeholder="例: 春の遠足" />
+              <TextInput style={styles.input} value={eventTitle} onChangeText={setEventTitle} placeholder="例: 春の遠足" editable={isAdmin} />
               
               <Text style={styles.label}>説明・詳細</Text>
               <TextInput 
@@ -240,18 +258,21 @@ export default function EventManagementScreen() {
                 onChangeText={setEventDesc} 
                 placeholder="持ち物や集合時間など" 
                 multiline 
+                editable={isAdmin}
               />
               
-              <View style={styles.actionRow}>
-                {currentEvent && (
-                  <TouchableOpacity style={styles.deleteBtn} onPress={deleteEvent}>
-                    <Text style={styles.deleteBtnText}>イベント削除</Text>
+              {isAdmin && (
+                <View style={styles.actionRow}>
+                  {currentEvent && (
+                    <TouchableOpacity style={styles.deleteBtn} onPress={deleteEvent}>
+                      <Text style={styles.deleteBtnText}>イベント削除</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={styles.saveBtn} onPress={saveEvent}>
+                    <Text style={styles.saveBtnText}>保存する</Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.saveBtn} onPress={saveEvent}>
-                  <Text style={styles.saveBtnText}>保存する</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              )}
 
               {currentEvent && (
                 <View style={styles.participantsSection}>
@@ -271,24 +292,28 @@ export default function EventManagementScreen() {
                     externalParts.map((p: any) => (
                       <View key={p.id} style={styles.extRow}>
                         <Text style={styles.participantName}>・{p.name} ({p.school}/{p.grade})</Text>
-                        <TouchableOpacity onPress={() => removeExternalParticipant(p.id)}>
-                          <Ionicons name="trash" size={18} color={COLORS.danger}/>
-                        </TouchableOpacity>
+                        {isAdmin && (
+                          <TouchableOpacity onPress={() => removeExternalParticipant(p.id)}>
+                            <Ionicons name="trash" size={18} color={COLORS.danger}/>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     ))
                   )}
 
-                  <View style={styles.addExtBox}>
-                    <Text style={{fontWeight: 'bold', marginBottom: 8}}>外部参加者の追加</Text>
-                    <TextInput style={styles.smallInput} placeholder="氏名" value={extName} onChangeText={setExtName} />
-                    <View style={{flexDirection: 'row', gap: 8, marginVertical: 8}}>
-                      <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学校名" value={extSchool} onChangeText={setExtSchool} />
-                      <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学年" value={extGrade} onChangeText={setExtGrade} />
+                  {isAdmin && (
+                    <View style={styles.addExtBox}>
+                      <Text style={{fontWeight: 'bold', marginBottom: 8}}>外部参加者の追加</Text>
+                      <TextInput style={styles.smallInput} placeholder="氏名" value={extName} onChangeText={setExtName} />
+                      <View style={{flexDirection: 'row', gap: 8, marginVertical: 8}}>
+                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学校名" value={extSchool} onChangeText={setExtSchool} />
+                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学年" value={extGrade} onChangeText={setExtGrade} />
+                      </View>
+                      <TouchableOpacity style={styles.addExtBtn} onPress={addExternalParticipant}>
+                        <Text style={{color: COLORS.white, fontWeight:'bold'}}>追加</Text>
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.addExtBtn} onPress={addExternalParticipant}>
-                      <Text style={{color: COLORS.white, fontWeight:'bold'}}>追加</Text>
-                    </TouchableOpacity>
-                  </View>
+                  )}
                 </View>
               )}
               <View style={{ height: 40 }}/>
@@ -333,7 +358,6 @@ const styles = StyleSheet.create({
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   
-  // ★ 修正: aspectRatioを外し、minHeightで自動拡張させる
   calCellEmpty: { 
     width: '14.28%', 
     minHeight: 60 

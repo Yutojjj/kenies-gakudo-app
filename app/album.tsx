@@ -8,14 +8,12 @@ import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollV
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 
-// --- 型定義 ---
 type Mode = 'top' | 'add' | 'view';
 type TabType = '月' | '火' | '水' | '木' | '金' | 'イベント';
 const ALL_TABS: TabType[] = ['月', '火', '水', '木', '金', 'イベント'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
-// ★ 追加: ローカル時間での日付文字列 (YYYY-MM-DD) を取得するヘルパー関数
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -43,7 +41,6 @@ export default function AlbumScreen() {
   const [pastDate, setPastDate] = useState(new Date());
   
   const [albumPhotos, setAlbumPhotos] = useState<Record<string, { id: string, uri: string, storagePath?: string }[]>>({});
-  
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -111,7 +108,6 @@ export default function AlbumScreen() {
         }
         Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
       } catch (e) {
-        console.error("Upload error:", e);
         Alert.alert('エラー', '画像のアップロードに失敗しました。');
       } finally {
         setIsUploading(false);
@@ -122,7 +118,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // ★ 修正: toISOString() ではなく、ローカルの時刻文字列を使う
   const handleAddToday = () => {
     const todayStr = getLocalDateString(new Date());
     pickImages('今日', todayStr);
@@ -158,12 +153,10 @@ export default function AlbumScreen() {
         photos: albumPhotos[k]
       }));
     }
-
     const year = new Date().getFullYear();
     const dayIdx = ['日', '月', '火', '水', '木', '金', '土'].indexOf(activeTab);
     const dates = [];
     const d = new Date(year, viewMonth - 1, 1);
-
     while (d.getMonth() === viewMonth - 1) {
       if (d.getDay() === dayIdx) {
         const dateObj = new Date(d);
@@ -173,7 +166,7 @@ export default function AlbumScreen() {
           if (dateObj.getTime() < createdTime) canView = false;
         }
         if (canView) {
-          const dateStr = getLocalDateString(dateObj); // ★ 修正
+          const dateStr = getLocalDateString(dateObj);
           dates.push({
             key: dateStr,
             label: `${viewMonth}月${dateObj.getDate()}日(${activeTab})`,
@@ -200,7 +193,6 @@ export default function AlbumScreen() {
             await deleteDoc(doc(db, 'albums', selectedPhoto.id));
             setSelectedPhoto(null);
           } catch (e) {
-            console.error("Delete error:", e);
             window.alert('削除に失敗しました。');
           }
         }
@@ -219,14 +211,12 @@ export default function AlbumScreen() {
             await deleteDoc(doc(db, 'albums', selectedPhoto.id));
             setSelectedPhoto(null);
           } catch (e) {
-            console.error("Delete error:", e);
             Alert.alert('エラー', '削除に失敗しました。');
           }
         }
       }}
     ]);
   };
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -238,23 +228,23 @@ export default function AlbumScreen() {
       )}
 
       <View style={styles.header}>
-        {mode !== 'top' && role !== 'user' && (
-          <TouchableOpacity style={styles.backBtn} onPress={() => setMode('top')}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
-        )}
+        {/* ★ 戻るボタンの追加 */}
+        <TouchableOpacity style={styles.backBtn} onPress={() => mode === 'top' || role === 'user' ? router.back() : setMode('top')}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真を追加' : 'アルバムを見る'}</Text>
       </View>
 
+      {/* ★ メニューボタンの巨大化デザイン */}
       {mode === 'top' && (
-        <View style={styles.topContainer}>
-          <TouchableOpacity style={[styles.mainCard, { backgroundColor: '#E0FFFF' }]} onPress={() => setMode('view')}>
-            <Ionicons name="images-outline" size={48} color="#4682B4" />
-            <Text style={styles.mainCardTitle}>見る</Text>
-            <Text style={styles.mainCardDesc}>月ごとの写真やイベントを閲覧します。</Text>
+        <View style={styles.topContainerFull}>
+          <TouchableOpacity style={[styles.mainCardHuge, { backgroundColor: '#E0FFFF' }]} onPress={() => setMode('view')}>
+            <Ionicons name="images-outline" size={80} color="#4682B4" />
+            <Text style={styles.mainCardTitleHuge}>見る</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.mainCard, { backgroundColor: '#FFE4E1' }]} onPress={() => setMode('add')}>
-            <Ionicons name="add-circle-outline" size={48} color="#D87093" />
-            <Text style={styles.mainCardTitle}>追加する</Text>
-            <Text style={styles.mainCardDesc}>スマホのアルバムから写真をアップロードします。</Text>
+          <TouchableOpacity style={[styles.mainCardHuge, { backgroundColor: '#FFE4E1' }]} onPress={() => setMode('add')}>
+            <Ionicons name="add-circle-outline" size={80} color="#D87093" />
+            <Text style={styles.mainCardTitleHuge}>追加する</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -414,17 +404,16 @@ export default function AlbumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  center: { justifyContent: 'center', alignItems: 'center' },
   uploadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   backBtn: { marginRight: 16 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
   scrollArea: { flex: 1 },
-  topContainer: { flex: 1, padding: 20, gap: 20, justifyContent: 'center' },
-  mainCard: { padding: 30, borderRadius: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
-  mainCardTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.text, marginTop: 16, marginBottom: 8 },
-  mainCardDesc: { fontSize: 14, color: COLORS.textLight, textAlign: 'center' },
+  // ★ 画面中央に大きく配置するスタイル
+  topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
+  mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  mainCardTitleHuge: { fontSize: 32, fontWeight: 'bold', color: COLORS.text, marginTop: 24 },
   addGrid: { padding: 20, gap: 16 },
   addOptionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
   iconCircle: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 20 },
@@ -442,12 +431,10 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
   tabTextActive: { color: '#9370DB' },
   dateSection: { marginBottom: 12 },
-  
   dateHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   dateHeader: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
   expandBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   expandText: { fontSize: 12, color: COLORS.primary, fontWeight: 'bold', marginRight: 4 },
-
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: COLORS.background },
   photoWrapper: { width: '33.333%', aspectRatio: 1, padding: 1 }, 
   photo: { flex: 1, backgroundColor: '#EAEAEA' },

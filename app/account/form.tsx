@@ -54,7 +54,6 @@ export default function AccountFormScreen() {
   const [empType, setEmpType] = useState('アルバイト');
   const [skills, setSkills] = useState({ drive: false, program: false, child: false });
 
-  // ★ スタッフの子供（複数対応）
   const [staffChildren, setStaffChildren] = useState<any[]>([]);
 
   const [school, setSchool] = useState('');
@@ -70,21 +69,16 @@ export default function AccountFormScreen() {
       for (let i = 0; i < retries; i++) {
         try {
           await fetchFunction();
-          return; // 成功したら終了
+          return;
         } catch (error: any) {
           if (error.code === 'unavailable' || error.message.includes('offline')) {
             console.warn(`Firestore offline error. Retrying... (${i + 1}/${retries})`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2秒待機してリトライ
+            await new Promise(resolve => setTimeout(resolve, 2000));
           } else {
             console.error("Firestore error:", error);
-            break; // その他のエラーはリトライしない
+            break;
           }
         }
-      }
-      if (isMounted) {
-          console.error("Failed to fetch data after retries.");
-          // 本来はここでエラー状態をセットしてUIに表示すべきですが、
-          // 既存の動きを維持するため、ここではログのみ出力します。
       }
     };
 
@@ -114,10 +108,10 @@ export default function AccountFormScreen() {
             setEmpType(data.empType || 'アルバイト');
             setSkills(data.skills || { drive: false, program: false, child: false });
             
-            // 過去の単一データ(childName)を配列(staffChildren)に互換対応
             const loadedStaffChildren = data.staffChildren || [];
             if (loadedStaffChildren.length === 0 && data.childName) {
-              loadedStaffChildren.push({ name: data.childName, school: data.childSchool, grade: data.childGrade });
+              // ★ ④ IDの付与
+              loadedStaffChildren.push({ id: `${id}_staffchild_0`, name: data.childName, school: data.childSchool, grade: data.childGrade });
             }
             setStaffChildren(loadedStaffChildren);
             
@@ -126,16 +120,21 @@ export default function AccountFormScreen() {
             setGrade(data.grade || '');
             setUsageType(data.usageType || '定期利用');
             setDays(data.days || { 月: false, 火: false, 水: false, 木: false, 金: false });
-            setSiblings(data.siblings || []);
+            
+            // ★ ④ 古いデータ（IDなし）にIDを付与して読み込む
+            const loadedSiblings = data.siblings || [];
+            const sanitizedSiblings = loadedSiblings.map((sib: any, idx: number) => ({
+              ...sib,
+              id: sib.id || `${id}_sib_${idx}`
+            }));
+            setSiblings(sanitizedSiblings);
           }
         }
         if (isMounted) setInitialLoading(false);
     };
 
-    // マスターデータの取得
     fetchWithRetry(fetchMasterData);
 
-    // 編集モードの場合のみアカウントデータを取得
     if (isEditMode) {
       fetchWithRetry(fetchAccountData);
     }
@@ -153,14 +152,22 @@ export default function AccountFormScreen() {
     setLoading(true);
 
     try {
+      const romaji = kanaToRomaji(nicknameKana);
+      // 新規作成時はここでドキュメントIDをあらかじめ発行するか、addDoc後に更新する必要がありますが、
+      // 兄弟のID生成を完全にするために、保存時のデータにプレースホルダーIDを入れておき、
+      // 表示側で「親ID_sib_0」のように生成する運用が最も安全です。
+
       let accountData: any = {
         name, nicknameKana, updatedAt: serverTimestamp(),
         ...(role === 'staff' ? { 
           empType, skills,
           hasChild: skills.child,
-          staffChildren: skills.child ? staffChildren : [] // ★ 配列で保存
+          // ★ ④ 保存時にIDの抜け漏れがないように補完
+          staffChildren: skills.child ? staffChildren.map((c, i) => ({...c, id: c.id || `temp_staffchild_${i}`})) : [] 
         } : { 
-          school, grade, usageType, days, siblings 
+          school, grade, usageType, days,
+          // ★ ④ 保存時にIDの抜け漏れがないように補完 
+          siblings: siblings.map((s, i) => ({...s, id: s.id || `temp_sib_${i}`})) 
         }),
       };
 
@@ -168,11 +175,22 @@ export default function AccountFormScreen() {
         await updateDoc(doc(db, 'accounts', id), accountData);
         Alert.alert('更新完了', 'アカウント情報を更新しました。');
       } else {
-        const romaji = kanaToRomaji(nicknameKana);
         const generatedId = `${romaji}${generateRandomDigits()}`;
         const generatedPw = `${romaji}${generateRandomDigits()}`;
         accountData.role = role; accountData.generatedId = generatedId; accountData.generatedPw = generatedPw; accountData.createdAt = serverTimestamp();
-        await addDoc(collection(db, 'accounts'), accountData);
+        
+        // 新規作成
+        const docRef = await addDoc(collection(db, 'accounts'), accountData);
+        
+        // ★ ④ 新規作成直後に、確定した親のIDを使って兄弟のIDを正しい形式で上書き保存する
+        if (role === 'staff' && accountData.staffChildren.length > 0) {
+           const finalChildren = accountData.staffChildren.map((c:any, i:number) => ({...c, id: `${docRef.id}_staffchild_${i}`}));
+           await updateDoc(docRef, { staffChildren: finalChildren });
+        } else if (role === 'user' && accountData.siblings.length > 0) {
+           const finalSiblings = accountData.siblings.map((s:any, i:number) => ({...s, id: `${docRef.id}_sib_${i}`}));
+           await updateDoc(docRef, { siblings: finalSiblings });
+        }
+
         Alert.alert('保存完了', `アカウントを保存しました。\nID: ${generatedId}\nPW: ${generatedPw}`);
       }
       router.back();
@@ -180,13 +198,11 @@ export default function AccountFormScreen() {
     finally { setLoading(false); }
   };
 
-  // 兄弟(利用者)の操作
-  const addSibling = () => setSiblings([...siblings, { name: '', nicknameKana: '', school: '', grade: '', usageType: '定期利用', days: { 月: false, 火: false, 水: false, 木: false, 金: false } }]);
+  const addSibling = () => setSiblings([...siblings, { id: `temp_sib_${Date.now()}`, name: '', nicknameKana: '', school: '', grade: '', usageType: '定期利用', days: { 月: false, 火: false, 水: false, 木: false, 金: false } }]);
   const updateSibling = (index: number, field: string, value: any) => { const newSiblings = [...siblings]; newSiblings[index][field] = value; setSiblings(newSiblings); };
   const removeSibling = (index: number) => setSiblings(siblings.filter((_, i) => i !== index));
 
-  // ★ スタッフの子供の操作
-  const addStaffChild = () => setStaffChildren([...staffChildren, { name: '', school: '', grade: '' }]);
+  const addStaffChild = () => setStaffChildren([...staffChildren, { id: `temp_staffchild_${Date.now()}`, name: '', school: '', grade: '' }]);
   const updateStaffChild = (index: number, field: string, value: any) => { const newChildren = [...staffChildren]; newChildren[index][field] = value; setStaffChildren(newChildren); };
   const removeStaffChild = (index: number) => setStaffChildren(staffChildren.filter((_, i) => i !== index));
 
@@ -261,7 +277,6 @@ export default function AccountFormScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* ★ スタッフの子供入力エリア（複数対応） */}
             {skills.child && (
               <View style={styles.childBox}>
                 <View style={styles.sectionHeader}>
@@ -300,7 +315,6 @@ export default function AccountFormScreen() {
           </View>
         ) : (
           <View>
-             {/* 通常利用者の入力（省略なし） */}
             <Text style={styles.label}><Ionicons name="business-outline" size={16} /> 学校名</Text>
             <TouchableOpacity style={styles.selectBox} onPress={() => openPicker('school')}>
               <Text style={styles.selectBoxText}>{school || '選択してください'}</Text>

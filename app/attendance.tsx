@@ -1,11 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { collection, doc, getDocs, onSnapshot, query } from 'firebase/firestore';
+import { useRouter } from 'expo-router';
+import { collection, doc, getDoc, getDocs, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
-// --- 型定義 ---
+const customAlert = (title: string, message?: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 interface Kid {
   id: string;
   name: string;
@@ -15,14 +23,32 @@ interface Kid {
   days: Record<string, boolean>;
   isStaffChild?: boolean;
   parentName?: string;
+  isManualOverride?: boolean;
+  nicknameKana?: string;
 }
+
+type ViewMode = 'attendance' | 'schoolUsers' | 'transport';
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const PASTEL_COLORS = ['#FFE4E1', '#E6F2FF', '#F0FFF0', '#F8F0FF', '#FFFFE0', '#FFF5EE'];
+const BG_COLORS = ['#FFE4E1', '#E0FFFF', '#E6E6FA', '#FFFACD', '#F0FFF0', '#F5FFFA', '#FFE4B5', '#F0F8FF'];
+
+const getGradeValue = (grade: string) => {
+  const match = grade.match(/\d/);
+  return match ? parseInt(match[0], 10) : 99;
+};
+
+const sortKidsByGrade = (kidsArray: Kid[]) => {
+  return kidsArray.sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade));
+};
 
 export default function AttendanceScreen() {
+  const router = useRouter();
+  
+  const [currentView, setCurrentView] = useState<ViewMode>('attendance');
+
   const [kids, setKids] = useState<Kid[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [masterSchools, setMasterSchools] = useState<string[]>([]);
   
   const [pastWeeks, setPastWeeks] = useState(0);   
   const [futureWeeks, setFutureWeeks] = useState(1); 
@@ -38,20 +64,25 @@ export default function AttendanceScreen() {
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
   const [holidays, setHolidays] = useState<any[]>([]); 
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
-  
-  // ★ 追加：祝日データの管理
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
+
+  const [activeSchool, setActiveSchool] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 祝日データの自動取得
         try {
           const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
           const data = await res.json();
           setPublicHolidays(data);
         } catch (e) {
           console.warn('祝日APIの取得に失敗しました', e);
+        }
+
+        const masterRef = doc(db, 'settings', 'master_data');
+        const masterSnap = await getDoc(masterRef);
+        if (masterSnap.exists() && masterSnap.data().schools) {
+            setMasterSchools(masterSnap.data().schools);
         }
 
         const q = query(collection(db, 'accounts')); 
@@ -63,16 +94,33 @@ export default function AttendanceScreen() {
           const parentId = docSnap.id;
 
           if (data.role === 'staff' && data.hasChild) {
-            allKids.push({
-              id: parentId,
-              name: data.childName || 'スタッフの子',
-              school: data.childSchool || '',
-              grade: data.childGrade || '',
-              usageType: '定期利用', 
-              days: { 月:true, 火:true, 水:true, 木:true, 金:true }, 
-              isStaffChild: true,
-              parentName: data.name
-            });
+            if (data.staffChildren && data.staffChildren.length > 0) {
+              data.staffChildren.forEach((child: any, idx: number) => {
+                 allKids.push({
+                   id: child.id || `${parentId}_staffchild_${idx}`,
+                   name: child.name,
+                   school: child.school || '',
+                   grade: child.grade || '',
+                   usageType: '定期利用', 
+                   days: { 月:true, 火:true, 水:true, 木:true, 金:true }, 
+                   isStaffChild: true,
+                   parentName: data.name,
+                   nicknameKana: ''
+                 });
+              });
+            } else if (data.childName) {
+              allKids.push({
+                id: `${parentId}_staffchild_0`,
+                name: data.childName,
+                school: data.childSchool || '',
+                grade: data.childGrade || '',
+                usageType: '定期利用', 
+                days: { 月:true, 火:true, 水:true, 木:true, 金:true }, 
+                isStaffChild: true,
+                parentName: data.name,
+                nicknameKana: ''
+              });
+            }
           } else if (data.role === 'user') {
             if (data.school) {
               allKids.push({
@@ -81,19 +129,21 @@ export default function AttendanceScreen() {
                 school: data.school,
                 grade: data.grade,
                 usageType: data.usageType || '定期利用',
-                days: data.days || {}
+                days: data.days || {},
+                nicknameKana: data.nicknameKana || ''
               });
             }
             if (data.siblings && Array.isArray(data.siblings)) {
               data.siblings.forEach((sib: any, idx: number) => {
                 if (sib.school) {
                   allKids.push({
-                    id: `${parentId}_sib_${idx}`,
+                    id: sib.id || `${parentId}_sib_${idx}`,
                     name: sib.name,
                     school: sib.school,
                     grade: sib.grade,
                     usageType: sib.usageType || '定期利用',
-                    days: sib.days || {}
+                    days: sib.days || {},
+                    nicknameKana: sib.nicknameKana || ''
                   });
                 }
               });
@@ -139,7 +189,6 @@ export default function AttendanceScreen() {
 
       } catch (error) {
         console.error("データ取得エラー:", error);
-      } finally {
       }
     };
     fetchData();
@@ -165,7 +214,7 @@ export default function AttendanceScreen() {
     
     const override = scheduleOverrides[`${kid.id}_${dateStr}`];
     if (override && override.pickupTime !== undefined) {
-      return { pickupTime: override.pickupTime, lesson: override.lesson };
+      return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true };
     }
 
     let autoPickup = null;
@@ -186,7 +235,7 @@ export default function AttendanceScreen() {
       }
     }
 
-    return { pickupTime: autoPickup, lesson: override?.lesson || null };
+    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false };
   };
 
   const getAttendanceForDay = (date: Date) => {
@@ -200,19 +249,20 @@ export default function AttendanceScreen() {
     let totalCount = 0;
 
     kids.forEach((kid) => {
-      const { pickupTime, lesson } = getCalculatedTime(dateStr, kid);
+      const { pickupTime, lesson, isManual } = getCalculatedTime(dateStr, kid);
+      const displayKid = { ...kid, isManualOverride: isManual };
 
       if (pickupTime) {
         totalCount++;
         if (!schools[kid.school]) schools[kid.school] = {};
         if (!schools[kid.school][pickupTime]) schools[kid.school][pickupTime] = [];
-        schools[kid.school][pickupTime].push(kid);
+        schools[kid.school][pickupTime].push(displayKid);
       }
 
       if (lesson) {
         const key = `${lesson.time} ${lesson.name}`;
         if (!lessons[key]) lessons[key] = [];
-        lessons[key].push(kid);
+        lessons[key].push(displayKid);
       }
     });
 
@@ -232,9 +282,28 @@ export default function AttendanceScreen() {
     }
   };
 
+  const groupedUsersBySchool = useMemo(() => {
+    const grouped: Record<string, Kid[]> = {};
+    kids.forEach(k => {
+      if (k.isStaffChild) return;
+      const s = k.school || '未設定の学校';
+      if (!grouped[s]) grouped[s] = [];
+      grouped[s].push(k);
+    });
+    return grouped;
+  }, [kids]);
+  
+  const sortedSchoolNames = Object.keys(groupedUsersBySchool).sort((a, b) => {
+      const idxA = masterSchools.indexOf(a);
+      const idxB = masterSchools.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+  });
 
-  return (
-    <SafeAreaView style={styles.container}>
+  const renderAttendanceView = () => (
+    <>
       <View style={styles.topNav}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topNavScroll}>
           {datesToDisplay.map((d, index) => {
@@ -247,7 +316,6 @@ export default function AttendanceScreen() {
             const dateKey = `${m}/${day}`;
             const isToday = d.toDateString() === new Date().toDateString();
             
-            // ★ 土日祝の色判定
             const isSaturday = dayOfWeek === 6;
             const isSunday = dayOfWeek === 0;
             const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
@@ -288,7 +356,6 @@ export default function AttendanceScreen() {
           const isPublicHoliday = !!publicHolidays[dateStr];
           const eventTitle = eventsData[dateStr];
           
-          // ★ 土日祝の色判定
           const isSaturday = dayOfWeek === 6;
           const isSunday = dayOfWeek === 0;
           let headerColorStyle = {};
@@ -298,60 +365,63 @@ export default function AttendanceScreen() {
           const attendanceData = getAttendanceForDay(date);
           const hasLessons = Object.keys(attendanceData.lessons).length > 0;
 
+          const sortedAttendanceSchools = Object.entries(attendanceData.schools).sort(([schoolA], [schoolB]) => {
+              const idxA = masterSchools.indexOf(schoolA);
+              const idxB = masterSchools.indexOf(schoolB);
+              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+              if (idxA !== -1) return -1;
+              if (idxB !== -1) return 1;
+              return schoolA.localeCompare(schoolB);
+          });
+
           return (
             <View 
               key={index} 
-              style={styles.daySection}
-              onLayout={(e) => {
-                const y = e.nativeEvent.layout.y;
-                setLayouts(prev => ({ ...prev, [dateKey]: y }));
+              style={styles.daySection} 
+              onLayout={(e) => { 
+                // ★ 修正箇所：レイアウトイベントの値を確実に変数に退避してからステート更新する
+                const currentY = e.nativeEvent.layout.y;
+                setLayouts(prev => ({ ...prev, [dateKey]: currentY })); 
               }}
             >
               <View style={styles.dayHeaderContainer}>
-                <Text style={[styles.dayHeaderText, headerColorStyle]}>
-                  {m}月{day}日 ({dayStr})
-                </Text>
+                <Text style={[styles.dayHeaderText, headerColorStyle]}>{m}月{day}日 ({dayStr})</Text>
                 {isPublicHoliday && <Text style={{ color: 'red', marginLeft: 8, fontSize: 12, fontWeight: 'bold' }}>{publicHolidays[dateStr]}</Text>}
-                
-                {eventTitle && (
-                  <View style={styles.eventBadgeLarge}>
-                    <Text style={styles.eventBadgeTextLarge}>{eventTitle}</Text>
-                  </View>
-                )}
-
-                <View style={styles.totalBadge}>
-                  <Text style={styles.totalBadgeText}>合計: {attendanceData.totalCount}名</Text>
-                </View>
+                {eventTitle && <View style={styles.eventBadgeLarge}><Text style={styles.eventBadgeTextLarge}>{eventTitle}</Text></View>}
+                <View style={styles.totalBadge}><Text style={styles.totalBadgeText}>合計: {attendanceData.totalCount}名</Text></View>
               </View>
 
               {attendanceData.totalCount > 0 || hasLessons ? (
                 <View style={styles.schoolsGrid}>
-                  {Object.entries(attendanceData.schools).map(([schoolName, timesMap]) => {
+                  {sortedAttendanceSchools.map(([schoolName, timesMap]) => {
                     const allKidsInSchool = Object.values(timesMap).flat();
                     return (
                       <View key={schoolName} style={[styles.schoolCard, { backgroundColor: getCardColor(schoolName) }]}>
-                        <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: schoolName, kids: allKidsInSchool })}>
+                        <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: schoolName, kids: sortKidsByGrade(allKidsInSchool) })}>
                           <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{schoolName}</Text>
                         </TouchableOpacity>
                         <View style={styles.timeGroupContainer}>
-                          {Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, kids]) => (
-                            <TouchableOpacity key={time} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids })}>
-                              <Text style={styles.timeButtonText}>{time}</Text>
-                              <Text style={styles.timeCountText}>{kids.length}名</Text>
-                            </TouchableOpacity>
-                          ))}
+                          {Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, kids]) => {
+                             const hasManualOverride = kids.some(k => k.isManualOverride);
+                             return (
+                              <TouchableOpacity key={time} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
+                                <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
+                                <Text style={styles.timeCountText}>{kids.length}名</Text>
+                              </TouchableOpacity>
+                             )
+                          })}
                         </View>
                       </View>
                     );
                   })}
                   {hasLessons && (
                     <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
-                      <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: Object.values(attendanceData.lessons).flat() })}>
+                      <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(Object.values(attendanceData.lessons).flat()) })}>
                         <Text style={[styles.schoolNameText, { color: '#4682B4' }]}><Ionicons name="color-wand" size={12} /> 習い事</Text>
                       </TouchableOpacity>
                       <View style={styles.timeGroupContainer}>
                         {Object.entries(attendanceData.lessons).map(([lessonKey, kids]) => (
-                          <TouchableOpacity key={lessonKey} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids })}>
+                          <TouchableOpacity key={lessonKey} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
                             <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
                             <Text style={styles.timeCountText}>{kids.length}名</Text>
                           </TouchableOpacity>
@@ -372,23 +442,130 @@ export default function AttendanceScreen() {
           <Text style={styles.loadMoreText}>さらに次の1週間分を表示</Text>
         </TouchableOpacity>
       </ScrollView>
+    </>
+  );
 
-      {/* --- モーダル群 (省略なし) --- */}
+  const renderSchoolUsersView = () => (
+    <ScrollView style={styles.mainScroll}>
+      <Text style={styles.instruction}>確認したい学校をタップしてください</Text>
+      <View style={styles.gridContainer}>
+        {sortedSchoolNames.map((school, index) => {
+          const isActive = activeSchool === school;
+          const bgColor = BG_COLORS[index % BG_COLORS.length];
+          return (
+            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
+              <Ionicons name="school" size={32} color={COLORS.primary} style={{ opacity: 0.8, marginBottom: 8 }} />
+              <Text style={styles.schoolCardName} numberOfLines={2}>{school}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {activeSchool && (
+        <View style={styles.listSection}>
+          <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
+          {sortKidsByGrade(groupedUsersBySchool[activeSchool]).map((user, idx) => (
+            <TouchableOpacity key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+              <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
+              </View>
+              <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  const renderTransportView = () => (
+    <View style={styles.centerBox}>
+      <Ionicons name="bus-outline" size={64} color={COLORS.textLight} />
+      <Text style={styles.instruction}>送迎一覧の機能は準備中です</Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '学校別利用者' : '送迎一覧'}
+        </Text>
+      </View>
+
+      <View style={styles.tabNavigation}>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'attendance' && styles.tabNavBtnActive]} onPress={() => setCurrentView('attendance')}>
+          <Text style={[styles.tabNavText, currentView === 'attendance' && styles.tabNavTextActive]}>出欠一覧</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'schoolUsers' && styles.tabNavBtnActive]} onPress={() => setCurrentView('schoolUsers')}>
+          <Text style={[styles.tabNavText, currentView === 'schoolUsers' && styles.tabNavTextActive]}>学校別利用者</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'transport' && styles.tabNavBtnActive]} onPress={() => setCurrentView('transport')}>
+          <Text style={[styles.tabNavText, currentView === 'transport' && styles.tabNavTextActive]}>送迎一覧</Text>
+        </TouchableOpacity>
+      </View>
+
+      {currentView === 'attendance' && renderAttendanceView()}
+      {currentView === 'schoolUsers' && renderSchoolUsersView()}
+      {currentView === 'transport' && renderTransportView()}
+
       <Modal visible={!!schoolModalData} transparent animationType="fade">
-        <View style={styles.modalOverlay}><View style={styles.modalContent}>{schoolModalData && (
-          <><View style={styles.modalHeader}><Text style={styles.modalSubTitle}>{schoolModalData.date} の予定</Text><TouchableOpacity onPress={() => setSchoolModalData(null)}><Ionicons name="close-circle" size={28} color={COLORS.textLight} /></TouchableOpacity></View>
-          <Text style={styles.modalMainTitle}>{schoolModalData.title}</Text><ScrollView style={styles.modalList}>{schoolModalData.kids.map(kid => (
-            <View key={kid.id} style={styles.modalListItem}><Ionicons name="person" size={16} color={COLORS.primary} /><Text style={styles.modalItemName}>{kid.name}</Text><Text style={styles.modalItemSub}>{kid.grade}</Text></View>
-          ))}</ScrollView></>
-        )}</View></View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {schoolModalData && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalSubTitle}>{schoolModalData.date} の予定</Text>
+                  <TouchableOpacity onPress={() => setSchoolModalData(null)}>
+                    <Ionicons name="close-circle" size={28} color={COLORS.textLight} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalMainTitle}>{schoolModalData.title}</Text>
+                <ScrollView style={styles.modalList}>
+                  {schoolModalData.kids.map(kid => (
+                    <TouchableOpacity key={kid.id} style={styles.modalListItem} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                      <Ionicons name="person" size={16} color={COLORS.primary} />
+                      <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                      <Text style={styles.modalItemSub}>{kid.grade}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
+
       <Modal visible={!!timeModalData} transparent animationType="fade">
-        <View style={styles.modalOverlay}><View style={styles.modalContent}>{timeModalData && (
-          <><View style={styles.modalHeader}><Text style={styles.modalSubTitle}>{timeModalData.title}</Text><TouchableOpacity onPress={() => setTimeModalData(null)}><Ionicons name="close-circle" size={28} color={COLORS.textLight} /></TouchableOpacity></View>
-          <Text style={styles.modalMainTitle}>{timeModalData.subtitle}</Text><ScrollView style={styles.modalList}>{timeModalData.kids.map(kid => (
-            <View key={kid.id} style={styles.modalListItem}><Ionicons name="time" size={16} color={COLORS.info} /><Text style={styles.modalItemName}>{kid.name}</Text><Text style={styles.modalItemSub}>{kid.grade}</Text></View>
-          ))}</ScrollView></>
-        )}</View></View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {timeModalData && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalSubTitle}>{timeModalData.title}</Text>
+                  <TouchableOpacity onPress={() => setTimeModalData(null)}>
+                    <Ionicons name="close-circle" size={28} color={COLORS.textLight} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.modalMainTitle}>{timeModalData.subtitle}</Text>
+                <ScrollView style={styles.modalList}>
+                  {timeModalData.kids.map(kid => (
+                    <TouchableOpacity key={kid.id} style={styles.modalListItem} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                      <Ionicons name="time" size={16} color={COLORS.info} />
+                      <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                      <Text style={styles.modalItemSub}>{kid.grade}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -396,6 +573,16 @@ export default function AttendanceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.white },
+  backBtn: { marginRight: 16 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  
+  tabNavigation: { flexDirection: 'row', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  tabNavBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },
+  tabNavBtnActive: { borderColor: COLORS.primary },
+  tabNavText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
+  tabNavTextActive: { fontSize: 13, fontWeight: 'bold', color: COLORS.primary },
+
   topNav: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 10 },
   topNavScroll: { paddingHorizontal: 12, alignItems: 'center' },
   navDateBtn: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, backgroundColor: '#F0F0F0', marginHorizontal: 4 },
@@ -424,6 +611,7 @@ const styles = StyleSheet.create({
   timeCountText: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxHeight: '70%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
@@ -433,4 +621,21 @@ const styles = StyleSheet.create({
   modalListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
   modalItemName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1, marginLeft: 12 },
   modalItemSub: { fontSize: 14, color: COLORS.textLight },
+
+  centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  instruction: { padding: 16, color: COLORS.textLight, fontWeight: 'bold', textAlign: 'center', marginTop: 8 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 20 },
+  schoolCardList: { width: '23%', aspectRatio: 0.9, margin: '1%', borderRadius: 12, padding: 8, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
+  schoolCardActive: { borderColor: COLORS.primary },
+  schoolCardName: { fontSize: 11, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
+  listSection: { backgroundColor: COLORS.white, borderTopWidth: 1, borderColor: COLORS.border, padding: 16, minHeight: 400 },
+  listSectionTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 16, textAlign: 'center' },
+  userListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
+  userIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F0F8FF', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  userInfo: { flex: 1 },
+  userName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  userGrade: { fontSize: 14, color: COLORS.textLight, fontWeight: 'normal' },
+  userKana: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }
 });

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import React, { useRef, useState } from 'react';
@@ -9,11 +10,36 @@ import { db } from '../firebase';
 
 const { width } = Dimensions.get('window');
 
+// --- Web/Native 共通の安全なアラート関数 ---
+const customAlert = (title: string, message?: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
+const customConfirm = (title: string, message: string, onConfirm: () => void) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: 'OK', style: 'destructive', onPress: onConfirm }
+    ]);
+  }
+};
+
+const hashPassword = (password: string) => {
+  return Crypto.SHA256(password).toString();
+};
+
 export default function MenuScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
   
-  // ▼ 修正①: userDocId の取得をパスワード変更時だけ行う（初期ロード不要）▼
   const userDocIdRef = useRef<string>('');
   const [fetchingDocId, setFetchingDocId] = useState(false);
 
@@ -35,39 +61,33 @@ export default function MenuScreen() {
   };
 
   const handleLogout = async () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('ログアウトしますか？')) {
-        await AsyncStorage.removeItem('loggedInUser');
-        router.replace('/');
-      }
-      return;
-    }
-    Alert.alert('ログアウト', 'ログアウトしますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: 'ログアウト', style: 'destructive', onPress: async () => { await AsyncStorage.removeItem('loggedInUser'); router.replace('/'); }}
-    ]);
+    customConfirm('ログアウト', 'ログアウトしますか？', async () => {
+      await AsyncStorage.removeItem('loggedInUser');
+      router.replace('/');
+    });
   };
 
   const saveShiftPeriod = async () => {
     try {
       await setDoc(doc(db, 'settings', 'shift_period'), { start: startDay, end: endDay });
-      Alert.alert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
+      customAlert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
       setPeriodModal(false);
     } catch (e) {
-      Alert.alert('エラー', '保存に失敗しました');
+      customAlert('エラー', '保存に失敗しました');
     }
   };
 
-  // ▼ 修正②: パスワードモーダルを開く際に userDocId を遅延取得 ▼
   const openPasswordModal = async () => {
+    if (role === 'admin') {
+      customAlert('エラー', '管理者のパスワードはこの画面からは変更できません。');
+      return;
+    }
     if (!userDocIdRef.current && name) {
       setFetchingDocId(true);
       try {
         const q = query(collection(db, 'accounts'), where('name', '==', name));
         const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          userDocIdRef.current = snapshot.docs[0].id;
-        }
+        if (!snapshot.empty) userDocIdRef.current = snapshot.docs[0].id;
       } catch (error) {
         console.error('ユーザー取得エラー:', error);
       } finally {
@@ -80,20 +100,19 @@ export default function MenuScreen() {
   const savePassword = async () => {
     if (!newPassword) return;
     if (!userDocIdRef.current) {
-      Alert.alert('エラー', 'ユーザー情報の取得に失敗しました。');
+      customAlert('エラー', 'ユーザー情報の取得に失敗しました。');
       return;
     }
     try {
-      await setDoc(doc(db, 'accounts', userDocIdRef.current), { generatedPw: newPassword, password: newPassword }, { merge: true });
-      Alert.alert('変更完了', 'パスワードを変更しました。');
+      const hashedPassword = hashPassword(newPassword);
+      await setDoc(doc(db, 'accounts', userDocIdRef.current), { generatedPw: hashedPassword, password: hashedPassword }, { merge: true });
+      customAlert('変更完了', 'パスワードを変更しました。次回から新しいパスワードでログインしてください。');
       setPasswordModal(false);
       setNewPassword('');
     } catch (e) {
-      Alert.alert('エラー', 'パスワード変更に失敗しました。');
+      customAlert('エラー', 'パスワード変更に失敗しました。');
     }
   };
-
-  // ▼ 修正③: loading スピナーを削除 → メニューを即時表示 ▼
 
   return (
     <SafeAreaView style={styles.container}>
@@ -102,7 +121,11 @@ export default function MenuScreen() {
           <View style={styles.headerTopRow}>
             <View style={{ flex: 1 }} />
             <View style={styles.headerCenter}><Text style={styles.headerTitle}>Kenie's System</Text><Text style={styles.headerSubtitle}>ケーニーズ学童クラブ</Text></View>
-            <View style={styles.headerRight}>{role !== 'user' && (<TouchableOpacity onPress={openSettings} style={styles.settingsBtn}><Ionicons name="menu" size={32} color={COLORS.primary} /></TouchableOpacity>)}</View>
+            <View style={styles.headerRight}>
+              <TouchableOpacity onPress={openSettings} style={styles.settingsBtn}>
+                <Ionicons name="menu" size={32} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
           {name && <View style={styles.welcomeBadge}><Text style={styles.welcomeText}>{name} 様</Text></View>}
         </View>
@@ -112,9 +135,6 @@ export default function MenuScreen() {
             <View style={styles.grid2x2}>
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4E1' }]} onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)}>
                 <View style={styles.iconCircle}><Ionicons name="calendar-outline" size={32} color="#D87093" /></View><Text style={styles.gridTitle}>利用日・習い事{"\n"}変更</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E0FFFF' }]} onPress={() => {}}>
-                <View style={styles.iconCircle}><Ionicons name="today-outline" size={32} color="#4682B4" /></View><Text style={styles.gridTitle}>カレンダー</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E6E6FA' }]} onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}>
                 <View style={styles.iconCircle}><Ionicons name="images-outline" size={32} color="#9370DB" /></View><Text style={styles.gridTitle}>アルバム</Text>
@@ -130,6 +150,7 @@ export default function MenuScreen() {
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4E1' }]} onPress={() => router.push('/attendance')}>
                 <View style={styles.iconCircle}><Ionicons name="people-outline" size={32} color="#D87093" /></View><Text style={styles.gridTitle}>出欠一覧</Text>
               </TouchableOpacity>
+              
               {role === 'admin' ? (
                 <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E0FFFF' }]} onPress={() => router.push('/shift-create')}>
                   <View style={styles.iconCircle}><Ionicons name="calendar-outline" size={32} color="#4682B4" /></View><Text style={styles.gridTitle}>シフト作成</Text>
@@ -139,36 +160,26 @@ export default function MenuScreen() {
                   <View style={styles.iconCircle}><Ionicons name="time-outline" size={32} color="#4682B4" /></View><Text style={styles.gridTitle}>シフト提出</Text>
                 </TouchableOpacity>
               )}
+              
+              <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#F0F8FF' }]} onPress={() => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any)}>
+                <View style={styles.iconCircle}><Ionicons name="grid-outline" size={32} color="#4169E1" /></View><Text style={styles.gridTitle}>シフトを見る</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E6E6FA' }]} onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}>
                 <View style={styles.iconCircle}><Ionicons name="images-outline" size={32} color="#9370DB" /></View><Text style={styles.gridTitle}>アルバム</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#F0FFF0' }]} onPress={() => router.push('/user-list')}>
-                <View style={styles.iconCircle}><Ionicons name="school-outline" size={32} color="#2E8B57" /></View><Text style={styles.gridTitle}>学校別利用者</Text>
-              </TouchableOpacity>
-            </View>
 
-            {role === 'admin' && (
-              <View style={{ marginTop: 24, borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 24 }}>
-                <Text style={{ fontSize: 12, color: COLORS.danger, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' }}>※管理者専用メニュー</Text>
-                <View style={styles.grid2x2}>
-                  <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFFACD', width: '48%' }]} onPress={() => router.push('/school-times')}>
-                    <View style={styles.iconCircle}><Ionicons name="alarm-outline" size={32} color="#DAA520" /></View><Text style={styles.gridTitle}>学校別下校時刻</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4E1', width: '48%' }]} onPress={() => router.push('/account/list')}>
-                    <View style={styles.iconCircle}><Ionicons name="key-outline" size={32} color="#D87093" /></View><Text style={styles.gridTitle}>アカウント管理</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E0FFFF', width: '48%' }]} onPress={() => {}}>
-                    <View style={styles.iconCircle}><Ionicons name="bus-outline" size={32} color="#4682B4" /></View><Text style={styles.gridTitle}>送迎一覧</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4B5', width: '48%' }]} onPress={() => router.push('/holidays-setting')}>
-                    <View style={styles.iconCircle}><Ionicons name="calendar-clear-outline" size={32} color="#FF8C00" /></View><Text style={styles.gridTitle}>長期休み設定</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#F5FFFA', width: '100%' }]} onPress={() => router.push('/event-management')}>
-                    <View style={styles.iconCircle}><Ionicons name="flag-outline" size={32} color="#20B2AA" /></View><Text style={styles.gridTitle}>イベント管理</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+              {/* ★ 管理者/スタッフ共通の2x2構成を維持しつつ配置を調整 */}
+              <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#F5FFFA' }]} onPress={() => router.push({ pathname: '/event-management', params: { role: role || '' } } as any)}>
+                <View style={styles.iconCircle}><Ionicons name="flag-outline" size={32} color="#20B2AA" /></View><Text style={styles.gridTitle}>イベント管理</Text>
+              </TouchableOpacity>
+
+              {role === 'admin' && (
+                <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4E1' }]} onPress={() => router.push('/account/list')}>
+                  <View style={styles.iconCircle}><Ionicons name="key-outline" size={32} color="#D87093" /></View><Text style={styles.gridTitle}>アカウント管理</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
       </ScrollView>
@@ -181,16 +192,23 @@ export default function MenuScreen() {
               <Text style={styles.drawerTitle}>設定メニュー</Text><TouchableOpacity onPress={closeSettings}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
             </View>
             <ScrollView style={styles.drawerScroll}>
-              <TouchableOpacity style={styles.drawerItem} onPress={() => setPeriodModal(true)}><Ionicons name="calendar-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>シフトの入力期間の設定</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。')}><Ionicons name="time-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.drawerItem} onPress={openPasswordModal}>
-                {fetchingDocId
-                  ? <ActivityIndicator size="small" color={COLORS.primary} style={styles.drawerIcon} />
-                  : <Ionicons name="lock-closed-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} />
-                }
-                <Text style={styles.drawerItemText}>パスワード変更</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.drawerItem, { borderBottomWidth: 0, marginTop: 40 }]} onPress={handleLogout}><Ionicons name="log-out-outline" size={24} color={COLORS.danger} style={styles.drawerIcon} /><Text style={[styles.drawerItemText, { color: COLORS.danger, fontWeight: 'bold' }]}>ログアウト</Text></TouchableOpacity>
+              {role === 'admin' && (
+                <>
+                  <Text style={styles.drawerSectionTitle}>【管理者専用】</Text>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => {closeSettings(); router.push('/school-times');}}><Ionicons name="alarm-outline" size={20} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>学校別下校時刻</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => {closeSettings(); router.push('/holidays-setting');}}><Ionicons name="calendar-clear-outline" size={20} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>長期休み設定</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => {closeSettings(); setPeriodModal(true);}}><Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>シフト入力期間の設定</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => {closeSettings(); customAlert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。');}}><Ionicons name="time-outline" size={20} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text></TouchableOpacity>
+                  <View style={{height: 1, backgroundColor: COLORS.border, marginVertical: 16}} />
+                </>
+              )}
+              {role !== 'admin' && (
+                <TouchableOpacity style={styles.drawerItem} onPress={openPasswordModal}>
+                  {fetchingDocId ? <ActivityIndicator size="small" color={COLORS.primary} style={styles.drawerIcon} /> : <Ionicons name="lock-closed-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} />}
+                  <Text style={styles.drawerItemText}>パスワード変更</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[styles.drawerItem, { borderBottomWidth: 0, marginTop: 20 }]} onPress={handleLogout}><Ionicons name="log-out-outline" size={24} color={COLORS.danger} style={styles.drawerIcon} /><Text style={[styles.drawerItemText, { color: COLORS.danger, fontWeight: 'bold' }]}>ログアウト</Text></TouchableOpacity>
             </ScrollView>
           </Animated.View>
         </View>
@@ -251,9 +269,10 @@ const styles = StyleSheet.create({
   drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border, paddingTop: 60 },
   drawerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
   drawerScroll: { padding: 20 },
-  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: COLORS.border },
+  drawerSectionTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8 },
+  drawerItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderColor: COLORS.border },
   drawerIcon: { marginRight: 16 },
-  drawerItemText: { fontSize: 16, color: COLORS.text },
+  drawerItemText: { fontSize: 14, color: COLORS.text },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
   modalContent: { backgroundColor: COLORS.white, padding: 24, borderRadius: 16 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
