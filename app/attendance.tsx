@@ -33,6 +33,21 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const PASTEL_COLORS = ['#FFE4E1', '#E6F2FF', '#F0FFF0', '#F8F0FF', '#FFFFE0', '#FFF5EE'];
 const BG_COLORS = ['#FFE4E1', '#E0FFFF', '#E6E6FA', '#FFFACD', '#F0FFF0', '#F5FFFA', '#FFE4B5', '#F0F8FF'];
 
+// 固定の学校順序
+const FIXED_SCHOOL_ORDER = [
+  '蟹江小',
+  '須西小',
+  '学戸小',
+  '新蟹江小',
+  '豊治小',
+  '南陽小',
+  '千音寺小',
+  '戸田小',
+  '春田小',
+  '福田小',
+  '福春小'
+];
+
 const getGradeValue = (grade: string) => {
   const match = grade.match(/\d/);
   return match ? parseInt(match[0], 10) : 99;
@@ -46,6 +61,7 @@ export default function AttendanceScreen() {
   const router = useRouter();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
+  const [showKidNames, setShowKidNames] = useState(false);
 
   const [kids, setKids] = useState<Kid[]>([]);
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
@@ -293,14 +309,12 @@ export default function AttendanceScreen() {
     return grouped;
   }, [kids]);
   
-  const sortedSchoolNames = Object.keys(groupedUsersBySchool).sort((a, b) => {
-      const idxA = masterSchools.indexOf(a);
-      const idxB = masterSchools.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-  });
+  const sortedSchoolNames = useMemo(() => {
+    const allSchools = Object.keys(groupedUsersBySchool);
+    return FIXED_SCHOOL_ORDER.filter(s => allSchools.includes(s)).concat(
+      allSchools.filter(s => !FIXED_SCHOOL_ORDER.includes(s))
+    );
+  }, [groupedUsersBySchool]);
 
   const renderAttendanceView = () => (
     <>
@@ -366,8 +380,8 @@ export default function AttendanceScreen() {
           const hasLessons = Object.keys(attendanceData.lessons).length > 0;
 
           const sortedAttendanceSchools = Object.entries(attendanceData.schools).sort(([schoolA], [schoolB]) => {
-              const idxA = masterSchools.indexOf(schoolA);
-              const idxB = masterSchools.indexOf(schoolB);
+              const idxA = sortedSchoolNames.indexOf(schoolA);
+              const idxB = sortedSchoolNames.indexOf(schoolB);
               if (idxA !== -1 && idxB !== -1) return idxA - idxB;
               if (idxA !== -1) return -1;
               if (idxB !== -1) return 1;
@@ -379,7 +393,6 @@ export default function AttendanceScreen() {
               key={index} 
               style={styles.daySection} 
               onLayout={(e) => { 
-                // ★ 修正箇所：レイアウトイベントの値を確実に変数に退避してからステート更新する
                 const currentY = e.nativeEvent.layout.y;
                 setLayouts(prev => ({ ...prev, [dateKey]: currentY })); 
               }}
@@ -404,9 +417,25 @@ export default function AttendanceScreen() {
                           {Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, kids]) => {
                              const hasManualOverride = kids.some(k => k.isManualOverride);
                              return (
-                              <TouchableOpacity key={time} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
-                                <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
-                                <Text style={styles.timeCountText}>{kids.length}名</Text>
+                              <TouchableOpacity key={time} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
+                                {showKidNames ? (
+                                  <>
+                                    <View style={styles.timeHeaderRow}>
+                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
+                                      <Text style={styles.timeCountBadge}>{kids.length}名</Text>
+                                    </View>
+                                    <View style={styles.kidNamesContainer}>
+                                      {kids.map(k => (
+                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }]} numberOfLines={1}>{k.name}</Text>
+                                      ))}
+                                    </View>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
+                                    <Text style={styles.timeCountText}>{kids.length}名</Text>
+                                  </>
+                                )}
                               </TouchableOpacity>
                              )
                           })}
@@ -421,9 +450,25 @@ export default function AttendanceScreen() {
                       </TouchableOpacity>
                       <View style={styles.timeGroupContainer}>
                         {Object.entries(attendanceData.lessons).map(([lessonKey, kids]) => (
-                          <TouchableOpacity key={lessonKey} style={styles.timeButton} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
-                            <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
-                            <Text style={styles.timeCountText}>{kids.length}名</Text>
+                          <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                            {showKidNames ? (
+                              <>
+                                <View style={styles.timeHeaderRow}>
+                                  <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonKey}</Text>
+                                  <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
+                                </View>
+                                <View style={styles.kidNamesContainer}>
+                                  {kids.map(k => (
+                                    <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
+                                  ))}
+                                </View>
+                              </>
+                            ) : (
+                              <>
+                                <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
+                                <Text style={styles.timeCountText}>{kids.length}名</Text>
+                              </>
+                            )}
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -463,16 +508,18 @@ export default function AttendanceScreen() {
       {activeSchool && (
         <View style={styles.listSection}>
           <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
-          {sortKidsByGrade(groupedUsersBySchool[activeSchool]).map((user, idx) => (
-            <TouchableOpacity key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
-              <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
-              </View>
-              <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-            </TouchableOpacity>
-          ))}
+          <ScrollView>
+            {sortKidsByGrade(groupedUsersBySchool[activeSchool]).map((user, idx) => (
+              <TouchableOpacity key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                  <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
+                </View>
+                <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
     </ScrollView>
@@ -511,6 +558,16 @@ export default function AttendanceScreen() {
       {currentView === 'attendance' && renderAttendanceView()}
       {currentView === 'schoolUsers' && renderSchoolUsersView()}
       {currentView === 'transport' && renderTransportView()}
+
+      {currentView === 'attendance' && (
+        <TouchableOpacity
+          style={[styles.fab, showKidNames && styles.fabActive]}
+          onPress={() => setShowKidNames(!showKidNames)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name={showKidNames ? "swap-vertical" : "swap-vertical"} size={22} color={COLORS.white} />
+        </TouchableOpacity>
+      )}
 
       <Modal visible={!!schoolModalData} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -607,8 +664,14 @@ const styles = StyleSheet.create({
   schoolNameText: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   timeGroupContainer: { gap: 8 },
   timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 3, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  timeButtonExpanded: { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 8 },
   timeButtonText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
   timeCountText: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary },
+  timeHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 6 },
+  timeLabel: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
+  timeCountBadge: { fontSize: 10, fontWeight: 'bold', color: COLORS.primary, backgroundColor: COLORS.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  kidNamesContainer: { gap: 3, width: '100%' },
+  kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
   
@@ -637,5 +700,7 @@ const styles = StyleSheet.create({
   userGrade: { fontSize: 14, color: COLORS.textLight, fontWeight: 'normal' },
   userKana: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 }
+  editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabActive: { backgroundColor: COLORS.danger },
 });
