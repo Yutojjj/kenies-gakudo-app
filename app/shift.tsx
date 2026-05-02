@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -13,7 +13,7 @@ type AssignedStaff = { name: string, start: string, end: string };
 export default function ShiftScreen() {
   const { name } = useLocalSearchParams<{ name: string }>();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
@@ -65,13 +65,11 @@ export default function ShiftScreen() {
           const asData: Record<string, AssignedStaff[]> = {};
           s.forEach(d => { asData[d.id] = d.data().staff || []; });
           setAssignedShifts(asData);
-          setLoading(false);
         });
         unsubscribes.push(unsubAssigned);
 
       } catch (error) {
         console.error("データ取得エラー", error);
-        setLoading(false);
       }
     };
 
@@ -154,7 +152,6 @@ export default function ShiftScreen() {
     Alert.alert('提出完了', 'シフトの希望を提出しました。');
   };
 
-  if (loading) return <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
 
   const days = generateCalendarDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];

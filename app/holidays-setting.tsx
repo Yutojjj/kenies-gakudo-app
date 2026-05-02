@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -10,7 +10,7 @@ type HolidayPeriod = { id: string, name: string, start: string, end: string };
 
 export default function HolidaysSettingScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [periods, setPeriods] = useState<HolidayPeriod[]>([]);
   
   const [modalVisible, setModalVisible] = useState(false);
@@ -23,7 +23,6 @@ export default function HolidaysSettingScreen() {
       if (docSnap.exists() && docSnap.data().periods) {
         setPeriods(docSnap.data().periods);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -77,7 +76,6 @@ export default function HolidaysSettingScreen() {
     setModalVisible(true);
   };
 
-  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary}/></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.container}>

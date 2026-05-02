@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -23,7 +22,7 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10...55分
 
 export default function SchoolTimesScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
   const [masterGrades, setMasterGrades] = useState<string[]>([]);
@@ -43,41 +42,35 @@ export default function SchoolTimesScreen() {
   const [stampingTime, setStampingTime] = useState('');
 
   useEffect(() => {
-    const fetchMasterData = async () => {
-      try {
-        const masterRef = doc(db, 'settings', 'master_data');
-        const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists()) {
-          const data = masterSnap.data();
-          const schools = data.schools || [];
-          setMasterSchools(schools);
-          setMasterGrades(data.grades || []);
-          
-          const times = data.times || ['14:30', '15:00', '15:30'];
-          setMasterTimes(times);
-          
-          if (schools.length > 0) setActiveSchool(schools[0]);
-        } else {
-          const defaultTimes = ['14:30', '15:00', '15:30'];
+    // ▼ 修正: getDoc → onSnapshot でリアルタイム取得（接続不安定でも確実に反映）▼
+    const masterRef = doc(db, 'settings', 'master_data');
+    const unsubMaster = onSnapshot(masterRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const schools = data.schools || [];
+        setMasterSchools(schools);
+        setMasterGrades(data.grades || []);
+        setMasterTimes(data.times || ['14:30', '15:00', '15:30']);
+        setActiveSchool(prev => prev || schools[0] || '');
+      } else {
+        // ドキュメントが存在しない場合はデフォルトを書き込み
+        const defaultTimes = ['14:30', '15:00', '15:30'];
+        setMasterTimes(defaultTimes);
+        try {
           await setDoc(masterRef, { times: defaultTimes }, { merge: true });
-          setMasterTimes(defaultTimes);
-        }
-      } catch (error) {
-        console.error("Master fetch error", error);
+        } catch (e) { console.warn('master_data 初期化失敗', e); }
       }
-    };
-    fetchMasterData();
+    }, (error) => console.warn('master_data リスナーエラー', error));
 
-    const unsubscribe = onSnapshot(collection(db, 'school_times'), (snapshot) => {
+    const unsubTimes = onSnapshot(collection(db, 'school_times'), (snapshot) => {
       const data: Record<string, any> = {};
       snapshot.forEach(doc => {
         data[doc.id] = doc.data();
       });
       setSchoolTimes(data);
-      setLoading(false);
-    });
+    }, (error) => console.warn('school_times リスナーエラー', error));
 
-    return () => unsubscribe();
+    return () => { unsubMaster(); unsubTimes(); };
   }, []);
 
   const handleTimeChange = (grade: string, day: string, value: string) => {
@@ -161,7 +154,6 @@ export default function SchoolTimesScreen() {
     ]);
   };
 
-  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary}/></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.container}>

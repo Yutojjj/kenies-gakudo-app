@@ -3,6 +3,7 @@
     "name": "ケーニーズ学童クラブ",
     "slug": "kenies-gakudo-app",
     "version": "1.0.0",
+    "scheme": "kenies-gakudo-app", 
     "icon": "./assets/images/icon.png",
     "web": {
       "output": "static",

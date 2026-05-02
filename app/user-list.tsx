@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -14,7 +14,7 @@ export default function UserListScreen() {
   const [groupedUsers, setGroupedUsers] = useState<Record<string, any[]>>({});
   const [schools, setSchools] = useState<string[]>([]);
   const [activeSchool, setActiveSchool] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -38,13 +38,11 @@ export default function UserListScreen() {
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
       }
     };
     fetchUsers();
   }, []);
 
-  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.container}>

@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -26,7 +25,7 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 export default function EventManagementScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   const [events, setEvents] = useState<Record<string, EventData>>({});
   const [participantsMap, setParticipantsMap] = useState<Record<string, Participant[]>>({});
@@ -62,7 +61,6 @@ export default function EventManagementScreen() {
         pData[item.eventId].push({ id: d.id, childName: item.childName, status: item.status });
       });
       setParticipantsMap(pData);
-      setLoading(false);
     });
 
     return () => { unsubEvents(); unsubParts(); };
@@ -149,7 +147,6 @@ export default function EventManagementScreen() {
     await setDoc(doc(db, 'events', selectedDateStr), { externalParticipants: updatedExtList }, { merge: true });
   };
 
-  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary}/></SafeAreaView>;
 
   const days = generateDays();
   const currentEvent = events[selectedDateStr];

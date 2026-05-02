@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, getDocs, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -22,7 +22,7 @@ const PASTEL_COLORS = ['#FFE4E1', '#E6F2FF', '#F0FFF0', '#F8F0FF', '#FFFFE0', '#
 
 export default function AttendanceScreen() {
   const [kids, setKids] = useState<Kid[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   const [pastWeeks, setPastWeeks] = useState(0);   
   const [futureWeeks, setFutureWeeks] = useState(1); 
@@ -140,7 +140,6 @@ export default function AttendanceScreen() {
       } catch (error) {
         console.error("データ取得エラー:", error);
       } finally {
-        setLoading(false);
       }
     };
     fetchData();
@@ -233,13 +232,6 @@ export default function AttendanceScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>

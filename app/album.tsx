@@ -28,7 +28,7 @@ export default function AlbumScreen() {
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
 
   const [userData, setUserData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
   const [mode, setMode] = useState<Mode>(role === 'user' ? 'view' : 'top');
@@ -71,7 +71,6 @@ export default function AlbumScreen() {
         photosData[key].push({ id: d.id, uri: item.uri, storagePath: item.storagePath });
       });
       setAlbumPhotos(photosData);
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -228,7 +227,6 @@ export default function AlbumScreen() {
     ]);
   };
 
-  if (loading) return <SafeAreaView style={[styles.container, styles.center]}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.container}>

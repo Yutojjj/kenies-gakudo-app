@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
 
 export default function AccountManagementScreen() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   // 基本フィルター
   const [filterRole, setFilterRole] = useState<'all' | 'user' | 'staff'>('all');
@@ -29,32 +29,54 @@ export default function AccountManagementScreen() {
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     // アカウント一覧の取得
-    const q = query(collection(db, 'accounts'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'accounts'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAccounts(data); setLoading(false);
+      // ▼ クライアント側でソート（orderByはインデックス不要で確実）▼
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.seconds ?? 0;
+          const bTime = b.createdAt?.seconds ?? 0;
+          return bTime - aTime;
+        });
+      if(isMounted) setAccounts(data);
     }, (error) => {
       console.error(error); Alert.alert('エラー', 'データの取得に失敗しました。'); setLoading(false);
     });
 
     // 学校・学年のマスターデータ取得（絞り込みの選択肢用）
-    const fetchMasterData = async () => {
-      try {
-        const masterRef = doc(db, 'settings', 'master_data');
-        const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists()) {
-          const data = masterSnap.data();
-          if (data.schools) setMasterSchools(data.schools);
-          if (data.grades) setMasterGrades(data.grades);
+    const fetchMasterData = async (retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          const masterRef = doc(db, 'settings', 'master_data');
+          const masterSnap = await getDoc(masterRef);
+          if (masterSnap.exists() && isMounted) {
+            const data = masterSnap.data();
+            if (data.schools) setMasterSchools(data.schools);
+            if (data.grades) setMasterGrades(data.grades);
+          }
+          return; // 成功で終了
+        } catch (error: any) {
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+              console.warn(`Master data fetch error: offline. Retrying... (${i + 1}/${retries})`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+             console.error("Master data fetch error:", error);
+             break;
+          }
         }
-      } catch (error) {
-        console.error("Master data fetch error:", error);
       }
     };
+    
     fetchMasterData();
 
-    return () => unsubscribe();
+    return () => {
+        isMounted = false;
+        unsubscribe();
+    };
   }, []);
 
   const handleDelete = (id: string) => {
@@ -193,10 +215,7 @@ export default function AccountManagementScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
-      ) : (
-        <FlatList
+      <FlatList
           data={filteredAccounts}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContainer}
@@ -214,7 +233,6 @@ export default function AccountManagementScreen() {
           )}
           ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="folder-open-outline" size={48} color={COLORS.border} /><Text style={styles.emptyText}>該当するアカウントはありません。</Text></View>}
         />
-      )}
 
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/account/form')}><Ionicons name="add" size={32} color={COLORS.white} /></TouchableOpacity>
 

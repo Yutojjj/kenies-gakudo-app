@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -31,7 +31,7 @@ export default function ScheduleScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [children, setChildren] = useState<ChildInfo[]>([]);
   const [activeChildIdx, setActiveChildIdx] = useState(0);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(false);
   
   const [parentDocId, setParentDocId] = useState('');
 
@@ -190,7 +190,6 @@ export default function ScheduleScreen() {
       } catch (error) {
         console.error("データ取得エラー:", error);
       } finally {
-        setInitialLoading(false);
       }
     };
     fetchData();
@@ -429,9 +428,6 @@ export default function ScheduleScreen() {
     }
   };
 
-  if (initialLoading) {
-    return <SafeAreaView style={[styles.container, { justifyContent: 'center' }]}><ActivityIndicator size="large" color={COLORS.primary}/></SafeAreaView>;
-  }
 
   if (children.length === 0) {
     return (

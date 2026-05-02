@@ -64,57 +64,83 @@ export default function AccountFormScreen() {
   const [siblings, setSiblings] = useState<any[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchWithRetry = async (fetchFunction: () => Promise<void>, retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          await fetchFunction();
+          return; // 成功したら終了
+        } catch (error: any) {
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+            console.warn(`Firestore offline error. Retrying... (${i + 1}/${retries})`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2秒待機してリトライ
+          } else {
+            console.error("Firestore error:", error);
+            break; // その他のエラーはリトライしない
+          }
+        }
+      }
+      if (isMounted) {
+          console.error("Failed to fetch data after retries.");
+          // 本来はここでエラー状態をセットしてUIに表示すべきですが、
+          // 既存の動きを維持するため、ここではログのみ出力します。
+      }
+    };
+
     const fetchMasterData = async () => {
-      try {
         const masterRef = doc(db, 'settings', 'master_data');
         const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists()) {
+        if (masterSnap.exists() && isMounted) {
           const data = masterSnap.data();
           if (data.schools && data.schools.length > 0) setSchools(data.schools);
           if (data.grades && data.grades.length > 0) setGrades(data.grades);
-        } else {
+        } else if (isMounted) {
           await setDoc(masterRef, { schools, grades });
         }
-      } catch (error) { console.error("Master data fetch error:", error); }
     };
-    fetchMasterData();
 
-    if (isEditMode) {
-      const fetchAccountData = async () => {
-        try {
-          const docRef = doc(db, 'accounts', id);
-          const docSnap = await getDoc(docRef);
+    const fetchAccountData = async () => {
+        const docRef = doc(db, 'accounts', id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists() && isMounted) {
+          const data = docSnap.data();
+          setRole(data.role || 'user');
+          setName(data.name || '');
+          setNicknameKana(data.nicknameKana || '');
           
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setRole(data.role || 'user');
-            setName(data.name || '');
-            setNicknameKana(data.nicknameKana || '');
+          if (data.role === 'staff') {
+            setEmpType(data.empType || 'アルバイト');
+            setSkills(data.skills || { drive: false, program: false, child: false });
             
-            if (data.role === 'staff') {
-              setEmpType(data.empType || 'アルバイト');
-              setSkills(data.skills || { drive: false, program: false, child: false });
-              
-              // 過去の単一データ(childName)を配列(staffChildren)に互換対応
-              const loadedStaffChildren = data.staffChildren || [];
-              if (loadedStaffChildren.length === 0 && data.childName) {
-                loadedStaffChildren.push({ name: data.childName, school: data.childSchool, grade: data.childGrade });
-              }
-              setStaffChildren(loadedStaffChildren);
-              
-            } else {
-              setSchool(data.school || '');
-              setGrade(data.grade || '');
-              setUsageType(data.usageType || '定期利用');
-              setDays(data.days || { 月: false, 火: false, 水: false, 木: false, 金: false });
-              setSiblings(data.siblings || []);
+            // 過去の単一データ(childName)を配列(staffChildren)に互換対応
+            const loadedStaffChildren = data.staffChildren || [];
+            if (loadedStaffChildren.length === 0 && data.childName) {
+              loadedStaffChildren.push({ name: data.childName, school: data.childSchool, grade: data.childGrade });
             }
+            setStaffChildren(loadedStaffChildren);
+            
+          } else {
+            setSchool(data.school || '');
+            setGrade(data.grade || '');
+            setUsageType(data.usageType || '定期利用');
+            setDays(data.days || { 月: false, 火: false, 水: false, 木: false, 金: false });
+            setSiblings(data.siblings || []);
           }
-        } catch (error) { Alert.alert('エラー', 'データの取得に失敗しました。'); } 
-        finally { setInitialLoading(false); }
-      };
-      fetchAccountData();
+        }
+        if (isMounted) setInitialLoading(false);
+    };
+
+    // マスターデータの取得
+    fetchWithRetry(fetchMasterData);
+
+    // 編集モードの場合のみアカウントデータを取得
+    if (isEditMode) {
+      fetchWithRetry(fetchAccountData);
     }
+
+    return () => { isMounted = false; };
   }, [id, isEditMode]);
 
   const updateMasterDataInDB = async (newSchools: string[], newGrades: string[]) => {

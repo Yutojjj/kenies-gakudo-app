@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -17,7 +17,7 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 export default function ShiftCreateScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   const [showTimeInCalendar, setShowTimeInCalendar] = useState(false);
 
@@ -51,6 +51,9 @@ export default function ShiftCreateScreen() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // ▼ 修正: 各処理を個別に try/catch し、失敗しても次の処理へ進む ▼
+
+      // 祝日 API（失敗しても続行）
       try {
         const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
         const data = await res.json();
@@ -59,21 +62,33 @@ export default function ShiftCreateScreen() {
         console.warn('祝日APIの取得に失敗しました', e);
       }
 
-      const masterRef = doc(db, 'settings', 'master_data');
-      const masterSnap = await getDoc(masterRef);
-      if (masterSnap.exists() && masterSnap.data().times) {
-        setMasterTimes(masterSnap.data().times);
-      } else {
-        const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
-        setMasterTimes(defaultTimes);
-        await setDoc(masterRef, { times: defaultTimes }, { merge: true });
+      // master_data（失敗してもデフォルト値で続行）
+      try {
+        const masterRef = doc(db, 'settings', 'master_data');
+        const masterSnap = await getDoc(masterRef);
+        if (masterSnap.exists() && masterSnap.data().times) {
+          setMasterTimes(masterSnap.data().times);
+        } else {
+          const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
+          setMasterTimes(defaultTimes);
+          await setDoc(masterRef, { times: defaultTimes }, { merge: true });
+        }
+      } catch (e) {
+        console.warn('master_data 取得失敗。デフォルト値を使用します', e);
+        setMasterTimes(['14:00-18:30', '11:00-18:30', '13:30-18:30']);
       }
 
-      const q = query(collection(db, 'accounts'), where('role', '==', 'staff'));
-      const snap = await getDocs(q);
-      const staffList = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
-      setAllStaff(staffList);
+      // スタッフ一覧（失敗しても続行）
+      try {
+        const q = query(collection(db, 'accounts'), where('role', '==', 'staff'));
+        const snap = await getDocs(q);
+        const staffList = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
+        setAllStaff(staffList);
+      } catch (e) {
+        console.warn('スタッフ取得失敗', e);
+      }
 
+      // ▼ リアルタイムリスナーをまとめて設定 ▼
       const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
         const reqData: Record<string, string> = {};
         s.forEach(d => {
@@ -81,20 +96,21 @@ export default function ShiftCreateScreen() {
           reqData[`${data.staffName}_${data.dateStr}`] = data.type;
         });
         setRequests(reqData);
-      });
+      }, (e) => console.warn('shifts リスナーエラー', e));
 
       const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
         const asData: Record<string, AssignedStaff[]> = {};
         s.forEach(d => { asData[d.id] = d.data().staff || []; });
         setAssignedShifts(asData);
-      });
+      }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
       const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
         const eData: Record<string, string> = {};
         snap.forEach(d => { eData[d.id] = d.data().title; });
         setEventsData(eData);
-        setLoading(false);
-      });
+      }, (e) => console.warn('events リスナーエラー', e));
+
+      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
       return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
@@ -278,7 +294,6 @@ export default function ShiftCreateScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary}/></SafeAreaView>;
 
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
