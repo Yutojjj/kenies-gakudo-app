@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router'; // useRouterを追加
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -11,6 +11,7 @@ type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
 export default function ShiftScreen() {
+  const router = useRouter(); // ★ 追加
   const { name } = useLocalSearchParams<{ name: string }>();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
@@ -152,7 +153,6 @@ export default function ShiftScreen() {
     Alert.alert('提出完了', 'シフトの希望を提出しました。');
   };
 
-
   const days = generateCalendarDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
@@ -160,8 +160,14 @@ export default function ShiftScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
+      {/* ★ ヘッダー部分に戻るボタンを追加 */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10 }}>
-        <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>シフト提出</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+            <Ionicons name="chevron-back" size={28} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>シフト提出</Text>
+        </View>
         <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
           <Ionicons name="grid-outline" size={18} color={COLORS.white} />
           <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
@@ -245,9 +251,6 @@ export default function ShiftScreen() {
         <Text style={styles.fabText}>種類変更</Text>
       </TouchableOpacity>
 
-      {/* ==========================================
-          ★ 1画面完全フィット(土日細い版・時間表示改行対応)のシフト表
-          ========================================== */}
       <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.ssModalContainer}>
           <View style={styles.ssModalHeader}>
@@ -325,7 +328,6 @@ export default function ShiftScreen() {
                             const req = allRequests[`${staff.name}_${day.dateStr}`];
                             
                             if (assigned) {
-                              // ★ 縦に伸びすぎないように「開:〇〇 \n 終:〇〇」の2行にまとめる
                               content = `開:${assigned.start}\n終:${assigned.end}`; 
                               bgColor = '#FFD700'; 
                               isBold = true;
@@ -339,7 +341,6 @@ export default function ShiftScreen() {
 
                           return (
                             <View key={dIdx} style={[styles.ssDataCell, { width: cellWidth, backgroundColor: bgColor }]}>
-                              {/* ★ numberOfLines={2} で確実に2行で切る */}
                               <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold' }]} adjustsFontSizeToFit numberOfLines={2}>{content}</Text>
                             </View>
                           );
@@ -355,7 +356,6 @@ export default function ShiftScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* --- スタンプ選択モーダル --- */}
       <Modal visible={stampModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -402,21 +402,16 @@ export default function ShiftScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  
   viewBoardBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   viewBoardBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
-
   stampBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFDF5', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F3E5AB', marginTop: 10 },
   bannerText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   activeStampBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   activeStampText: { color: COLORS.text, fontWeight: 'bold', fontSize: 14 },
-
   scrollArea: { flex: 1 },
-
   monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
   monthBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   monthText: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
-
   calendarContainer: { paddingHorizontal: 12, paddingBottom: 20 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 12 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
@@ -426,32 +421,25 @@ const styles = StyleSheet.create({
   calCellActive: { backgroundColor: '#FAFAFA' },
   calDayText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 4, textAlign: 'center' },
   cellContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
   stampBadge: { paddingHorizontal: 4, paddingVertical: 4, borderRadius: 6, width: '100%', alignItems: 'center', justifyContent: 'center' },
   stampBadgeAll: { backgroundColor: '#FFE4E1' }, 
   stampBadgeAM: { backgroundColor: '#E0FFFF' },  
   stampBadgePM: { backgroundColor: '#FFFACD' },  
   stampText: { fontSize: 11, fontWeight: 'bold', color: COLORS.text },
-
   submitContainer: { padding: 20, paddingBottom: 100 },
   submitBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
-
   fab: { position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.secondary, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { width: '100%', backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
   modalDesc: { fontSize: 13, color: COLORS.textLight, marginBottom: 24 },
-
   stampSelectBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderColor: COLORS.border },
   stampIconDemo: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, marginRight: 16, width: 80, alignItems: 'center' },
   stampTextDemo: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   stampSelectText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1 },
-
-  // ★ 1画面完全フィット(土日細い版・時間表示改行対応)のスタイル
   ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
   ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
@@ -459,21 +447,16 @@ const styles = StyleSheet.create({
   ssMonthBtn: { backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9370DB' },
   ssMonthBtnText: { fontSize: 12, fontWeight: 'bold', color: '#9370DB' },
   ssMonthTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  
   ssTableContainer: { flex: 1, backgroundColor: '#F0F0F0' },
   ssVerticalScroll: { flex: 1 },
   spreadsheet: { padding: 2 }, 
-  
   ssRow: { flexDirection: 'row', width: '100%' },
   ssHeaderCell: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssHeaderText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
-  
   ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssDateText: { fontSize: 14, fontWeight: 'bold' },
-  
   ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
   ssNameText: { fontSize: 10, fontWeight: 'bold', color: '#333', textAlign: 'center', paddingHorizontal: 2 },
-  
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
-  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 }, // ★ 行間を少し詰める
+  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
 });
