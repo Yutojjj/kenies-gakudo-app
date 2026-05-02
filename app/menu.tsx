@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -13,9 +13,9 @@ export default function MenuScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
   
-  const [userData, setUserData] = useState<any>(null);
-  const [userDocId, setUserDocId] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  // ▼ 修正①: userDocId の取得をパスワード変更時だけ行う（初期ロード不要）▼
+  const userDocIdRef = useRef<string>('');
+  const [fetchingDocId, setFetchingDocId] = useState(false);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(width));
@@ -26,23 +26,13 @@ export default function MenuScreen() {
   const [passwordModal, setPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const q = query(collection(db, 'accounts'), where('name', '==', name));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          setUserData(snapshot.docs[0].data());
-          setUserDocId(snapshot.docs[0].id);
-        }
-      } catch (error) { console.error("ユーザー取得エラー:", error); } 
-      finally { setLoading(false); }
-    };
-    if (name) fetchUserData();
-  }, [name]);
-
-  const openSettings = () => { setSettingsVisible(true); Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(); };
-  const closeSettings = () => { Animated.timing(slideAnim, { toValue: width, duration: 300, useNativeDriver: true }).start(() => setSettingsVisible(false)); };
+  const openSettings = () => {
+    setSettingsVisible(true);
+    Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+  };
+  const closeSettings = () => {
+    Animated.timing(slideAnim, { toValue: width, duration: 300, useNativeDriver: true }).start(() => setSettingsVisible(false));
+  };
 
   const handleLogout = async () => {
     if (Platform.OS === 'web') {
@@ -59,17 +49,51 @@ export default function MenuScreen() {
   };
 
   const saveShiftPeriod = async () => {
-    try { await setDoc(doc(db, 'settings', 'shift_period'), { start: startDay, end: endDay }); Alert.alert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`); setPeriodModal(false); } 
-    catch (e) { Alert.alert('エラー', '保存に失敗しました'); }
+    try {
+      await setDoc(doc(db, 'settings', 'shift_period'), { start: startDay, end: endDay });
+      Alert.alert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
+      setPeriodModal(false);
+    } catch (e) {
+      Alert.alert('エラー', '保存に失敗しました');
+    }
+  };
+
+  // ▼ 修正②: パスワードモーダルを開く際に userDocId を遅延取得 ▼
+  const openPasswordModal = async () => {
+    if (!userDocIdRef.current && name) {
+      setFetchingDocId(true);
+      try {
+        const q = query(collection(db, 'accounts'), where('name', '==', name));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          userDocIdRef.current = snapshot.docs[0].id;
+        }
+      } catch (error) {
+        console.error('ユーザー取得エラー:', error);
+      } finally {
+        setFetchingDocId(false);
+      }
+    }
+    setPasswordModal(true);
   };
 
   const savePassword = async () => {
     if (!newPassword) return;
-    try { await setDoc(doc(db, 'accounts', userDocId), { generatedPw: newPassword, password: newPassword }, { merge: true }); Alert.alert('変更完了', 'パスワードを変更しました。'); setPasswordModal(false); setNewPassword(''); } 
-    catch (e) { Alert.alert('エラー', 'パスワード変更に失敗しました。'); }
+    if (!userDocIdRef.current) {
+      Alert.alert('エラー', 'ユーザー情報の取得に失敗しました。');
+      return;
+    }
+    try {
+      await setDoc(doc(db, 'accounts', userDocIdRef.current), { generatedPw: newPassword, password: newPassword }, { merge: true });
+      Alert.alert('変更完了', 'パスワードを変更しました。');
+      setPasswordModal(false);
+      setNewPassword('');
+    } catch (e) {
+      Alert.alert('エラー', 'パスワード変更に失敗しました。');
+    }
   };
 
-  if (loading) return <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
+  // ▼ 修正③: loading スピナーを削除 → メニューを即時表示 ▼
 
   return (
     <SafeAreaView style={styles.container}>
@@ -95,7 +119,6 @@ export default function MenuScreen() {
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#E6E6FA' }]} onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}>
                 <View style={styles.iconCircle}><Ionicons name="images-outline" size={32} color="#9370DB" /></View><Text style={styles.gridTitle}>アルバム</Text>
               </TouchableOpacity>
-              {/* ★ イベント参加ボタン解放 */}
               <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFFACD' }]} onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}>
                 <View style={styles.iconCircle}><Ionicons name="ticket-outline" size={32} color="#DAA520" /></View><Text style={styles.gridTitle}>イベント参加</Text>
               </TouchableOpacity>
@@ -140,7 +163,6 @@ export default function MenuScreen() {
                   <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#FFE4B5', width: '48%' }]} onPress={() => router.push('/holidays-setting')}>
                     <View style={styles.iconCircle}><Ionicons name="calendar-clear-outline" size={32} color="#FF8C00" /></View><Text style={styles.gridTitle}>長期休み設定</Text>
                   </TouchableOpacity>
-                  {/* ★ 新規追加：イベント管理 */}
                   <TouchableOpacity style={[styles.gridCard, { backgroundColor: '#F5FFFA', width: '100%' }]} onPress={() => router.push('/event-management')}>
                     <View style={styles.iconCircle}><Ionicons name="flag-outline" size={32} color="#20B2AA" /></View><Text style={styles.gridTitle}>イベント管理</Text>
                   </TouchableOpacity>
@@ -161,14 +183,19 @@ export default function MenuScreen() {
             <ScrollView style={styles.drawerScroll}>
               <TouchableOpacity style={styles.drawerItem} onPress={() => setPeriodModal(true)}><Ionicons name="calendar-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>シフトの入力期間の設定</Text></TouchableOpacity>
               <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。')}><Ionicons name="time-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.drawerItem} onPress={() => setPasswordModal(true)}><Ionicons name="lock-closed-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} /><Text style={styles.drawerItemText}>パスワード変更</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.drawerItem} onPress={openPasswordModal}>
+                {fetchingDocId
+                  ? <ActivityIndicator size="small" color={COLORS.primary} style={styles.drawerIcon} />
+                  : <Ionicons name="lock-closed-outline" size={24} color={COLORS.primary} style={styles.drawerIcon} />
+                }
+                <Text style={styles.drawerItemText}>パスワード変更</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={[styles.drawerItem, { borderBottomWidth: 0, marginTop: 40 }]} onPress={handleLogout}><Ionicons name="log-out-outline" size={24} color={COLORS.danger} style={styles.drawerIcon} /><Text style={[styles.drawerItemText, { color: COLORS.danger, fontWeight: 'bold' }]}>ログアウト</Text></TouchableOpacity>
             </ScrollView>
           </Animated.View>
         </View>
       )}
 
-      {/* 期間設定・パスワード変更モーダル (省略なし) */}
       <Modal visible={periodModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
