@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query } from 'firebase/firestore';
@@ -25,6 +26,7 @@ interface Kid {
   parentName?: string;
   isManualOverride?: boolean;
   nicknameKana?: string;
+  parentDocId?: string;
 }
 
 type ViewMode = 'attendance' | 'schoolUsers' | 'transport';
@@ -63,6 +65,7 @@ export default function AttendanceScreen() {
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
   const [showKidNames, setShowKidNames] = useState(false);
 
+  const [isAdmin, setIsAdmin] = useState(false);
   const [kids, setKids] = useState<Kid[]>([]);
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
   
@@ -83,6 +86,12 @@ export default function AttendanceScreen() {
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
 
   const [activeSchool, setActiveSchool] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('loggedInUser').then(raw => {
+      if (raw) setIsAdmin(JSON.parse(raw).role === 'admin');
+    });
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -146,7 +155,8 @@ export default function AttendanceScreen() {
                 grade: data.grade,
                 usageType: data.usageType || '定期利用',
                 days: data.days || {},
-                nicknameKana: data.nicknameKana || ''
+                nicknameKana: data.nicknameKana || '',
+                parentDocId: parentId,
               });
             }
             if (data.siblings && Array.isArray(data.siblings)) {
@@ -159,7 +169,8 @@ export default function AttendanceScreen() {
                     grade: sib.grade,
                     usageType: sib.usageType || '定期利用',
                     days: sib.days || {},
-                    nicknameKana: sib.nicknameKana || ''
+                    nicknameKana: sib.nicknameKana || '',
+                    parentDocId: parentId,
                   });
                 }
               });
@@ -510,14 +521,24 @@ export default function AttendanceScreen() {
           <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
           <ScrollView>
             {sortKidsByGrade(groupedUsersBySchool[activeSchool]).map((user, idx) => (
-              <TouchableOpacity key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
-                <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                  <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
-                </View>
-                <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-              </TouchableOpacity>
+              <View key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]}>
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                  <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                    <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
+                  </View>
+                  <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+                </TouchableOpacity>
+                {isAdmin && user.parentDocId && (
+                  <TouchableOpacity
+                    style={styles.msgIconBtn}
+                    onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                  </TouchableOpacity>
+                )}
+              </View>
             ))}
           </ScrollView>
         </View>
@@ -700,6 +721,7 @@ const styles = StyleSheet.create({
   userGrade: { fontSize: 14, color: COLORS.textLight, fontWeight: 'normal' },
   userKana: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  msgIconBtn: { padding: 10, marginLeft: 4 },
   editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
   fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.danger },

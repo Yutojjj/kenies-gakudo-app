@@ -10,7 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput, // ★ ここが抜け落ちていたため追加しました
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -83,6 +83,7 @@ export default function ScheduleScreen() {
   const [lessonAddVisible, setLessonAddVisible] = useState(false);
   const [newLessonName, setNewLessonName] = useState('');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [returnToEdit, setReturnToEdit] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -256,6 +257,7 @@ export default function ScheduleScreen() {
       setLessonAddVisible(false);
       setNewLessonName('');
       setEditingTemplateId(null);
+      setTimeout(() => setTemplateModalVisible(true), 300);
     } catch(e) {
       customAlert('エラー', '習い事の保存に失敗しました。');
     }
@@ -404,6 +406,7 @@ export default function ScheduleScreen() {
   };
 
   const openTimePicker = (target: 'pickup' | 'lesson', defaultTime: string, lessonIndex: number = -1) => {
+    setEditModalVisible(false); // モーダル重複によるフリーズを防ぐ
     setTimePickerTarget(target);
     setEditingLessonIndex(lessonIndex);
     if (defaultTime) {
@@ -412,14 +415,15 @@ export default function ScheduleScreen() {
     } else {
       setTempHour(15); setTempMinute(0);
     }
-    setTimePickerVisible(true);
+    // 少し遅延してからピッカーを開く（前のモーダルが閉じるのを待つ）
+    setTimeout(() => setTimePickerVisible(true), 300);
   };
 
   const confirmTime = () => {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
     const current = scheduleData[key] || {};
-    
+
     if (timePickerTarget === 'pickup') {
       saveToFirestore(selectedDateStr, { pickupTime: timeStr });
     } else if (timePickerTarget === 'lesson' && editingLessonIndex >= 0) {
@@ -428,6 +432,7 @@ export default function ScheduleScreen() {
       saveToFirestore(selectedDateStr, { lessons: updatedLessons });
     }
     setTimePickerVisible(false);
+    setTimeout(() => setEditModalVisible(true), 300);
   };
 
   const deleteItem = async (target: 'pickup' | 'lesson', lessonIndex: number = -1) => {
@@ -445,13 +450,22 @@ export default function ScheduleScreen() {
     }
   };
 
+  const closeTemplateAndMaybeReturnToEdit = () => {
+    setTemplateModalVisible(false);
+    if (returnToEdit) {
+      setReturnToEdit(false);
+      setTimeout(() => setEditModalVisible(true), 300);
+    }
+  };
+
   const handleSelectTemplate = (template: LessonTemplate) => {
     if (templateSelectMode === 'edit') {
+        setTemplateModalVisible(false);
         setEditingTemplateId(template.id);
         setNewLessonName(template.name);
         const [h, m] = template.time.split(':').map(Number);
         setTempHour(h); setTempMinute(m);
-        setLessonAddVisible(true);
+        setTimeout(() => setLessonAddVisible(true), 300);
     } else if (templateSelectMode === 'stamping') {
       setActiveTemplate(template);
       setIsStampingMode(true);
@@ -463,7 +477,7 @@ export default function ScheduleScreen() {
           const newLessons = [...currentLessons, template];
           saveToFirestore(selectedDateStr, { lessons: newLessons });
       }
-      setTemplateModalVisible(false);
+      closeTemplateAndMaybeReturnToEdit();
     }
   };
 
@@ -534,9 +548,29 @@ export default function ScheduleScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ── 背景装飾 ── */}
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {([
+          { emoji: '⭐', top: 80,  left: 12,  size: 20, rotate: '15deg',  opacity: 0.13 },
+          { emoji: '✏️', top: 75,  right: 14, size: 22, rotate: '-18deg', opacity: 0.12 },
+          { emoji: '🌸', top: 200, left: 8,   size: 20, rotate: '-8deg',  opacity: 0.12 },
+          { emoji: '📅', top: 210, right: 10, size: 20, rotate: '10deg',  opacity: 0.11 },
+          { emoji: '🎵', top: 370, left: 8,   size: 18, rotate: '12deg',  opacity: 0.12 },
+          { emoji: '🌟', top: 380, right: 10, size: 18, rotate: '-10deg', opacity: 0.11 },
+          { emoji: '🎈', top: 540, left: 8,   size: 20, rotate: '-15deg', opacity: 0.11 },
+          { emoji: '✏️', top: 550, right: 12, size: 20, rotate: '20deg',  opacity: 0.12 },
+          { emoji: '🌸', top: 700, left: 10,  size: 18, rotate: '6deg',   opacity: 0.11 },
+          { emoji: '⭐', top: 710, right: 12, size: 18, rotate: '-12deg', opacity: 0.12 },
+        ] as const).map((d, i) => (
+          <Text key={i} style={{ position: 'absolute', top: d.top, ...(('left' in d) ? { left: d.left } : { right: d.right }), fontSize: d.size, opacity: d.opacity, transform: [{ rotate: d.rotate }] }}>
+            {d.emoji}
+          </Text>
+        ))}
+      </View>
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>スケジュール</Text>
       </View>
@@ -654,7 +688,12 @@ export default function ScheduleScreen() {
                       </View>
                   )}
                   
-                  <TouchableOpacity style={[styles.saveBtn, {marginTop: 8, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} onPress={() => { setTemplateSelectMode('singleDay'); setTemplateModalVisible(true); }}>
+                  <TouchableOpacity style={[styles.saveBtn, {marginTop: 8, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} onPress={() => {
+                      setEditModalVisible(false);
+                      setReturnToEdit(true);
+                      setTemplateSelectMode('singleDay');
+                      setTimeout(() => setTemplateModalVisible(true), 300);
+                  }}>
                       <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
                       <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>この日に習い事を追加</Text>
                   </TouchableOpacity>
@@ -740,7 +779,10 @@ export default function ScheduleScreen() {
               </ScrollView>
             </View>
             <View style={styles.pickerFooter}>
-              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setTimePickerVisible(false)}>
+              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => {
+                setTimePickerVisible(false);
+                setTimeout(() => setEditModalVisible(true), 300);
+              }}>
                 <Text style={styles.pickerCancelText}>キャンセル</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.pickerConfirmBtn} onPress={confirmTime}>
@@ -762,7 +804,7 @@ export default function ScheduleScreen() {
                   <TouchableOpacity onPress={() => setTemplateSelectMode(prev => prev === 'edit' ? 'stamping' : 'edit')}>
                       <Ionicons name={templateSelectMode === 'edit' ? "checkmark" : "settings-outline"} size={24} color={COLORS.primary} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { setTemplateModalVisible(false); }}>
+                  <TouchableOpacity onPress={closeTemplateAndMaybeReturnToEdit}>
                     <Ionicons name="close" size={28} color={COLORS.textLight} />
                   </TouchableOpacity>
               </View>
@@ -793,8 +835,8 @@ export default function ScheduleScreen() {
                 </View>
               ))}
               
-              <TouchableOpacity style={[styles.saveBtn, {marginTop: 16, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} 
-                                onPress={() => { setEditingTemplateId(null); setNewLessonName(''); setTempHour(16); setTempMinute(0); setLessonAddVisible(true); }}>
+              <TouchableOpacity style={[styles.saveBtn, {marginTop: 16, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]}
+                                onPress={() => { setTemplateModalVisible(false); setEditingTemplateId(null); setNewLessonName(''); setTempHour(16); setTempMinute(0); setTimeout(() => setLessonAddVisible(true), 300); }}>
                   <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
                   <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>新しい習い事を追加</Text>
               </TouchableOpacity>
@@ -836,7 +878,7 @@ export default function ScheduleScreen() {
                   </View>
 
                   <View style={styles.pickerFooter}>
-                    <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setLessonAddVisible(false)}>
+                    <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => { setLessonAddVisible(false); setTimeout(() => setTemplateModalVisible(true), 300); }}>
                       <Text style={styles.pickerCancelText}>キャンセル</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.pickerConfirmBtn} onPress={saveLessonTemplate}>
@@ -852,50 +894,51 @@ export default function ScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.background 
+  container: {
+    flex: 1,
+    backgroundColor: '#FFF8F0',
   },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 20, 
-    backgroundColor: COLORS.surface, 
-    borderBottomWidth: 1, 
-    borderColor: COLORS.border 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#AEE4F5',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  backBtn: { 
-    marginRight: 16 
+  backBtn: {
+    marginRight: 16
   },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: COLORS.text, 
-    flex: 1 
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#5D4037',
+    flex: 1
   },
-  childTabs: { 
-    flexDirection: 'row', 
-    backgroundColor: COLORS.surface, 
-    paddingHorizontal: 12, 
-    paddingTop: 12, 
-    borderBottomWidth: 1, 
-    borderColor: COLORS.border 
+  childTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF8F0',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    borderBottomWidth: 1,
+    borderColor: '#F0E4D0',
   },
-  childTabBtn: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 12, 
-    borderTopLeftRadius: 12, 
-    borderTopRightRadius: 12, 
-    backgroundColor: '#F5F5F5', 
-    marginHorizontal: 4 
+  childTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: '#F0E8DC',
+    marginHorizontal: 4
   },
-  childTabBtnActive: { 
-    backgroundColor: COLORS.white, 
-    borderBottomWidth: 3, 
-    borderBottomColor: COLORS.primary 
+  childTabBtnActive: {
+    backgroundColor: '#FFF8F0',
+    borderBottomWidth: 3,
+    borderBottomColor: COLORS.primary
   },
   childTabText: { 
     fontSize: 14, 
@@ -934,31 +977,39 @@ const styles = StyleSheet.create({
   scrollArea: { 
     flex: 1 
   },
-  monthSelector: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: 16 
+  monthSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#FFF0DC',
+    marginHorizontal: 8,
+    marginTop: 12,
+    borderRadius: 16,
+    marginBottom: 4,
   },
-  monthBtn: { 
-    padding: 8, 
-    backgroundColor: COLORS.surface, 
-    borderRadius: 20, 
-    borderWidth: 1, 
-    borderColor: COLORS.border 
+  monthBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F0D8B0',
   },
-  monthText: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: COLORS.text 
+  monthText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#5D4037',
   },
   calendarContainer: { 
     paddingHorizontal: 8, 
     paddingBottom: 40 
   },
-  calHeaderRow: { 
-    flexDirection: 'row', 
-    marginBottom: 8 
+  calHeaderRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    backgroundColor: '#FFE8CC',
+    borderRadius: 8,
+    paddingVertical: 6,
   },
   calWeekText: { 
     flex: 1, 
@@ -975,17 +1026,17 @@ const styles = StyleSheet.create({
     width: '14.28%', 
     minHeight: 60 
   },
-  calCell: { 
-    width: '14.28%', 
-    minHeight: 70, 
-    borderWidth: 0.5, 
-    borderColor: COLORS.border, 
-    padding: 2, 
-    backgroundColor: COLORS.white,
+  calCell: {
+    width: '14.28%',
+    minHeight: 70,
+    borderWidth: 0.5,
+    borderColor: '#F0E4D0',
+    padding: 2,
+    backgroundColor: '#FFFDF8',
     justifyContent: 'flex-start'
   },
-  calCellStamping: { 
-    backgroundColor: '#FAFAFA' 
+  calCellStamping: {
+    backgroundColor: '#FFF5E8'
   },
   calDayText: { 
     fontSize: 12, 

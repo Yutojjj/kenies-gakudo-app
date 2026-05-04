@@ -29,6 +29,7 @@ export default function RootLayout() {
           <Stack.Screen name="schedule" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="event-management" />
+          <Stack.Screen name="messages" />
         </Stack>
       </SafeAreaView>
     </SafeAreaProvider>

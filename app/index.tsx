@@ -66,7 +66,8 @@ export default function LoginScreen() {
     if (id === 'admin' && password === 'admin') {
       await AsyncStorage.setItem('loggedInUser', JSON.stringify({
         role: 'admin',
-        name: '管理者'
+        name: '管理者',
+        accountId: 'admin',
       }));
       router.replace({ pathname: '/menu', params: { role: 'admin', name: '管理者' } });
       return;
@@ -82,7 +83,8 @@ export default function LoginScreen() {
         if (userData.generatedPw === hashedPassword || userData.generatedPw === password) {
             await AsyncStorage.setItem('loggedInUser', JSON.stringify({
               role: userData.role,
-              name: userData.name
+              name: userData.name,
+              accountId: querySnapshot.docs[0].id,
             }));
             router.replace({ pathname: '/menu', params: { role: userData.role, name: userData.name } });
         } else {
