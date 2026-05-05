@@ -24,7 +24,7 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// ★ saveImageToDevice 内の documentDirectory へのアクセスを (FileSystem as any) に修正
+// ★ cacheDirectory も as any で型エラーを回避し、iOS対応を強化
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
@@ -34,7 +34,8 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `photo_${Date.now()}.jpg`;
+      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
+      link.download = `photo_${Date.now()}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -51,14 +52,25 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         Alert.alert('権限エラー', '写真へのアクセス権限が必要です。設定から許可してください。');
         return false;
       }
-      
-      // 型エラー回避のため as any を使用
-      const docDir = (FileSystem as any).documentDirectory;
-      if (!docDir) return false;
 
-      const fileUri = docDir + `photo_${Date.now()}.jpg`;
-      const { uri: localUri } = await FileSystem.downloadAsync(uri, fileUri);
-      await MediaLibrary.saveToLibraryAsync(localUri);
+      // iOSで見れない問題を解決するため、URLから拡張子を取得。なければ png をデフォルトに（jpgより安全）
+      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'png';
+      
+      // 型エラー回避のため (FileSystem as any) を使用
+      const cacheDir = (FileSystem as any).cacheDirectory;
+      if (!cacheDir) return false;
+
+      const fileUri = `${cacheDir}temp_photo_${Date.now()}.${extension}`;
+
+      const downloadRes = await FileSystem.downloadAsync(uri, fileUri);
+      
+      if (downloadRes.status !== 200) return false;
+
+      await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
+      
+      // 一時ファイルを削除
+      await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+      
       return true;
     } catch (e) {
       console.error('Native Download Error:', e);
@@ -560,7 +572,7 @@ export default function AlbumScreen() {
             mode === 'top' || role === 'user' ? router.back() : setMode('top');
           }
         }}>
-          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color={COLORS.text} />
+          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {isSelectMode ? `${selectedPhotoIds.length}枚選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真を追加' : 'アルバムを見る'}
@@ -991,11 +1003,9 @@ const styles = StyleSheet.create({
     zIndex: 9999 
   },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
-  
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
