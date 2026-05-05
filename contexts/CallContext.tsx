@@ -123,7 +123,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     peerRef.current?.close(); peerRef.current = null;
     localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
     localStreamRef.current = null;
-    if (remoteAudioRef.current) { remoteAudioRef.current.srcObject = null; remoteAudioRef.current = null; }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+      try { remoteAudioRef.current.remove(); } catch (e) {} // DOMから削除
+      remoteAudioRef.current = null;
+    }
     setCallStatus('idle');
     setActiveCallId(null);
     setIncomingCallId(null);
@@ -196,11 +200,16 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       };
       pc.ontrack = (e: any) => {
         if (!remoteAudioRef.current) {
-          const audio = new (window as any).Audio();
+          // iOS Safari はDOMに追加しないとスピーカー出力になりエコーが発生する
+          const audio = document.createElement('audio');
           audio.autoplay = true;
+          (audio as any).playsInline = true;
+          audio.muted = false;
+          document.body.appendChild(audio);
           remoteAudioRef.current = audio;
         }
         remoteAudioRef.current.srcObject = e.streams[0];
+        remoteAudioRef.current.play().catch(() => {});
       };
 
       const offer = await pc.createOffer();
@@ -300,11 +309,16 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       pc.ontrack = (e: any) => {
         if (!remoteAudioRef.current) {
-          const audio = new (window as any).Audio();
+          // iOS Safari はDOMに追加しないとスピーカー出力になりエコーが発生する
+          const audio = document.createElement('audio');
           audio.autoplay = true;
+          (audio as any).playsInline = true;
+          audio.muted = false;
+          document.body.appendChild(audio);
           remoteAudioRef.current = audio;
         }
         remoteAudioRef.current.srcObject = e.streams[0];
+        remoteAudioRef.current.play().catch(() => {});
       };
       pc.onicecandidate = (e: any) => {
         if (e.candidate) addDoc(collection(db, 'calls', callId, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
