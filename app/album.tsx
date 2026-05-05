@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-// ★ 修正: 元のインポートに戻す
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
@@ -54,18 +53,15 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         return false;
       }
       
-      // ★ 修正: TSのエラーを黙らせるために (FileSystem as any) を使用して強制取得
       const docDir = (FileSystem as any).documentDirectory;
       if (!docDir) {
         Alert.alert('エラー', 'ファイル保存領域にアクセスできません。');
         return false;
       }
 
-      // Firebase等のURLからローカルの一時ディレクトリにダウンロード
       const fileUri = docDir + `photo_${Date.now()}.jpg`;
       const { uri: localUri } = await FileSystem.downloadAsync(uri, fileUri);
       
-      // ローカルのファイルを端末のメディアライブラリ（カメラロール）に保存
       await MediaLibrary.saveToLibraryAsync(localUri);
       return true;
     } catch (e) {
@@ -82,7 +78,7 @@ export default function AlbumScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false); // 保存中インジケーター用
+  const [isDownloading, setIsDownloading] = useState(false);
   
   const [mode, setMode] = useState<Mode>(role === 'user' ? 'view' : 'top');
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
@@ -96,31 +92,26 @@ export default function AlbumScreen() {
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [eventNameInput, setEventNameInput] = useState('');
   const [pastDate, setPastDate] = useState(new Date());
-  // イベント追加モード選択
+  
   const [eventChoiceModalVisible, setEventChoiceModalVisible] = useState(false);
-  // 新規イベント: 日付選択カレンダー
   const [newEventCalendarVisible, setNewEventCalendarVisible] = useState(false);
   const [newEventDate, setNewEventDate] = useState(new Date());
-  // 既存イベントへの追加
   const [addToExistingModalVisible, setAddToExistingModalVisible] = useState(false);
   
   const [albumPhotos, setAlbumPhotos] = useState<Record<string, { id: string, uri: string, storagePath?: string }[]>>({});
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
-  // ── イベント管理用ステート ──
   const [albumEvents, setAlbumEvents] = useState<{id: string, name: string, code: string, category: string}[]>([]);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockCodeInput, setUnlockCodeInput] = useState('');
 
-  // ── 選択・一括操作用ステート ──
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
 
   useEffect(() => {
     let isMounted = true;
 
-    // ユーザー情報の取得
     const fetchUser = async () => {
       if (role === 'user') {
         const q = query(collection(db, 'accounts'), where('role', '==', 'user'), where('name', '==', name));
@@ -135,26 +126,23 @@ export default function AlbumScreen() {
     };
     fetchUser();
 
-    // ロック解除済みのイベント履歴をローカルから復元
     AsyncStorage.getItem('unlockedEvents').then(res => {
       if (res && isMounted) setUnlockedEvents(JSON.parse(res));
     });
 
-    // アルバム写真の購読
     const qPhotos = query(collection(db, 'albums'));
     const unsubPhotos = onSnapshot(qPhotos, (snapshot) => {
       const photosData: Record<string, { id: string, uri: string, storagePath?: string }[]> = {};
       snapshot.forEach(d => {
         const item = d.data();
         const key = item.category as string;
-        if (!key) return; // カテゴリがないデータはスキップ
+        if (!key) return; 
         if (!photosData[key]) photosData[key] = [];
         photosData[key].push({ id: d.id, uri: item.uri, storagePath: item.storagePath });
       });
       if (isMounted) setAlbumPhotos(photosData);
     });
 
-    // イベントメタデータ（コードなど）の購読
     const qEvents = query(collection(db, 'album_events'));
     const unsubEvents = onSnapshot(qEvents, (snapshot) => {
       const evs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
@@ -172,7 +160,6 @@ export default function AlbumScreen() {
     setExpandedDates(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // 写真のアップロード処理
   const pickImages = async (targetTitle: string, targetKey: string) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -254,7 +241,6 @@ export default function AlbumScreen() {
     return count;
   };
 
-  // 新規イベント作成とアップロード
   const handleCreateEvent = async () => {
     if (!eventNameInput.trim()) return Alert.alert('エラー', 'イベント名を入力してください');
     const eventCode = generateEventCode();
@@ -279,7 +265,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // 既存イベントへの写真追加
   const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
     setAddToExistingModalVisible(false);
     setIsUploading(true);
@@ -304,9 +289,7 @@ export default function AlbumScreen() {
     return days;
   };
 
-  // イベントコードを入力してロック解除
   const handleUnlockEvent = () => {
-    // 大文字小文字の揺れを吸収して比較
     const inputCode = unlockCodeInput.trim().toUpperCase();
     const ev = albumEvents.find(e => e.code === inputCode);
     if (ev) {
@@ -338,17 +321,16 @@ export default function AlbumScreen() {
   const getDatesForTab = () => {
     if (activeTab === 'イベント') {
       return albumEvents
-        .filter(ev => role !== 'user' || unlockedEvents.includes(ev.id)) // 利用者は解除済みのみ
+        .filter(ev => role !== 'user' || unlockedEvents.includes(ev.id)) 
         .map(ev => ({
           key: ev.category,
           label: ev.name,
-          code: ev.code, // 管理者用にコードを含める
+          code: ev.code, 
           eventId: ev.id,
           photos: albumPhotos[ev.category] || []
         }));
     }
     
-    // 月〜金タブの場合
     const year = new Date().getFullYear();
     const dayIdx = ['日', '月', '火', '水', '木', '金', '土'].indexOf(activeTab);
     const dates = [];
@@ -375,7 +357,6 @@ export default function AlbumScreen() {
     return dates;
   };
 
-  // ── 一括選択・保存・削除 ──
   const toggleSelectPhoto = (id: string) => {
     if (selectedPhotoIds.includes(id)) {
       setSelectedPhotoIds(selectedPhotoIds.filter(pid => pid !== id));
@@ -395,7 +376,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // ★ 単体保存処理
   const handleSaveSinglePhoto = async () => {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
@@ -411,7 +391,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // ★ 一括保存処理
   const handleBulkSave = async () => {
     if (selectedPhotoIds.length === 0) return;
     
@@ -492,7 +471,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // ── スワイプ機能（フルスクリーン） ──
   const openFullScreen = (photos: any[], index: number) => {
     setFullScreenPhotos(photos);
     setFullScreenIndex(index);
@@ -513,7 +491,6 @@ export default function AlbumScreen() {
         </View>
       )}
 
-      {/* 保存中のローディング */}
       {isDownloading && (
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
@@ -537,7 +514,7 @@ export default function AlbumScreen() {
             mode === 'top' || role === 'user' ? router.back() : setMode('top');
           }
         }}>
-          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color="#5D4037" />
+          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {isSelectMode ? `${selectedPhotoIds.length}枚選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真を追加' : 'アルバムを見る'}
@@ -628,7 +605,6 @@ export default function AlbumScreen() {
                         )}
                       </View>
 
-                      {/* セクション操作アイコン（管理者・スタッフ または 選択モード） */}
                       <View style={styles.sectionActions}>
                         {isSelectMode ? (
                           <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
@@ -697,7 +673,6 @@ export default function AlbumScreen() {
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* 選択モード時のボトムバー */}
           {isSelectMode && (
             <View style={styles.selectionBottomBar}>
               {role !== 'user' && (
@@ -713,7 +688,6 @@ export default function AlbumScreen() {
             </View>
           )}
 
-          {/* FAB: 選択モード切替ボタン */}
           {!isSelectMode && (
             <TouchableOpacity style={styles.fab} onPress={() => setIsSelectMode(true)}>
               <Ionicons name="checkmark-done" size={28} color={COLORS.white} />
@@ -723,7 +697,6 @@ export default function AlbumScreen() {
         </View>
       )}
 
-      {/* ── 各種モーダル ── */}
       <Modal visible={calendarModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -752,7 +725,6 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── イベント選択モーダル (新規 or 既存) ── */}
       <Modal visible={eventChoiceModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -772,7 +744,6 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── 新規イベント: 日付選択カレンダー ── */}
       <Modal visible={newEventCalendarVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -810,7 +781,6 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── 新規イベント: イベント名入力 ── */}
       <Modal visible={eventModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -831,7 +801,6 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── 既存イベントへの追加モーダル ── */}
       <Modal visible={addToExistingModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '80%' }]}>
@@ -880,7 +849,7 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── フルスクリーン・スワイプビューア ── */}
+      {/* ── 修正: フルスクリーン・スワイプビューア ── */}
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <SafeAreaView style={styles.fullScreenContainer}>
           <View style={styles.fullScreenHeader}>
@@ -892,6 +861,7 @@ export default function AlbumScreen() {
 
           {fullScreenPhotos && (
             <FlatList
+              style={{ flex: 1 }} // ★ ここを追加 (高さ潰れ防止)
               data={fullScreenPhotos}
               keyExtractor={(item) => item.id}
               horizontal
@@ -904,7 +874,7 @@ export default function AlbumScreen() {
                 setFullScreenIndex(idx);
               }}
               renderItem={({ item }) => (
-                <View style={{ width: SCREEN_WIDTH, height: '100%', justifyContent: 'center' }}>
+                <View style={{ width: SCREEN_WIDTH, height: '100%', justifyContent: 'center', alignItems: 'center' }}>
                   <Image source={{ uri: item.uri }} style={styles.fullScreenImage} resizeMode="contain" />
                 </View>
               )}
@@ -948,9 +918,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   uploadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
+  backBtn: { marginRight: 16 },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
@@ -987,12 +957,12 @@ const styles = StyleSheet.create({
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
   
-  // フルスクリーン関連
-  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center' },
+  // ── 修正: フルスクリーン関連 ──
+  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }, // justifyContent: 'center' を削除
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
-  fullScreenImage: { width: '100%', height: '75%' },
+  fullScreenImage: { width: '100%', height: '100%' }, // 75% -> 100% に変更 (アスペクト比は維持される)
   fullScreenFooter: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 60, zIndex: 10 },
   fullScreenActionBtn: { alignItems: 'center', padding: 10 },
   fullScreenActionText: { color: COLORS.white, fontSize: 14, marginTop: 6, fontWeight: 'bold' },

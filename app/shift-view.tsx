@@ -94,24 +94,25 @@ export default function ShiftViewScreen() {
         const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
         const color = (d === 0 || isPublicHoliday) ? 'red' : d === 6 ? 'blue' : '#000';
         const bg = (d === 0 || isPublicHoliday) ? '#FFE4E1' : d === 6 ? '#E0FFFF' : '#E8F5E9';
-        // 幅指定を%にして自動調整
-        thDates += `<th style="background:${bg}; color:${color}; border:1px solid #333; width:3%;">${i}</th>`;
+        
+        // ★ iOSの強制白黒化を回避するため、box-shadowでセル内に色を落とす最強のハックを使用
+        thDates += `<th style="background-color:${bg} !important; box-shadow: inset 0 0 0 1000px ${bg} !important; color:${color} !important; border:1px solid #333; width:3%;">${i}</th>`;
       }
 
       const staffToExport = showOnlyMine ? allStaff.filter(s => s.name === name) : allStaff;
       let staffRows = '';
       staffToExport.forEach(staff => {
-        let rowHtml = `<tr class="staff-row"><th style="background:#FFC0CB; border:1px solid #333; text-align:center; white-space:nowrap; width:6%; padding:2px;">${staff.name}</th>`;
+        let rowHtml = `<tr class="staff-row"><th style="background-color:#FFC0CB !important; box-shadow: inset 0 0 0 1000px #FFC0CB !important; border:1px solid #333; text-align:center; white-space:nowrap; width:6%; padding:2px;">${staff.name}</th>`;
         for (let i = 1; i <= daysInMonth; i++) {
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
           const assigned = assignedShifts[dateStr]?.find(s => s.name === staff.name);
           const req = requests[`${staff.name}_${dateStr}`];
           if (assigned) {
-            rowHtml += `<td style="background:#FFD700; border:1px solid #333; font-weight:bold;">${assigned.start}<br>-${assigned.end}</td>`;
+            rowHtml += `<td style="background-color:#FFD700 !important; box-shadow: inset 0 0 0 1000px #FFD700 !important; border:1px solid #333; font-weight:bold;">${assigned.start}<br>-${assigned.end}</td>`;
           } else if (req && req.includes('✕')) {
-            rowHtml += `<td style="background:#D3D3D3; border:1px solid #333; color:#333;">✕</td>`;
+            rowHtml += `<td style="background-color:#D3D3D3 !important; box-shadow: inset 0 0 0 1000px #D3D3D3 !important; border:1px solid #333; color:#333;">✕</td>`;
           } else {
-            rowHtml += `<td style="border:1px solid #333; background:#FFF;"></td>`;
+            rowHtml += `<td style="background-color:#FFFFFF !important; box-shadow: inset 0 0 0 1000px #FFFFFF !important; border:1px solid #333;"></td>`;
           }
         }
         rowHtml += `</tr>`;
@@ -121,41 +122,33 @@ export default function ShiftViewScreen() {
       // HTML/CSS設定: カラー強制反映＆A4完全フィット
       const html = `
         <html><head><style>
-          /* 1. インク節約設定を無視して色を完全に出力する */
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          /* 2. 余白を小さくし、A4横に設定 */
+          /* A4横に設定し、余白を最小化 */
           @page { size: A4 landscape; margin: 5mm; }
           
-          /* 3. A4一枚に絶対収めるためのコンテナ設定 */
+          /* 表全体の高さを100%にすることで、絶対に1枚に縮小・フィットさせる */
           html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
             font-family: sans-serif; box-sizing: border-box; overflow: hidden;
           }
-          /* 表全体の高さを100%にすることで、人数が増えても自動で1枚に縮小される */
           table {
             width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; text-align: center;
           }
           th, td {
             border: 1px solid #333; word-wrap: break-word; padding: 1px; line-height: 1.1; overflow: hidden;
           }
-          .top-header td {
-            font-weight: bold; font-size: 14px; text-align: center; height: 24px; border: 1px solid #333;
-          }
           .date-row th { font-size: 10px; height: 20px; }
           .staff-row td { font-size: 8px; }
           .staff-row th { font-size: 9px; }
         </style></head><body>
           <table>
-            <tr class="top-header">
-              <td style="background:#B0C4DE;">シフト表</td>
-              <td colspan="2" style="background:#E6E6FA;">${year}年</td>
-              <td colspan="4" style="background:#FFDAB9; font-size: 16px;">${month}月</td>
-              <td colspan="${daysInMonth - 6}" style="background:#F0F0F0; text-align: right; padding-right: 10px; font-size:10px; font-weight:normal;">出力日: ${new Date().toLocaleDateString('ja-JP')}</td>
+            <tr class="date-row">
+              <th style="background-color:#FFF3E0 !important; box-shadow: inset 0 0 0 1000px #FFF3E0 !important; border:1px solid #333; font-size: 12px;">${month}月</th>
+              ${thDates}
             </tr>
-            <tr class="date-row"><th style="background:#FFF3E0; border:1px solid #333;">名前 \\ 日付</th>${thDates}</tr>
             ${staffRows}
           </table>
         </body></html>
@@ -174,26 +167,25 @@ export default function ShiftViewScreen() {
 
   return (
     <SafeAreaView style={styles.ssModalContainer}>
+      
+      {/* ★ 「次の月」「前の月」などの無駄を削ぎ落とし、1行にキュッとまとめたヘッダー */}
       <View style={styles.ssModalHeader}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#5D4037" />
+          <Ionicons name="chevron-back" size={20} color="#5D4037" />
+          <Text style={{fontWeight: 'bold', color: '#5D4037', marginLeft: 2, fontSize: 14}}>戻る</Text>
         </TouchableOpacity>
-        <Text style={styles.ssModalTitle}>シフト表</Text>
+
+        <Text style={{fontSize: 16, fontWeight: 'bold', color: '#333'}}>
+          {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
+        </Text>
+
         <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
-          <Ionicons name="document-text" size={20} color={COLORS.white} />
+          <Ionicons name="document-text" size={16} color={COLORS.white} />
           <Text style={styles.pdfBtnText}>PDF出力</Text>
         </TouchableOpacity>
       </View>
       
-      <View style={styles.ssMonthNav}>
-        <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
-          <Text style={styles.ssMonthBtnText}>前の月</Text>
-        </TouchableOpacity>
-        <Text style={styles.ssMonthTitle}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-        <TouchableOpacity style={styles.ssMonthBtn} onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
-          <Text style={styles.ssMonthBtnText}>次の月</Text>
-        </TouchableOpacity>
-      </View>
+      {/* 不要な月ナビゲーション (ssMonthNav) は完全に削除しました */}
 
       <View style={styles.ssTableContainer}>
         <ScrollView style={styles.ssVerticalScroll} showsVerticalScrollIndicator={false}>
@@ -286,15 +278,26 @@ export default function ShiftViewScreen() {
 
 const styles = StyleSheet.create({
   ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
-  ssModalHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
-  ssModalTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-  ssMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E6E6FA', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#9370DB' },
-  ssMonthBtn: { backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#9370DB' },
-  ssMonthBtnText: { fontSize: 12, fontWeight: 'bold', color: '#9370DB' },
-  ssMonthTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   
-  ssTableContainer: { flex: 1, backgroundColor: '#F0F0F0' },
+  // ── 削ぎ落としてミニマルになったヘッダー ──
+  ssModalHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    backgroundColor: '#AEE4F5', 
+    borderBottomLeftRadius: 16, 
+    borderBottomRightRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10
+  },
+  backBtn: { flexDirection: 'row', alignItems: 'center' },
+  
+  ssTableContainer: { flex: 1, backgroundColor: '#F0F0F0', marginTop: 4 }, // 少しだけマージン
   ssVerticalScroll: { flex: 1 },
   spreadsheet: { padding: 2 }, 
   
