@@ -33,11 +33,16 @@ function fmtDuration(sec: number) {
 }
 
 const createRemoteAudioElement = () => {
-  // iOS PWAのエコーキャンセラーを強制的に効かせるため、<audio>ではなく<video>を使用する
+  // iOS PWAのエコーキャンセラーを強制的に効かせるため、<audio>ではなく<video>を使用
   const mediaEl = document.createElement('video');
   mediaEl.autoplay = true;
-  mediaEl.muted = false;
   
+  // iOS AEC対策: 最初はミュート状態にしておき、ストリーム注入後に解除する
+  mediaEl.muted = true; 
+  
+  // iOS AEC対策: 音量を80%に抑え、スピーカーからの物理的な音割れ・回り込みを防ぐ
+  mediaEl.volume = 0.8;
+
   // iOSで全画面再生になるのを防ぐ
   (mediaEl as any).playsInline = true;
   mediaEl.setAttribute('playsinline', '');
@@ -209,7 +214,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+      // iOS AEC対策: noiseSuppressionやautoGainControlを指定するとソフトウェア処理に落ちてAECが効かなくなるため外す
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
@@ -226,7 +232,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           remoteAudioRef.current = createRemoteAudioElement();
         }
         remoteAudioRef.current.srcObject = e.streams[0];
-        remoteAudioRef.current.play().catch(() => {});
+        
+        // iOS AEC対策: ストリーム注入後、少し遅延させてからミュート解除＆再生
+        setTimeout(() => {
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.muted = false;
+            remoteAudioRef.current.play().catch(() => {});
+          }
+        }, 150);
       };
 
       const offer = await pc.createOffer();
@@ -305,8 +318,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const acceptCall = async () => {
     if (!incomingCallId || Platform.OS !== 'web') return;
     const callId = incomingCallId;
+    
+    // 着信音を確実に止めて、AudioContextを解放する（AECの邪魔をさせない）
     stopRingtone();
     clearTimeout(missedTimerRef.current);
+    
     try {
       const snap = await getDoc(doc(db, 'calls', callId));
       if (!snap.exists()) { cleanupCall(); return; }
@@ -320,7 +336,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+      // iOS AEC対策: noiseSuppressionやautoGainControlを指定するとソフトウェア処理に落ちてAECが効かなくなるため外す
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
@@ -329,7 +346,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           remoteAudioRef.current = createRemoteAudioElement();
         }
         remoteAudioRef.current.srcObject = e.streams[0];
-        remoteAudioRef.current.play().catch(() => {});
+        
+        // iOS AEC対策: ストリーム注入後、少し遅延させてからミュート解除＆再生
+        setTimeout(() => {
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.muted = false;
+            remoteAudioRef.current.play().catch(() => {});
+          }
+        }, 150);
       };
       pc.onicecandidate = (e: any) => {
         if (e.candidate) addDoc(collection(db, 'calls', callId, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
