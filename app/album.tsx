@@ -67,7 +67,6 @@ export default function AlbumScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
 
-  // ★ 画面の横幅と縦幅を正確に取得（高さ潰れ防止用）
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [userData, setUserData] = useState<any>(null);
@@ -111,7 +110,6 @@ export default function AlbumScreen() {
     }
   }).current;
 
-  // Androidのスクロールバグ回避用
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
       flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -205,9 +203,11 @@ export default function AlbumScreen() {
           });
           uploadedCount++;
         }
-        Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
+        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
+        else Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
       } catch (e) {
-        Alert.alert('エラー', '画像のアップロードに失敗しました。');
+        if (Platform.OS === 'web') window.alert('画像のアップロードに失敗しました。');
+        else Alert.alert('エラー', '画像のアップロードに失敗しました。');
       } finally {
         setIsUploading(false);
       }
@@ -275,12 +275,15 @@ export default function AlbumScreen() {
           name: `${eventNameInput.trim()}_${dateStr}`,
           code: eventCode, category: eventCategory, createdAt: serverTimestamp()
         });
-        Alert.alert('イベント作成完了',
-          `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。\n※保護者にはこのコードを伝えてください。`
-        );
+        if (Platform.OS === 'web') {
+          window.alert(`イベント作成完了\nイベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。`);
+        } else {
+          Alert.alert('イベント作成完了', `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。\n※保護者にはこのコードを伝えてください。`);
+        }
       }
     } catch (e) {
-      Alert.alert('エラー', 'イベント作成または画像のアップロードに失敗しました。');
+      if (Platform.OS === 'web') window.alert('イベント作成または画像のアップロードに失敗しました。');
+      else Alert.alert('エラー', 'イベント作成または画像のアップロードに失敗しました。');
     } finally {
       setIsUploading(false);
       setEventNameInput('');
@@ -290,9 +293,13 @@ export default function AlbumScreen() {
   const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
     try {
       const uploaded = await uploadPhotosToCategory(ev.category);
-      if (uploaded > 0) Alert.alert('追加完了', `「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
+      if (uploaded > 0) {
+        if (Platform.OS === 'web') window.alert(`追加完了\n「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
+        else Alert.alert('追加完了', `「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
+      }
     } catch (e) {
-      Alert.alert('エラー', '写真のアップロードに失敗しました。');
+      if (Platform.OS === 'web') window.alert('写真のアップロードに失敗しました。');
+      else Alert.alert('エラー', '写真のアップロードに失敗しました。');
     } finally {
       setIsUploading(false);
     }
@@ -404,10 +411,12 @@ export default function AlbumScreen() {
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
     
-    if (success && Platform.OS !== 'web') {
-      Alert.alert('保存完了', '端末のアルバムに保存しました。');
-    } else if (!success && Platform.OS !== 'web') {
-      Alert.alert('エラー', '保存に失敗しました。');
+    if (success) {
+      if (Platform.OS === 'web') window.alert('端末のアルバムに保存しました。');
+      else Alert.alert('保存完了', '端末のアルバムに保存しました。');
+    } else {
+      if (Platform.OS === 'web') window.alert('保存に失敗しました。');
+      else Alert.alert('エラー', '保存に失敗しました。');
     }
   };
 
@@ -427,11 +436,11 @@ export default function AlbumScreen() {
       }
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
-      if (Platform.OS !== 'web') {
-        Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
-      }
+      if (Platform.OS === 'web') window.alert(`保存完了\n${successCount} 枚の画像を保存しました。`);
+      else Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
     } catch (error) {
-      if (Platform.OS !== 'web') Alert.alert('エラー', '一括保存中にエラーが発生しました。');
+      if (Platform.OS === 'web') window.alert('一括保存中にエラーが発生しました。');
+      else Alert.alert('エラー', '一括保存中にエラーが発生しました。');
     } finally {
       setIsDownloading(false);
     }
@@ -505,26 +514,27 @@ export default function AlbumScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      <Modal visible={isUploading} transparent animationType="fade">
+      {/* ★ Modalでのラップを解除し、一番手前に描画される View に変更 (Androidバグ回避) */}
+      {isUploading && (
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>写真をアップロード中...</Text>
         </View>
-      </Modal>
+      )}
 
-      <Modal visible={isDownloading} transparent animationType="fade">
+      {isDownloading && !fullScreenPhotos && (
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>端末に保存しています...</Text>
         </View>
-      </Modal>
+      )}
 
-      <Modal visible={loading} transparent animationType="fade">
+      {loading && (
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>処理中...</Text>
         </View>
-      </Modal>
+      )}
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => {
@@ -870,10 +880,17 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ★ レイアウト崩れ・真っ暗バグを完全解決したビューア */}
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', width: windowWidth, height: windowHeight }}>
           
+          {/* ★ フルスクリーンModalの中にローディング表示を組み込む */}
+          {isDownloading && (
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }]}>
+              <ActivityIndicator size="large" color={COLORS.white} />
+              <Text style={styles.uploadingText}>端末に保存しています...</Text>
+            </View>
+          )}
+
           <View style={styles.fullScreenHeader}>
             <Text style={styles.fullScreenCounter}>{fullScreenIndex + 1} / {fullScreenPhotos?.length}</Text>
             <TouchableOpacity style={styles.fullScreenIconBtn} onPress={closeFullScreen}>
@@ -900,6 +917,11 @@ export default function AlbumScreen() {
                 snapToAlignment="center"
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
+                // ★ スクロール位置のズレを確実に補正
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
+                  setFullScreenIndex(idx);
+                }}
                 renderItem={({ item }) => (
                   <View style={{ width: windowWidth, height: windowHeight, justifyContent: 'center', alignItems: 'center' }}>
                     <Image source={{ uri: item.uri }} style={{ width: windowWidth, height: windowHeight }} resizeMode="contain" />
@@ -955,7 +977,14 @@ export default function AlbumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  uploadingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
+  // ★ Modalラッパーをやめたので absoluteFillObject で一番手前に出す
+  uploadingOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: 'rgba(0,0,0,0.8)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    zIndex: 9999 
+  },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
@@ -995,9 +1024,11 @@ const styles = StyleSheet.create({
   noPhotoText: { color: COLORS.textLight, paddingHorizontal: 16, paddingVertical: 16, fontStyle: 'italic', fontSize: 14, textAlign: 'center' },
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
+  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
+  fullScreenImage: { width: '100%', height: '100%' },
   fullScreenFooter: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 60, zIndex: 10 },
   fullScreenActionBtn: { alignItems: 'center', padding: 10 },
   fullScreenActionText: { color: COLORS.white, fontSize: 14, marginTop: 6, fontWeight: 'bold' },
