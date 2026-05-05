@@ -32,6 +32,19 @@ function fmtDuration(sec: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+const createRemoteAudioElement = () => {
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  audio.muted = false;
+  (audio as any).playsInline = true;
+  audio.setAttribute('playsinline', '');
+  audio.setAttribute('webkit-playsinline', '');
+  audio.preload = 'auto';
+  audio.style.display = 'none';
+  document.body.appendChild(audio);
+  return audio;
+};
+
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const [myAccountId, setMyAccountId] = useState('');
   const [myName, setMyName] = useState('');
@@ -200,13 +213,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       };
       pc.ontrack = (e: any) => {
         if (!remoteAudioRef.current) {
-          // iOS Safari はDOMに追加しないとスピーカー出力になりエコーが発生する
-          const audio = document.createElement('audio');
-          audio.autoplay = true;
-          (audio as any).playsInline = true;
-          audio.muted = false;
-          document.body.appendChild(audio);
-          remoteAudioRef.current = audio;
+          remoteAudioRef.current = createRemoteAudioElement();
         }
         remoteAudioRef.current.srcObject = e.streams[0];
         remoteAudioRef.current.play().catch(() => {});
@@ -309,13 +316,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       pc.ontrack = (e: any) => {
         if (!remoteAudioRef.current) {
-          // iOS Safari はDOMに追加しないとスピーカー出力になりエコーが発生する
-          const audio = document.createElement('audio');
-          audio.autoplay = true;
-          (audio as any).playsInline = true;
-          audio.muted = false;
-          document.body.appendChild(audio);
-          remoteAudioRef.current = audio;
+          remoteAudioRef.current = createRemoteAudioElement();
         }
         remoteAudioRef.current.srcObject = e.streams[0];
         remoteAudioRef.current.play().catch(() => {});
