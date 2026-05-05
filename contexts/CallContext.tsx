@@ -32,32 +32,40 @@ function fmtDuration(sec: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-const createRemoteAudioElement = () => {
-  // iOS PWAのエコーキャンセラーを強制的に効かせるため、<audio>ではなく<video>を使用
-  const mediaEl = document.createElement('video');
-  mediaEl.autoplay = true;
-  
-  // iOS AEC対策: 最初はミュート状態にしておき、ストリーム注入後に解除する
-  mediaEl.muted = true; 
-  
-  // iOS AEC対策: 音量を80%に抑え、スピーカーからの物理的な音割れ・回り込みを防ぐ
-  mediaEl.volume = 0.8;
+// ─── 実験：Web Audio APIを使った音声ルーティング ───
+// <audio>や<video>タグで音を鳴らさず、Web Audio APIのパイプラインを通して出力します。
+// これによりiOSのハードウェアAECが強制的に有効化されることを狙います。
+const playStreamViaWebAudio = (stream: MediaStream) => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioCtx();
+    
+    // ユーザー操作（タップ）のコンテキスト内で呼ばれるため、resumeでアクティブ化できる
+    ctx.resume();
 
-  // iOSで全画面再生になるのを防ぐ
-  (mediaEl as any).playsInline = true;
-  mediaEl.setAttribute('playsinline', '');
-  mediaEl.setAttribute('webkit-playsinline', '');
-  mediaEl.preload = 'auto';
+    // iOS Safariの強烈なバグ対策：
+    // Web Audio APIを通す場合でも、裏でミュートにした<audio>タグにストリームを食わせておかないと、
+    // 数秒でガベージコレクション（メモリ解放）されて無音になる問題を防ぐためのダミー要素
+    const dummyAudio = document.createElement('audio');
+    dummyAudio.autoplay = true;
+    dummyAudio.muted = true; // タグからは絶対に音を出さない
+    (dummyAudio as any).playsInline = true;
+    dummyAudio.srcObject = stream;
+    dummyAudio.play().catch(() => {});
 
-  // 画面から見えなくする（display: noneはエコーキャンセラーが死ぬので絶対に使わない）
-  mediaEl.style.position = 'absolute';
-  mediaEl.style.width = '1px';
-  mediaEl.style.height = '1px';
-  mediaEl.style.opacity = '0';
-  mediaEl.style.pointerEvents = 'none';
+    // 実際の音はここ（Web Audio API）から出す
+    const source = ctx.createMediaStreamSource(stream);
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = 0.8; // 音量を80%に抑えて物理的なエコーを軽減
+    
+    source.connect(gainNode);
+    gainNode.connect(ctx.destination);
 
-  document.body.appendChild(mediaEl);
-  return mediaEl;
+    return { ctx, dummyAudio };
+  } catch (e) {
+    console.error("Web Audio API routing failed:", e);
+    return null;
+  }
 };
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
@@ -71,7 +79,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const peerRef = useRef<any>(null);
   const localStreamRef = useRef<any>(null);
-  const remoteAudioRef = useRef<any>(null);
+  const remoteAudioRef = useRef<any>(null); // 今回は { ctx, dummyAudio } のオブジェクトが入る
   const callTimerRef = useRef<any>(null);
   const missedTimerRef = useRef<any>(null);
   const ringtoneRef = useRef<any>(null);
@@ -97,7 +105,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
 
-      // 「リン・リン」電話ベル風ダブルリング
       const playRing = () => {
         ([[0, 0.4], [0.55, 0.95]] as [number, number][]).forEach(([s, e]) => {
           const osc = ctx.createOscillator();
@@ -116,10 +123,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       playRing();
       const interval = setInterval(playRing, 2500);
 
-      // バイブレーション（Android Chrome対応、iOS Safariは非対応）
       let vibInterval: ReturnType<typeof setInterval> | null = null;
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        const vibPat = [400, 150, 400, 1550]; // リン・リンに合わせたパターン
+        const vibPat = [400, 150, 400, 1550];
         navigator.vibrate(vibPat);
         vibInterval = setInterval(() => navigator.vibrate(vibPat), 2500);
       }
@@ -133,7 +139,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       clearInterval(ringtoneRef.current.interval);
       if (ringtoneRef.current.vibInterval) {
         clearInterval(ringtoneRef.current.vibInterval);
-        try { navigator.vibrate(0); } catch (e) {} // バイブ停止
+        try { navigator.vibrate(0); } catch (e) {}
       }
       try { ringtoneRef.current.ctx?.close(); } catch (e) {}
       ringtoneRef.current = null;
@@ -151,11 +157,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     peerRef.current?.close(); peerRef.current = null;
     localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
     localStreamRef.current = null;
+    
+    // Web Audio APIの破棄処理
     if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-      try { remoteAudioRef.current.remove(); } catch (e) {} // DOMから削除
+      try { remoteAudioRef.current.ctx.close(); } catch (e) {}
+      try { remoteAudioRef.current.dummyAudio.srcObject = null; } catch (e) {}
       remoteAudioRef.current = null;
     }
+    
     setCallStatus('idle');
     setActiveCallId(null);
     setIncomingCallId(null);
@@ -185,7 +194,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         setRemotePartyName(d.data().callerName || '不明');
         setCallStatus('receiving');
         startRingtone();
-        // 30秒無応答で不在扱い
         missedTimerRef.current = setTimeout(async () => {
           stopRingtone();
           await setDoc(doc(db, 'calls', d.id), { status: 'missed' }, { merge: true }).catch(() => {});
@@ -201,7 +209,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // ─── 発信 ───
   const startCall = async (convId: string, calleeName: string) => {
     if (!myAccountId || Platform.OS !== 'web' || typeof window === 'undefined') return;
-    // 管理者→利用者、利用者→管理者 の正しいルーティング
     const calleeId = myAccountId === 'admin'
       ? convId.replace('direct_', '')
       : 'admin';
@@ -214,8 +221,16 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      // iOS AEC対策: noiseSuppressionやautoGainControlを指定するとソフトウェア処理に落ちてAECが効かなくなるため外す
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
+      // 実験：制約を ideal で強制的に要求する
+      const constraints = { 
+        audio: { 
+          echoCancellation: { ideal: true }, 
+          noiseSuppression: { ideal: true }, 
+          autoGainControl: { ideal: true } 
+        }, 
+        video: false 
+      };
+      const stream = await (navigator as any).mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
@@ -227,19 +242,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       pc.onicecandidate = (e: any) => {
         if (e.candidate) addDoc(collection(db, 'calls', callRef.id, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
       };
+      
       pc.ontrack = (e: any) => {
+        // 実験：Web Audio APIを利用して音声を再生
         if (!remoteAudioRef.current) {
-          remoteAudioRef.current = createRemoteAudioElement();
+          remoteAudioRef.current = playStreamViaWebAudio(e.streams[0]);
         }
-        remoteAudioRef.current.srcObject = e.streams[0];
-        
-        // iOS AEC対策: ストリーム注入後、少し遅延させてからミュート解除＆再生
-        setTimeout(() => {
-          if (remoteAudioRef.current) {
-            remoteAudioRef.current.muted = false;
-            remoteAudioRef.current.play().catch(() => {});
-          }
-        }, 150);
       };
 
       const offer = await pc.createOffer();
@@ -251,17 +259,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         createdAt: serverTimestamp(),
       });
 
-      // 相手のICE候補
       onSnapshot(collection(db, 'calls', callRef.id, 'calleeCandidates'), snap => {
         snap.docChanges().forEach(ch => {
           if (ch.type === 'added') pc.addIceCandidate(new (window as any).RTCIceCandidate(ch.doc.data())).catch(() => {});
         });
       });
 
-      // 30秒で不在処理（発信側）
       missedTimerRef.current = setTimeout(async () => {
         await setDoc(doc(db, 'calls', callRef.id), { status: 'missed' }, { merge: true }).catch(() => {});
-        // 不在着信として相手へ通知
         if (calleeFcmTokenRef.current) {
           fetch('/api/send-notification', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -277,7 +282,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         setTimeout(() => cleanupCall(), 3000);
       }, 30000);
 
-      // 応答・ステータス監視
       unsubCallRef.current = onSnapshot(doc(db, 'calls', callRef.id), async snap => {
         const data = snap.data();
         if (!data) return;
@@ -295,7 +299,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (data.status === 'ended') cleanupCall();
       });
 
-      // 着信通知を相手へ送信
       const tokenDoc = await getDoc(doc(db, 'fcm_tokens', calleeId));
       if (tokenDoc.exists()) {
         const token = tokenDoc.data().token;
@@ -319,7 +322,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     if (!incomingCallId || Platform.OS !== 'web') return;
     const callId = incomingCallId;
     
-    // 着信音を確実に止めて、AudioContextを解放する（AECの邪魔をさせない）
     stopRingtone();
     clearTimeout(missedTimerRef.current);
     
@@ -336,25 +338,26 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      // iOS AEC対策: noiseSuppressionやautoGainControlを指定するとソフトウェア処理に落ちてAECが効かなくなるため外す
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
+      // 実験：制約を ideal で強制的に要求する
+      const constraints = { 
+        audio: { 
+          echoCancellation: { ideal: true }, 
+          noiseSuppression: { ideal: true }, 
+          autoGainControl: { ideal: true } 
+        }, 
+        video: false 
+      };
+      const stream = await (navigator as any).mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
       pc.ontrack = (e: any) => {
+        // 実験：Web Audio APIを利用して音声を再生
         if (!remoteAudioRef.current) {
-          remoteAudioRef.current = createRemoteAudioElement();
+          remoteAudioRef.current = playStreamViaWebAudio(e.streams[0]);
         }
-        remoteAudioRef.current.srcObject = e.streams[0];
-        
-        // iOS AEC対策: ストリーム注入後、少し遅延させてからミュート解除＆再生
-        setTimeout(() => {
-          if (remoteAudioRef.current) {
-            remoteAudioRef.current.muted = false;
-            remoteAudioRef.current.play().catch(() => {});
-          }
-        }, 150);
       };
+      
       pc.onicecandidate = (e: any) => {
         if (e.candidate) addDoc(collection(db, 'calls', callId, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
       };
