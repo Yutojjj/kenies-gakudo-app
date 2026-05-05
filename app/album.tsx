@@ -25,46 +25,57 @@ const getLocalDateString = (date: Date) => {
 };
 
 /**
- * ★ 保存・共有ロジック
+ * ★ 修正版：保存ロジック（Androidは今まで通り、iOS Webは共有メニュー）
  */
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
     try {
-      // Web環境では、OS標準の「共有メニュー」を呼び出す
-      if (navigator.share) {
+      // iOSのWebブラウザ（LINE内含む）のみ共有メニューを表示
+      if (isIOS && navigator.share) {
         await navigator.share({
-          title: '写真を保存',
+          title: '保存',
           url: uri,
         });
         return true;
-      } else {
-        // 共有機能がないブラウザ（古いPC等）は別タブ開き
-        window.open(uri, '_blank');
-        return true;
-      }
+      } 
+      
+      // Androidまたはnavigator.shareがない環境は「今まで通り」のダウンロード保存
+      const response = await fetch(uri);
+      if (!response.ok) throw new Error('Network error');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
+      link.download = `kenies_photo_${Date.now()}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      return true;
+
     } catch (e) {
-      console.error('Web Share Error:', e);
+      console.error('Web Save Error:', e);
       return false;
     }
   } else {
+    // アプリ実機（ネイティブ）環境
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('権限エラー', '写真へのアクセス権限が必要です。');
         return false;
       }
-
       const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
       const cacheDir = (FileSystem as any).cacheDirectory;
       if (!cacheDir) return false;
-
       const fileUri = `${cacheDir}temp_photo_${Date.now()}.${extension}`;
       const downloadRes = await FileSystem.downloadAsync(uri, fileUri);
-      
       if (downloadRes.status !== 200) return false;
       await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
       await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
-      
       return true;
     } catch (e) {
       console.error('Native Save Error:', e);
@@ -76,7 +87,6 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
 export default function AlbumScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
-
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [userData, setUserData] = useState<any>(null);
@@ -134,7 +144,6 @@ export default function AlbumScreen() {
 
   useEffect(() => {
     let isMounted = true;
-
     const fetchUser = async () => {
       if (role === 'user') {
         const q = query(collection(db, 'accounts'), where('role', '==', 'user'), where('name', '==', name));
@@ -411,36 +420,34 @@ export default function AlbumScreen() {
     }
   };
 
-  /**
-   * ★ 共有・保存ボタンのアクション
-   */
   const handleSaveSinglePhoto = async () => {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
     
     if (Platform.OS === 'web') {
-      // Webブラウザ（LINE内含む）ではOSの共有メニューを一発で出す
-      await saveImageToDevice(targetPhoto.uri);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        await saveImageToDevice(targetPhoto.uri);
+      } else {
+        // Android/PCは今まで通りダウンロード
+        setIsDownloading(true);
+        await saveImageToDevice(targetPhoto.uri);
+        setIsDownloading(false);
+      }
       return;
     }
 
-    // アプリ実機版
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
-    
-    if (success) {
-      Alert.alert('保存完了', 'アルバムに保存しました。');
-    } else {
-      Alert.alert('エラー', '保存に失敗しました。');
-    }
+    if (success) Alert.alert('保存完了', 'アルバムに保存しました。');
+    else Alert.alert('エラー', '保存に失敗しました。');
   };
 
   const handleBulkSave = async () => {
     if (selectedPhotoIds.length === 0) return;
-    
     if (Platform.OS === 'web') {
-      window.alert('Web版では一括保存に対応していません。\n画像を開いて1枚ずつ共有メニューから保存してください。');
+      window.alert('Web版では一括保存に対応していません。\n1枚ずつ保存してください。');
       return;
     }
 
@@ -448,23 +455,15 @@ export default function AlbumScreen() {
     try {
       const allPhotosFlat = Object.values(albumPhotos).flat();
       let successCount = 0;
-      let failCount = 0;
       for (const id of selectedPhotoIds) {
         const photo = allPhotosFlat.find(p => p.id === id);
         if (photo && photo.uri) {
-          const ok = await saveImageToDevice(photo.uri);
-          if (ok) successCount++;
-          else failCount++;
+          if (await saveImageToDevice(photo.uri)) successCount++;
         }
       }
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
-      
-      if (failCount > 0) {
-        Alert.alert('一部保存失敗', `${successCount} 枚保存完了、${failCount} 枚失敗しました。`);
-      } else {
-        Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
-      }
+      Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
     } catch (error) {
       Alert.alert('エラー', '一括保存中にエラーが発生しました。');
     } finally {
@@ -494,7 +493,7 @@ export default function AlbumScreen() {
       }
       return;
     }
-    Alert.alert('アルバム削除確認', `「${sectionLabel}」のアルバムを全て削除しますか？\n（復元できません）`, [
+    Alert.alert('アルバム削除確認', `「${sectionLabel}」のアルバムを全て削除しますか？`, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: async () => {
         await executeBulkDelete(photos.map(p => p.id));
@@ -724,8 +723,8 @@ export default function AlbumScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.bottomActionBtn, { backgroundColor: COLORS.primary, flex: 1, marginLeft: 12 }]} onPress={handleBulkSave}>
-                <Ionicons name="share-social" size={20} color={COLORS.white} />
-                <Text style={[styles.bottomActionText, { color: COLORS.white }]}>{Platform.OS === 'web' ? '共有して保存' : '一括保存'}</Text>
+                <Ionicons name="download" size={20} color={COLORS.white} />
+                <Text style={[styles.bottomActionText, { color: COLORS.white }]}>一括保存</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -735,11 +734,10 @@ export default function AlbumScreen() {
               <Ionicons name="checkmark-done" size={28} color={COLORS.white} />
             </TouchableOpacity>
           )}
-
         </View>
       )}
 
-      {/* 各種Modal（変更なし） */}
+      {/* 各種モーダル */}
       <Modal visible={calendarModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -952,8 +950,10 @@ export default function AlbumScreen() {
 
           <View style={styles.fullScreenFooter}>
             <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
-              <Ionicons name={Platform.OS === 'web' ? "share-social-outline" : "download-outline"} size={28} color={COLORS.white} />
-              <Text style={styles.fullScreenActionText}>{Platform.OS === 'web' ? '保存' : '保存'}</Text>
+              <Ionicons name={Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent) ? "share-social-outline" : "download-outline"} size={28} color={COLORS.white} />
+              <Text style={styles.fullScreenActionText}>
+                {Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent) ? '共有・保存' : '保存'}
+              </Text>
             </TouchableOpacity>
             {role !== 'user' && currentFullScreenPhoto && (
               <TouchableOpacity style={styles.fullScreenActionBtn} onPress={async () => {
