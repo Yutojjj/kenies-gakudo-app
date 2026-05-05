@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   addDoc, collection, doc, getDoc, onSnapshot,
   query, serverTimestamp, setDoc, updateDoc, where,
@@ -40,7 +40,15 @@ const createRemoteAudioElement = () => {
   audio.setAttribute('playsinline', '');
   audio.setAttribute('webkit-playsinline', '');
   audio.preload = 'auto';
-  audio.style.display = 'none';
+  
+  // 修正: iOSのハードウェアエコーキャンセラーを無効化させないため、
+  // display: none ではなく、視覚的に見えなくするスタイルを適用します
+  audio.style.position = 'absolute';
+  audio.style.width = '1px';
+  audio.style.height = '1px';
+  audio.style.opacity = '0';
+  audio.style.pointerEvents = 'none';
+  
   document.body.appendChild(audio);
   return audio;
 };
