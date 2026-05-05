@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
+import { CallProvider } from '../contexts/CallContext';
 
 // ピンチズームを無効化（iOS/Androidのように操作しやすくする）
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -21,11 +22,7 @@ export default function RootLayout() {
   return (
     // SafeAreaProvider でアプリ全体を包みます
     <SafeAreaProvider>
-      {/* 
-        SafeAreaView で Stack を包むことで、
-        すべての画面の最上部にステータスバー分の余白が自動で入ります。
-        背景色を COLORS.background に合わせることで重なりが自然になります。
-      */}
+      <CallProvider>
       <SafeAreaView style={styles.container}>
         <Stack
           screenOptions={{
@@ -47,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="schedule-changes" />
         </Stack>
       </SafeAreaView>
+      </CallProvider>
     </SafeAreaProvider>
   );
 }

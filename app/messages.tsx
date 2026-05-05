@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  addDoc, arrayRemove, collection, doc, getDocs,
+  addDoc, arrayRemove, arrayUnion, collection, doc, getDocs,
   getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, limit,
-  updateDoc, where,
+  where,
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useCall } from '../contexts/CallContext';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -27,11 +28,6 @@ type Message = {
 
 const STAFF_GROUP_ID = 'staff_group';
 const ADMIN_ID = 'admin';
-
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
 
 function relTime(ts: any) {
   if (!ts?.toDate) return '';
@@ -47,12 +43,6 @@ function msgTime(ts: any) {
   if (!ts?.toDate) return '';
   const d: Date = ts.toDate();
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function fmtDuration(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 async function resolveAccountId(user: UserInfo): Promise<string> {
@@ -84,7 +74,6 @@ async function setupFCMToken(accountId: string) {
   } catch (e) { /* 通知権限がなくてもメッセージは使える */ }
 }
 
-// 1対1: convId = 'direct_userId' → 相手は convId から確定できる
 function deriveParticipants(convId: string): string[] {
   if (convId.startsWith('direct_')) {
     const userId = convId.replace('direct_', '');
@@ -102,11 +91,9 @@ async function pushNotify(
   try {
     let recipientIds: string[] = [];
     if (convType === 'group') {
-      // グループ: スタッフ全員＋管理者（送信者を除く）
       const snap = await getDocs(collection(db, 'fcm_tokens'));
       recipientIds = snap.docs.map(d => d.id).filter(id => id !== senderAccountId);
     } else {
-      // 1対1: Firestoreのparticipantsを優先、なければIDから導出
       const s = await getDoc(doc(db, 'conversations', convId));
       const parts: string[] = s.data()?.participants?.length
         ? s.data()!.participants
@@ -127,15 +114,10 @@ async function pushNotify(
   } catch (e) { /* 通知失敗は無視 */ }
 }
 
-// ── WebRTC ヘルパー（web 専用） ──
-function createPC(): any {
-  if (typeof window === 'undefined') return null;
-  return new (window as any).RTCPeerConnection({ iceServers: ICE_SERVERS });
-}
-
 export default function MessagesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string }>();
+  const { startCall, callStatus } = useCall();
 
   const [resolvedUser, setResolvedUser] = useState<(UserInfo & { accountId: string }) | null>(null);
   const [view, setView] = useState<'list' | 'chat'>('list');
@@ -146,21 +128,11 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
-
-  // ── 通話状態 ──
-  type CallStatus = 'idle' | 'calling' | 'receiving' | 'connected';
-  const [callStatus, setCallStatus] = useState<CallStatus>('idle');
-  const [activeCallId, setActiveCallId] = useState<string | null>(null);
-  const [incomingCall, setIncomingCall] = useState<{ id: string; callerName: string } | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
-  const peerRef = useRef<any>(null);
-  const localStreamRef = useRef<any>(null);
-  const remoteAudioRef = useRef<any>(null);
-  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [convReadBy, setConvReadBy] = useState<string[]>([]);
 
   const scrollRef = useRef<ScrollView>(null);
   const unsubMsgsRef = useRef<(() => void) | null>(null);
-  const unsubCallRef = useRef<(() => void) | null>(null);
+  const unsubConvRef = useRef<(() => void) | null>(null);
 
   // ── ユーザー解決 ──
   useEffect(() => {
@@ -178,24 +150,6 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (resolvedUser) setupFCMToken(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
-
-  // ── 着信リスナー ──
-  useEffect(() => {
-    if (!resolvedUser || Platform.OS !== 'web') return;
-    const q = query(
-      collection(db, 'calls'),
-      where('calleeId', '==', resolvedUser.accountId),
-      where('status', '==', 'calling')
-    );
-    const unsub = onSnapshot(q, snap => {
-      if (!snap.empty && callStatus === 'idle') {
-        const d = snap.docs[0];
-        setIncomingCall({ id: d.id, callerName: d.data().callerName });
-        setCallStatus('receiving');
-      }
-    });
-    return unsub;
-  }, [resolvedUser?.accountId, callStatus]);
 
   // ── メッセージ/会話セットアップ ──
   useEffect(() => {
@@ -250,7 +204,15 @@ export default function MessagesScreen() {
   const openChat = (conv: ConvDoc) => {
     setActiveConv(conv);
     setView('chat');
+    setConvReadBy([]);
     unsubMsgsRef.current?.();
+    unsubConvRef.current?.();
+
+    // 会話ドキュメントを購読して readBy をリアルタイム取得
+    unsubConvRef.current = onSnapshot(doc(db, 'conversations', conv.id), snap => {
+      setConvReadBy(snap.data()?.readBy || []);
+    });
+
     const q = query(
       collection(db, 'conversations', conv.id, 'messages'),
       orderBy('createdAt', 'asc'), limit(100),
@@ -264,19 +226,18 @@ export default function MessagesScreen() {
     );
   };
 
+  // 既読マーク＋readBy 更新
   useEffect(() => {
     if (!resolvedUser || !activeConv) return;
     setDoc(doc(db, 'conversations', activeConv.id), {
       unreadFor: arrayRemove(resolvedUser.accountId),
+      readBy: arrayUnion(resolvedUser.accountId),
     }, { merge: true }).catch(() => {});
   }, [activeConv?.id, resolvedUser?.accountId]);
 
   useEffect(() => () => {
     unsubMsgsRef.current?.();
-    unsubCallRef.current?.();
-    callTimerRef.current && clearInterval(callTimerRef.current);
-    peerRef.current?.close();
-    localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
+    unsubConvRef.current?.();
   }, []);
 
   // ── メッセージ送信 ──
@@ -291,7 +252,6 @@ export default function MessagesScreen() {
         const snap = await getDocs(collection(db, 'fcm_tokens'));
         participants = [ADMIN_ID, ...snap.docs.map(d => d.id)];
       } else {
-        // 1対1: Firestoreのparticipantsが未設定でも convId から確実に導出する
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
         participants = s.data()?.participants?.length
           ? s.data()!.participants
@@ -306,6 +266,7 @@ export default function MessagesScreen() {
       await setDoc(doc(db, 'conversations', activeConv.id), {
         lastMessage: text, lastMessageAt: serverTimestamp(),
         unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
+        readBy: [resolvedUser.accountId],  // 送信時はリセット（自分だけ既読）
       }, { merge: true });
       pushNotify(activeConv.id, activeConv.type, resolvedUser.accountId, resolvedUser.name, text);
     } catch (e) {
@@ -315,229 +276,21 @@ export default function MessagesScreen() {
     }
   };
 
-  // ── 通話処理 ──
-  const startCallTimer = () => {
-    callTimerRef.current && clearInterval(callTimerRef.current);
-    setCallDuration(0);
-    callTimerRef.current = setInterval(() => setCallDuration(p => p + 1), 1000);
-  };
-
-  const cleanupCall = () => {
-    callTimerRef.current && clearInterval(callTimerRef.current);
-    callTimerRef.current = null;
-    unsubCallRef.current?.();
-    unsubCallRef.current = null;
-    peerRef.current?.close();
-    peerRef.current = null;
-    localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
-    localStreamRef.current = null;
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.srcObject = null;
-      remoteAudioRef.current = null;
-    }
-    setCallStatus('idle');
-    setActiveCallId(null);
-    setIncomingCall(null);
-    setCallDuration(0);
-  };
-
-  const endCall = async (callId?: string) => {
-    const id = callId || activeCallId;
-    if (id) await setDoc(doc(db, 'calls', id), { status: 'ended' }, { merge: true }).catch(() => {});
-    cleanupCall();
-  };
-
-  const startCall = async () => {
-    if (!resolvedUser || !activeConv || activeConv.type !== 'direct' || Platform.OS !== 'web') return;
-    const calleeId = activeConv.id.replace('direct_', '');
-    try {
-      const pc = createPC();
-      if (!pc) return;
-      peerRef.current = pc;
-
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-      stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
-
-      const callRef = doc(collection(db, 'calls'));
-      setActiveCallId(callRef.id);
-      setCallStatus('calling');
-
-      pc.onicecandidate = (e: any) => {
-        if (e.candidate) addDoc(collection(db, 'calls', callRef.id, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
-      };
-      pc.ontrack = (e: any) => {
-        if (!remoteAudioRef.current) {
-          const audio = new (window as any).Audio();
-          audio.autoplay = true;
-          remoteAudioRef.current = audio;
-        }
-        remoteAudioRef.current.srcObject = e.streams[0];
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      await setDoc(callRef, {
-        callerId: resolvedUser.accountId, callerName: resolvedUser.name,
-        calleeId, calleeName: activeConv.name,
-        status: 'calling', sdpOffer: JSON.stringify(offer),
-        createdAt: serverTimestamp(),
-      });
-
-      // 相手のICE候補を受信
-      onSnapshot(collection(db, 'calls', callRef.id, 'calleeCandidates'), snap => {
-        snap.docChanges().forEach(ch => {
-          if (ch.type === 'added') pc.addIceCandidate(new (window as any).RTCIceCandidate(ch.doc.data())).catch(() => {});
-        });
-      });
-
-      // 応答 & ステータス監視
-      unsubCallRef.current = onSnapshot(doc(db, 'calls', callRef.id), async snap => {
-        const d = snap.data();
-        if (!d) return;
-        if (d.sdpAnswer && !pc.currentRemoteDescription) {
-          await pc.setRemoteDescription(new (window as any).RTCSessionDescription(JSON.parse(d.sdpAnswer)));
-          setCallStatus('connected');
-          startCallTimer();
-        }
-        if (d.status === 'ended' || d.status === 'rejected') endCall(callRef.id);
-      });
-
-      // 相手へプッシュ通知
-      const calleeToken = await getDoc(doc(db, 'fcm_tokens', calleeId));
-      if (calleeToken.exists()) {
-        const token = calleeToken.data().token;
-        if (token) fetch('/api/send-notification', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tokens: [token],
-            title: `${resolvedUser.name}から着信`,
-            body: 'メッセージ画面を開いて応答してください',
-            url: '/messages',
-          }),
-        }).catch(() => {});
-      }
-    } catch (e) {
-      cleanupCall();
-      alert('マイクへのアクセスが許可されていません。ブラウザの設定を確認してください。');
-    }
-  };
-
-  const acceptCall = async () => {
-    if (!incomingCall || !resolvedUser || Platform.OS !== 'web') return;
-    const callId = incomingCall.id;
-    try {
-      const callSnap = await getDoc(doc(db, 'calls', callId));
-      if (!callSnap.exists()) return;
-      const callData = callSnap.data();
-
-      const pc = createPC();
-      if (!pc) return;
-      peerRef.current = pc;
-
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-      stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
-
-      pc.ontrack = (e: any) => {
-        if (!remoteAudioRef.current) {
-          const audio = new (window as any).Audio();
-          audio.autoplay = true;
-          remoteAudioRef.current = audio;
-        }
-        remoteAudioRef.current.srcObject = e.streams[0];
-      };
-      pc.onicecandidate = (e: any) => {
-        if (e.candidate) addDoc(collection(db, 'calls', callId, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
-      };
-
-      await pc.setRemoteDescription(new (window as any).RTCSessionDescription(JSON.parse(callData.sdpOffer)));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      await updateDoc(doc(db, 'calls', callId), { sdpAnswer: JSON.stringify(answer), status: 'connected' });
-
-      onSnapshot(collection(db, 'calls', callId, 'callerCandidates'), snap => {
-        snap.docChanges().forEach(ch => {
-          if (ch.type === 'added') pc.addIceCandidate(new (window as any).RTCIceCandidate(ch.doc.data())).catch(() => {});
-        });
-      });
-
-      setActiveCallId(callId);
-      setCallStatus('connected');
-      setIncomingCall(null);
-      startCallTimer();
-    } catch (e) {
-      cleanupCall();
-      alert('通話の開始に失敗しました。マイクのアクセスを確認してください。');
-    }
-  };
-
-  const rejectCall = async () => {
-    if (!incomingCall) return;
-    await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'rejected' }).catch(() => {});
-    setCallStatus('idle');
-    setIncomingCall(null);
-  };
-
   const goBack = () => {
     if (view === 'chat' && resolvedUser?.role === 'admin' && !params.conversationId) {
       unsubMsgsRef.current?.(); unsubMsgsRef.current = null;
-      setView('list'); setActiveConv(null); setMessages([]);
+      unsubConvRef.current?.(); unsubConvRef.current = null;
+      setView('list'); setActiveConv(null); setMessages([]); setConvReadBy([]);
     } else {
       router.back();
     }
   };
 
-  // ── 通話オーバーレイ ──
-  const callOverlay = callStatus !== 'idle' && (
-    <View style={styles.callOverlay}>
-      <View style={styles.callBox}>
-        {callStatus === 'receiving' && incomingCall ? (
-          <>
-            <View style={styles.callAvatar}>
-              <Text style={styles.callAvatarText}>{(incomingCall.callerName || '?')[0]}</Text>
-            </View>
-            <Text style={styles.callName}>{incomingCall.callerName}</Text>
-            <Text style={styles.callStatusText}>着信中...</Text>
-            <View style={styles.callBtns}>
-              <TouchableOpacity style={styles.rejectBtn} onPress={rejectCall}>
-                <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.acceptBtn} onPress={acceptCall}>
-                <Ionicons name="call" size={28} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : callStatus === 'calling' ? (
-          <>
-            <View style={styles.callAvatar}>
-              <Text style={styles.callAvatarText}>{(activeConv?.name || '?')[0]}</Text>
-            </View>
-            <Text style={styles.callName}>{activeConv?.name}</Text>
-            <Text style={styles.callStatusText}>呼び出し中...</Text>
-            <TouchableOpacity style={styles.hangupBtn} onPress={() => endCall()}>
-              <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <View style={[styles.callAvatar, { backgroundColor: '#4CAF50' }]}>
-              <Ionicons name="call" size={28} color="#fff" />
-            </View>
-            <Text style={styles.callName}>
-              {incomingCall?.callerName || activeConv?.name}
-            </Text>
-            <Text style={styles.callStatusText}>{fmtDuration(callDuration)}</Text>
-            <TouchableOpacity style={styles.hangupBtn} onPress={() => endCall()}>
-              <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-    </View>
-  );
+  // 既読表示の計算
+  const myLastMsgId = resolvedUser
+    ? [...messages].reverse().find(m => m.senderId === resolvedUser.accountId)?.id ?? null
+    : null;
+  const othersHaveRead = convReadBy.some(id => id !== resolvedUser?.accountId);
 
   // ── ローディング ──
   if (loading) {
@@ -583,7 +336,6 @@ export default function MessagesScreen() {
     const hasUnread = (conv: ConvDoc) => (conv.unreadFor || []).includes(ADMIN_ID);
     return (
       <SafeAreaView style={styles.container}>
-        {callOverlay}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
@@ -633,10 +385,11 @@ export default function MessagesScreen() {
 
   // ── チャット画面 ──
   const canCall = Platform.OS === 'web' && activeConv?.type === 'direct';
+  // 通話の宛先名：管理者→利用者名、利用者→管理者
+  const calleeDisplayName = resolvedUser?.role === 'admin' ? (activeConv?.name ?? '') : '管理者';
+
   return (
     <SafeAreaView style={styles.container}>
-      {callOverlay}
-
       {/* ヘッダー */}
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
@@ -650,7 +403,7 @@ export default function MessagesScreen() {
           {activeConv?.name || 'チャット'}
         </Text>
         {canCall && callStatus === 'idle' && (
-          <TouchableOpacity style={styles.callHeaderBtn} onPress={startCall}>
+          <TouchableOpacity style={styles.callHeaderBtn} onPress={() => startCall(activeConv!.id, calleeDisplayName)}>
             <Ionicons name="call" size={20} color="#5D4037" />
           </TouchableOpacity>
         )}
@@ -676,6 +429,8 @@ export default function MessagesScreen() {
           )}
           {messages.map(item => {
             const isMe = item.senderId === resolvedUser?.accountId;
+            const showRead = isMe && activeConv?.type === 'direct'
+              && item.id === myLastMsgId && othersHaveRead;
             return (
               <View key={item.id} style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
                 {!isMe && (
@@ -683,12 +438,15 @@ export default function MessagesScreen() {
                     <Text style={styles.msgAvatarText}>{(item.senderName || '?')[0]}</Text>
                   </View>
                 )}
-                <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
-                  {!isMe && <Text style={styles.bubbleSender}>{item.senderName}</Text>}
-                  <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
-                  <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-                    {msgTime(item.createdAt)}
-                  </Text>
+                <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                  <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+                    {!isMe && <Text style={styles.bubbleSender}>{item.senderName}</Text>}
+                    <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
+                    <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+                      {msgTime(item.createdAt)}
+                    </Text>
+                  </View>
+                  {showRead && <Text style={styles.readLabel}>既読</Text>}
                 </View>
               </View>
             );
@@ -783,6 +541,7 @@ const styles = StyleSheet.create({
   bubbleTextMe: { color: '#fff' },
   bubbleTime: { fontSize: 10, color: '#999', marginTop: 4, textAlign: 'right' },
   bubbleTimeMe: { color: 'rgba(255,255,255,0.7)' },
+  readLabel: { fontSize: 10, color: COLORS.textLight, marginTop: 2, marginRight: 2 },
 
   // 入力欄
   inputArea: {
@@ -800,36 +559,4 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginLeft: 8,
   },
   sendBtnDisabled: { opacity: 0.4 },
-
-  // 通話オーバーレイ
-  callOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 200,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  callBox: {
-    width: 280, backgroundColor: '#1C1C2E', borderRadius: 24,
-    padding: 32, alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20, elevation: 20,
-  },
-  callAvatar: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: '#87CEEB', justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-  },
-  callAvatarText: { fontSize: 28, color: '#fff', fontWeight: 'bold' },
-  callName: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 8, textAlign: 'center' },
-  callStatusText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 32 },
-  callBtns: { flexDirection: 'row', gap: 32 },
-  acceptBtn: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: '#4CAF50', justifyContent: 'center', alignItems: 'center',
-  },
-  rejectBtn: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: '#E53935', justifyContent: 'center', alignItems: 'center',
-  },
-  hangupBtn: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: '#E53935', justifyContent: 'center', alignItems: 'center',
-  },
 });

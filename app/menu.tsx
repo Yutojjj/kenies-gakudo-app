@@ -149,18 +149,26 @@ export default function MenuScreen() {
 
   // 未読メッセージ数を購読
   useEffect(() => {
-    let accountId = '';
-    AsyncStorage.getItem('loggedInUser').then(raw => {
+    let unsub: (() => void) | null = null;
+    (async () => {
+      const raw = await AsyncStorage.getItem('loggedInUser');
       if (!raw) return;
       const user = JSON.parse(raw);
-      accountId = user.accountId || (user.role === 'admin' ? 'admin' : '');
+      let accountId: string = user.accountId || (user.role === 'admin' ? 'admin' : '');
+      // accountId が未保存の場合は Firestore から取得
+      if (!accountId && user.name) {
+        try {
+          const snap = await getDocs(query(collection(db, 'accounts'), where('name', '==', user.name)));
+          if (!snap.empty) accountId = snap.docs[0].id;
+        } catch (e) {}
+      }
       if (!accountId) return;
-      const unsub = onSnapshot(collection(db, 'conversations'), snap => {
+      unsub = onSnapshot(collection(db, 'conversations'), snap => {
         const count = snap.docs.filter(d => (d.data().unreadFor || []).includes(accountId)).length;
         setUnreadCount(count);
       });
-      return unsub;
-    });
+    })();
+    return () => { unsub?.(); };
   }, []);
 
   useEffect(() => {
