@@ -182,7 +182,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
@@ -294,7 +294,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
