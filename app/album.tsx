@@ -26,7 +26,6 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// ─── 端末への画像保存ヘルパー ───
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
@@ -52,16 +51,11 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         Alert.alert('権限エラー', '写真へのアクセス権限が必要です。設定から許可してください。');
         return false;
       }
-      
       const docDir = (FileSystem as any).documentDirectory;
-      if (!docDir) {
-        Alert.alert('エラー', 'ファイル保存領域にアクセスできません。');
-        return false;
-      }
+      if (!docDir) return false;
 
       const fileUri = docDir + `photo_${Date.now()}.jpg`;
       const { uri: localUri } = await FileSystem.downloadAsync(uri, fileUri);
-      
       await MediaLibrary.saveToLibraryAsync(localUri);
       return true;
     } catch (e) {
@@ -84,7 +78,6 @@ export default function AlbumScreen() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [activeTab, setActiveTab] = useState<TabType>('月');
   
-  // スワイプ可能なフルスクリーンビューア用ステート
   const [fullScreenPhotos, setFullScreenPhotos] = useState<any[] | null>(null);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
 
@@ -168,6 +161,7 @@ export default function AlbumScreen() {
     });
 
     if (!result.canceled) {
+      setCalendarModalVisible(false);
       setIsUploading(true);
       try {
         let uploadedCount = 0;
@@ -206,7 +200,6 @@ export default function AlbumScreen() {
   const handleAddPast = () => {
     const pastDateStr = getLocalDateString(pastDate);
     pickImages(pastDateStr, pastDateStr);
-    setCalendarModalVisible(false);
   };
 
   const generateEventCode = () => {
@@ -223,6 +216,13 @@ export default function AlbumScreen() {
       quality: 0.6,
     });
     if (result.canceled) return 0;
+    
+    // 入力モーダル類を確実に閉じてからローディング表示
+    setEventModalVisible(false);
+    setAddToExistingModalVisible(false);
+    setEventChoiceModalVisible(false);
+    setIsUploading(true);
+    
     let count = 0;
     for (const asset of result.assets) {
       const response = await fetch(asset.uri);
@@ -246,28 +246,27 @@ export default function AlbumScreen() {
     const eventCode = generateEventCode();
     const dateStr = getLocalDateString(newEventDate);
     const eventCategory = `EVENT_${eventNameInput.trim()}_${dateStr}`;
-    setIsUploading(true);
+    
     try {
-      await addDoc(collection(db, 'album_events'), {
-        name: `${eventNameInput.trim()}_${dateStr}`,
-        code: eventCode, category: eventCategory, createdAt: serverTimestamp()
-      });
       const uploaded = await uploadPhotosToCategory(eventCategory);
-      Alert.alert('イベント作成完了',
-        `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。\n※保護者にはこのコードを伝えてください。`
-      );
+      if (uploaded > 0) {
+        await addDoc(collection(db, 'album_events'), {
+          name: `${eventNameInput.trim()}_${dateStr}`,
+          code: eventCode, category: eventCategory, createdAt: serverTimestamp()
+        });
+        Alert.alert('イベント作成完了',
+          `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。\n※保護者にはこのコードを伝えてください。`
+        );
+      }
     } catch (e) {
       Alert.alert('エラー', 'イベント作成または画像のアップロードに失敗しました。');
     } finally {
       setIsUploading(false);
-      setEventModalVisible(false);
       setEventNameInput('');
     }
   };
 
   const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
-    setAddToExistingModalVisible(false);
-    setIsUploading(true);
     try {
       const uploaded = await uploadPhotosToCategory(ev.category);
       if (uploaded > 0) Alert.alert('追加完了', `「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
@@ -484,27 +483,29 @@ export default function AlbumScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {isUploading && (
+      
+      <Modal visible={isUploading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>写真をアップロード中...</Text>
         </View>
-      )}
+      </Modal>
 
-      {isDownloading && (
+      <Modal visible={isDownloading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>端末に保存しています...</Text>
         </View>
-      )}
+      </Modal>
 
-      {loading && (
+      <Modal visible={loading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>処理中...</Text>
         </View>
-      )}
+      </Modal>
 
+      {/* ★ 気に入っていただいていた青いやつのヘッダーに完全復元 */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => {
           if (isSelectMode) {
@@ -514,7 +515,7 @@ export default function AlbumScreen() {
             mode === 'top' || role === 'user' ? router.back() : setMode('top');
           }
         }}>
-          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color={COLORS.text} />
+          <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {isSelectMode ? `${selectedPhotoIds.length}枚選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真を追加' : 'アルバムを見る'}
@@ -849,7 +850,6 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ── 修正: フルスクリーン・スワイプビューア ── */}
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <SafeAreaView style={styles.fullScreenContainer}>
           <View style={styles.fullScreenHeader}>
@@ -861,7 +861,7 @@ export default function AlbumScreen() {
 
           {fullScreenPhotos && (
             <FlatList
-              style={{ flex: 1 }} // ★ ここを追加 (高さ潰れ防止)
+              style={{ flex: 1 }}
               data={fullScreenPhotos}
               keyExtractor={(item) => item.id}
               horizontal
@@ -916,11 +916,20 @@ export default function AlbumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  uploadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  uploadingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
+  // ★ ここをご要望の青いヘッダーに完全復元しました
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 14, 
+    backgroundColor: '#AEE4F5', 
+    borderBottomLeftRadius: 16, 
+    borderBottomRightRadius: 16 
+  },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
@@ -956,18 +965,14 @@ const styles = StyleSheet.create({
   noPhotoText: { color: COLORS.textLight, paddingHorizontal: 16, paddingVertical: 16, fontStyle: 'italic', fontSize: 14, textAlign: 'center' },
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
-  
-  // ── 修正: フルスクリーン関連 ──
-  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }, // justifyContent: 'center' を削除
+  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
-  fullScreenImage: { width: '100%', height: '100%' }, // 75% -> 100% に変更 (アスペクト比は維持される)
+  fullScreenImage: { width: '100%', height: '100%' },
   fullScreenFooter: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 60, zIndex: 10 },
   fullScreenActionBtn: { alignItems: 'center', padding: 10 },
   fullScreenActionText: { color: COLORS.white, fontSize: 14, marginTop: 6, fontWeight: 'bold' },
-  
-  // モーダル全般
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24, shadowColor: '#000', elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -978,8 +983,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 14, fontSize: 16, marginBottom: 20 },
   primaryBtn: { flexDirection: 'row', justifyContent: 'center', backgroundColor: COLORS.primary, padding: 16, borderRadius: 8, alignItems: 'center' },
   primaryBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 16 },
-
-  // FABとボトムバー
   fab: { position: 'absolute', bottom: 30, right: 24, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   selectionBottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.white, padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16, flexDirection: 'row', borderTopWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 },
   bottomActionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12 },
