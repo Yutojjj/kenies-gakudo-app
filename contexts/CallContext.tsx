@@ -56,7 +56,9 @@ const playStreamViaWebAudio = (stream: MediaStream) => {
     // 実際の音はここ（Web Audio API）から出す
     const source = ctx.createMediaStreamSource(stream);
     const gainNode = ctx.createGain();
-    gainNode.gain.value = 0.8; // 音量を80%に抑えて物理的なエコーを軽減
+    
+    // 通話音量はハウリング（物理ループ）を防ぐために 0.15 (15%) に低くキープ
+    gainNode.gain.value = 0.15; 
     
     source.connect(gainNode);
     gainNode.connect(ctx.destination);
@@ -114,8 +116,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           const dur = e - s;
           const t = ctx.currentTime + s;
           gain.gain.setValueAtTime(0, t);
-          gain.gain.linearRampToValueAtTime(0.38, t + 0.03);
-          gain.gain.setValueAtTime(0.38, t + dur - 0.05);
+          
+          // 変更：着信音はしっかり聞こえるように 0.6 (60%) に引き上げました
+          gain.gain.linearRampToValueAtTime(0.6, t + 0.03);
+          gain.gain.setValueAtTime(0.6, t + dur - 0.05);
+          
           gain.gain.linearRampToValueAtTime(0, t + dur);
           osc.start(t); osc.stop(t + dur + 0.01);
         });
