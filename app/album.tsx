@@ -25,29 +25,19 @@ const getLocalDateString = (date: Date) => {
 };
 
 /**
- * ★ 保存ロジック：LINE等の思想に基づいた最適化
- * 1. Webブラウザ: セキュリティ(CORS)を考慮したBlobダウンロード
- * 2. ネイティブ: OSの画像保存エンジンが認識しやすい形式で一時保存してからMediaLibraryに委譲
+ * ★ 修正版：保存ロジック
+ * LINE等のアプリ内ブラウザで「ウザい画面」が出るのを防ぐため、
+ * Web版は「別タブで画像表示（長押し保存）」に切り替えます。
  */
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error('Network error');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      // URLから拡張子を抽出。不明な場合はjpgとする
-      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
-      link.download = `kenies_photo_${Date.now()}.${extension}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // LINEブラウザ等でダウンロード命令を出すとプレビュー画面に飛ぶため、
+      // 画像URLをそのまま別タブで開く（ユーザーはそこから長押しで保存できる）
+      window.open(uri, '_blank');
       return true;
     } catch (e) {
-      console.error('Web Download Error:', e);
+      console.error('Web View Error:', e);
       return false; 
     }
   } else {
@@ -58,23 +48,15 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         return false;
       }
 
-      // URLから元の拡張子を判別。iOSならHEIC、AndroidならJPG/PNG等を尊重
       const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
-      
-      // TypeScriptの型エラー回避のため (FileSystem as any) を使用
       const cacheDir = (FileSystem as any).cacheDirectory;
       if (!cacheDir) return false;
 
-      // OSが「画像データ」として正しくスキャンできるよう一時ファイルパスを作成
       const fileUri = `${cacheDir}temp_photo_${Date.now()}.${extension}`;
-
       const downloadRes = await FileSystem.downloadAsync(uri, fileUri);
-      if (downloadRes.status !== 200) return false;
-
-      // MediaLibrary.saveToLibraryAsync は、ファイルの中身と拡張子を照合して最適な保存処理を行う
-      await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
       
-      // クリーンアップ
+      if (downloadRes.status !== 200) return false;
+      await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
       await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
       
       return true;
@@ -427,22 +409,32 @@ export default function AlbumScreen() {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
     
+    // Webの場合はローディングを出さずに即実行（別タブで開くため）
+    if (Platform.OS === 'web') {
+      await saveImageToDevice(targetPhoto.uri);
+      window.alert('画像を表示しました。\n長押し（または右クリック）で保存してください。');
+      return;
+    }
+
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
     
     if (success) {
-      if (Platform.OS === 'web') window.alert('画像を保存しました。');
-      else Alert.alert('保存完了', '端末のアルバムに保存しました。');
+      Alert.alert('保存完了', '端末のアルバムに保存しました。');
     } else {
-      if (Platform.OS === 'web') window.alert('保存に失敗しました。');
-      else Alert.alert('エラー', '保存に失敗しました。');
+      Alert.alert('エラー', '保存に失敗しました。');
     }
   };
 
   const handleBulkSave = async () => {
     if (selectedPhotoIds.length === 0) return;
     
+    if (Platform.OS === 'web') {
+      window.alert('Web版では一括保存に対応していません。\n画像を開いて1枚ずつ保存してください。');
+      return;
+    }
+
     setIsDownloading(true);
     try {
       const allPhotosFlat = Object.values(albumPhotos).flat();
@@ -459,22 +451,13 @@ export default function AlbumScreen() {
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
       
-      if (Platform.OS === 'web') {
-        if (failCount > 0) {
-          window.alert(`保存完了: ${successCount}件\n失敗: ${failCount}件`);
-        } else {
-          window.alert(`保存完了\n${successCount} 枚の画像を保存しました。`);
-        }
+      if (failCount > 0) {
+        Alert.alert('一部保存失敗', `${successCount} 枚保存完了、${failCount} 枚失敗しました。`);
       } else {
-        if (failCount > 0) {
-          Alert.alert('一部保存失敗', `${successCount} 枚保存完了、${failCount} 枚失敗しました。`);
-        } else {
-          Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
-        }
+        Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
       }
     } catch (error) {
-      if (Platform.OS === 'web') window.alert('一括保存中にエラーが発生しました。');
-      else Alert.alert('エラー', '一括保存中にエラーが発生しました。');
+      Alert.alert('エラー', '一括保存中にエラーが発生しました。');
     } finally {
       setIsDownloading(false);
     }
