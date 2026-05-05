@@ -438,7 +438,7 @@ export default function MessagesScreen() {
                     <Text style={styles.msgAvatarText}>{(item.senderName || '?')[0]}</Text>
                   </View>
                 )}
-                <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                   <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                     {!isMe && <Text style={styles.bubbleSender}>{item.senderName}</Text>}
                     <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>

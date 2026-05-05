@@ -69,27 +69,44 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
 
-      const beep = (freq: number, start: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = freq; osc.type = 'sine';
-        gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + 0.35);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + 0.35);
+      // 「リン・リン」電話ベル風ダブルリング
+      const playRing = () => {
+        ([[0, 0.4], [0.55, 0.95]] as [number, number][]).forEach(([s, e]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sine'; osc.frequency.value = 460;
+          const dur = e - s;
+          const t = ctx.currentTime + s;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.38, t + 0.03);
+          gain.gain.setValueAtTime(0.38, t + dur - 0.05);
+          gain.gain.linearRampToValueAtTime(0, t + dur);
+          osc.start(t); osc.stop(t + dur + 0.01);
+        });
       };
+      playRing();
+      const interval = setInterval(playRing, 2500);
 
-      const play = () => { beep(440, 0); beep(550, 0.45); };
-      play();
-      const interval = setInterval(play, 2200);
-      ringtoneRef.current = { interval, ctx };
+      // バイブレーション（Android Chrome対応、iOS Safariは非対応）
+      let vibInterval: ReturnType<typeof setInterval> | null = null;
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        const vibPat = [400, 150, 400, 1550]; // リン・リンに合わせたパターン
+        navigator.vibrate(vibPat);
+        vibInterval = setInterval(() => navigator.vibrate(vibPat), 2500);
+      }
+
+      ringtoneRef.current = { interval, ctx, vibInterval };
     } catch (e) {}
   };
 
   const stopRingtone = () => {
     if (ringtoneRef.current) {
       clearInterval(ringtoneRef.current.interval);
+      if (ringtoneRef.current.vibInterval) {
+        clearInterval(ringtoneRef.current.vibInterval);
+        try { navigator.vibrate(0); } catch (e) {} // バイブ停止
+      }
       try { ringtoneRef.current.ctx?.close(); } catch (e) {}
       ringtoneRef.current = null;
     }
