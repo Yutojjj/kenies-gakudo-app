@@ -24,10 +24,12 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+// ★ saveImageToDevice 内の documentDirectory へのアクセスを (FileSystem as any) に修正
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
       const response = await fetch(uri);
+      if (!response.ok) throw new Error('Network error');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -39,8 +41,8 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       window.URL.revokeObjectURL(url);
       return true;
     } catch (e) {
-      console.error(e);
-      return false;
+      console.error('Web Download Error:', e);
+      return false; 
     }
   } else {
     try {
@@ -49,6 +51,8 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         Alert.alert('権限エラー', '写真へのアクセス権限が必要です。設定から許可してください。');
         return false;
       }
+      
+      // 型エラー回避のため as any を使用
       const docDir = (FileSystem as any).documentDirectory;
       if (!docDir) return false;
 
@@ -57,7 +61,7 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       await MediaLibrary.saveToLibraryAsync(localUri);
       return true;
     } catch (e) {
-      console.error(e);
+      console.error('Native Download Error:', e);
       return false;
     }
   }
@@ -203,11 +207,9 @@ export default function AlbumScreen() {
           });
           uploadedCount++;
         }
-        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
-        else Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
+        Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
       } catch (e) {
-        if (Platform.OS === 'web') window.alert('画像のアップロードに失敗しました。');
-        else Alert.alert('エラー', '画像のアップロードに失敗しました。');
+        Alert.alert('エラー', '画像のアップロードに失敗しました。');
       } finally {
         setIsUploading(false);
       }
@@ -412,7 +414,7 @@ export default function AlbumScreen() {
     setIsDownloading(false);
     
     if (success) {
-      if (Platform.OS === 'web') window.alert('端末のアルバムに保存しました。');
+      if (Platform.OS === 'web') window.alert('画像を保存しました。');
       else Alert.alert('保存完了', '端末のアルバムに保存しました。');
     } else {
       if (Platform.OS === 'web') window.alert('保存に失敗しました。');
@@ -427,17 +429,31 @@ export default function AlbumScreen() {
     try {
       const allPhotosFlat = Object.values(albumPhotos).flat();
       let successCount = 0;
+      let failCount = 0;
       for (const id of selectedPhotoIds) {
         const photo = allPhotosFlat.find(p => p.id === id);
         if (photo && photo.uri) {
           const ok = await saveImageToDevice(photo.uri);
           if (ok) successCount++;
+          else failCount++;
         }
       }
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
-      if (Platform.OS === 'web') window.alert(`保存完了\n${successCount} 枚の画像を保存しました。`);
-      else Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
+      
+      if (Platform.OS === 'web') {
+        if (failCount > 0) {
+          window.alert(`保存完了: ${successCount}件\n失敗: ${failCount}件`);
+        } else {
+          window.alert(`保存完了\n${successCount} 枚の画像を保存しました。`);
+        }
+      } else {
+        if (failCount > 0) {
+          Alert.alert('一部保存失敗', `${successCount} 枚保存完了、${failCount} 枚失敗しました。`);
+        } else {
+          Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
+        }
+      }
     } catch (error) {
       if (Platform.OS === 'web') window.alert('一括保存中にエラーが発生しました。');
       else Alert.alert('エラー', '一括保存中にエラーが発生しました。');
@@ -514,27 +530,26 @@ export default function AlbumScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      {/* ★ Modalでのラップを解除し、一番手前に描画される View に変更 (Androidバグ回避) */}
-      {isUploading && (
+      <Modal visible={isUploading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>写真をアップロード中...</Text>
         </View>
-      )}
+      </Modal>
 
-      {isDownloading && !fullScreenPhotos && (
+      <Modal visible={isDownloading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>端末に保存しています...</Text>
         </View>
-      )}
+      </Modal>
 
-      {loading && (
+      <Modal visible={loading} transparent animationType="fade">
         <View style={styles.uploadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.white} />
           <Text style={styles.uploadingText}>処理中...</Text>
         </View>
-      )}
+      </Modal>
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => {
@@ -883,14 +898,6 @@ export default function AlbumScreen() {
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', width: windowWidth, height: windowHeight }}>
           
-          {/* ★ フルスクリーンModalの中にローディング表示を組み込む */}
-          {isDownloading && (
-            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', zIndex: 100 }]}>
-              <ActivityIndicator size="large" color={COLORS.white} />
-              <Text style={styles.uploadingText}>端末に保存しています...</Text>
-            </View>
-          )}
-
           <View style={styles.fullScreenHeader}>
             <Text style={styles.fullScreenCounter}>{fullScreenIndex + 1} / {fullScreenPhotos?.length}</Text>
             <TouchableOpacity style={styles.fullScreenIconBtn} onPress={closeFullScreen}>
@@ -917,7 +924,6 @@ export default function AlbumScreen() {
                 snapToAlignment="center"
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
-                // ★ スクロール位置のズレを確実に補正
                 onMomentumScrollEnd={(e) => {
                   const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
                   setFullScreenIndex(idx);
@@ -977,7 +983,6 @@ export default function AlbumScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  // ★ Modalラッパーをやめたので absoluteFillObject で一番手前に出す
   uploadingOverlay: { 
     ...StyleSheet.absoluteFillObject, 
     backgroundColor: 'rgba(0,0,0,0.8)', 
@@ -986,9 +991,11 @@ const styles = StyleSheet.create({
     zIndex: 9999 
   },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
+  
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
@@ -1024,11 +1031,9 @@ const styles = StyleSheet.create({
   noPhotoText: { color: COLORS.textLight, paddingHorizontal: 16, paddingVertical: 16, fontStyle: 'italic', fontSize: 14, textAlign: 'center' },
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
-  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
-  fullScreenImage: { width: '100%', height: '100%' },
   fullScreenFooter: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 60, zIndex: 10 },
   fullScreenActionBtn: { alignItems: 'center', padding: 10 },
   fullScreenActionText: { color: COLORS.white, fontSize: 14, marginTop: 6, fontWeight: 'bold' },
