@@ -24,7 +24,11 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// ★ cacheDirectory も as any で型エラーを回避し、iOS対応を強化
+/**
+ * ★ 保存ロジック：LINE等の思想に基づいた最適化
+ * 1. Webブラウザ: セキュリティ(CORS)を考慮したBlobダウンロード
+ * 2. ネイティブ: OSの画像保存エンジンが認識しやすい形式で一時保存してからMediaLibraryに委譲
+ */
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
@@ -34,8 +38,9 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
+      // URLから拡張子を抽出。不明な場合はjpgとする
       const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
-      link.download = `photo_${Date.now()}.${extension}`;
+      link.download = `kenies_photo_${Date.now()}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -53,22 +58,23 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
         return false;
       }
 
-      // iOSで見れない問題を解決するため、URLから拡張子を取得。なければ png をデフォルトに（jpgより安全）
-      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'png';
+      // URLから元の拡張子を判別。iOSならHEIC、AndroidならJPG/PNG等を尊重
+      const extension = uri.split(/[#?]/)[0].split('.').pop()?.trim().toLowerCase() || 'jpg';
       
-      // 型エラー回避のため (FileSystem as any) を使用
+      // TypeScriptの型エラー回避のため (FileSystem as any) を使用
       const cacheDir = (FileSystem as any).cacheDirectory;
       if (!cacheDir) return false;
 
+      // OSが「画像データ」として正しくスキャンできるよう一時ファイルパスを作成
       const fileUri = `${cacheDir}temp_photo_${Date.now()}.${extension}`;
 
       const downloadRes = await FileSystem.downloadAsync(uri, fileUri);
-      
       if (downloadRes.status !== 200) return false;
 
+      // MediaLibrary.saveToLibraryAsync は、ファイルの中身と拡張子を照合して最適な保存処理を行う
       await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
       
-      // 一時ファイルを削除
+      // クリーンアップ
       await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
       
       return true;
@@ -542,26 +548,12 @@ export default function AlbumScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      <Modal visible={isUploading} transparent animationType="fade">
-        <View style={styles.uploadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.white} />
-          <Text style={styles.uploadingText}>写真をアップロード中...</Text>
-        </View>
-      </Modal>
-
-      <Modal visible={isDownloading} transparent animationType="fade">
-        <View style={styles.uploadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.white} />
-          <Text style={styles.uploadingText}>端末に保存しています...</Text>
-        </View>
-      </Modal>
-
-      <Modal visible={loading} transparent animationType="fade">
-        <View style={styles.uploadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.white} />
-          <Text style={styles.uploadingText}>処理中...</Text>
-        </View>
-      </Modal>
+      <View style={isUploading || (isDownloading && !fullScreenPhotos) || loading ? styles.uploadingOverlay : { display: 'none' }}>
+        <ActivityIndicator size="large" color={COLORS.white} />
+        <Text style={styles.uploadingText}>
+          {isUploading ? '写真をアップロード中...' : isDownloading ? '端末に保存しています...' : '処理中...'}
+        </Text>
+      </View>
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => {
@@ -910,6 +902,11 @@ export default function AlbumScreen() {
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', width: windowWidth, height: windowHeight }}>
           
+          <View style={isDownloading ? styles.uploadingOverlay : { display: 'none' }}>
+            <ActivityIndicator size="large" color={COLORS.white} />
+            <Text style={styles.uploadingText}>端末に保存しています...</Text>
+          </View>
+
           <View style={styles.fullScreenHeader}>
             <Text style={styles.fullScreenCounter}>{fullScreenIndex + 1} / {fullScreenPhotos?.length}</Text>
             <TouchableOpacity style={styles.fullScreenIconBtn} onPress={closeFullScreen}>
