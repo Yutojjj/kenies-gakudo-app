@@ -25,26 +25,32 @@ const getLocalDateString = (date: Date) => {
 };
 
 /**
- * ★ 修正版：保存ロジック
- * LINE等のアプリ内ブラウザで「ウザい画面」が出るのを防ぐため、
- * Web版は「別タブで画像表示（長押し保存）」に切り替えます。
+ * ★ 保存・共有ロジック
  */
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
     try {
-      // LINEブラウザ等でダウンロード命令を出すとプレビュー画面に飛ぶため、
-      // 画像URLをそのまま別タブで開く（ユーザーはそこから長押しで保存できる）
-      window.open(uri, '_blank');
-      return true;
+      // Web環境では、OS標準の「共有メニュー」を呼び出す
+      if (navigator.share) {
+        await navigator.share({
+          title: '写真を保存',
+          url: uri,
+        });
+        return true;
+      } else {
+        // 共有機能がないブラウザ（古いPC等）は別タブ開き
+        window.open(uri, '_blank');
+        return true;
+      }
     } catch (e) {
-      console.error('Web View Error:', e);
-      return false; 
+      console.error('Web Share Error:', e);
+      return false;
     }
   } else {
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('権限エラー', '写真へのアクセス権限が必要です。設定から許可してください。');
+        Alert.alert('権限エラー', '写真へのアクセス権限が必要です。');
         return false;
       }
 
@@ -61,7 +67,7 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       
       return true;
     } catch (e) {
-      console.error('Native Download Error:', e);
+      console.error('Native Save Error:', e);
       return false;
     }
   }
@@ -405,23 +411,26 @@ export default function AlbumScreen() {
     }
   };
 
+  /**
+   * ★ 共有・保存ボタンのアクション
+   */
   const handleSaveSinglePhoto = async () => {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
     
-    // Webの場合はローディングを出さずに即実行（別タブで開くため）
     if (Platform.OS === 'web') {
+      // Webブラウザ（LINE内含む）ではOSの共有メニューを一発で出す
       await saveImageToDevice(targetPhoto.uri);
-      window.alert('画像を表示しました。\n長押し（または右クリック）で保存してください。');
       return;
     }
 
+    // アプリ実機版
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
     
     if (success) {
-      Alert.alert('保存完了', '端末のアルバムに保存しました。');
+      Alert.alert('保存完了', 'アルバムに保存しました。');
     } else {
       Alert.alert('エラー', '保存に失敗しました。');
     }
@@ -431,7 +440,7 @@ export default function AlbumScreen() {
     if (selectedPhotoIds.length === 0) return;
     
     if (Platform.OS === 'web') {
-      window.alert('Web版では一括保存に対応していません。\n画像を開いて1枚ずつ保存してください。');
+      window.alert('Web版では一括保存に対応していません。\n画像を開いて1枚ずつ共有メニューから保存してください。');
       return;
     }
 
@@ -715,8 +724,8 @@ export default function AlbumScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.bottomActionBtn, { backgroundColor: COLORS.primary, flex: 1, marginLeft: 12 }]} onPress={handleBulkSave}>
-                <Ionicons name="download" size={20} color={COLORS.white} />
-                <Text style={[styles.bottomActionText, { color: COLORS.white }]}>一括保存</Text>
+                <Ionicons name="share-social" size={20} color={COLORS.white} />
+                <Text style={[styles.bottomActionText, { color: COLORS.white }]}>{Platform.OS === 'web' ? '共有して保存' : '一括保存'}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -730,6 +739,7 @@ export default function AlbumScreen() {
         </View>
       )}
 
+      {/* 各種Modal（変更なし） */}
       <Modal visible={calendarModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -942,8 +952,8 @@ export default function AlbumScreen() {
 
           <View style={styles.fullScreenFooter}>
             <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
-              <Ionicons name="download-outline" size={28} color={COLORS.white} />
-              <Text style={styles.fullScreenActionText}>保存</Text>
+              <Ionicons name={Platform.OS === 'web' ? "share-social-outline" : "download-outline"} size={28} color={COLORS.white} />
+              <Text style={styles.fullScreenActionText}>{Platform.OS === 'web' ? '保存' : '保存'}</Text>
             </TouchableOpacity>
             {role !== 'user' && currentFullScreenPhoto && (
               <TouchableOpacity style={styles.fullScreenActionBtn} onPress={async () => {
