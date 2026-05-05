@@ -7,9 +7,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Mode = 'top' | 'add' | 'view';
 type TabType = '月' | '火' | '水' | '木' | '金' | 'イベント';
@@ -67,8 +69,6 @@ export default function AlbumScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
 
-  const { width: windowWidth } = useWindowDimensions();
-
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -110,7 +110,6 @@ export default function AlbumScreen() {
     }
   }).current;
 
-  // ★ AndroidのFlatListバグ(真っ暗になる問題)を回避する最強のハック
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
       flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -869,7 +868,7 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ★ Androidの「真っ暗になる問題」を解決したフルスクリーンビューア */}
+      {/* ★ Androidの「真っ暗になる問題」＆「複数枚飛ぶ問題」を完全解決したビューア */}
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
         <SafeAreaView style={styles.fullScreenContainer}>
           <View style={styles.fullScreenHeader}>
@@ -890,12 +889,18 @@ export default function AlbumScreen() {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 initialScrollIndex={fullScreenIndex}
-                getItemLayout={(data, index) => ({ length: windowWidth, offset: windowWidth * index, index })}
+                getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
                 onScrollToIndexFailed={onScrollToIndexFailed}
+                // ★ 以下の4つがAndroidのバグ回避の特効薬
+                removeClippedSubviews={false} // 真っ暗防止
+                snapToInterval={SCREEN_WIDTH} // ぴったり止める
+                snapToAlignment="center"
+                decelerationRate="fast"
+                disableIntervalMomentum={true} // 勢いよくスワイプしても1枚しか進まない
                 renderItem={({ item }) => (
-                  <View style={{ width: windowWidth, flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <View style={{ width: SCREEN_WIDTH, flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Image source={{ uri: item.uri }} style={styles.fullScreenImage} resizeMode="contain" />
                   </View>
                 )}
