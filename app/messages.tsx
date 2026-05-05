@@ -1,20 +1,30 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  addDoc, arrayRemove, arrayUnion, collection, doc, getDocs,
-  getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, limit,
-  where,
+  addDoc, arrayRemove, arrayUnion, collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot, orderBy, query, serverTimestamp, setDoc,
+  where
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
-  TouchableOpacity, View,
+  TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { db } from '../firebase';
 import { useCall } from '../contexts/CallContext';
+import { db } from '../firebase';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -129,6 +139,12 @@ export default function MessagesScreen() {
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [convReadBy, setConvReadBy] = useState<string[]>([]);
+
+  // ── グループ作成用のステート ──
+  const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [availableAccounts, setAvailableAccounts] = useState<any[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   const scrollRef = useRef<ScrollView>(null);
   const unsubMsgsRef = useRef<(() => void) | null>(null);
@@ -286,6 +302,77 @@ export default function MessagesScreen() {
     }
   };
 
+  // ── トーク・グループ削除処理 ──
+  const handleDeleteConversation = (conv: ConvDoc) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`「${conv.name || 'トーク'}」を完全に削除しますか？\n（復元できません）`)) {
+        deleteDoc(doc(db, 'conversations', conv.id)).then(() => {
+          if (activeConv?.id === conv.id) goBack();
+        }).catch(() => window.alert('削除に失敗しました。'));
+      }
+      return;
+    }
+    Alert.alert('削除確認', `「${conv.name || 'トーク'}」を完全に削除しますか？\n（復元できません）`, [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: async () => {
+        try {
+          await deleteDoc(doc(db, 'conversations', conv.id));
+          if (activeConv?.id === conv.id) goBack();
+        } catch (e) {
+          Alert.alert('エラー', '削除に失敗しました。');
+        }
+      }}
+    ]);
+  };
+
+  // ── グループ作成関連の処理 ──
+  const openCreateGroupModal = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'accounts'));
+      const accs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAvailableAccounts(accs);
+      setCreateGroupModalVisible(true);
+      setNewGroupName('');
+      setSelectedUserIds([]);
+    } catch (e) {
+      Alert.alert('エラー', 'ユーザーの取得に失敗しました');
+    }
+  };
+
+  const toggleUserSelection = (id: string) => {
+    if (selectedUserIds.includes(id)) {
+      setSelectedUserIds(selectedUserIds.filter(uid => uid !== id));
+    } else {
+      setSelectedUserIds([...selectedUserIds, id]);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) {
+      Alert.alert('エラー', 'グループ名を入力してください');
+      return;
+    }
+    if (selectedUserIds.length === 0) {
+      Alert.alert('エラー', 'メンバーを1人以上選択してください');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'conversations'), {
+        type: 'group',
+        name: newGroupName.trim(),
+        participants: [ADMIN_ID, ...selectedUserIds],
+        createdAt: serverTimestamp(),
+        lastMessageAt: serverTimestamp(),
+        lastMessage: 'グループが作成されました',
+        readBy: [ADMIN_ID],
+        unreadFor: selectedUserIds,
+      });
+      setCreateGroupModalVisible(false);
+    } catch (e) {
+      Alert.alert('エラー', 'グループの作成に失敗しました');
+    }
+  };
+
   // 既読表示の計算
   const myLastMsgId = resolvedUser
     ? [...messages].reverse().find(m => m.senderId === resolvedUser.accountId)?.id ?? null
@@ -341,7 +428,13 @@ export default function MessagesScreen() {
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>
+          
+          {/* グループ作成ボタンを追加 */}
+          <TouchableOpacity onPress={openCreateGroupModal} style={styles.callHeaderBtn}>
+            <Ionicons name="people-circle-outline" size={24} color="#5D4037" />
+          </TouchableOpacity>
         </View>
+        
         <ScrollView style={{ flex: 1 }}>
           {conversations.length === 0 && (
             <View style={styles.centerBox}>
@@ -374,11 +467,63 @@ export default function MessagesScreen() {
                     {unread && <View style={styles.unreadDot} />}
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{ marginLeft: 4 }} />
+                {/* 削除ボタン（ゴミ箱）をリストに追加 */}
+                <TouchableOpacity onPress={() => handleDeleteConversation(item)} style={{ padding: 8, marginLeft: 4 }}>
+                  <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
+
+        {/* グループ作成モーダル */}
+        <Modal visible={createGroupModalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.createGroupModalContent}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: COLORS.text }}>新規グループ作成</Text>
+              
+              <TextInput
+                style={styles.textInput}
+                placeholder="グループ名を入力"
+                placeholderTextColor={COLORS.textLight}
+                value={newGroupName}
+                onChangeText={setNewGroupName}
+              />
+              
+              <Text style={{ fontSize: 14, fontWeight: 'bold', marginTop: 16, marginBottom: 8, color: COLORS.text }}>メンバー選択</Text>
+              
+              <FlatList
+                data={availableAccounts}
+                keyExtractor={item => item.id}
+                style={{ maxHeight: 240, marginBottom: 16 }}
+                renderItem={({item}) => (
+                  <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F0E4D0' }}
+                    onPress={() => toggleUserSelection(item.id)}
+                  >
+                    <Ionicons 
+                      name={selectedUserIds.includes(item.id) ? "checkbox" : "square-outline"} 
+                      size={24} 
+                      color={selectedUserIds.includes(item.id) ? COLORS.primary : '#ccc'} 
+                      style={{ marginRight: 12 }}
+                    />
+                    <Text style={{ fontSize: 16, color: COLORS.text }}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+              
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity style={[styles.sendBtn, { flex: 1, backgroundColor: '#E8DDD0', borderRadius: 12, width: 'auto' }]} onPress={() => setCreateGroupModalVisible(false)}>
+                  <Text style={{ color: COLORS.text, fontWeight: 'bold', fontSize: 16 }}>キャンセル</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.sendBtn, { flex: 1, borderRadius: 12, width: 'auto' }]} onPress={handleCreateGroup}>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>作成する</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     );
   }
@@ -402,9 +547,18 @@ export default function MessagesScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {activeConv?.name || 'チャット'}
         </Text>
+
+        {/* チャット画面内の削除（ゴミ箱）ボタン */}
+        {activeConv && (
+          <TouchableOpacity style={styles.callHeaderBtn} onPress={() => handleDeleteConversation(activeConv)}>
+            <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+          </TouchableOpacity>
+        )}
+
+        {/* ビデオ通話ボタン */}
         {canCall && callStatus === 'idle' && (
           <TouchableOpacity style={styles.callHeaderBtn} onPress={() => startCall(activeConv!.id, calleeDisplayName)}>
-            <Ionicons name="call" size={20} color="#5D4037" />
+            <Ionicons name="videocam" size={20} color="#5D4037" />
           </TouchableOpacity>
         )}
       </View>
@@ -488,7 +642,7 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   callHeaderBtn: {
-    padding: 8, marginLeft: 4,
+    padding: 8, marginLeft: 8,
     backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20,
   },
 
@@ -559,4 +713,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginLeft: 8,
   },
   sendBtnDisabled: { opacity: 0.4 },
+
+  // グループ作成モーダル用
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  createGroupModalContent: { width: '100%', backgroundColor: '#fff', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10, maxHeight: '80%' },
 });

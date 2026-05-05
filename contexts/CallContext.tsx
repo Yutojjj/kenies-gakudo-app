@@ -32,43 +32,12 @@ function fmtDuration(sec: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// ─── 実験：Web Audio APIを使った音声ルーティング ───
-// <audio>や<video>タグで音を鳴らさず、Web Audio APIのパイプラインを通して出力します。
-// これによりiOSのハードウェアAECが強制的に有効化されることを狙います。
-const playStreamViaWebAudio = (stream: MediaStream) => {
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    const ctx = new AudioCtx();
-    
-    // ユーザー操作（タップ）のコンテキスト内で呼ばれるため、resumeでアクティブ化できる
-    ctx.resume();
-
-    // iOS Safariの強烈なバグ対策：
-    // Web Audio APIを通す場合でも、裏でミュートにした<audio>タグにストリームを食わせておかないと、
-    // 数秒でガベージコレクション（メモリ解放）されて無音になる問題を防ぐためのダミー要素
-    const dummyAudio = document.createElement('audio');
-    dummyAudio.autoplay = true;
-    dummyAudio.muted = true; // タグからは絶対に音を出さない
-    (dummyAudio as any).playsInline = true;
-    dummyAudio.srcObject = stream;
-    dummyAudio.play().catch(() => {});
-
-    // 実際の音はここ（Web Audio API）から出す
-    const source = ctx.createMediaStreamSource(stream);
-    const gainNode = ctx.createGain();
-    
-    // 通話音量はハウリング（物理ループ）を防ぐために 0.15 (15%) に低くキープ
-    gainNode.gain.value = 0.15; 
-    
-    source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    return { ctx, dummyAudio };
-  } catch (e) {
-    console.error("Web Audio API routing failed:", e);
-    return null;
-  }
-};
+// ─── Web用ビデオコンポーネント (React Native Web環境で安全に <video> を描画する) ───
+const WebVideo = React.forwardRef((props: any, ref: any) => {
+  if (Platform.OS !== 'web') return null;
+  const Component = 'video' as any;
+  return <Component ref={ref} {...props} />;
+});
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const [myAccountId, setMyAccountId] = useState('');
@@ -81,7 +50,11 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const peerRef = useRef<any>(null);
   const localStreamRef = useRef<any>(null);
-  const remoteAudioRef = useRef<any>(null); // 今回は { ctx, dummyAudio } のオブジェクトが入る
+  
+  // ─── ビデオ通話用の参照 ───
+  const localVideoRef = useRef<any>(null);
+  const remoteVideoRef = useRef<any>(null);
+
   const callTimerRef = useRef<any>(null);
   const missedTimerRef = useRef<any>(null);
   const ringtoneRef = useRef<any>(null);
@@ -116,11 +89,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           const dur = e - s;
           const t = ctx.currentTime + s;
           gain.gain.setValueAtTime(0, t);
-          
-          // 変更：着信音はしっかり聞こえるように 0.6 (60%) に引き上げました
-          gain.gain.linearRampToValueAtTime(0.6, t + 0.03);
+          gain.gain.linearRampToValueAtTime(0.6, t + 0.03); // 着信音の音量(60%)
           gain.gain.setValueAtTime(0.6, t + dur - 0.05);
-          
           gain.gain.linearRampToValueAtTime(0, t + dur);
           osc.start(t); osc.stop(t + dur + 0.01);
         });
@@ -163,12 +133,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
     localStreamRef.current = null;
     
-    // Web Audio APIの破棄処理
-    if (remoteAudioRef.current) {
-      try { remoteAudioRef.current.ctx.close(); } catch (e) {}
-      try { remoteAudioRef.current.dummyAudio.srcObject = null; } catch (e) {}
-      remoteAudioRef.current = null;
-    }
+    // 映像参照のクリア
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
     
     setCallStatus('idle');
     setActiveCallId(null);
@@ -226,14 +193,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      // 実験：制約を ideal で強制的に要求する
+      // 📹 ビデオ通話用の制約 (フロントカメラを指定)
       const constraints = { 
-        audio: { 
-          echoCancellation: { ideal: true }, 
-          noiseSuppression: { ideal: true }, 
-          autoGainControl: { ideal: true } 
-        }, 
-        video: false 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
+        video: { facingMode: "user" }
       };
       const stream = await (navigator as any).mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
@@ -242,17 +205,24 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       const callRef = doc(collection(db, 'calls'));
       setActiveCallId(callRef.id);
       setRemotePartyName(calleeName);
-      setCallStatus('calling');
+      setCallStatus('calling'); // UIが表示される
+
+      // UI描画後に自分の映像をセットする
+      setTimeout(() => {
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      }, 50);
 
       pc.onicecandidate = (e: any) => {
         if (e.candidate) addDoc(collection(db, 'calls', callRef.id, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
       };
       
       pc.ontrack = (e: any) => {
-        // 実験：Web Audio APIを利用して音声を再生
-        if (!remoteAudioRef.current) {
-          remoteAudioRef.current = playStreamViaWebAudio(e.streams[0]);
-        }
+        setTimeout(() => {
+          if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+            remoteVideoRef.current.srcObject = e.streams[0];
+            remoteVideoRef.current.volume = 0.5; // 前回の要望通り音量を少し下げる
+          }
+        }, 50);
       };
 
       const offer = await pc.createOffer();
@@ -318,7 +288,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       cleanupCall();
-      if (typeof window !== 'undefined') window.alert('マイクへのアクセスが必要です。ブラウザ設定を確認してください。');
+      if (typeof window !== 'undefined') window.alert('カメラとマイクへのアクセスが必要です。ブラウザ設定を確認してください。');
     }
   };
 
@@ -343,24 +313,27 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      // 実験：制約を ideal で強制的に要求する
+      // 📹 ビデオ通話用の制約
       const constraints = { 
-        audio: { 
-          echoCancellation: { ideal: true }, 
-          noiseSuppression: { ideal: true }, 
-          autoGainControl: { ideal: true } 
-        }, 
-        video: false 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
+        video: { facingMode: "user" } 
       };
       const stream = await (navigator as any).mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
 
+      // 自分の映像をセット
+      setTimeout(() => {
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      }, 50);
+
       pc.ontrack = (e: any) => {
-        // 実験：Web Audio APIを利用して音声を再生
-        if (!remoteAudioRef.current) {
-          remoteAudioRef.current = playStreamViaWebAudio(e.streams[0]);
-        }
+        setTimeout(() => {
+          if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+            remoteVideoRef.current.srcObject = e.streams[0];
+            remoteVideoRef.current.volume = 0.5;
+          }
+        }, 50);
       };
       
       pc.onicecandidate = (e: any) => {
@@ -388,7 +361,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       startCallTimer();
     } catch (e) {
       cleanupCall();
-      if (typeof window !== 'undefined') window.alert('通話に失敗しました。マイクのアクセスを確認してください。');
+      if (typeof window !== 'undefined') window.alert('通話に失敗しました。カメラとマイクのアクセスを確認してください。');
     }
   };
 
@@ -409,54 +382,83 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => () => cleanupCall(), []);
 
-  // ─── 全画面 通話 UI ───
+  // ─── 全画面 ビデオ通話 UI ───
   return (
     <CallContext.Provider value={{ callStatus, startCall, endCall }}>
       {children}
-      <Modal visible={callStatus !== 'idle'} transparent={false} animationType="slide" onRequestClose={() => {}}>
+      <Modal visible={callStatus !== 'idle'} transparent={true} animationType="fade" onRequestClose={() => {}}>
         <View style={styles.screen}>
-          <Text style={styles.statusTag}>
-            {callStatus === 'receiving' ? '着信' : callStatus === 'calling' ? '発信中' : '通話中'}
-          </Text>
+          
+          {/* 📹 背景: 相手の映像 */}
+          <View style={StyleSheet.absoluteFill}>
+            <WebVideo 
+              ref={remoteVideoRef} 
+              autoPlay 
+              playsInline 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#16213E' }} 
+            />
+          </View>
 
-          <View style={styles.avatarWrap}>
-            <View style={[styles.avatar, callStatus === 'connected' && styles.avatarConnected]}>
-              <Text style={styles.avatarInitial}>{(remotePartyName || '?')[0]}</Text>
+          {/* 📹 右下: 自分の映像 */}
+          {(callStatus === 'calling' || callStatus === 'connected') && (
+            <View style={styles.localVideoContainer}>
+              <WebVideo 
+                ref={localVideoRef} 
+                autoPlay 
+                playsInline 
+                muted // 自分自身の声がループしないようにミュート必須
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
+            </View>
+          )}
+
+          {/* UIオーバーレイ (名前やボタンなど) */}
+          <View style={styles.overlayUI}>
+            <View style={{ alignItems: 'center', marginTop: 60 }}>
+              {/* 接続前のみアバターを表示 */}
+              {callStatus !== 'connected' && (
+                <View style={styles.avatarWrap}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarInitial}>{(remotePartyName || '?')[0]}</Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.partyName}>{remotePartyName}</Text>
+              <Text style={styles.statusSub}>
+                {callStatus === 'receiving' ? 'ビデオ通話の着信中...'
+                  : callStatus === 'calling' ? '呼び出し中...'
+                  : fmtDuration(callDuration)}
+              </Text>
+            </View>
+
+            <View style={styles.btnRow}>
+              {callStatus === 'receiving' ? (
+                <>
+                  <View style={styles.btnItem}>
+                    <TouchableOpacity style={[styles.circleBtn, styles.rejectBtn]} onPress={rejectCall}>
+                      <Ionicons name="call" size={34} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+                    </TouchableOpacity>
+                    <Text style={styles.btnLabel}>拒否</Text>
+                  </View>
+                  <View style={styles.btnItem}>
+                    <TouchableOpacity style={[styles.circleBtn, styles.acceptBtn]} onPress={acceptCall}>
+                      <Ionicons name="videocam" size={34} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.btnLabel}>応答</Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.btnItem}>
+                  <TouchableOpacity style={[styles.circleBtn, styles.hangupBtn]} onPress={endCall}>
+                    <Ionicons name="call" size={34} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+                  </TouchableOpacity>
+                  <Text style={styles.btnLabel}>終了</Text>
+                </View>
+              )}
             </View>
           </View>
 
-          <Text style={styles.partyName}>{remotePartyName}</Text>
-          <Text style={styles.statusSub}>
-            {callStatus === 'receiving' ? '着信中...'
-              : callStatus === 'calling' ? '呼び出し中...'
-              : fmtDuration(callDuration)}
-          </Text>
-
-          <View style={styles.btnRow}>
-            {callStatus === 'receiving' ? (
-              <>
-                <View style={styles.btnItem}>
-                  <TouchableOpacity style={[styles.circleBtn, styles.rejectBtn]} onPress={rejectCall}>
-                    <Ionicons name="call" size={34} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-                  </TouchableOpacity>
-                  <Text style={styles.btnLabel}>拒否</Text>
-                </View>
-                <View style={styles.btnItem}>
-                  <TouchableOpacity style={[styles.circleBtn, styles.acceptBtn]} onPress={acceptCall}>
-                    <Ionicons name="call" size={34} color="#fff" />
-                  </TouchableOpacity>
-                  <Text style={styles.btnLabel}>応答</Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.btnItem}>
-                <TouchableOpacity style={[styles.circleBtn, styles.hangupBtn]} onPress={endCall}>
-                  <Ionicons name="call" size={34} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-                </TouchableOpacity>
-                <Text style={styles.btnLabel}>終了</Text>
-              </View>
-            )}
-          </View>
         </View>
       </Modal>
     </CallContext.Provider>
@@ -465,26 +467,32 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1, backgroundColor: '#16213E',
-    alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 90, paddingBottom: 90, paddingHorizontal: 40,
+    flex: 1, backgroundColor: 'transparent',
   },
-  statusTag: { fontSize: 13, color: 'rgba(255,255,255,0.45)', letterSpacing: 3 },
-  avatarWrap: { alignItems: 'center' },
+  localVideoContainer: {
+    position: 'absolute', bottom: 160, right: 20, width: 110, height: 160,
+    borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: '#fff',
+    backgroundColor: '#000', elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8,
+    zIndex: 20
+  },
+  overlayUI: {
+    flex: 1, justifyContent: 'space-between', paddingBottom: 60, paddingHorizontal: 20,
+    zIndex: 30 // 映像よりも上にUIを配置
+  },
+  avatarWrap: { alignItems: 'center', marginBottom: 16 },
   avatar: {
-    width: 120, height: 120, borderRadius: 60,
+    width: 100, height: 100, borderRadius: 50,
     backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center',
     shadowColor: '#4a90d9', shadowOpacity: 0.7, shadowRadius: 24, elevation: 12,
   },
-  avatarConnected: { backgroundColor: '#4CAF50', shadowColor: '#4CAF50' },
-  avatarInitial: { fontSize: 52, color: '#fff', fontWeight: 'bold' },
-  partyName: { fontSize: 30, fontWeight: 'bold', color: '#fff', textAlign: 'center' },
-  statusSub: { fontSize: 17, color: 'rgba(255,255,255,0.5)', marginTop: 4 },
+  avatarInitial: { fontSize: 42, color: '#fff', fontWeight: 'bold' },
+  partyName: { fontSize: 28, fontWeight: 'bold', color: '#fff', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 },
+  statusSub: { fontSize: 16, color: 'rgba(255,255,255,0.9)', marginTop: 8, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   btnRow: { flexDirection: 'row', gap: 64, justifyContent: 'center' },
   btnItem: { alignItems: 'center', gap: 10 },
-  circleBtn: { width: 78, height: 78, borderRadius: 39, justifyContent: 'center', alignItems: 'center' },
+  circleBtn: { width: 78, height: 78, borderRadius: 39, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
   acceptBtn: { backgroundColor: '#4CAF50' },
   rejectBtn: { backgroundColor: '#E53935' },
   hangupBtn: { backgroundColor: '#E53935' },
-  btnLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 14 },
+  btnLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 });
