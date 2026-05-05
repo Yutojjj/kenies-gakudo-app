@@ -389,7 +389,11 @@ export default function MenuScreen() {
                     animValue={cardAnims[6]}
                     badge={unreadCount}
                   />
-                  <View style={{ flex: 1 }} />
+                  <MenuCard
+                    image={ANIMALS.bear} title="変更履歴" subtitle="スケジュール変更を確認" bgColor="#F5DCA8"
+                    onPress={() => router.push('/schedule-changes' as any)}
+                    animValue={cardAnims[7]}
+                  />
                 </View>
               )}
             </>
@@ -433,10 +437,6 @@ export default function MenuScreen() {
                   <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); customAlert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。'); }}>
                     <Text style={styles.drawerIcon}>⏱️</Text>
                     <Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/schedule-changes' as any); }}>
-                    <Text style={styles.drawerIcon}>📝</Text>
-                    <Text style={styles.drawerItemText}>スケジュール変更履歴</Text>
                   </TouchableOpacity>
                   <View style={{ height: 1, backgroundColor: '#E8DDD0', marginVertical: 16 }} />
                 </>

@@ -335,11 +335,13 @@ export default function ScheduleScreen() {
             changedAt: serverTimestamp(),
           });
 
-          // 変更日が今日を含む3日以内なら管理者へ通知
-          const today = new Date(); today.setHours(0, 0, 0, 0);
-          const changeDay = new Date(dateStr); changeDay.setHours(0, 0, 0, 0);
-          const diffDays = Math.round((changeDay.getTime() - today.getTime()) / 86400000);
-          if (diffDays >= 0 && diffDays <= 2) {
+          // 変更対象日が今月であれば管理者へ通知
+          const today = new Date();
+          const changeDay = new Date(dateStr);
+          const isSameMonth =
+            changeDay.getFullYear() === today.getFullYear() &&
+            changeDay.getMonth() === today.getMonth();
+          if (isSameMonth) {
             const adminTokenDoc = await getDoc(doc(db, 'fcm_tokens', 'admin'));
             if (adminTokenDoc.exists()) {
               const token = adminTokenDoc.data().token;

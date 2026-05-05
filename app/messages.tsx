@@ -84,6 +84,15 @@ async function setupFCMToken(accountId: string) {
   } catch (e) { /* 通知権限がなくてもメッセージは使える */ }
 }
 
+// 1対1: convId = 'direct_userId' → 相手は convId から確定できる
+function deriveParticipants(convId: string): string[] {
+  if (convId.startsWith('direct_')) {
+    const userId = convId.replace('direct_', '');
+    return [ADMIN_ID, userId];
+  }
+  return [];
+}
+
 async function pushNotify(
   convId: string, convType: string,
   senderAccountId: string, senderName: string,
@@ -93,11 +102,15 @@ async function pushNotify(
   try {
     let recipientIds: string[] = [];
     if (convType === 'group') {
+      // グループ: スタッフ全員＋管理者（送信者を除く）
       const snap = await getDocs(collection(db, 'fcm_tokens'));
       recipientIds = snap.docs.map(d => d.id).filter(id => id !== senderAccountId);
     } else {
+      // 1対1: Firestoreのparticipantsを優先、なければIDから導出
       const s = await getDoc(doc(db, 'conversations', convId));
-      const parts: string[] = s.data()?.participants || [];
+      const parts: string[] = s.data()?.participants?.length
+        ? s.data()!.participants
+        : deriveParticipants(convId);
       recipientIds = parts.filter(id => id !== senderAccountId);
     }
     if (!recipientIds.length) return;
@@ -278,8 +291,11 @@ export default function MessagesScreen() {
         const snap = await getDocs(collection(db, 'fcm_tokens'));
         participants = [ADMIN_ID, ...snap.docs.map(d => d.id)];
       } else {
+        // 1対1: Firestoreのparticipantsが未設定でも convId から確実に導出する
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
-        participants = s.data()?.participants || [ADMIN_ID, resolvedUser.accountId];
+        participants = s.data()?.participants?.length
+          ? s.data()!.participants
+          : deriveParticipants(activeConv.id);
       }
       const unreadFor = participants.filter(id => id !== resolvedUser.accountId);
 
