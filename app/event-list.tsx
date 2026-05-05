@@ -145,7 +145,7 @@ export default function EventListScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>イベント参加登録</Text>
       </View>
@@ -213,9 +213,9 @@ export default function EventListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   scrollArea: { flex: 1, padding: 16 },
   instruction: { fontSize: 14, color: COLORS.textLight, marginBottom: 16, fontWeight: 'bold', textAlign: 'center' },
   noEventText: { textAlign: 'center', color: COLORS.textLight, marginTop: 40 },

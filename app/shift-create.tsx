@@ -3,7 +3,7 @@ import * as Print from 'expo-print';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -302,7 +302,7 @@ export default function ShiftCreateScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={[styles.pdfBtn, { backgroundColor: COLORS.secondary }]}>
@@ -395,9 +395,15 @@ export default function ShiftCreateScreen() {
               <Ionicons name="grid" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
               <Text style={styles.ssModalTitle}>月別シフト表</Text>
             </View>
-            <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
-              <Ionicons name="close-circle" size={32} color={COLORS.textLight} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
+                <Ionicons name="document-text" size={20} color={COLORS.white} />
+                <Text style={styles.pdfBtnText}>PDF出力</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
+                <Ionicons name="close-circle" size={32} color={COLORS.textLight} />
+              </TouchableOpacity>
+            </View>
           </View>
           
           <View style={styles.ssMonthNav}>
@@ -513,14 +519,14 @@ export default function ShiftCreateScreen() {
               {availableStaff.map((s, i) => {
                 const isAssigned = currentDayAssigned.some(a => a.name === s.name);
                 return (
-                  <View key={i} style={styles.staffRow}>
+                  <TouchableOpacity key={i} style={styles.staffRow} onPress={() => !isAssigned && addStaffToShift(s.name, false)} activeOpacity={isAssigned ? 1 : 0.6}>
                     <Text style={styles.staffName}>{s.name}</Text>
                     {isAssigned ? (
                       <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
                     ) : (
-                      <TouchableOpacity style={styles.addBtn} onPress={() => addStaffToShift(s.name, false)}><Text style={styles.addBtnText}>追加</Text></TouchableOpacity>
+                      <View style={styles.addBtn}><Text style={styles.addBtnText}>追加</Text></View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
 
@@ -528,14 +534,14 @@ export default function ShiftCreateScreen() {
               {unavailableStaff.map((s, i) => {
                 const isAssigned = currentDayAssigned.some(a => a.name === s.name);
                 return (
-                  <View key={i} style={[styles.staffRow, { opacity: 0.6 }]}>
+                  <TouchableOpacity key={i} style={[styles.staffRow, { opacity: 0.6 }]} onPress={() => !isAssigned && addStaffToShift(s.name, true)} activeOpacity={isAssigned ? 1 : 0.6}>
                     <Text style={[styles.staffName, { color: COLORS.danger }]}>{s.name} ({s.type})</Text>
                     {isAssigned ? (
                       <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
                     ) : (
-                      <TouchableOpacity style={[styles.addBtn, {backgroundColor: '#999'}]} onPress={() => addStaffToShift(s.name, true)}><Text style={styles.addBtnText}>追加</Text></TouchableOpacity>
+                      <View style={[styles.addBtn, {backgroundColor: '#999'}]}><Text style={styles.addBtnText}>追加</Text></View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
 
@@ -547,9 +553,14 @@ export default function ShiftCreateScreen() {
                     <Text style={styles.assignedName}>{s.name}</Text>
                     <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
                   </View>
-                  <TouchableOpacity style={styles.editTimeBtn} onPress={() => openTimeEditor(s.name, s.start, s.end)}>
-                    <Ionicons name="time" size={16} color={COLORS.primary} /><Text style={styles.editTimeBtnText}>時間変更</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity style={styles.editTimeBtn} onPress={() => openTimeEditor(s.name, s.start, s.end)}>
+                      <Ionicons name="time" size={16} color={COLORS.primary} /><Text style={styles.editTimeBtnText}>時間変更</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
+                      <Ionicons name="trash" size={16} color={COLORS.danger} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
               <View style={{height: 40}} />
@@ -656,9 +667,9 @@ export default function ShiftCreateScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
   
@@ -703,6 +714,7 @@ const styles = StyleSheet.create({
   assignedTime: { fontSize: 14, color: COLORS.text, fontWeight: 'bold' },
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
+  assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   
   modalFooter: { padding: 20, borderTopWidth: 1, borderColor: COLORS.border },
   saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center' },

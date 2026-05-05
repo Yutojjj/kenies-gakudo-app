@@ -159,7 +159,7 @@ export default function SchoolTimesScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>学校別下校時刻設定</Text>
       </View>
@@ -329,9 +329,9 @@ export default function SchoolTimesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   schoolSelector: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   schoolTab: { paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 3, borderBottomColor: 'transparent' },
   schoolTabActive: { borderBottomColor: COLORS.primary },

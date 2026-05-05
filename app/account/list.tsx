@@ -9,7 +9,7 @@ import { db } from '../../firebase';
 
 export default function AccountManagementScreen() {
   const router = useRouter();
-  const { startCall } = useCall(); // ビデオ通話を起動するために追加
+  const { startCall } = useCall(); 
   
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,6 @@ export default function AccountManagementScreen() {
     // アカウント一覧の取得
     const q = query(collection(db, 'accounts'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // ▼ クライアント側でソート（orderByはインデックス不要で確実）▼
       const data = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a: any, b: any) => {
@@ -50,7 +49,7 @@ export default function AccountManagementScreen() {
       console.error(error); Alert.alert('エラー', 'データの取得に失敗しました。'); setLoading(false);
     });
 
-    // 学校・学年のマスターデータ取得（絞り込みの選択肢用）
+    // 学校・学年のマスターデータ取得
     const fetchMasterData = async (retries = 3) => {
       for (let i = 0; i < retries; i++) {
         try {
@@ -61,7 +60,7 @@ export default function AccountManagementScreen() {
             if (data.schools) setMasterSchools(data.schools);
             if (data.grades) setMasterGrades(data.grades);
           }
-          return; // 成功で終了
+          return; 
         } catch (error: any) {
           if (error.code === 'unavailable' || error.message.includes('offline')) {
               console.warn(`Master data fetch error: offline. Retrying... (${i + 1}/${retries})`);
@@ -102,7 +101,6 @@ export default function AccountManagementScreen() {
 
   const handleEdit = (id: string) => { setSelectedAccount(null); router.push({ pathname: '/account/form', params: { id } }); };
 
-  // --- 絞り込み処理 ---
   const toggleFilterArray = (currentArray: string[], value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
     if (currentArray.includes(value)) {
       setter(currentArray.filter(item => item !== value));
@@ -119,16 +117,13 @@ export default function AccountManagementScreen() {
 
   // 表示するデータのフィルタリング
   const filteredAccounts = accounts.filter(acc => {
-    // 1. タブ（Role）での絞り込み
     if (filterRole !== 'all' && acc.role !== filterRole) return false;
     
-    // 2. 検索バーでの絞り込み (名前 or ニックネーム)
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchName = acc.name?.toLowerCase().includes(q);
       const matchKana = acc.nicknameKana?.toLowerCase().includes(q);
       
-      // 兄弟の名前やニックネームも検索対象に含める場合
       let matchSibling = false;
       if (acc.siblings && Array.isArray(acc.siblings)) {
         matchSibling = acc.siblings.some((sib: any) => 
@@ -139,11 +134,9 @@ export default function AccountManagementScreen() {
       if (!matchName && !matchKana && !matchSibling) return false;
     }
 
-    // 3. 詳細絞り込み（学校、学年、利用形態）※スタッフは基本的に弾かれるか、条件なしなら表示
     const hasDetailedFilters = selectedSchools.length > 0 || selectedGrades.length > 0 || selectedUsageTypes.length > 0;
     
     if (hasDetailedFilters) {
-      // スタッフは学校等の属性を持たないため、詳細フィルターがかかっている場合は除外する
       if (acc.role === 'staff') return false;
 
       let isMatchMain = true;
@@ -151,10 +144,8 @@ export default function AccountManagementScreen() {
       if (selectedGrades.length > 0 && !selectedGrades.includes(acc.grade)) isMatchMain = false;
       if (selectedUsageTypes.length > 0 && !selectedUsageTypes.includes(acc.usageType)) isMatchMain = false;
 
-      // 本人がマッチしていればOK
       if (isMatchMain) return true;
 
-      // 本人がマッチしなくても、兄弟がマッチしていれば親アカウントごと表示する
       if (acc.siblings && Array.isArray(acc.siblings)) {
         const isMatchSibling = acc.siblings.some((sib: any) => {
           let sibMatch = true;
@@ -166,7 +157,7 @@ export default function AccountManagementScreen() {
         if (isMatchSibling) return true;
       }
       
-      return false; // 本人も兄弟も条件に合わない
+      return false; 
     }
 
     return true;
@@ -185,13 +176,20 @@ export default function AccountManagementScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ── 色合いを豊かにしたヘッダー ── */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>アカウント管理</Text>
+      </View>
+
       <View style={styles.filterContainer}>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'all' && styles.filterBtnActive]} onPress={() => setFilterRole('all')}><Text style={[styles.filterText, filterRole === 'all' && styles.filterTextActive]}>すべて</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'user' && styles.filterBtnActive]} onPress={() => setFilterRole('user')}><Text style={[styles.filterText, filterRole === 'user' && styles.filterTextActive]}>利用者</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.filterBtn, filterRole === 'staff' && styles.filterBtnActive]} onPress={() => setFilterRole('staff')}><Text style={[styles.filterText, filterRole === 'staff' && styles.filterTextActive]}>スタッフ</Text></TouchableOpacity>
       </View>
 
-      {/* 検索バー ＆ 詳細絞り込みボタン */}
       <View style={styles.searchRow}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={COLORS.textLight} style={styles.searchIcon} />
@@ -239,7 +237,6 @@ export default function AccountManagementScreen() {
 
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/account/form')}><Ionicons name="add" size={32} color={COLORS.white} /></TouchableOpacity>
 
-      {/* --- アカウント詳細モーダル --- */}
       <Modal visible={!!selectedAccount} transparent={true} animationType="fade" onRequestClose={() => setSelectedAccount(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -295,7 +292,6 @@ export default function AccountManagementScreen() {
                   )}
                 </View>
 
-                {/* --- 連絡アクションボタン --- */}
                 <View style={styles.modalActions}>
                   <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
                     <TouchableOpacity 
@@ -317,7 +313,7 @@ export default function AccountManagementScreen() {
                         const id = selectedAccount.id;
                         const name = selectedAccount.name;
                         setSelectedAccount(null);
-                        startCall(`direct_${id}`, name);
+                        startCall(`direct_${id}`, name, true);
                       }}
                     >
                       <Ionicons name="videocam" size={18} color={COLORS.white} />
@@ -340,7 +336,6 @@ export default function AccountManagementScreen() {
         </View>
       </Modal>
 
-      {/* --- 詳細絞り込みモーダル --- */}
       <Modal visible={filterModalVisible} transparent={true} animationType="slide">
         <View style={styles.filterModalOverlay}>
           <View style={styles.filterModalContent}>
@@ -410,14 +405,41 @@ export default function AccountManagementScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  // ── 色合いを豊かにしたヘッダーのスタイル ──
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 16, 
+    backgroundColor: '#FFE4B5', // やさしいイエローベージュ
+    borderBottomLeftRadius: 16, 
+    borderBottomRightRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 10,
+  },
+  backBtn: { 
+    marginRight: 16,
+    backgroundColor: 'rgba(255,255,255,0.6)', // アイコンの背景を少し白抜きに
+    padding: 6,
+    borderRadius: 16,
+  },
+  headerTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#5D4037', // 視認性の良い茶色
+    flex: 1 
+  },
+  // ────────────────────────────
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  filterContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, padding: 12, borderBottomWidth: 1, borderColor: COLORS.border },
+  filterContainer: { flexDirection: 'row', backgroundColor: COLORS.surface, padding: 12, borderBottomWidth: 1, borderColor: COLORS.border, marginTop: 4 },
   filterBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
   filterBtnActive: { backgroundColor: COLORS.primary },
   filterText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
   filterTextActive: { color: COLORS.white },
   
-  // 検索バー＆詳細フィルターボタン
   searchRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, gap: 12 },
   searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 },
   searchIcon: { marginRight: 8 },
@@ -442,7 +464,6 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 100 },
   emptyText: { color: COLORS.textLight, fontSize: 16, marginTop: 12, fontWeight: 'bold' },
   
-  // モーダル全般
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxHeight: '85%', backgroundColor: COLORS.white, borderRadius: 20, padding: 24, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -466,7 +487,6 @@ const styles = StyleSheet.create({
   modalDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0' },
   modalBtnTextDanger: { color: COLORS.danger, fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
 
-  // 詳細絞り込みモーダル
   filterModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   filterModalContent: { backgroundColor: COLORS.white, height: '80%', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   filterModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderColor: COLORS.border, paddingBottom: 16, marginBottom: 16 },

@@ -177,7 +177,7 @@ export default function EventManagementScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>イベント管理 {isAdmin ? '' : '(閲覧のみ)'}</Text>
       </View>
@@ -328,16 +328,9 @@ export default function EventManagementScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 20, 
-    backgroundColor: COLORS.surface, 
-    borderBottomWidth: 1, 
-    borderColor: COLORS.border 
-  },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   monthSelector: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 

@@ -161,12 +161,12 @@ export default function ShiftScreen() {
     <SafeAreaView style={styles.container}>
       
       {/* ★ ヘッダー部分に戻るボタンを追加 */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-            <Ionicons name="chevron-back" size={28} color={COLORS.text} />
+            <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text }}>シフト提出</Text>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#5D4037' }}>シフト提出</Text>
         </View>
         <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
           <Ionicons name="grid-outline" size={18} color={COLORS.white} />

@@ -49,6 +49,7 @@ interface Lesson {
   school: string;
   lessonName: string;
   lessonTime: string;
+  dayOfWeek?: string;
 }
 
 const getGradeNum = (grade: string) => {
@@ -63,6 +64,7 @@ export default function LessonManagementScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const [lessonName, setLessonName] = useState('');
+  const [selectedDayOfWeek, setSelectedDayOfWeek] = useState('月');
   const [selectedTime, setSelectedTime] = useState('15:00');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +196,7 @@ export default function LessonManagementScreen() {
         await addDoc(collection(db, 'lessons'), {
           childId: kid.id, childName: kid.name, school: kid.school,
           lessonName: lessonName.trim(), lessonTime: selectedTime,
+          dayOfWeek: selectedDayOfWeek,
         });
       }
       customAlert('成功', `${selectedKidIds.length}名に習い事を登録しました`);
@@ -221,6 +224,7 @@ export default function LessonManagementScreen() {
 
   const resetForm = () => {
     setLessonName('');
+    setSelectedDayOfWeek('月');
     setSelectedTime('15:00');
     setTempHour(15);
     setTempMinute(0);
@@ -232,7 +236,7 @@ export default function LessonManagementScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>習い事一覧管理</Text>
       </View>
@@ -264,6 +268,12 @@ export default function LessonManagementScreen() {
                       <Ionicons name="book-outline" size={12} color={COLORS.primary} />
                       <Text style={styles.lessonBadgeText}>{lesson.lessonName}</Text>
                     </View>
+                    {lesson.dayOfWeek && (
+                      <View style={styles.lessonBadge}>
+                        <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
+                        <Text style={styles.lessonBadgeText}>{lesson.dayOfWeek}曜日</Text>
+                      </View>
+                    )}
                     <View style={styles.lessonBadge}>
                       <Ionicons name="time-outline" size={12} color={COLORS.primary} />
                       <Text style={styles.lessonBadgeText}>{lesson.lessonTime}</Text>
@@ -294,10 +304,29 @@ export default function LessonManagementScreen() {
             />
           </View>
 
-          {/* STEP 2: 開始時間 */}
+          {/* STEP 2: 曜日 */}
           <View style={styles.stepCard}>
             <View style={styles.stepHeader}>
               <View style={styles.stepNum}><Text style={styles.stepNumText}>2</Text></View>
+              <Text style={styles.stepTitle}>曜日</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              {['月', '火', '水', '木', '金'].map(day => (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayBtn, selectedDayOfWeek === day && styles.dayBtnActive]}
+                  onPress={() => setSelectedDayOfWeek(day)}
+                >
+                  <Text style={[styles.dayBtnText, selectedDayOfWeek === day && styles.dayBtnTextActive]}>{day}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* STEP 3: 開始時間 */}
+          <View style={styles.stepCard}>
+            <View style={styles.stepHeader}>
+              <View style={styles.stepNum}><Text style={styles.stepNumText}>3</Text></View>
               <Text style={styles.stepTitle}>開始時間</Text>
             </View>
             <TouchableOpacity style={styles.timeSelectBtn} onPress={openTimePicker}>
@@ -307,10 +336,10 @@ export default function LessonManagementScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* STEP 3: 児童を検索して選択 */}
+          {/* STEP 4: 児童を検索して選択 */}
           <View style={styles.stepCard}>
             <View style={styles.stepHeader}>
-              <View style={styles.stepNum}><Text style={styles.stepNumText}>3</Text></View>
+              <View style={styles.stepNum}><Text style={styles.stepNumText}>4</Text></View>
               <Text style={styles.stepTitle}>児童を選択（複数可）</Text>
               {selectedKidIds.length > 0 && (
                 <View style={styles.selectedCountBadge}>
@@ -437,9 +466,9 @@ export default function LessonManagementScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: COLORS.white },
-  backBtn: { marginRight: 16 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   tabSection: { flexDirection: 'row', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },
   tabBtnActive: { borderColor: COLORS.primary },
@@ -482,6 +511,10 @@ const styles = StyleSheet.create({
   kidListName: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   kidListNameActive: { color: COLORS.primary },
   kidListSub: { fontSize: 11, color: COLORS.textLight, marginTop: 2 },
+  dayBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: '#FAFAFA' },
+  dayBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  dayBtnText: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight },
+  dayBtnTextActive: { color: COLORS.white },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 16, gap: 8, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: COLORS.textLight },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },

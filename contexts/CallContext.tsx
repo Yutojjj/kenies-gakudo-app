@@ -12,7 +12,7 @@ type CallStatus = 'idle' | 'calling' | 'receiving' | 'connected';
 
 type CallContextType = {
   callStatus: CallStatus;
-  startCall: (convId: string, calleeName: string) => Promise<void>;
+  startCall: (convId: string, calleeName: string, audioOnly?: boolean) => Promise<void>;
   endCall: () => Promise<void>;
 };
 
@@ -47,6 +47,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState(0);
+  const [isAudioOnly, setIsAudioOnly] = useState(false);
 
   const peerRef = useRef<any>(null);
   const localStreamRef = useRef<any>(null);
@@ -179,7 +180,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [myAccountId, callStatus]);
 
   // ─── 発信 ───
-  const startCall = async (convId: string, calleeName: string) => {
+  const startCall = async (convId: string, calleeName: string, audioOnly?: boolean) => {
     if (!myAccountId || Platform.OS !== 'web' || typeof window === 'undefined') return;
     const calleeId = myAccountId === 'admin'
       ? convId.replace('direct_', '')
@@ -193,11 +194,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       });
       peerRef.current = pc;
 
-      // 📹 ビデオ通話用の制約 (フロントカメラを指定)
-      const constraints = { 
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
-        video: { facingMode: "user" }
-      };
+      setIsAudioOnly(!!audioOnly);
+      const constraints = audioOnly
+        ? { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }
+        : { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { facingMode: "user" } };
       const stream = await (navigator as any).mediaDevices.getUserMedia(constraints);
       localStreamRef.current = stream;
       stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
@@ -399,15 +399,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             />
           </View>
 
-          {/* 📹 右下: 自分の映像 */}
-          {(callStatus === 'calling' || callStatus === 'connected') && (
+          {/* 📹 右下: 自分の映像 (音声通話時は非表示) */}
+          {!isAudioOnly && (callStatus === 'calling' || callStatus === 'connected') && (
             <View style={styles.localVideoContainer}>
-              <WebVideo 
-                ref={localVideoRef} 
-                autoPlay 
-                playsInline 
-                muted // 自分自身の声がループしないようにミュート必須
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              <WebVideo
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </View>
           )}
