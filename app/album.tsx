@@ -17,6 +17,9 @@ const ALL_TABS: TabType[] = ['月', '火', '水', '木', '金', 'イベント'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
+// iOSかどうかを判定するヘルパー
+const isIOSWeb = Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -24,22 +27,12 @@ const getLocalDateString = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-/**
- * ★ 保存・表示ロジック
- */
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
-    if (isIOS) {
-      // iOS Web（LINE内含む）の場合
-      // 「写真に保存」を出すための最短ルートとして、画像を別タブで直接開く
-      // これにより、開いた先ですぐに長押しメニュー（保存・コピー）が呼び出せます
+    if (isIOSWeb) {
       window.open(uri, '_blank');
       return true;
     } 
-    
-    // Android/PC Webは今まで通り直接ダウンロード
     try {
       const response = await fetch(uri);
       if (!response.ok) throw new Error('Network error');
@@ -59,7 +52,6 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
       return false;
     }
   } else {
-    // アプリ実機版
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -418,41 +410,28 @@ export default function AlbumScreen() {
     }
   };
 
-  /**
-   * ★ 修正：保存ボタンの挙動
-   */
   const handleSaveSinglePhoto = async () => {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
     
-    if (Platform.OS === 'web') {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        // iOS Webの場合：画像を別タブでパッと開く
-        // 開いた先ですぐに長押しすれば「写真に保存」が出せます
-        await saveImageToDevice(targetPhoto.uri);
-      } else {
-        // Android/PC：今まで通りダウンロード
-        setIsDownloading(true);
-        await saveImageToDevice(targetPhoto.uri);
-        setIsDownloading(false);
-      }
+    if (isIOSWeb) {
+      await saveImageToDevice(targetPhoto.uri);
       return;
     }
 
-    // アプリ版
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
     if (success) Alert.alert('保存完了', 'アルバムに保存しました。');
+    else Alert.alert('エラー', '保存に失敗しました。');
   };
 
   const handleBulkSave = async () => {
     if (selectedPhotoIds.length === 0) return;
-    if (Platform.OS === 'web') {
-      window.alert('Web版では一括保存に対応していません。\n1枚ずつ表示して保存してください。');
-      return;
-    }
+    
+    // iOS Web版では一括保存ボタンそのものを非表示にするが、
+    // 万が一呼ばれた際もガードをかけておく
+    if (isIOSWeb) return;
 
     setIsDownloading(true);
     try {
@@ -651,9 +630,12 @@ export default function AlbumScreen() {
 
                       <View style={styles.sectionActions}>
                         {isSelectMode ? (
-                          <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
-                            <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>すべて選択</Text>
-                          </TouchableOpacity>
+                          // iOS Web版は一括保存できないため、選択モードでも「すべて選択」は出さないように制御可（必要なら）
+                          !isIOSWeb && (
+                            <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
+                              <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>すべて選択</Text>
+                            </TouchableOpacity>
+                          )
                         ) : (
                           <>
                             {role !== 'user' && activeTab === 'イベント' && (
@@ -690,14 +672,15 @@ export default function AlbumScreen() {
                                   else openFullScreen(item.photos, idx);
                                 }}
                                 onLongPress={() => {
-                                  if (!isSelectMode) {
+                                  // iOS Web版以外なら長押しで選択モード開始
+                                  if (!isSelectMode && !isIOSWeb) {
                                     setIsSelectMode(true);
                                     setSelectedPhotoIds([photoObj.id]);
                                   }
                                 }}
                               >
                                 <Image source={{ uri: photoObj.uri }} style={styles.photo} resizeMode="cover" />
-                                {isSelectMode && (
+                                {isSelectMode && !isIOSWeb && (
                                   <View style={styles.checkOverlay}>
                                     <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={28} color={isSelected ? COLORS.primary : "rgba(255,255,255,0.7)"} />
                                   </View>
@@ -717,7 +700,7 @@ export default function AlbumScreen() {
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {isSelectMode && (
+          {isSelectMode && !isIOSWeb && (
             <View style={styles.selectionBottomBar}>
               {role !== 'user' && (
                 <TouchableOpacity style={[styles.bottomActionBtn, { backgroundColor: '#FFF0F0', borderColor: COLORS.danger, borderWidth: 1 }]} onPress={handleBulkDelete}>
@@ -732,7 +715,7 @@ export default function AlbumScreen() {
             </View>
           )}
 
-          {!isSelectMode && (
+          {!isSelectMode && !isIOSWeb && (
             <TouchableOpacity style={styles.fab} onPress={() => setIsSelectMode(true)}>
               <Ionicons name="checkmark-done" size={28} color={COLORS.white} />
             </TouchableOpacity>
@@ -952,12 +935,25 @@ export default function AlbumScreen() {
           )}
 
           <View style={styles.fullScreenFooter}>
-            <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
-              <Ionicons name={Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent) ? "expand-outline" : "download-outline"} size={28} color={COLORS.white} />
-              <Text style={styles.fullScreenActionText}>
-                {Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent) ? '長押し保存' : '保存'}
-              </Text>
-            </TouchableOpacity>
+            {isIOSWeb ? (
+              // ★ iOS Web版のみ：ボタンではなくメッセージを表示
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>
+                  画像をなが押しして保存
+                </Text>
+                <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
+                  <Ionicons name="expand-outline" size={24} color={COLORS.white} />
+                  <Text style={styles.fullScreenActionText}>全画面で表示</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Android / アプリ版：通常の保存ボタン
+              <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
+                <Ionicons name="download-outline" size={28} color={COLORS.white} />
+                <Text style={styles.fullScreenActionText}>保存</Text>
+              </TouchableOpacity>
+            )}
+
             {role !== 'user' && currentFullScreenPhoto && (
               <TouchableOpacity style={styles.fullScreenActionBtn} onPress={async () => {
                 if (Platform.OS === 'web') {
