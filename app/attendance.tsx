@@ -604,12 +604,22 @@ export default function AttendanceScreen() {
                 <Text style={styles.modalMainTitle}>{schoolModalData.title}</Text>
                 <ScrollView style={styles.modalList}>
                   {schoolModalData.kids.map(kid => (
-                    <TouchableOpacity key={kid.id} style={styles.modalListItem} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
-                      <Ionicons name="person" size={16} color={COLORS.primary} />
-                      <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
-                      <Text style={styles.modalItemSub}>{kid.grade}</Text>
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
-                    </TouchableOpacity>
+                    <View key={kid.id} style={styles.modalListItem}>
+                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                        <Ionicons name="person" size={16} color={COLORS.primary} />
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                        <Text style={styles.modalItemSub}>{kid.grade}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
+                      </TouchableOpacity>
+                      {isAdmin && kid.parentDocId && (
+                        <TouchableOpacity
+                          style={styles.msgIconBtn}
+                          onPress={() => { setSchoolModalData(null); router.push({ pathname: '/messages', params: { conversationId: `direct_${kid.parentDocId}`, conversationName: kid.name } } as any); }}
+                        >
+                          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   ))}
                 </ScrollView>
               </>
@@ -632,12 +642,22 @@ export default function AttendanceScreen() {
                 <Text style={styles.modalMainTitle}>{timeModalData.subtitle}</Text>
                 <ScrollView style={styles.modalList}>
                   {timeModalData.kids.map(kid => (
-                    <TouchableOpacity key={kid.id} style={styles.modalListItem} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
-                      <Ionicons name="time" size={16} color={COLORS.info} />
-                      <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
-                      <Text style={styles.modalItemSub}>{kid.grade}</Text>
-                      <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
-                    </TouchableOpacity>
+                    <View key={kid.id} style={styles.modalListItem}>
+                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                        <Ionicons name="time" size={16} color={COLORS.info} />
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                        <Text style={styles.modalItemSub}>{kid.grade}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
+                      </TouchableOpacity>
+                      {isAdmin && kid.parentDocId && (
+                        <TouchableOpacity
+                          style={styles.msgIconBtn}
+                          onPress={() => { setTimeModalData(null); router.push({ pathname: '/messages', params: { conversationId: `direct_${kid.parentDocId}`, conversationName: kid.name } } as any); }}
+                        >
+                          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   ))}
                 </ScrollView>
               </>

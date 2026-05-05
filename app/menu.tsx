@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image, ImageSourcePropType, Modal,
@@ -46,7 +46,7 @@ const hashPassword = (password: string) => Crypto.SHA256(password).toString();
 
 // ── メニューカード ──
 function MenuCard({
-  image, title, subtitle, bgColor, onPress, animValue,
+  image, title, subtitle, bgColor, onPress, animValue, badge,
 }: {
   image: ImageSourcePropType;
   title: string;
@@ -54,6 +54,7 @@ function MenuCard({
   bgColor: string;
   onPress: () => void;
   animValue: Animated.Value;
+  badge?: number;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () =>
@@ -71,6 +72,11 @@ function MenuCard({
     }]}>
       <TouchableWithoutFeedback onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
         <Animated.View style={[styles.card, { backgroundColor: bgColor, transform: [{ scale }] }]}>
+          {badge != null && badge > 0 && (
+            <View style={styles.badgeWrap}>
+              <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+            </View>
+          )}
           <Image source={image} style={styles.cardImage} resizeMode="contain" />
           <View style={styles.cardLabelWrap}>
             <Text style={styles.cardTitle}>{title}</Text>
@@ -134,10 +140,28 @@ export default function MenuScreen() {
   const [passwordModal, setPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
+
+  // 未読メッセージ数を購読
+  useEffect(() => {
+    let accountId = '';
+    AsyncStorage.getItem('loggedInUser').then(raw => {
+      if (!raw) return;
+      const user = JSON.parse(raw);
+      accountId = user.accountId || (user.role === 'admin' ? 'admin' : '');
+      if (!accountId) return;
+      const unsub = onSnapshot(collection(db, 'conversations'), snap => {
+        const count = snap.docs.filter(d => (d.data().unreadFor || []).includes(accountId)).length;
+        setUnreadCount(count);
+      });
+      return unsub;
+    });
+  }, []);
 
   useEffect(() => {
     // フワフワアニメーション
@@ -300,6 +324,7 @@ export default function MenuScreen() {
                   image={ANIMALS.koala} title="メッセージ" subtitle="先生に連絡" bgColor="#C9AADF"
                   onPress={() => router.push('/messages' as any)}
                   animValue={cardAnims[3]}
+                  badge={unreadCount}
                 />
               </View>
             </>
@@ -352,6 +377,7 @@ export default function MenuScreen() {
                       image={ANIMALS.koala} title="メッセージ" subtitle="管理者に連絡" bgColor="#C9AADF"
                       onPress={() => router.push('/messages' as any)}
                       animValue={cardAnims[5]}
+                      badge={unreadCount}
                     />
                 }
               </View>
@@ -361,6 +387,7 @@ export default function MenuScreen() {
                     image={ANIMALS.koala} title="メッセージ" subtitle="利用者・スタッフと連絡" bgColor="#C9AADF"
                     onPress={() => router.push('/messages' as any)}
                     animValue={cardAnims[6]}
+                    badge={unreadCount}
                   />
                   <View style={{ flex: 1 }} />
                 </View>
@@ -406,6 +433,10 @@ export default function MenuScreen() {
                   <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); customAlert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。'); }}>
                     <Text style={styles.drawerIcon}>⏱️</Text>
                     <Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/schedule-changes' as any); }}>
+                    <Text style={styles.drawerIcon}>📝</Text>
+                    <Text style={styles.drawerItemText}>スケジュール変更履歴</Text>
                   </TouchableOpacity>
                   <View style={{ height: 1, backgroundColor: '#E8DDD0', marginVertical: 16 }} />
                 </>
@@ -549,6 +580,14 @@ const styles = StyleSheet.create({
   cardLabelWrap: { width: '100%', alignItems: 'center', paddingBottom: 2 },
   cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#5D4037', textAlign: 'center' },
   cardSubtitle: { fontSize: 11, color: '#8D6E63', textAlign: 'center', marginTop: 2 },
+  badgeWrap: {
+    position: 'absolute', top: 8, right: 8, zIndex: 10,
+    minWidth: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#E74C3C',
+    justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  badgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 
   // ── ドロワー ──
   drawerOverlay: {

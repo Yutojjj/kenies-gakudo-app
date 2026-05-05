@@ -1,7 +1,21 @@
 import { Stack } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
+
+// ピンチズームを無効化（iOS/Androidのように操作しやすくする）
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const meta = document.querySelector('meta[name="viewport"]');
+  const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+  if (meta) {
+    meta.setAttribute('content', content);
+  } else {
+    const m = document.createElement('meta');
+    m.name = 'viewport';
+    m.content = content;
+    document.head.appendChild(m);
+  }
+}
 
 export default function RootLayout() {
   return (
@@ -30,6 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="shift" />
           <Stack.Screen name="event-management" />
           <Stack.Screen name="messages" />
+          <Stack.Screen name="schedule-changes" />
         </Stack>
       </SafeAreaView>
     </SafeAreaProvider>

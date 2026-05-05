@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -84,6 +85,13 @@ export default function ScheduleScreen() {
   const [newLessonName, setNewLessonName] = useState('');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [returnToEdit, setReturnToEdit] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<{ name: string; accountId?: string; role: string } | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('loggedInUser').then(raw => {
+      if (raw) setLoggedInUser(JSON.parse(raw));
+    });
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -280,23 +288,79 @@ export default function ScheduleScreen() {
     ]);
   };
 
+  const buildChangeDesc = (data: Partial<DailyData>, current: Partial<DailyData>): string | null => {
+    if (data.pickupTime !== undefined) {
+      return data.pickupTime === null ? 'お迎え時間を削除' : `お迎え時間を${data.pickupTime}に設定`;
+    }
+    if (data.lessons !== undefined) {
+      const oldL = current.lessons || [];
+      const newL = data.lessons || [];
+      if (newL.length > oldL.length) {
+        const added = newL.find(n => !oldL.find(o => o.id === n.id));
+        return added ? `習い事「${added.name}」を追加(${added.time})` : '習い事を追加';
+      }
+      if (newL.length < oldL.length) {
+        const removed = oldL.find(o => !newL.find(n => n.id === o.id));
+        return removed ? `習い事「${removed.name}」を削除` : '習い事を削除';
+      }
+      return '習い事を変更';
+    }
+    return null;
+  };
+
   const saveToFirestore = async (dateStr: string, data: Partial<DailyData>) => {
     const child = children[activeChildIdx];
     if (!child) return;
     const docId = `${child.id}_${dateStr}`;
-    
-    setScheduleData(prev => {
-      const current = prev[docId] || {};
-      return { ...prev, [docId]: { ...current, ...data } };
-    });
+    const current = scheduleData[docId] || {};
+
+    setScheduleData(prev => ({ ...prev, [docId]: { ...(prev[docId] || {}), ...data } }));
 
     try {
       const saveData: any = { parentId: parentDocId, childId: child.id, dateStr, updatedAt: new Date() };
-      
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
-
       await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
+
+      // 管理者以外の操作のみログ記録
+      if (loggedInUser && loggedInUser.role !== 'admin') {
+        const desc = buildChangeDesc(data, current);
+        if (desc) {
+          await addDoc(collection(db, 'scheduleChanges'), {
+            date: dateStr,
+            userId: parentDocId,
+            userName: loggedInUser.name,
+            childName: child.name,
+            description: desc,
+            changedAt: serverTimestamp(),
+          });
+
+          // 変更日が今日を含む3日以内なら管理者へ通知
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const changeDay = new Date(dateStr); changeDay.setHours(0, 0, 0, 0);
+          const diffDays = Math.round((changeDay.getTime() - today.getTime()) / 86400000);
+          if (diffDays >= 0 && diffDays <= 2) {
+            const adminTokenDoc = await getDoc(doc(db, 'fcm_tokens', 'admin'));
+            if (adminTokenDoc.exists()) {
+              const token = adminTokenDoc.data().token;
+              if (token) {
+                const d = new Date(dateStr);
+                const label = `${d.getMonth() + 1}月${d.getDate()}日`;
+                fetch('/api/send-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tokens: [token],
+                    title: `${loggedInUser.name}さんがスケジュールを変更`,
+                    body: `${label} ${child.name}: ${desc}`,
+                    url: '/schedule-changes',
+                  }),
+                }).catch(() => {});
+              }
+            }
+          }
+        }
+      }
     } catch (e) {
       customAlert('エラー', 'データの保存に失敗しました');
     }

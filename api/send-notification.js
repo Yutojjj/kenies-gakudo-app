@@ -30,7 +30,7 @@ async function getAccessToken(serviceAccount) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { tokens, title, body } = req.body ?? {};
+  const { tokens, title, body, url } = req.body ?? {};
   if (!tokens?.length) return res.status(200).json({ sent: 0 });
 
   const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -51,7 +51,9 @@ export default async function handler(req, res) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            message: { token, notification: { title, body } },
+            // notification フィールドを使うとブラウザが自動表示 + SW が手動表示 → 二重になる
+            // data-only にすることで SW の onBackgroundMessage のみが通知を表示する
+            message: { token, data: { title, body, url: req.body.url || '/messages' } },
           }),
         })
       )

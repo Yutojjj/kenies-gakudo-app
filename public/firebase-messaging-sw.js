@@ -12,13 +12,37 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// バックグラウンド受信（data-onlyメッセージのため自動表示されない→手動でshowNotification）
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'ケーニーズ学童';
-  const body = payload.notification?.body || '';
+  const data = payload.data || {};
+  const title = data.title || 'ケーニーズ学童';
+  const body  = data.body  || '';
+  const url   = data.url   || '/messages';
+
   self.registration.showNotification(title, {
     body,
-    icon: '/icon-192.png',
+    icon:  '/icon-192.png',
     badge: '/icon-192.png',
-    tag: 'kenies-message',
+    tag:   `kenies-${Date.now()}`,
+    data:  { url },
   });
+});
+
+// 通知タップ → 該当画面へ遷移
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/messages';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client) client.navigate(url);
+          return;
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc, arrayRemove, collection, doc, getDocs,
   getDoc, onSnapshot, orderBy, query, serverTimestamp, setDoc, limit,
-  where,
+  updateDoc, where,
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -28,6 +28,11 @@ type Message = {
 const STAFF_GROUP_ID = 'staff_group';
 const ADMIN_ID = 'admin';
 
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+
 function relTime(ts: any) {
   if (!ts?.toDate) return '';
   const d: Date = ts.toDate();
@@ -44,18 +49,22 @@ function msgTime(ts: any) {
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-// accountIdが保存されていない古いセッション用フォールバック
+function fmtDuration(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 async function resolveAccountId(user: UserInfo): Promise<string> {
   if (user.accountId) return user.accountId;
   if (user.role === 'admin') return ADMIN_ID;
-  // Firestoreから名前で検索
   try {
     const snap = await getDocs(query(collection(db, 'accounts'), where('name', '==', user.name)));
     if (!snap.empty) return snap.docs[0].id;
   } catch (e) {
     console.warn('accountId lookup failed', e);
   }
-  return user.name; // 最終フォールバック
+  return user.name;
 }
 
 async function setupFCMToken(accountId: string) {
@@ -72,12 +81,14 @@ async function setupFCMToken(accountId: string) {
     if (token) {
       await setDoc(doc(db, 'fcm_tokens', accountId), { token, updatedAt: new Date() });
     }
-  } catch (e) {
-    // 通知権限がなくてもメッセージは使える
-  }
+  } catch (e) { /* 通知権限がなくてもメッセージは使える */ }
 }
 
-async function pushNotify(convId: string, convType: string, senderAccountId: string, senderName: string, text: string) {
+async function pushNotify(
+  convId: string, convType: string,
+  senderAccountId: string, senderName: string,
+  text: string, url = '/messages'
+) {
   if (Platform.OS !== 'web') return;
   try {
     let recipientIds: string[] = [];
@@ -90,15 +101,23 @@ async function pushNotify(convId: string, convType: string, senderAccountId: str
       recipientIds = parts.filter(id => id !== senderAccountId);
     }
     if (!recipientIds.length) return;
-    const tokenDocs = await Promise.all(recipientIds.slice(0, 10).map(id => getDoc(doc(db, 'fcm_tokens', id))));
+    const tokenDocs = await Promise.all(
+      recipientIds.slice(0, 10).map(id => getDoc(doc(db, 'fcm_tokens', id)))
+    );
     const tokens = tokenDocs.filter(d => d.exists()).map(d => d.data()!.token).filter(Boolean);
     if (!tokens.length) return;
     await fetch('/api/send-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tokens, title: `${senderName}からメッセージ`, body: text }),
+      body: JSON.stringify({ tokens, title: `${senderName}からメッセージ`, body: text, url }),
     });
   } catch (e) { /* 通知失敗は無視 */ }
+}
+
+// ── WebRTC ヘルパー（web 専用） ──
+function createPC(): any {
+  if (typeof window === 'undefined') return null;
+  return new (window as any).RTCPeerConnection({ iceServers: ICE_SERVERS });
 }
 
 export default function MessagesScreen() {
@@ -113,18 +132,27 @@ export default function MessagesScreen() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  // ── 通話状態 ──
+  type CallStatus = 'idle' | 'calling' | 'receiving' | 'connected';
+  const [callStatus, setCallStatus] = useState<CallStatus>('idle');
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ id: string; callerName: string } | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const peerRef = useRef<any>(null);
+  const localStreamRef = useRef<any>(null);
+  const remoteAudioRef = useRef<any>(null);
+  const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const unsubMsgsRef = useRef<(() => void) | null>(null);
+  const unsubCallRef = useRef<(() => void) | null>(null);
 
-  // ユーザー情報の読み込みとaccountId解決
+  // ── ユーザー解決 ──
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(async raw => {
-      if (!raw) {
-        setError('ログインが必要です');
-        setLoading(false);
-        return;
-      }
+      if (!raw) { setError('ログインが必要です'); setLoading(false); return; }
       const user: UserInfo = JSON.parse(raw);
       const accountId = await resolveAccountId(user);
       setResolvedUser({ ...user, accountId });
@@ -134,16 +162,32 @@ export default function MessagesScreen() {
     });
   }, []);
 
-  // FCMトークン登録
   useEffect(() => {
     if (resolvedUser) setupFCMToken(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
 
-  // メッセージ画面のセットアップ
+  // ── 着信リスナー ──
+  useEffect(() => {
+    if (!resolvedUser || Platform.OS !== 'web') return;
+    const q = query(
+      collection(db, 'calls'),
+      where('calleeId', '==', resolvedUser.accountId),
+      where('status', '==', 'calling')
+    );
+    const unsub = onSnapshot(q, snap => {
+      if (!snap.empty && callStatus === 'idle') {
+        const d = snap.docs[0];
+        setIncomingCall({ id: d.id, callerName: d.data().callerName });
+        setCallStatus('receiving');
+      }
+    });
+    return unsub;
+  }, [resolvedUser?.accountId, callStatus]);
+
+  // ── メッセージ/会話セットアップ ──
   useEffect(() => {
     if (!resolvedUser) return;
 
-    // 出欠画面などから直接遷移してきた場合（管理者→利用者への直接メッセージ）
     if (params.conversationId) {
       const conv: ConvDoc = {
         id: params.conversationId, type: 'direct',
@@ -159,7 +203,6 @@ export default function MessagesScreen() {
     }
 
     if (resolvedUser.role === 'admin') {
-      // 管理者：全会話リストを表示
       const unsub = onSnapshot(
         collection(db, 'conversations'),
         snap => {
@@ -172,39 +215,32 @@ export default function MessagesScreen() {
           setConversations(convs);
           setLoading(false);
         },
-        err => {
-          console.error('Conversations fetch error:', err);
-          setLoading(false);
-        }
+        () => setLoading(false)
       );
       return unsub;
     }
 
-    // スタッフ・利用者：自分の会話に直接入る
     const convId = resolvedUser.role === 'staff' ? STAFF_GROUP_ID : `direct_${resolvedUser.accountId}`;
     const convData: ConvDoc = resolvedUser.role === 'staff'
       ? { id: convId, type: 'group', name: 'スタッフグループ' }
       : { id: convId, type: 'direct', name: resolvedUser.name };
 
     setDoc(doc(db, 'conversations', convId), {
-      type: convData.type,
-      name: convData.name,
+      type: convData.type, name: convData.name,
       participants: [ADMIN_ID, resolvedUser.accountId],
     }, { merge: true })
-      .then(() => { openChat(convData); })
-      .catch(() => { openChat(convData); }) // エラーでもチャット画面は開く
-      .finally(() => { setLoading(false); });
+      .then(() => openChat(convData))
+      .catch(() => openChat(convData))
+      .finally(() => setLoading(false));
   }, [resolvedUser]);
 
   const openChat = (conv: ConvDoc) => {
     setActiveConv(conv);
     setView('chat');
     unsubMsgsRef.current?.();
-
     const q = query(
       collection(db, 'conversations', conv.id, 'messages'),
-      orderBy('createdAt', 'asc'),
-      limit(100),
+      orderBy('createdAt', 'asc'), limit(100),
     );
     unsubMsgsRef.current = onSnapshot(q,
       snap => {
@@ -215,7 +251,6 @@ export default function MessagesScreen() {
     );
   };
 
-  // チャット開いたら既読にする
   useEffect(() => {
     if (!resolvedUser || !activeConv) return;
     setDoc(doc(db, 'conversations', activeConv.id), {
@@ -223,12 +258,20 @@ export default function MessagesScreen() {
     }, { merge: true }).catch(() => {});
   }, [activeConv?.id, resolvedUser?.accountId]);
 
-  useEffect(() => () => { unsubMsgsRef.current?.(); }, []);
+  useEffect(() => () => {
+    unsubMsgsRef.current?.();
+    unsubCallRef.current?.();
+    callTimerRef.current && clearInterval(callTimerRef.current);
+    peerRef.current?.close();
+    localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
+  }, []);
 
+  // ── メッセージ送信 ──
   const sendMessage = async () => {
-    if (!inputText.trim() || !activeConv || !resolvedUser) return;
+    if (!inputText.trim() || !activeConv || !resolvedUser || isSending) return;
     const text = inputText.trim();
     setInputText('');
+    setIsSending(true);
     try {
       let participants: string[];
       if (activeConv.type === 'group') {
@@ -241,37 +284,244 @@ export default function MessagesScreen() {
       const unreadFor = participants.filter(id => id !== resolvedUser.accountId);
 
       await addDoc(collection(db, 'conversations', activeConv.id, 'messages'), {
-        senderId: resolvedUser.accountId,
-        senderName: resolvedUser.name,
-        text,
-        createdAt: serverTimestamp(),
+        senderId: resolvedUser.accountId, senderName: resolvedUser.name,
+        text, createdAt: serverTimestamp(),
       });
-
       await setDoc(doc(db, 'conversations', activeConv.id), {
-        lastMessage: text,
-        lastMessageAt: serverTimestamp(),
-        unreadFor,
-        type: activeConv.type || 'direct',
-        name: activeConv.name,
+        lastMessage: text, lastMessageAt: serverTimestamp(),
+        unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
       }, { merge: true });
-
       pushNotify(activeConv.id, activeConv.type, resolvedUser.accountId, resolvedUser.name, text);
     } catch (e) {
       console.error('Send failed:', e);
+    } finally {
+      setIsSending(false);
     }
+  };
+
+  // ── 通話処理 ──
+  const startCallTimer = () => {
+    callTimerRef.current && clearInterval(callTimerRef.current);
+    setCallDuration(0);
+    callTimerRef.current = setInterval(() => setCallDuration(p => p + 1), 1000);
+  };
+
+  const cleanupCall = () => {
+    callTimerRef.current && clearInterval(callTimerRef.current);
+    callTimerRef.current = null;
+    unsubCallRef.current?.();
+    unsubCallRef.current = null;
+    peerRef.current?.close();
+    peerRef.current = null;
+    localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
+    localStreamRef.current = null;
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+      remoteAudioRef.current = null;
+    }
+    setCallStatus('idle');
+    setActiveCallId(null);
+    setIncomingCall(null);
+    setCallDuration(0);
+  };
+
+  const endCall = async (callId?: string) => {
+    const id = callId || activeCallId;
+    if (id) await setDoc(doc(db, 'calls', id), { status: 'ended' }, { merge: true }).catch(() => {});
+    cleanupCall();
+  };
+
+  const startCall = async () => {
+    if (!resolvedUser || !activeConv || activeConv.type !== 'direct' || Platform.OS !== 'web') return;
+    const calleeId = activeConv.id.replace('direct_', '');
+    try {
+      const pc = createPC();
+      if (!pc) return;
+      peerRef.current = pc;
+
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
+
+      const callRef = doc(collection(db, 'calls'));
+      setActiveCallId(callRef.id);
+      setCallStatus('calling');
+
+      pc.onicecandidate = (e: any) => {
+        if (e.candidate) addDoc(collection(db, 'calls', callRef.id, 'callerCandidates'), e.candidate.toJSON()).catch(() => {});
+      };
+      pc.ontrack = (e: any) => {
+        if (!remoteAudioRef.current) {
+          const audio = new (window as any).Audio();
+          audio.autoplay = true;
+          remoteAudioRef.current = audio;
+        }
+        remoteAudioRef.current.srcObject = e.streams[0];
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      await setDoc(callRef, {
+        callerId: resolvedUser.accountId, callerName: resolvedUser.name,
+        calleeId, calleeName: activeConv.name,
+        status: 'calling', sdpOffer: JSON.stringify(offer),
+        createdAt: serverTimestamp(),
+      });
+
+      // 相手のICE候補を受信
+      onSnapshot(collection(db, 'calls', callRef.id, 'calleeCandidates'), snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'added') pc.addIceCandidate(new (window as any).RTCIceCandidate(ch.doc.data())).catch(() => {});
+        });
+      });
+
+      // 応答 & ステータス監視
+      unsubCallRef.current = onSnapshot(doc(db, 'calls', callRef.id), async snap => {
+        const d = snap.data();
+        if (!d) return;
+        if (d.sdpAnswer && !pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(new (window as any).RTCSessionDescription(JSON.parse(d.sdpAnswer)));
+          setCallStatus('connected');
+          startCallTimer();
+        }
+        if (d.status === 'ended' || d.status === 'rejected') endCall(callRef.id);
+      });
+
+      // 相手へプッシュ通知
+      const calleeToken = await getDoc(doc(db, 'fcm_tokens', calleeId));
+      if (calleeToken.exists()) {
+        const token = calleeToken.data().token;
+        if (token) fetch('/api/send-notification', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokens: [token],
+            title: `${resolvedUser.name}から着信`,
+            body: 'メッセージ画面を開いて応答してください',
+            url: '/messages',
+          }),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      cleanupCall();
+      alert('マイクへのアクセスが許可されていません。ブラウザの設定を確認してください。');
+    }
+  };
+
+  const acceptCall = async () => {
+    if (!incomingCall || !resolvedUser || Platform.OS !== 'web') return;
+    const callId = incomingCall.id;
+    try {
+      const callSnap = await getDoc(doc(db, 'calls', callId));
+      if (!callSnap.exists()) return;
+      const callData = callSnap.data();
+
+      const pc = createPC();
+      if (!pc) return;
+      peerRef.current = pc;
+
+      const stream = await (navigator as any).mediaDevices.getUserMedia({ audio: true, video: false });
+      localStreamRef.current = stream;
+      stream.getTracks().forEach((t: any) => pc.addTrack(t, stream));
+
+      pc.ontrack = (e: any) => {
+        if (!remoteAudioRef.current) {
+          const audio = new (window as any).Audio();
+          audio.autoplay = true;
+          remoteAudioRef.current = audio;
+        }
+        remoteAudioRef.current.srcObject = e.streams[0];
+      };
+      pc.onicecandidate = (e: any) => {
+        if (e.candidate) addDoc(collection(db, 'calls', callId, 'calleeCandidates'), e.candidate.toJSON()).catch(() => {});
+      };
+
+      await pc.setRemoteDescription(new (window as any).RTCSessionDescription(JSON.parse(callData.sdpOffer)));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      await updateDoc(doc(db, 'calls', callId), { sdpAnswer: JSON.stringify(answer), status: 'connected' });
+
+      onSnapshot(collection(db, 'calls', callId, 'callerCandidates'), snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'added') pc.addIceCandidate(new (window as any).RTCIceCandidate(ch.doc.data())).catch(() => {});
+        });
+      });
+
+      setActiveCallId(callId);
+      setCallStatus('connected');
+      setIncomingCall(null);
+      startCallTimer();
+    } catch (e) {
+      cleanupCall();
+      alert('通話の開始に失敗しました。マイクのアクセスを確認してください。');
+    }
+  };
+
+  const rejectCall = async () => {
+    if (!incomingCall) return;
+    await updateDoc(doc(db, 'calls', incomingCall.id), { status: 'rejected' }).catch(() => {});
+    setCallStatus('idle');
+    setIncomingCall(null);
   };
 
   const goBack = () => {
     if (view === 'chat' && resolvedUser?.role === 'admin' && !params.conversationId) {
-      unsubMsgsRef.current?.();
-      unsubMsgsRef.current = null;
-      setView('list');
-      setActiveConv(null);
-      setMessages([]);
+      unsubMsgsRef.current?.(); unsubMsgsRef.current = null;
+      setView('list'); setActiveConv(null); setMessages([]);
     } else {
       router.back();
     }
   };
+
+  // ── 通話オーバーレイ ──
+  const callOverlay = callStatus !== 'idle' && (
+    <View style={styles.callOverlay}>
+      <View style={styles.callBox}>
+        {callStatus === 'receiving' && incomingCall ? (
+          <>
+            <View style={styles.callAvatar}>
+              <Text style={styles.callAvatarText}>{(incomingCall.callerName || '?')[0]}</Text>
+            </View>
+            <Text style={styles.callName}>{incomingCall.callerName}</Text>
+            <Text style={styles.callStatusText}>着信中...</Text>
+            <View style={styles.callBtns}>
+              <TouchableOpacity style={styles.rejectBtn} onPress={rejectCall}>
+                <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.acceptBtn} onPress={acceptCall}>
+                <Ionicons name="call" size={28} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : callStatus === 'calling' ? (
+          <>
+            <View style={styles.callAvatar}>
+              <Text style={styles.callAvatarText}>{(activeConv?.name || '?')[0]}</Text>
+            </View>
+            <Text style={styles.callName}>{activeConv?.name}</Text>
+            <Text style={styles.callStatusText}>呼び出し中...</Text>
+            <TouchableOpacity style={styles.hangupBtn} onPress={() => endCall()}>
+              <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <View style={[styles.callAvatar, { backgroundColor: '#4CAF50' }]}>
+              <Ionicons name="call" size={28} color="#fff" />
+            </View>
+            <Text style={styles.callName}>
+              {incomingCall?.callerName || activeConv?.name}
+            </Text>
+            <Text style={styles.callStatusText}>{fmtDuration(callDuration)}</Text>
+            <TouchableOpacity style={styles.hangupBtn} onPress={() => endCall()}>
+              <Ionicons name="call" size={28} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </View>
+  );
 
   // ── ローディング ──
   if (loading) {
@@ -317,13 +567,13 @@ export default function MessagesScreen() {
     const hasUnread = (conv: ConvDoc) => (conv.unreadFor || []).includes(ADMIN_ID);
     return (
       <SafeAreaView style={styles.container}>
+        {callOverlay}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>
         </View>
-
         <ScrollView style={{ flex: 1 }}>
           {conversations.length === 0 && (
             <View style={styles.centerBox}>
@@ -366,8 +616,11 @@ export default function MessagesScreen() {
   }
 
   // ── チャット画面 ──
+  const canCall = Platform.OS === 'web' && activeConv?.type === 'direct';
   return (
     <SafeAreaView style={styles.container}>
+      {callOverlay}
+
       {/* ヘッダー */}
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
@@ -380,9 +633,13 @@ export default function MessagesScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {activeConv?.name || 'チャット'}
         </Text>
+        {canCall && callStatus === 'idle' && (
+          <TouchableOpacity style={styles.callHeaderBtn} onPress={startCall}>
+            <Ionicons name="call" size={20} color="#5D4037" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* メッセージエリア + 入力欄 */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -434,9 +691,9 @@ export default function MessagesScreen() {
             maxLength={500}
           />
           <TouchableOpacity
-            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+            style={[styles.sendBtn, (!inputText.trim() || isSending) && styles.sendBtnDisabled]}
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isSending}
           >
             <Ionicons name="send" size={20} color="#fff" />
           </TouchableOpacity>
@@ -456,6 +713,10 @@ const styles = StyleSheet.create({
   },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+  callHeaderBtn: {
+    padding: 8, marginLeft: 4,
+    backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20,
+  },
 
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   loadingText: { color: COLORS.textLight, marginTop: 12, fontSize: 14 },
@@ -469,13 +730,11 @@ const styles = StyleSheet.create({
   convRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 14, paddingHorizontal: 16,
-    borderBottomWidth: 1, borderColor: '#F0E4D0',
-    backgroundColor: '#fff',
+    borderBottomWidth: 1, borderColor: '#F0E4D0', backgroundColor: '#fff',
   },
   convAvatar: {
     width: 46, height: 46, borderRadius: 23,
-    backgroundColor: '#87CEEB',
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
+    backgroundColor: '#87CEEB', justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
   convAvatarGroup: { backgroundColor: '#B8DF78' },
   convBody: { flex: 1 },
@@ -494,8 +753,7 @@ const styles = StyleSheet.create({
   msgRowOther: { justifyContent: 'flex-start' },
   msgAvatar: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#87CEEB',
-    justifyContent: 'center', alignItems: 'center', marginRight: 8,
+    backgroundColor: '#87CEEB', justifyContent: 'center', alignItems: 'center', marginRight: 8,
   },
   msgAvatarText: { fontSize: 12, color: '#fff', fontWeight: 'bold' },
   bubble: {
@@ -514,21 +772,48 @@ const styles = StyleSheet.create({
   inputArea: {
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderTopWidth: 1, borderColor: '#F0E4D0',
-    minHeight: 64,
+    backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#F0E4D0', minHeight: 64,
   },
   textInput: {
     flex: 1, backgroundColor: '#F8F4EE',
     borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 15, maxHeight: 120,
-    borderWidth: 1, borderColor: '#E8DDD0',
-    color: '#333',
+    fontSize: 15, maxHeight: 120, borderWidth: 1, borderColor: '#E8DDD0', color: '#333',
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center', marginLeft: 8,
+    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginLeft: 8,
   },
   sendBtnDisabled: { opacity: 0.4 },
+
+  // 通話オーバーレイ
+  callOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 200,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  callBox: {
+    width: 280, backgroundColor: '#1C1C2E', borderRadius: 24,
+    padding: 32, alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20, elevation: 20,
+  },
+  callAvatar: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#87CEEB', justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+  },
+  callAvatarText: { fontSize: 28, color: '#fff', fontWeight: 'bold' },
+  callName: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 8, textAlign: 'center' },
+  callStatusText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 32 },
+  callBtns: { flexDirection: 'row', gap: 32 },
+  acceptBtn: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: '#4CAF50', justifyContent: 'center', alignItems: 'center',
+  },
+  rejectBtn: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: '#E53935', justifyContent: 'center', alignItems: 'center',
+  },
+  hangupBtn: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: '#E53935', justifyContent: 'center', alignItems: 'center',
+  },
 });
