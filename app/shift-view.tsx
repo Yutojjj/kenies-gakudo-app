@@ -21,7 +21,6 @@ export default function ShiftViewScreen() {
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
 
-  // ★ ① 修正: 初期の表示を「全体」にするため false に変更
   const [showOnlyMine, setShowOnlyMine] = useState(false);
 
   useEffect(() => {
@@ -95,21 +94,22 @@ export default function ShiftViewScreen() {
         const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
         const color = (d === 0 || isPublicHoliday) ? 'red' : d === 6 ? 'blue' : '#000';
         const bg = (d === 0 || isPublicHoliday) ? '#FFE4E1' : d === 6 ? '#E0FFFF' : '#E8F5E9';
-        thDates += `<th style="background:${bg}; color:${color}; border:1px solid #333; width: 60px;">${i}</th>`;
+        // 幅指定を%にして自動調整
+        thDates += `<th style="background:${bg}; color:${color}; border:1px solid #333; width:3%;">${i}</th>`;
       }
 
       const staffToExport = showOnlyMine ? allStaff.filter(s => s.name === name) : allStaff;
       let staffRows = '';
       staffToExport.forEach(staff => {
-        let rowHtml = `<tr><th style="background:#FFC0CB; border:1px solid #333; text-align:center; padding: 4px; white-space: nowrap;">${staff.name}</th>`;
+        let rowHtml = `<tr class="staff-row"><th style="background:#FFC0CB; border:1px solid #333; text-align:center; white-space:nowrap; width:6%; padding:2px;">${staff.name}</th>`;
         for (let i = 1; i <= daysInMonth; i++) {
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
           const assigned = assignedShifts[dateStr]?.find(s => s.name === staff.name);
           const req = requests[`${staff.name}_${dateStr}`];
           if (assigned) {
-            rowHtml += `<td style="background:#FFD700; border:1px solid #333; font-weight:bold; font-size:10px;">${assigned.start}<br>-${assigned.end}</td>`;
+            rowHtml += `<td style="background:#FFD700; border:1px solid #333; font-weight:bold;">${assigned.start}<br>-${assigned.end}</td>`;
           } else if (req && req.includes('✕')) {
-            rowHtml += `<td style="background:#D3D3D3; border:1px solid #333; color:#333; font-size:12px;">✕</td>`;
+            rowHtml += `<td style="background:#D3D3D3; border:1px solid #333; color:#333;">✕</td>`;
           } else {
             rowHtml += `<td style="border:1px solid #333; background:#FFF;"></td>`;
           }
@@ -118,22 +118,44 @@ export default function ShiftViewScreen() {
         staffRows += rowHtml;
       });
 
+      // HTML/CSS設定: カラー強制反映＆A4完全フィット
       const html = `
         <html><head><style>
-          @page { size: A4 landscape; margin: 10mm; }
-          body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 0; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; text-align: center; }
-          th, td { height: 36px; word-wrap: break-word; }
-          .top-header td { border: 1px solid #333; font-weight: bold; font-size: 18px; text-align: center; }
+          /* 1. インク節約設定を無視して色を完全に出力する */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          /* 2. 余白を小さくし、A4横に設定 */
+          @page { size: A4 landscape; margin: 5mm; }
+          
+          /* 3. A4一枚に絶対収めるためのコンテナ設定 */
+          html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            font-family: sans-serif; box-sizing: border-box; overflow: hidden;
+          }
+          /* 表全体の高さを100%にすることで、人数が増えても自動で1枚に縮小される */
+          table {
+            width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; text-align: center;
+          }
+          th, td {
+            border: 1px solid #333; word-wrap: break-word; padding: 1px; line-height: 1.1; overflow: hidden;
+          }
+          .top-header td {
+            font-weight: bold; font-size: 14px; text-align: center; height: 24px; border: 1px solid #333;
+          }
+          .date-row th { font-size: 10px; height: 20px; }
+          .staff-row td { font-size: 8px; }
+          .staff-row th { font-size: 9px; }
         </style></head><body>
           <table>
-            <tr class="top-header" style="height: 40px;">
+            <tr class="top-header">
               <td style="background:#B0C4DE;">シフト表</td>
               <td colspan="2" style="background:#E6E6FA;">${year}年</td>
-              <td colspan="3" style="background:#FFDAB9; font-size: 24px;">${month}月</td>
-              <td colspan="${daysInMonth - 6}" style="background:#F0F0F0; text-align: right; padding-right: 10px; font-size:12px; font-weight:normal;">出力日: ${new Date().toLocaleDateString('ja-JP')}</td>
+              <td colspan="4" style="background:#FFDAB9; font-size: 16px;">${month}月</td>
+              <td colspan="${daysInMonth - 6}" style="background:#F0F0F0; text-align: right; padding-right: 10px; font-size:10px; font-weight:normal;">出力日: ${new Date().toLocaleDateString('ja-JP')}</td>
             </tr>
-            <tr><th style="background:#FFF3E0; border:1px solid #333;">名前 \\ 日付</th>${thDates}</tr>
+            <tr class="date-row"><th style="background:#FFF3E0; border:1px solid #333;">名前 \\ 日付</th>${thDates}</tr>
             ${staffRows}
           </table>
         </body></html>
