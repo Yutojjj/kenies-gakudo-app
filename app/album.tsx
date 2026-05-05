@@ -7,11 +7,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Mode = 'top' | 'add' | 'view';
 type TabType = '月' | '火' | '水' | '木' | '金' | 'イベント';
@@ -69,6 +67,9 @@ export default function AlbumScreen() {
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
 
+  // ★ 画面の横幅と縦幅を正確に取得（高さ潰れ防止用）
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -110,6 +111,7 @@ export default function AlbumScreen() {
     }
   }).current;
 
+  // Androidのスクロールバグ回避用
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
       flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
@@ -868,9 +870,10 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      {/* ★ Androidの「真っ暗になる問題」＆「複数枚飛ぶ問題」を完全解決したビューア */}
+      {/* ★ レイアウト崩れ・真っ暗バグを完全解決したビューア */}
       <Modal visible={!!fullScreenPhotos} transparent animationType="fade">
-        <SafeAreaView style={styles.fullScreenContainer}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', width: windowWidth, height: windowHeight }}>
+          
           <View style={styles.fullScreenHeader}>
             <Text style={styles.fullScreenCounter}>{fullScreenIndex + 1} / {fullScreenPhotos?.length}</Text>
             <TouchableOpacity style={styles.fullScreenIconBtn} onPress={closeFullScreen}>
@@ -882,26 +885,24 @@ export default function AlbumScreen() {
             <>
               <FlatList
                 ref={flatListRef}
-                style={{ flex: 1 }}
                 data={fullScreenPhotos}
                 keyExtractor={(item) => item.id}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 initialScrollIndex={fullScreenIndex}
-                getItemLayout={(data, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+                getItemLayout={(data, index) => ({ length: windowWidth, offset: windowWidth * index, index })}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
                 onScrollToIndexFailed={onScrollToIndexFailed}
-                // ★ 以下の4つがAndroidのバグ回避の特効薬
-                removeClippedSubviews={false} // 真っ暗防止
-                snapToInterval={SCREEN_WIDTH} // ぴったり止める
+                removeClippedSubviews={false}
+                snapToInterval={windowWidth}
                 snapToAlignment="center"
                 decelerationRate="fast"
-                disableIntervalMomentum={true} // 勢いよくスワイプしても1枚しか進まない
+                disableIntervalMomentum={true}
                 renderItem={({ item }) => (
-                  <View style={{ width: SCREEN_WIDTH, flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <Image source={{ uri: item.uri }} style={styles.fullScreenImage} resizeMode="contain" />
+                  <View style={{ width: windowWidth, height: windowHeight, justifyContent: 'center', alignItems: 'center' }}>
+                    <Image source={{ uri: item.uri }} style={{ width: windowWidth, height: windowHeight }} resizeMode="contain" />
                   </View>
                 )}
               />
@@ -946,7 +947,7 @@ export default function AlbumScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -956,12 +957,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   uploadingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
-  
-  // ★ ヘッダーを「青いやつ」に完全復元
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
@@ -997,29 +995,13 @@ const styles = StyleSheet.create({
   noPhotoText: { color: COLORS.textLight, paddingHorizontal: 16, paddingVertical: 16, fontStyle: 'italic', fontSize: 14, textAlign: 'center' },
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
-  
-  fullScreenContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
-  fullScreenImage: { width: '100%', height: '100%' },
   fullScreenFooter: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 60, zIndex: 10 },
   fullScreenActionBtn: { alignItems: 'center', padding: 10 },
   fullScreenActionText: { color: COLORS.white, fontSize: 14, marginTop: 6, fontWeight: 'bold' },
-  
-  navArrowBtn: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -25,
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 25,
-    zIndex: 20,
-  },
-
+  navArrowBtn: { position: 'absolute', top: '50%', marginTop: -25, width: 50, height: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, zIndex: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24, shadowColor: '#000', elevation: 10 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
