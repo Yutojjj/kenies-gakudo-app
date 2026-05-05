@@ -33,24 +33,26 @@ function fmtDuration(sec: number) {
 }
 
 const createRemoteAudioElement = () => {
-  const audio = document.createElement('audio');
-  audio.autoplay = true;
-  audio.muted = false;
-  (audio as any).playsInline = true;
-  audio.setAttribute('playsinline', '');
-  audio.setAttribute('webkit-playsinline', '');
-  audio.preload = 'auto';
+  // iOS PWAのエコーキャンセラーを強制的に効かせるため、<audio>ではなく<video>を使用する
+  const mediaEl = document.createElement('video');
+  mediaEl.autoplay = true;
+  mediaEl.muted = false;
   
-  // 修正: iOSのハードウェアエコーキャンセラーを無効化させないため、
-  // display: none ではなく、視覚的に見えなくするスタイルを適用します
-  audio.style.position = 'absolute';
-  audio.style.width = '1px';
-  audio.style.height = '1px';
-  audio.style.opacity = '0';
-  audio.style.pointerEvents = 'none';
-  
-  document.body.appendChild(audio);
-  return audio;
+  // iOSで全画面再生になるのを防ぐ
+  (mediaEl as any).playsInline = true;
+  mediaEl.setAttribute('playsinline', '');
+  mediaEl.setAttribute('webkit-playsinline', '');
+  mediaEl.preload = 'auto';
+
+  // 画面から見えなくする（display: noneはエコーキャンセラーが死ぬので絶対に使わない）
+  mediaEl.style.position = 'absolute';
+  mediaEl.style.width = '1px';
+  mediaEl.style.height = '1px';
+  mediaEl.style.opacity = '0';
+  mediaEl.style.pointerEvents = 'none';
+
+  document.body.appendChild(mediaEl);
+  return mediaEl;
 };
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
