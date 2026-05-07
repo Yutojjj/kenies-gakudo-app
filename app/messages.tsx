@@ -129,7 +129,7 @@ async function pushNotify(
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string }>();
+  const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string; conversationType?: string }>();
   const { startCall, callStatus } = useCall();
 
   const [resolvedUser, setResolvedUser] = useState<(UserInfo & { accountId: string }) | null>(null);
@@ -152,7 +152,12 @@ export default function MessagesScreen() {
   const [allowMemberChat, setAllowMemberChat] = useState(true);
   const [allowMemberCall, setAllowMemberCall] = useState(true);
 
+  const [manageMembersModalVisible, setManageMembersModalVisible] = useState(false);
+  const [managingConv, setManagingConv] = useState<ConvDoc | null>(null);
+  const [managingParticipants, setManagingParticipants] = useState<string[]>([]);
+
   const scrollRef = useRef<ScrollView>(null);
+  const unsubListRef = useRef<(() => void) | null>(null);
   const unsubMsgsRef = useRef<(() => void) | null>(null);
   const unsubConvRef = useRef<(() => void) | null>(null);
 
@@ -175,17 +180,34 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (!resolvedUser) return;
 
+    unsubListRef.current?.();
+    unsubListRef.current = null;
+
     if (params.conversationId) {
-      const conv: ConvDoc = {
-        id: params.conversationId, type: 'direct',
-        name: params.conversationName || 'ユーザー',
+      const loadConv = async () => {
+        try {
+          const convDocSnap = await getDoc(doc(db, 'conversations', params.conversationId!));
+          let conv: ConvDoc;
+          if (convDocSnap.exists()) {
+            conv = { id: params.conversationId!, ...convDocSnap.data() } as ConvDoc;
+          } else {
+            const convType = (params.conversationType as 'direct' | 'group') || 'direct';
+            conv = { id: params.conversationId!, type: convType, name: params.conversationName || 'ユーザー' };
+            if (convType !== 'group') {
+              setDoc(doc(db, 'conversations', params.conversationId!), {
+                type: 'direct', name: params.conversationName || 'ユーザー',
+                participants: [ADMIN_ID, params.conversationId!.replace('direct_', '')],
+              }, { merge: true }).catch(() => {});
+            }
+          }
+          openChat(conv);
+        } catch (e) {
+          openChat({ id: params.conversationId!, type: 'direct', name: params.conversationName || 'ユーザー' });
+        } finally {
+          setLoading(false);
+        }
       };
-      setDoc(doc(db, 'conversations', params.conversationId), {
-        type: 'direct', name: params.conversationName || 'ユーザー',
-        participants: [ADMIN_ID, params.conversationId.replace('direct_', '')],
-      }, { merge: true }).catch(() => {});
-      openChat(conv);
-      setLoading(false);
+      loadConv();
       return;
     }
 
@@ -204,21 +226,41 @@ export default function MessagesScreen() {
         },
         () => setLoading(false)
       );
-      return unsub;
+      unsubListRef.current = unsub;
+      return () => { unsubListRef.current?.(); };
     }
 
-    const convId = resolvedUser.role === 'staff' ? STAFF_GROUP_ID : `direct_${resolvedUser.accountId}`;
-    const convData: ConvDoc = resolvedUser.role === 'staff'
-      ? { id: convId, type: 'group', name: 'スタッフグループ' }
-      : { id: convId, type: 'direct', name: resolvedUser.name };
-
-    setDoc(doc(db, 'conversations', convId), {
-      type: convData.type, name: convData.name,
-      participants: [ADMIN_ID, resolvedUser.accountId],
-    }, { merge: true })
-      .then(() => openChat(convData))
-      .catch(() => openChat(convData))
-      .finally(() => setLoading(false));
+    // スタッフ・利用者: 自分が参加している会話一覧を表示
+    const setupConversations = async () => {
+      try {
+        if (resolvedUser.role === 'staff') {
+          await setDoc(doc(db, 'conversations', STAFF_GROUP_ID), {
+            type: 'group', name: 'スタッフグループ',
+            participants: arrayUnion(ADMIN_ID, resolvedUser.accountId),
+          }, { merge: true });
+        } else {
+          const convId = `direct_${resolvedUser.accountId}`;
+          await setDoc(doc(db, 'conversations', convId), {
+            type: 'direct', name: resolvedUser.name,
+            participants: [ADMIN_ID, resolvedUser.accountId],
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.warn('Setup conversation error', e);
+      }
+      unsubListRef.current = onSnapshot(
+        query(collection(db, 'conversations'), where('participants', 'array-contains', resolvedUser.accountId)),
+        snap => {
+          const convs: ConvDoc[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as ConvDoc));
+          convs.sort((a, b) => (b.lastMessageAt?.seconds || 0) - (a.lastMessageAt?.seconds || 0));
+          setConversations(convs);
+          setLoading(false);
+        },
+        () => setLoading(false)
+      );
+    };
+    setupConversations();
+    return () => { unsubListRef.current?.(); };
   }, [resolvedUser]);
 
   const openChat = (conv: ConvDoc) => {
@@ -256,6 +298,7 @@ export default function MessagesScreen() {
   useEffect(() => () => {
     unsubMsgsRef.current?.();
     unsubConvRef.current?.();
+    unsubListRef.current?.();
   }, []);
 
   const sendMessage = async () => {
@@ -285,7 +328,8 @@ export default function MessagesScreen() {
         unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
         readBy: [resolvedUser.accountId],
       }, { merge: true });
-      pushNotify(activeConv.id, activeConv.type, resolvedUser.accountId, resolvedUser.name, text);
+      const convUrl = `/messages?conversationId=${encodeURIComponent(activeConv.id)}&conversationName=${encodeURIComponent(activeConv.name || '')}&conversationType=${activeConv.type}`;
+      pushNotify(activeConv.id, activeConv.type, resolvedUser.accountId, resolvedUser.name, text, convUrl);
     } catch (e) {
       console.error('Send failed:', e);
     } finally {
@@ -332,6 +376,8 @@ export default function MessagesScreen() {
         unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
         readBy: [resolvedUser.accountId],
       }, { merge: true });
+      const convUrl = `/messages?conversationId=${encodeURIComponent(activeConv.id)}&conversationName=${encodeURIComponent(activeConv.name || '')}&conversationType=${activeConv.type}`;
+      pushNotify(activeConv.id, activeConv.type, resolvedUser.accountId, resolvedUser.name, '📷 画像', convUrl);
     } catch (e) {
       console.error('Image send failed:', e);
     } finally {
@@ -340,7 +386,7 @@ export default function MessagesScreen() {
   };
 
   const goBack = () => {
-    if (view === 'chat' && resolvedUser?.role === 'admin' && !params.conversationId) {
+    if (view === 'chat' && !params.conversationId) {
       unsubMsgsRef.current?.(); unsubMsgsRef.current = null;
       unsubConvRef.current?.(); unsubConvRef.current = null;
       setView('list'); setActiveConv(null); setMessages([]); setConvReadBy([]);
@@ -426,6 +472,51 @@ export default function MessagesScreen() {
     }
   };
 
+  const openManageMembersModal = async (conv: ConvDoc) => {
+    try {
+      const convDocSnap = await getDoc(doc(db, 'conversations', conv.id));
+      const participants: string[] = convDocSnap.data()?.participants || [];
+      if (availableAccounts.length === 0) {
+        const snap = await getDocs(collection(db, 'accounts'));
+        setAvailableAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }
+      setManagingConv(conv);
+      setManagingParticipants(participants);
+      setManageMembersModalVisible(true);
+    } catch (e) {
+      if (Platform.OS === 'web') {
+        window.alert('メンバー情報の取得に失敗しました');
+      } else {
+        Alert.alert('エラー', 'メンバー情報の取得に失敗しました');
+      }
+    }
+  };
+
+  const handleRemoveMember = async (accountId: string) => {
+    if (!managingConv) return;
+    try {
+      await setDoc(doc(db, 'conversations', managingConv.id), {
+        participants: arrayRemove(accountId),
+      }, { merge: true });
+      setManagingParticipants(prev => prev.filter(id => id !== accountId));
+    } catch (e) {
+      Alert.alert('エラー', 'メンバーの削除に失敗しました');
+    }
+  };
+
+  const handleAddMemberToGroup = async (accountId: string) => {
+    if (!managingConv) return;
+    try {
+      await setDoc(doc(db, 'conversations', managingConv.id), {
+        participants: arrayUnion(accountId),
+        unreadFor: arrayUnion(accountId),
+      }, { merge: true });
+      setManagingParticipants(prev => [...prev, accountId]);
+    } catch (e) {
+      Alert.alert('エラー', 'メンバーの追加に失敗しました');
+    }
+  };
+
   const filteredGroupAccounts = availableAccounts.filter(acc => {
     if (groupFilterRole !== 'all' && acc.role !== groupFilterRole) return false;
     if (groupSearchQuery) {
@@ -487,8 +578,9 @@ export default function MessagesScreen() {
     );
   }
 
-  if (view === 'list' && resolvedUser?.role === 'admin') {
-    const hasUnread = (conv: ConvDoc) => (conv.unreadFor || []).includes(ADMIN_ID);
+  if (view === 'list') {
+    const myId = resolvedUser?.accountId || ADMIN_ID;
+    const hasUnread = (conv: ConvDoc) => (conv.unreadFor || []).includes(myId);
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -496,11 +588,13 @@ export default function MessagesScreen() {
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>
-          <TouchableOpacity onPress={openCreateGroupModal} style={styles.callHeaderBtn}>
-            <Ionicons name="people-circle-outline" size={24} color="#5D4037" />
-          </TouchableOpacity>
+          {isAdmin && (
+            <TouchableOpacity onPress={openCreateGroupModal} style={styles.callHeaderBtn}>
+              <Ionicons name="people-circle-outline" size={24} color="#5D4037" />
+            </TouchableOpacity>
+          )}
         </View>
-        
+
         <ScrollView style={{ flex: 1 }}>
           {conversations.length === 0 && (
             <View style={styles.centerBox}>
@@ -530,9 +624,16 @@ export default function MessagesScreen() {
                     {unread && <View style={styles.unreadDot} />}
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => handleDeleteConversation(item)} style={{ padding: 8, marginLeft: 4 }}>
-                  <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
-                </TouchableOpacity>
+                {isAdmin && isGroupItem && (
+                  <TouchableOpacity onPress={() => openManageMembersModal(item)} style={{ padding: 8, marginLeft: 4 }}>
+                    <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
+                  </TouchableOpacity>
+                )}
+                {isAdmin && (
+                  <TouchableOpacity onPress={() => handleDeleteConversation(item)} style={{ padding: 8, marginLeft: 4 }}>
+                    <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -636,6 +737,58 @@ export default function MessagesScreen() {
                   <Text style={styles.modalCreateBtnText}>グループを作成する</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* グループメンバー管理モーダル */}
+        <Modal visible={manageMembersModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.createGroupModalContentFull}>
+              <View style={styles.modalHeaderInner}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text }}>メンバー管理</Text>
+                <TouchableOpacity onPress={() => setManageMembersModalVisible(false)}>
+                  <Ionicons name="close" size={28} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalSubLabel}>現在のメンバー</Text>
+                {managingParticipants.filter(id => id !== ADMIN_ID).map(id => {
+                  const account = availableAccounts.find((a: any) => a.id === id);
+                  return (
+                    <View key={id} style={[styles.memberSelectRow, { justifyContent: 'space-between' }]}>
+                      <View style={[styles.smallBadge, account?.role === 'staff' ? styles.smallBadgeStaff : styles.smallBadgeUser]}>
+                        <Text style={styles.smallBadgeText}>{account?.role === 'staff' ? 'スタッフ' : '利用者'}</Text>
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 16, color: COLORS.text, marginLeft: 8 }}>{account?.name || id}</Text>
+                      <TouchableOpacity onPress={() => handleRemoveMember(id)} style={{ padding: 8 }}>
+                        <Ionicons name="remove-circle-outline" size={26} color={COLORS.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {managingParticipants.filter(id => id !== ADMIN_ID).length === 0 && (
+                  <Text style={styles.emptyText}>メンバーがいません</Text>
+                )}
+
+                <Text style={[styles.modalSubLabel, { marginTop: 24 }]}>メンバーを追加</Text>
+                {availableAccounts
+                  .filter((a: any) => a.role !== 'admin' && !managingParticipants.includes(a.id))
+                  .map((account: any) => (
+                    <TouchableOpacity
+                      key={account.id}
+                      style={styles.memberSelectRow}
+                      onPress={() => handleAddMemberToGroup(account.id)}
+                    >
+                      <View style={[styles.smallBadge, account.role === 'staff' ? styles.smallBadgeStaff : styles.smallBadgeUser]}>
+                        <Text style={styles.smallBadgeText}>{account.role === 'staff' ? 'スタッフ' : '利用者'}</Text>
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 16, color: COLORS.text, marginLeft: 8 }}>{account.name}</Text>
+                      <Ionicons name="add-circle-outline" size={26} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
             </View>
           </View>
         </Modal>

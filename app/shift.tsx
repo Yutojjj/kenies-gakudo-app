@@ -149,10 +149,6 @@ export default function ShiftScreen() {
     setStampModalVisible(false);
   };
 
-  const handleSubmit = () => {
-    Alert.alert('提出完了', 'シフトの希望を提出しました。');
-  };
-
   const days = generateCalendarDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
@@ -238,12 +234,6 @@ export default function ShiftScreen() {
           </View>
         </View>
 
-        <View style={styles.submitContainer}>
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-            <Ionicons name="send" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
-            <Text style={styles.submitBtnText}>シフトを提出する</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
       <TouchableOpacity style={styles.fab} onPress={() => setStampModalVisible(true)}>

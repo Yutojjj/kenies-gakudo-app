@@ -36,7 +36,7 @@ type ChildInfo = {
   days?: Record<string, boolean>; 
 };
 type LessonTemplate = { id: string; name: string; time: string; };
-type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; };
+type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?: string; };
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -86,6 +86,7 @@ export default function ScheduleScreen() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [returnToEdit, setReturnToEdit] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<{ name: string; accountId?: string; role: string } | null>(null);
+  const [editingMemo, setEditingMemo] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -190,7 +191,7 @@ export default function ScheduleScreen() {
               } else if (item.lesson) {
                   lessons = [item.lesson];
               }
-              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons };
+              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
             });
             setScheduleData(sData);
           });
@@ -320,6 +321,7 @@ export default function ScheduleScreen() {
       const saveData: any = { parentId: parentDocId, childId: child.id, dateStr, updatedAt: new Date() };
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
+      if (data.memo !== undefined) saveData.memo = data.memo;
       await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
 
       // 管理者以外の操作のみログ記録
@@ -441,7 +443,7 @@ export default function ScheduleScreen() {
     const autoPickup = child ? getAutoPickupTime(dateStr, child) : null;
     const finalPickup = userOverride.pickupTime !== undefined ? userOverride.pickupTime : autoPickup;
     
-    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: userOverride.lessons || [] };
+    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: userOverride.lessons || [], memo: userOverride.memo };
   };
 
   const changeMonth = (offset: number) => {
@@ -463,6 +465,8 @@ export default function ScheduleScreen() {
       saveToFirestore(dateStr, { lessons: newLessons });
     } else {
       setSelectedDateStr(dateStr);
+      const key = getScheduleKey(dateStr);
+      setEditingMemo(scheduleData[key]?.memo || '');
       if (eventsData[dateStr]) {
           setEventModalVisible(true);
       } else {
@@ -596,6 +600,7 @@ export default function ScheduleScreen() {
                     </View>
                   )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
+                  {cellData.memo && <View style={styles.memoBadge}><Text style={styles.memoIndicatorText}>✏</Text></View>}
                   
                   {cellData.lessons && cellData.lessons.length > 0 && cellData.lessons.map((lesson, idx) => (
                       <View key={`les-${idx}`} style={styles.lessonBadge}>
@@ -764,6 +769,28 @@ export default function ScheduleScreen() {
                       <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>この日に習い事を追加</Text>
                   </TouchableOpacity>
                 </View>
+
+                <View style={styles.editSection}>
+                  <View style={styles.editSectionHeader}>
+                    <Ionicons name="document-text-outline" size={20} color="#888" />
+                    <Text style={styles.editSectionTitle}>メモ</Text>
+                  </View>
+                  <TextInput
+                    style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 15, minHeight: 80, backgroundColor: COLORS.surface, textAlignVertical: 'top' }}
+                    placeholder="この日のメモを入力..."
+                    placeholderTextColor={COLORS.textLight}
+                    value={editingMemo}
+                    onChangeText={setEditingMemo}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { marginTop: 8 }]}
+                    onPress={() => saveToFirestore(selectedDateStr, { memo: editingMemo })}
+                  >
+                    <Ionicons name="checkmark" size={18} color={COLORS.white} style={{ marginRight: 6 }} />
+                    <Text style={styles.saveBtnText}>メモを保存</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={{height: 20}} />
             </ScrollView>
           </View>
@@ -815,7 +842,11 @@ export default function ScheduleScreen() {
                           </TouchableOpacity>
                       )}
                       
-                      <TouchableOpacity style={{marginTop: 20, alignItems: 'center', padding: 12}} onPress={() => {setEventModalVisible(false); setTimeout(()=>setEditModalVisible(true), 300);}}>
+                      <TouchableOpacity style={{marginTop: 20, alignItems: 'center', padding: 12}} onPress={() => {
+                          setEditingMemo(scheduleData[getScheduleKey(selectedDateStr)]?.memo || '');
+                          setEventModalVisible(false);
+                          setTimeout(()=>setEditModalVisible(true), 300);
+                      }}>
                           <Text style={{color: COLORS.primary, textDecorationLine: 'underline'}}>お迎え・習い事の時間を設定する</Text>
                       </TouchableOpacity>
                   </View>
@@ -1397,9 +1428,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     borderRadius: 8 
   },
-  saveBtnText: { 
-    color: COLORS.white, 
-    fontSize: 16, 
-    fontWeight: 'bold' 
-  }
+  saveBtnText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: 'bold'
+  },
+  memoBadge: {
+    backgroundColor: '#FFF3CD',
+    borderRadius: 4,
+    padding: 2,
+    marginBottom: 2,
+    alignItems: 'center',
+  },
+  memoIndicatorText: {
+    fontSize: 9,
+    color: '#CC7700',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
 });

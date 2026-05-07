@@ -27,6 +27,7 @@ interface Kid {
   isManualOverride?: boolean;
   nicknameKana?: string;
   parentDocId?: string;
+  hasMemo?: boolean;
 }
 
 type ViewMode = 'attendance' | 'schoolUsers' | 'transport';
@@ -183,7 +184,7 @@ export default function AttendanceScreen() {
           const sData: Record<string, any> = {};
           snap.forEach(d => {
             const item = d.data();
-            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson };
+            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson, memo: item.memo };
           });
           setScheduleOverrides(sData);
         });
@@ -240,15 +241,16 @@ export default function AttendanceScreen() {
     const dayOfWeekStr = DAY_NAMES[d.getDay()];
     
     const override = scheduleOverrides[`${kid.id}_${dateStr}`];
+    const memo = override?.memo || null;
     if (override && override.pickupTime !== undefined) {
-      return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true };
+      return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true, memo };
     }
 
     let autoPickup = null;
-    
+
     if (dayOfWeekStr !== '日' && dayOfWeekStr !== '土' && !publicHolidays[dateStr]) {
       const isHoliday = holidays.some(h => dateStr >= h.start && dateStr <= h.end);
-      
+
       if (!isHoliday) {
         if (kid.isStaffChild) {
           const todaysShift = assignedShifts[dateStr] || [];
@@ -262,7 +264,7 @@ export default function AttendanceScreen() {
       }
     }
 
-    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false };
+    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false, memo };
   };
 
   const getAttendanceForDay = (date: Date) => {
@@ -276,8 +278,8 @@ export default function AttendanceScreen() {
     let totalCount = 0;
 
     kids.forEach((kid) => {
-      const { pickupTime, lesson, isManual } = getCalculatedTime(dateStr, kid);
-      const displayKid = { ...kid, isManualOverride: isManual };
+      const { pickupTime, lesson, isManual, memo } = getCalculatedTime(dateStr, kid);
+      const displayKid = { ...kid, isManualOverride: isManual, hasMemo: !!memo };
 
       if (pickupTime) {
         totalCount++;
@@ -427,23 +429,24 @@ export default function AttendanceScreen() {
                         <View style={styles.timeGroupContainer}>
                           {Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, kids]) => {
                              const hasManualOverride = kids.some(k => k.isManualOverride);
+                             const hasAnyMemo = kids.some(k => k.hasMemo);
                              return (
                               <TouchableOpacity key={time} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
                                 {showKidNames ? (
                                   <>
                                     <View style={styles.timeHeaderRow}>
-                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
+                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' ！' : ''}</Text>
                                       <Text style={styles.timeCountBadge}>{kids.length}名</Text>
                                     </View>
                                     <View style={styles.kidNamesContainer}>
                                       {kids.map(k => (
-                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }]} numberOfLines={1}>{k.name}</Text>
+                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}</Text>
                                       ))}
                                     </View>
                                   </>
                                 ) : (
                                   <>
-                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}</Text>
+                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' ！' : ''}</Text>
                                     <Text style={styles.timeCountText}>{kids.length}名</Text>
                                   </>
                                 )}
@@ -607,7 +610,7 @@ export default function AttendanceScreen() {
                     <View key={kid.id} style={styles.modalListItem}>
                       <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
                         <Ionicons name="person" size={16} color={COLORS.primary} />
-                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '！' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
                       </TouchableOpacity>
@@ -645,7 +648,7 @@ export default function AttendanceScreen() {
                     <View key={kid.id} style={styles.modalListItem}>
                       <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
                         <Ionicons name="time" size={16} color={COLORS.info} />
-                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }]}>{kid.name}</Text>
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '！' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
                       </TouchableOpacity>
