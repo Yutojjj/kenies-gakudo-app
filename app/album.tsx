@@ -197,14 +197,14 @@ export default function AlbumScreen() {
       try {
         let uploadedCount = 0;
         for (const asset of result.assets) {
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
+          const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
           const storagePath = `albums/${filename}`;
           const storageRef = ref(storage, storagePath);
           await uploadBytes(storageRef, blob);
           const downloadUrl = await getDownloadURL(storageRef);
-
           await addDoc(collection(db, 'albums'), {
             uri: downloadUrl,
             storagePath: storagePath,
@@ -214,9 +214,13 @@ export default function AlbumScreen() {
           });
           uploadedCount++;
         }
-        Alert.alert('アップロード完了', `${targetTitle} に ${uploadedCount} 枚の写真を保存しました。`);
-      } catch (e) {
-        Alert.alert('エラー', '画像のアップロードに失敗しました。');
+        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 枚保存しました`);
+        else Alert.alert('完了', `${targetTitle} に ${uploadedCount} 枚保存しました`);
+      } catch (e: any) {
+        console.error('upload error:', e);
+        const msg = e?.message || String(e);
+        if (Platform.OS === 'web') window.alert('アップロード失敗: ' + msg);
+        else Alert.alert('エラー', 'アップロード失敗: ' + msg);
       } finally {
         setIsUploading(false);
       }
@@ -256,10 +260,12 @@ export default function AlbumScreen() {
     setIsUploading(true);
     
     let count = 0;
+    try {
     for (const asset of result.assets) {
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      const res = await fetch(asset.uri);
+      const blob = await res.blob();
+      const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
+      const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const storagePath = `albums/${filename}`;
       const storageRef = ref(storage, storagePath);
       await uploadBytes(storageRef, blob);
@@ -269,6 +275,11 @@ export default function AlbumScreen() {
         uploader: name || '不明', category, createdAt: serverTimestamp()
       });
       count++;
+    }
+    } catch (e: any) {
+      console.error('uploadPhotosToCategory error:', e?.message || e);
+      if (Platform.OS === 'web') window.alert('アップロード失敗: ' + (e?.message || String(e)));
+      else Alert.alert('エラー', 'アップロード失敗: ' + (e?.message || String(e)));
     }
     return count;
   };
