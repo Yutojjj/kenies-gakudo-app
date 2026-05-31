@@ -183,8 +183,10 @@ export default function AlbumScreen() {
   };
 
   const pickImages = async (targetTitle: string, targetKey: string) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as any,
       allowsMultipleSelection: true,
       quality: 0.6,
     });
@@ -239,8 +241,10 @@ export default function AlbumScreen() {
   };
 
   const uploadPhotosToCategory = async (category: string): Promise<number> => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return 0; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as any,
       allowsMultipleSelection: true,
       quality: 0.6,
     });
@@ -715,11 +719,7 @@ export default function AlbumScreen() {
             </View>
           )}
 
-          {!isSelectMode && !isIOSWeb && (
-            <TouchableOpacity style={styles.fab} onPress={() => setIsSelectMode(true)}>
-              <Ionicons name="checkmark-done" size={28} color={COLORS.white} />
-            </TouchableOpacity>
-          )}
+          {/* FAB削除済み */}
         </View>
       )}
 

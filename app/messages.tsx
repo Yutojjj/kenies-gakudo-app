@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   addDoc, arrayRemove, arrayUnion, collection,
@@ -145,6 +146,7 @@ export default function MessagesScreen() {
   const [convReadBy, setConvReadBy] = useState<string[]>([]);
 
   const [createGroupModalVisible, setCreateGroupModalVisible] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [availableAccounts, setAvailableAccounts] = useState<any[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -340,6 +342,11 @@ export default function MessagesScreen() {
 
   const sendImage = async () => {
     if (!activeConv || !resolvedUser || isSending) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'] as any,
       allowsMultipleSelection: false,
@@ -864,7 +871,7 @@ export default function MessagesScreen() {
                   <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
                     {!isMe && <Text style={styles.bubbleSender}>{item.senderName}</Text>}
                     {item.imageUrl
-                      ? <Image source={{ uri: item.imageUrl }} style={styles.bubbleImage} resizeMode="cover" />
+                      ? <TouchableOpacity onPress={() => setPreviewImageUrl(item.imageUrl!)} activeOpacity={0.85}><Image source={{ uri: item.imageUrl }} style={styles.bubbleImage} resizeMode="cover" /></TouchableOpacity>
                       : <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{item.text}</Text>
                     }
                     <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>{msgTime(item.createdAt)}</Text>
@@ -902,6 +909,44 @@ export default function MessagesScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
+    {/* 画像プレビューモーダル */}
+    <Modal visible={!!previewImageUrl} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' }}>
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10 }}
+          onPress={() => setPreviewImageUrl(null)}
+        >
+          <Ionicons name="close-circle" size={36} color="#fff" />
+        </TouchableOpacity>
+        {previewImageUrl && (
+          <Image
+            source={{ uri: previewImageUrl }}
+            style={{ width: '95%', height: '70%' }}
+            resizeMode="contain"
+          />
+        )}
+        <TouchableOpacity
+          style={{ marginTop: 24, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 30 }}
+          onPress={async () => {
+            if (!previewImageUrl) return;
+            try {
+              const { status } = await MediaLibrary.requestPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('権限エラー', '写真の保存には権限が必要です');
+                return;
+              }
+              await MediaLibrary.saveToLibraryAsync(previewImageUrl);
+              Alert.alert('保存完了', '写真を保存しました');
+            } catch (e) {
+              Alert.alert('エラー', '保存に失敗しました');
+            }
+          }}
+        >
+          <Ionicons name="download-outline" size={22} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>保存する</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
     </SafeAreaView>
   );
 }
