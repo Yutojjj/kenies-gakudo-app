@@ -151,7 +151,8 @@ export default function ShiftViewScreen() {
                     return (
                       <View key={staff.id} style={[styles.cellStaffRow, isMe && styles.cellStaffRowMe]}>
                         <Text style={[styles.cellStaffName, isMe && styles.cellStaffNameMe]} numberOfLines={1}>{staff.name}</Text>
-                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]} numberOfLines={1}>{assigned.start}-{assigned.end}</Text>
+                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>開始:{assigned.start}</Text>
+                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>終了:{assigned.end}</Text>
                       </View>
                     );
                   })}
@@ -187,14 +188,14 @@ const styles = StyleSheet.create({
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.text },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calCellEmpty: { width: '14.28%', minHeight: 90 },
-  calCell: { width: '14.28%', minHeight: 90, borderWidth: 0.5, borderColor: COLORS.border, padding: 4 },
+  calCell: { width: '14.28%', minHeight: 100, borderWidth: 0.5, borderColor: COLORS.border, padding: 4 },
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calDayText: { fontSize: 12, fontWeight: 'bold' },
   cellCountText: { fontSize: 10, color: COLORS.primary, fontWeight: 'bold' },
   eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
   eventBadgeText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center' },
-  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2 },
-  cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825' },
+  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, minHeight: 34 },
+  cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825', minHeight: 34 },
   cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffNameMe: { color: '#E65100' },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
