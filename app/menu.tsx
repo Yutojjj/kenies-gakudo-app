@@ -31,9 +31,8 @@ const MENU_ICONS = {
   accountList:     require('../assets/menu/account-list.png'),
   messages:        require('../assets/menu/messages.png'),
   scheduleChanges: require('../assets/menu/schedule-changes.png'),
-  // schedule.png・event-list.pngは未配置のため既存画像を使用
-  schedule:        ANIMALS.dolphin,
-  eventList:       ANIMALS.chick,
+  schedule:        require('../assets/menu/schedule.png'),
+  eventList:       require('../assets/menu/event-list.png'),
 };
 
 const { width } = Dimensions.get('window');
@@ -321,26 +320,28 @@ export default function MenuScreen() {
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
-              <View style={styles.gridRow}>
+              <View style={styles.gridRowSingle}>
                 <MenuCard
-                  image={MENU_ICONS.schedule} title="利用日・習い事" subtitle="予定を見る" bgColor="#87CEEB"
+                  image={MENU_ICONS.schedule} title="利用日・習い事" subtitle="" bgColor="#87CEEB"
                   onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)}
                   animValue={cardAnims[0]}
                 />
+              </View>
+              <View style={styles.gridRowSingle}>
                 <MenuCard
-                  image={MENU_ICONS.album} title="アルバム" subtitle="思い出の写真" bgColor="#C49FD8"
-                  onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}
+                  image={MENU_ICONS.eventList} title="イベント" subtitle="" bgColor="#F5DCA8"
+                  onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
                   animValue={cardAnims[1]}
                 />
               </View>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={MENU_ICONS.eventList} title="イベント参加" subtitle="行事の予定" bgColor="#F5DCA8"
-                  onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                  image={MENU_ICONS.album} title="アルバム" subtitle="" bgColor="#C49FD8"
+                  onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}
                   animValue={cardAnims[2]}
                 />
                 <MenuCard
-                  image={MENU_ICONS.messages} title="メッセージ" subtitle="先生に連絡" bgColor="#C9AADF"
+                  image={MENU_ICONS.messages} title="メッセージ" subtitle="" bgColor="#C9AADF"
                   onPress={() => router.push('/messages' as any)}
                   animValue={cardAnims[3]}
                   badge={unreadCount}
@@ -578,6 +579,7 @@ const styles = StyleSheet.create({
   // ── グリッド ──
   grid: { paddingHorizontal: 14, gap: 12 },
   gridRow: { flexDirection: 'row', gap: 12, marginBottom: 0 },
+  gridRowSingle: { flexDirection: 'row', gap: 12, marginBottom: 0 },
 
   // ── カード ──
   card: {
