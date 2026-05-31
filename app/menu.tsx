@@ -320,20 +320,16 @@ export default function MenuScreen() {
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
-              <View style={styles.gridRowSingle}>
-                <MenuCard
-                  image={MENU_ICONS.schedule} title="利用日・習い事" subtitle="" bgColor="#87CEEB"
-                  onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)}
-                  animValue={cardAnims[0]}
-                />
-              </View>
-              <View style={styles.gridRowSingle}>
-                <MenuCard
-                  image={MENU_ICONS.eventList} title="イベント" subtitle="" bgColor="#F5DCA8"
-                  onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
-                  animValue={cardAnims[1]}
-                />
-              </View>
+              <Animated.View style={[{ opacity: cardAnims[0], transform: [{ scale: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
+                <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)} activeOpacity={0.85}>
+                  <Image source={MENU_ICONS.schedule} style={styles.cardWideImage} resizeMode="contain" />
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View style={[{ opacity: cardAnims[1], transform: [{ scale: cardAnims[1].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[1].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
+                <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)} activeOpacity={0.85}>
+                  <Image source={MENU_ICONS.eventList} style={styles.cardWideImage} resizeMode="contain" />
+                </TouchableOpacity>
+              </Animated.View>
               <View style={styles.gridRow}>
                 <MenuCard
                   image={MENU_ICONS.album} title="アルバム" subtitle="" bgColor="#C49FD8"
@@ -580,6 +576,8 @@ const styles = StyleSheet.create({
   grid: { paddingHorizontal: 14, gap: 12 },
   gridRow: { flexDirection: 'row', gap: 12, marginBottom: 0 },
   gridRowSingle: { flexDirection: 'row', gap: 12, marginBottom: 0 },
+  cardWide: { flex: 1, borderRadius: 22, overflow: 'hidden', shadowColor: '#8B7340', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 6, aspectRatio: 2.7, backgroundColor: '#F5DCA8' },
+  cardWideImage: { width: '100%', height: '100%' },
 
   // ── カード ──
   card: {
