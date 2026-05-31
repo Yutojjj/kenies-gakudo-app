@@ -232,6 +232,12 @@ export default function AccountFormScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={24} color="#5D4037" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{isEditMode ? 'アカウント編集' : '新規アカウント作成'}</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.formContainer}>
         <View style={styles.segmentedControl}>
           <TouchableOpacity style={[styles.segmentBtn, role === 'user' && styles.segmentBtnActive, isEditMode && styles.segmentBtnDisabled]} onPress={() => !isEditMode && setRole('user')} disabled={isEditMode}>
@@ -245,9 +251,9 @@ export default function AccountFormScreen() {
         </View>
 
         <Text style={styles.label}><Ionicons name="person-outline" size={16} /> 氏名</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="山田 太郎" placeholderTextColor={COLORS.textLight} />
+        <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="山田 太郎" placeholderTextColor="#BBBBBB" />
         <Text style={styles.label}><Ionicons name="text-outline" size={16} /> ニックネーム (かな)</Text>
-        <TextInput style={styles.input} value={nicknameKana} onChangeText={setNicknameKana} placeholder="けんた" placeholderTextColor={COLORS.textLight} autoCapitalize="none" />
+        <TextInput style={styles.input} value={nicknameKana} onChangeText={setNicknameKana} placeholder="けんた" placeholderTextColor="#BBBBBB" autoCapitalize="none" />
 
         {role === 'staff' ? (
           <View>
@@ -297,7 +303,7 @@ export default function AccountFormScreen() {
                       )}
                     </View>
                     <Text style={styles.label}>氏名</Text>
-                    <TextInput style={styles.input} value={child.name} onChangeText={(v) => updateStaffChild(index, 'name', v)} placeholder="子供の氏名" />
+                    <TextInput style={styles.input} value={child.name} onChangeText={(v) => updateStaffChild(index, 'name', v)} placeholder="子供の氏名" placeholderTextColor="#BBBBBB" />
                     <Text style={styles.label}>学校名</Text>
                     <TouchableOpacity style={styles.selectBox} onPress={() => openPicker('staff_child_school', index)}>
                       <Text style={styles.selectBoxText}>{child.school || '選択してください'}</Text>
@@ -365,9 +371,9 @@ export default function AccountFormScreen() {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.label}>氏名</Text>
-                <TextInput style={styles.input} value={sib.name} onChangeText={(v) => updateSibling(index, 'name', v)} placeholder="氏名" placeholderTextColor={COLORS.textLight} />
+                <TextInput style={styles.input} value={sib.name} onChangeText={(v) => updateSibling(index, 'name', v)} placeholder="氏名" placeholderTextColor="#BBBBBB" />
                 <Text style={styles.label}>ニックネーム (かな)</Text>
-                <TextInput style={styles.input} value={sib.nicknameKana} onChangeText={(v) => updateSibling(index, 'nicknameKana', v)} placeholder="かな" placeholderTextColor={COLORS.textLight} autoCapitalize="none" />
+                <TextInput style={styles.input} value={sib.nicknameKana} onChangeText={(v) => updateSibling(index, 'nicknameKana', v)} placeholder="かな" placeholderTextColor="#BBBBBB" autoCapitalize="none" />
                 <Text style={styles.label}>学校名</Text>
                 <TouchableOpacity style={styles.selectBox} onPress={() => openPicker('sibling_school', index)}>
                   <Text style={styles.selectBoxText}>{sib.school || '選択してください'}</Text>
@@ -423,6 +429,9 @@ export default function AccountFormScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { marginRight: 12 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   formContainer: { padding: 20, paddingBottom: 60 },
   segmentedControl: { flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: 12, padding: 6, marginBottom: 24, borderWidth: 1, borderColor: COLORS.border },
   segmentBtn: { flex: 1, flexDirection: 'row', paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },

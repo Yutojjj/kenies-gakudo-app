@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -587,8 +587,11 @@ export default function ScheduleScreen() {
               dateColor = 'blue';
             }
 
+            const holidayPeriod = holidays.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
+            const holidayBg = holidayPeriod?.color || null;
+
             return (
-              <TouchableOpacity key={item.dateStr} style={[styles.calCell, isStampingMode && styles.calCellStamping]} onPress={() => handleDayPress(item.dateStr)}>
+              <TouchableOpacity key={item.dateStr} style={[styles.calCell, isStampingMode && styles.calCellStamping, holidayBg && { backgroundColor: holidayBg }]} onPress={() => handleDayPress(item.dateStr)}>
                 <Text style={[styles.calDayText, { color: dateColor }]}>
                   {item.day}
                 </Text>
@@ -681,7 +684,6 @@ export default function ScheduleScreen() {
 
       {!isStampingMode && (
         <TouchableOpacity style={styles.fab} onPress={() => { setTemplateSelectMode('stamping'); setTemplateModalVisible(true); }}>
-          <Ionicons name="color-wand" size={24} color={COLORS.white} />
           <Text style={styles.fabText}>習い事</Text>
         </TouchableOpacity>
       )}
@@ -777,8 +779,7 @@ export default function ScheduleScreen() {
                   </View>
                   <TextInput
                     style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 15, minHeight: 80, backgroundColor: COLORS.surface, textAlignVertical: 'top' }}
-                    placeholder="この日のメモを入力..."
-                    placeholderTextColor={COLORS.textLight}
+                    placeholder="この日のメモを入力..." placeholderTextColor="#BBBBBB"
                     value={editingMemo}
                     onChangeText={setEditingMemo}
                     multiline
@@ -950,7 +951,7 @@ export default function ScheduleScreen() {
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>習い事の名前</Text>
                   <TextInput 
                       style={{borderWidth: 1, borderColor: COLORS.border, padding: 12, borderRadius: 8, fontSize: 16, marginBottom: 20}}
-                      placeholder="例: スイミング"
+                      placeholder="例: スイミング" placeholderTextColor="#BBBBBB"
                       value={newLessonName}
                       onChangeText={setNewLessonName}
                   />

@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -64,7 +64,7 @@ export default function AttendanceScreen() {
   const router = useRouter();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
-  const [showKidNames, setShowKidNames] = useState(false);
+  const [showKidNames, setShowKidNames] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [kids, setKids] = useState<Kid[]>([]);
@@ -85,6 +85,7 @@ export default function AttendanceScreen() {
   const [holidays, setHolidays] = useState<any[]>([]); 
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
+  const [lessonsData, setLessonsData] = useState<any[]>([]); // 習い事一覧管理のデータ
 
   const [activeSchool, setActiveSchool] = useState<string | null>(null);
 
@@ -184,7 +185,14 @@ export default function AttendanceScreen() {
           const sData: Record<string, any> = {};
           snap.forEach(d => {
             const item = d.data();
-            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson, memo: item.memo };
+            // lessons配列（新形式）とlesson単体（旧形式）の両方に対応
+            let lessons: any[] = [];
+            if (item.lessons && Array.isArray(item.lessons)) {
+              lessons = item.lessons;
+            } else if (item.lesson) {
+              lessons = [item.lesson];
+            }
+            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons, memo: item.memo };
           });
           setScheduleOverrides(sData);
         });
@@ -215,6 +223,11 @@ export default function AttendanceScreen() {
           setEventsData(eData);
         });
 
+        // 習い事一覧管理のデータをリアルタイム取得
+        onSnapshot(collection(db, 'lessons'), (snap) => {
+          setLessonsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
       } catch (error) {
         console.error("データ取得エラー:", error);
       }
@@ -242,8 +255,22 @@ export default function AttendanceScreen() {
     
     const override = scheduleOverrides[`${kid.id}_${dateStr}`];
     const memo = override?.memo || null;
+
+    // スケジュール個別登録のlessons（新形式:配列、旧形式:単体 両対応）
+    let overrideLessons: any[] = [];
+    if (override?.lessons && Array.isArray(override.lessons)) {
+      overrideLessons = override.lessons;
+    } else if (override?.lesson) {
+      overrideLessons = [override.lesson];
+    }
+
     if (override && override.pickupTime !== undefined) {
-      return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true, memo };
+      return { pickupTime: override.pickupTime, lessons: overrideLessons, isManual: true, memo };
+    }
+
+    // pickupTimeがなくても習い事だけ登録されている場合（出欠には表示するが登校扱いにはしない）
+    if (override && overrideLessons.length > 0) {
+      return { pickupTime: null, lessons: overrideLessons, isManual: false, memo };
     }
 
     let autoPickup = null;
@@ -264,7 +291,14 @@ export default function AttendanceScreen() {
       }
     }
 
-    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false, memo };
+    // 習い事一覧管理の定期習い事（その曜日に一致するもの全件）
+    const regularLessons = lessonsData
+      .filter(l => l.childId === kid.id && l.dayOfWeek === dayOfWeekStr)
+      .map(l => ({ name: l.lessonName, time: l.lessonTime }));
+
+    const finalLessons = overrideLessons.length > 0 ? overrideLessons : regularLessons;
+
+    return { pickupTime: autoPickup, lessons: finalLessons, isManual: false, memo };
   };
 
   const getAttendanceForDay = (date: Date) => {
@@ -278,7 +312,7 @@ export default function AttendanceScreen() {
     let totalCount = 0;
 
     kids.forEach((kid) => {
-      const { pickupTime, lesson, isManual, memo } = getCalculatedTime(dateStr, kid);
+      const { pickupTime, lessons: kidLessons, isManual, memo } = getCalculatedTime(dateStr, kid);
       const displayKid = { ...kid, isManualOverride: isManual, hasMemo: !!memo };
 
       if (pickupTime) {
@@ -288,10 +322,13 @@ export default function AttendanceScreen() {
         schools[kid.school][pickupTime].push(displayKid);
       }
 
-      if (lesson) {
-        const key = `${lesson.time} ${lesson.name}`;
-        if (!lessons[key]) lessons[key] = [];
-        lessons[key].push(displayKid);
+      if (kidLessons && kidLessons.length > 0) {
+        kidLessons.forEach((lesson: any) => {
+          totalCount++;
+          const key = `${lesson.time} ${lesson.name}`;
+          if (!lessons[key]) lessons[key] = [];
+          lessons[key].push(displayKid);
+        });
       }
     });
 
@@ -458,33 +495,32 @@ export default function AttendanceScreen() {
                     );
                   })}
                   {hasLessons && (
-                    <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
+                    <View style={[styles.schoolCard, { backgroundColor: '#EEF4FF' }]}>
                       <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(Object.values(attendanceData.lessons).flat()) })}>
-                        <Text style={[styles.schoolNameText, { color: '#4682B4' }]}><Ionicons name="color-wand" size={12} /> 習い事</Text>
+                        <Text style={[styles.schoolNameText, { color: '#4682B4' }]}>習い事</Text>
                       </TouchableOpacity>
                       <View style={styles.timeGroupContainer}>
-                        {Object.entries(attendanceData.lessons).map(([lessonKey, kids]) => (
-                          <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
-                            {showKidNames ? (
-                              <>
-                                <View style={styles.timeHeaderRow}>
-                                  <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonKey}</Text>
-                                  <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
+                        {Object.entries(attendanceData.lessons).sort(([a], [b]) => a.localeCompare(b)).map(([lessonKey, kids]) => {
+                          const spaceIdx = lessonKey.indexOf(' ');
+                          const lessonTime = spaceIdx !== -1 ? lessonKey.substring(0, spaceIdx) : lessonKey;
+                          const lessonName = spaceIdx !== -1 ? lessonKey.substring(spaceIdx + 1) : '';
+                          return (
+                            <TouchableOpacity key={lessonKey} style={[styles.timeButton, styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                              <View style={styles.timeHeaderRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.timeLabel, { color: '#4682B4', fontSize: 12 }]}>{lessonTime}</Text>
+                                  {lessonName ? <Text style={[styles.kidNameText, { color: '#4682B4', fontSize: 11 }]} numberOfLines={1}>{lessonName}</Text> : null}
                                 </View>
-                                <View style={styles.kidNamesContainer}>
-                                  {kids.map(k => (
-                                    <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
-                                  ))}
-                                </View>
-                              </>
-                            ) : (
-                              <>
-                                <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
-                                <Text style={styles.timeCountText}>{kids.length}名</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ))}
+                                <Text style={[styles.timeCountBadge, { color: '#4682B4', backgroundColor: '#4682B420' }]}>{kids.length}名</Text>
+                              </View>
+                              <View style={styles.kidNamesContainer}>
+                                {kids.map(k => (
+                                  <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
+                                ))}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </View>
                   )}
@@ -589,7 +625,8 @@ export default function AttendanceScreen() {
           onPress={() => setShowKidNames(!showKidNames)}
           activeOpacity={0.85}
         >
-          <Ionicons name={showKidNames ? "swap-vertical" : "swap-vertical"} size={22} color={COLORS.white} />
+          <Ionicons name={showKidNames ? "eye-off" : "person"} size={22} color={COLORS.white} />
+          <Text style={styles.fabLabel}>{showKidNames ? '隠す' : '名前'}</Text>
         </TouchableOpacity>
       )}
 
@@ -748,4 +785,7 @@ const styles = StyleSheet.create({
   editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
   fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.danger },
+  fabLabel: { color: COLORS.white, fontSize: 9, fontWeight: 'bold', marginTop: 2 },
+  hideNamesBar: { backgroundColor: COLORS.primary, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
+  hideNamesBarText: { color: COLORS.white, fontSize: 13, fontWeight: 'bold' },
 });

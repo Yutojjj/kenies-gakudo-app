@@ -819,7 +819,7 @@ export default function AlbumScreen() {
               日付: {getLocalDateString(newEventDate)}
             </Text>
             <Text style={{ marginBottom: 8, fontWeight: 'bold', color: COLORS.text }}>イベント名</Text>
-            <TextInput style={styles.input} placeholder="例: 春の遠足" value={eventNameInput} onChangeText={setEventNameInput} />
+            <TextInput style={styles.input} placeholder="例: 春の遠足" placeholderTextColor="#BBBBBB" value={eventNameInput} onChangeText={setEventNameInput} />
             <Text style={{ marginBottom: 16, color: COLORS.textLight, fontSize: 12 }}>
               ※ 保存名: {eventNameInput.trim() || 'イベント名'}_{getLocalDateString(newEventDate)}
             </Text>
@@ -865,7 +865,7 @@ export default function AlbumScreen() {
             </View>
             <Text style={{ marginBottom: 8, fontWeight: 'bold', color: COLORS.text }}>イベントコード</Text>
             <TextInput 
-              style={styles.input} placeholder="コードを入力 (例: AB12C3)" 
+              style={styles.input} placeholder="コードを入力 (例: AB12C3)" placeholderTextColor="#BBBBBB" 
               value={unlockCodeInput} onChangeText={setUnlockCodeInput} 
               autoCapitalize="characters"
             />

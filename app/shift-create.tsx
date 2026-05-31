@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -19,7 +19,7 @@ export default function ShiftCreateScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   
-  const [showTimeInCalendar, setShowTimeInCalendar] = useState(false);
+  const [showTimeInCalendar, setShowTimeInCalendar] = useState(true);
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [requests, setRequests] = useState<Record<string, string>>({});
@@ -28,6 +28,7 @@ export default function ShiftCreateScreen() {
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
+  const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -109,6 +110,10 @@ export default function ShiftCreateScreen() {
         snap.forEach(d => { eData[d.id] = d.data().title; });
         setEventsData(eData);
       }, (e) => console.warn('events リスナーエラー', e));
+
+      onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
+      });
 
       // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
@@ -235,64 +240,173 @@ export default function ShiftCreateScreen() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth() + 1;
       const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
-      
-      let thDates = '';
-      for (let i = 1; i <= daysInMonth; i++) {
-        const d = new Date(year, month - 1, i).getDay();
-        const dateStrForHoliday = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-        const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
-        
-        const color = (d === 0 || isPublicHoliday) ? 'red' : d === 6 ? 'blue' : '#000';
-        const bg = (d === 0 || isPublicHoliday) ? '#FFE4E1' : d === 6 ? '#E0FFFF' : '#E8F5E9'; 
-        thDates += `<th style="background:${bg}; color:${color}; border:1px solid #333; width: 60px;">${i}</th>`;
+      const DOW = ['日','月','火','水','木','金','土'];
+
+      const weeks: ({day:number, dow:number, dateStr:string} | null)[][] = [];
+      let week: ({day:number, dow:number, dateStr:string} | null)[] = [];
+      const firstDow = new Date(year, month - 1, 1).getDay();
+      for (let p = 0; p < firstDow; p++) week.push(null);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dow = new Date(year, month - 1, d).getDay();
+        const ds = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        week.push({ day: d, dow, dateStr: ds });
+        if (dow === 6 || d === daysInMonth) {
+          while (week.length < 7) week.push(null);
+          weeks.push(week);
+          week = [];
+        }
       }
 
-      let staffRows = '';
-      allStaff.forEach(staff => {
-        let rowHtml = `<tr><th style="background:#FFC0CB; border:1px solid #333; text-align:center; padding: 4px; white-space: nowrap;">${staff.name}</th>`;
-        for (let i = 1; i <= daysInMonth; i++) {
-          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-          const assigned = assignedShifts[dateStr]?.find(s => s.name === staff.name);
-          const req = requests[`${staff.name}_${dateStr}`];
+      const dowHeader = `<tr>
+        <td class="c-month">${month}月</td>
+        ${DOW.map((d,i) => {
+          const cls = i===0 ? 'c-dow c-dow-sun' : i===6 ? 'c-dow c-dow-sat' : 'c-dow c-dow-week';
+          return `<td class="${cls}">${d}</td>`;
+        }).join('')}
+      </tr>`;
 
-          if (assigned) {
-            rowHtml += `<td style="background:#FFD700; border:1px solid #333; font-weight:bold; font-size:10px;">${assigned.start}<br>-${assigned.end}</td>`;
-          } else if (req && req.includes('✕')) {
-            rowHtml += `<td style="background:#D3D3D3; border:1px solid #333; color:#333; font-size:12px;">✕</td>`;
-          } else {
-            rowHtml += `<td style="border:1px solid #333; background: #FFF;"></td>`;
-          }
-        }
-        rowHtml += `</tr>`;
-        staffRows += rowHtml;
+      let bodyHtml = '';
+      weeks.forEach(wk => {
+        // 日付行
+        const dateRow = `<tr>
+          <td class="c-date-label"></td>
+          ${wk.map(cell => {
+            if (!cell) return `<td class="c-date-empty"></td>`;
+            const isSun = cell.dow===0, isSat = cell.dow===6;
+            const isPH = !!publicHolidays[cell.dateStr];
+            const cls = (isPH||isSun) ? 'c-date c-date-sun' : isSat ? 'c-date c-date-sat' : 'c-date c-date-week';
+            return `<td class="${cls}">${cell.day}</td>`;
+          }).join('')}
+        </tr>`;
+
+        // スタッフ行
+        const staffHtml = allStaff.map(staff => {
+          const cells = wk.map(cell => {
+            if (!cell) return `<td class="c-shift c-shift-empty"></td>`;
+            const isSun = cell.dow===0, isSat = cell.dow===6;
+            const isPH = !!publicHolidays[cell.dateStr];
+            // 土日・祝日は色だけ（×なし）
+            if (isSun || isPH) return `<td class="c-shift c-col-sun"></td>`;
+            if (isSat) return `<td class="c-shift c-col-sat"></td>`;
+            const assigned = assignedShifts[cell.dateStr]?.find((s:any) => s.name === staff.name);
+            const req = requests[`${staff.name}_${cell.dateStr}`];
+            if (assigned) {
+              return `<td class="c-shift c-assigned">${assigned.start}-${assigned.end}</td>`;
+            } else {
+              // 平日の未回答・出勤不可は × グレー
+              return `<td class="c-shift c-off">×</td>`;
+            }
+          }).join('');
+          return `<tr><td class="c-name">${staff.name}</td>${cells}</tr>`;
+        }).join('');
+
+        bodyHtml += dateRow + staffHtml;
       });
 
-      const html = `
-        <html><head><style>
-          @page { size: A4 landscape; margin: 10mm; }
-          body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 0; }
-          table { width: 100%; border-collapse: collapse; table-layout: fixed; text-align: center; }
-          th, td { height: 36px; word-wrap: break-word; }
-          .top-header td { border: 1px solid #333; font-weight: bold; font-size: 18px; text-align: center; }
-        </style></head><body>
-          <table>
-            <tr class="top-header" style="height: 40px;">
-              <td style="background:#B0C4DE;">シフト表</td>
-              <td colspan="2" style="background:#E6E6FA;">${year}年</td>
-              <td colspan="3" style="background:#FFDAB9; font-size: 24px;">${month}月</td>
-              <td colspan="${daysInMonth - 6}" style="background:#F0F0F0; text-align: right; padding-right: 10px; font-size:12px; font-weight:normal;">出力日: ${new Date().toLocaleDateString('ja-JP')}</td>
-            </tr>
-            <tr><th style="background:#FFF3E0; border:1px solid #333;">名前 \\ 日付</th>${thDates}</tr>
-            ${staffRows}
-          </table>
-        </body></html>
-      `;
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri);
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        @page { size: A4 portrait; margin: 7mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
+          font-size: 7px;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
+        }
+        .title-bar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+        .title { font-size: 11px; font-weight: bold; }
+        .sub { font-size: 6.5px; color: #888; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        td { border: 0.5px solid #AAAAAA; vertical-align: middle; text-align: center; }
+
+        .c-month { background-color: #E8F5E9 !important; font-weight: bold; font-size: 8px; padding: 2px; }
+
+        .c-dow { font-weight: bold; font-size: 7.5px; padding: 2px; }
+        .c-dow-week { background-color: #E8E8E8 !important; color: #333; }
+        .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
+        .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
+
+        .c-date-label { background-color: #FFFFFF !important; height: 14px; }
+        .c-date-empty { background-color: #F0F0F0 !important; height: 14px; }
+        .c-date       { font-weight: bold; font-size: 8px; height: 14px; padding: 1px; }
+        .c-date-week  { background-color: #E8F5E9 !important; color: #333; }
+        .c-date-sun   { background-color: #FFD9D9 !important; color: #CC0000; }
+        .c-date-sat   { background-color: #CCE4FF !important; color: #0055CC; }
+
+        .c-name { background-color: #FFB6C1 !important; font-weight: bold; font-size: 7px;
+          padding: 1px 2px; height: 20px; white-space: nowrap; overflow: hidden; }
+
+        .c-shift       { height: 20px; font-size: 8px; padding: 1px;
+                         background-color: #FFFFFF !important;
+                         white-space: nowrap; overflow: hidden; }
+        .c-shift-empty { background-color: #F0F0F0 !important; }
+        .c-assigned    { background-color: #FFD700 !important; font-weight: bold; color: #333; font-size: 8.5px; }
+        .c-off         { background-color: #D0D0D0 !important; color: #444; font-size: 9px; }
+        .c-col-sun     { background-color: #FFD9D9 !important; }
+        .c-col-sat     { background-color: #CCE4FF !important; }
+
+        .legend { margin-top: 5px; font-size: 6.5px; color: #444; display: flex; gap: 10px; align-items: center; }
+        .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
+      </style></head><body>
+        <div class="title-bar">
+          <span class="title">シフト表　${year}年 ${month}月</span>
+          <span class="sub">出力日: ${new Date().toLocaleDateString('ja-JP')}</span>
+        </div>
+        <table>
+          <colgroup>
+            <col style="width:18px"/>
+            <col style="width:3%"/>
+            <col style="width:16.4%"/>
+            <col style="width:16.4%"/>
+            <col style="width:16.4%"/>
+            <col style="width:16.4%"/>
+            <col style="width:16.4%"/>
+            <col style="width:3%"/>
+          </colgroup>
+          <thead>${dowHeader}</thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+        <div class="legend">
+          <span><span class="lb" style="background:#FFD700;"></span>出勤（時間）</span>
+          <span><span class="lb" style="background:#D0D0D0;"></span>× 出勤不可 / 未回答</span>
+          <span><span class="lb" style="background:#FFD9D9;"></span>日曜・祝日</span>
+          <span><span class="lb" style="background:#CCE4FF;"></span>土曜</span>
+        </div>
+      </body></html>`;
+
+      if (Platform.OS === 'web') {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(html);
+          printWindow.document.close();
+          printWindow.focus();
+          setTimeout(() => { printWindow.print(); }, 600);
+        }
+      } else {
+        const { uri } = await Print.printToFileAsync({ html, base64: false });
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+      }
     } catch (e) {
       Alert.alert('エラー', 'PDF作成に失敗しました');
     }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
   const days = generateDays();
@@ -305,10 +419,6 @@ export default function ShiftCreateScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={[styles.pdfBtn, { backgroundColor: COLORS.secondary }]}>
-            <Ionicons name="grid-outline" size={20} color={COLORS.white} />
-            <Text style={styles.pdfBtnText}>表を見る</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
             <Ionicons name="document-text" size={20} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>PDF出力</Text>
@@ -356,8 +466,9 @@ export default function ShiftCreateScreen() {
             if (isSunday || isPublicHoliday) dateColor = 'red';
             else if (isSaturday) dateColor = 'blue';
 
+            const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
             return (
-              <TouchableOpacity key={item.dateStr} style={styles.calCell} onPress={() => openDayModal(item.dateStr)}>
+              <TouchableOpacity key={item.dateStr} style={[styles.calCell, hPeriod?.color && { backgroundColor: hPeriod.color }]} onPress={() => openDayModal(item.dateStr)}>
                 <View style={styles.cellTopRow}>
                   <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -384,6 +495,88 @@ export default function ShiftCreateScreen() {
           })}
         </View>
       </ScrollView>
+
+      {/* 一括削除FAB（右下）*/}
+      <TouchableOpacity
+        style={styles.fabDelete}
+        onPress={async () => {
+          const year = currentDate.getFullYear();
+          const month = currentDate.getMonth();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const confirmed = Platform.OS === 'web'
+            ? window.confirm(`${year}年${month + 1}月のシフトを全て削除しますか？`)
+            : await new Promise<boolean>(resolve => Alert.alert('確認', `${year}年${month + 1}月のシフトを全て削除しますか？`, [
+                { text: 'キャンセル', onPress: () => resolve(false) },
+                { text: '削除', style: 'destructive', onPress: () => resolve(true) }
+              ]));
+          if (!confirmed) return;
+          setLoading(true);
+          let count = 0;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            if (assignedShifts[dateStr] && assignedShifts[dateStr].length > 0) {
+              await deleteDoc(doc(db, 'assigned_shifts', dateStr));
+              count++;
+            }
+          }
+          setLoading(false);
+          if (Platform.OS === 'web') window.alert(`${count}日分のシフトを削除しました`);
+          else Alert.alert('完了', `${count}日分のシフトを削除しました`);
+        }}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="trash" size={20} color={COLORS.white} />
+        <Text style={styles.fabDeleteText}>月一括削除</Text>
+      </TouchableOpacity>
+
+      {/* 自動入力FAB（左下）- 当月全日一括 */}
+      <TouchableOpacity
+        style={styles.fabAutoFill}
+        onPress={async () => {
+          const year = currentDate.getFullYear();
+          const month = currentDate.getMonth();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          let updatedCount = 0;
+          const ok = Platform.OS === 'web'
+            ? window.confirm(`${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`)
+            : await new Promise<boolean>(resolve => Alert.alert('一括自動入力', `${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`, [
+                { text: 'キャンセル', onPress: () => resolve(false) },
+                { text: '実行', onPress: () => resolve(true) }
+              ]));
+          if (!ok) return;
+          setLoading(true);
+          try {
+            for (let d = 1; d <= daysInMonth; d++) {
+              const date = new Date(year, month, d);
+              const dow = date.getDay();
+              if (dow === 0 || dow === 6) continue;
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+              if (publicHolidays[dateStr]) continue;
+              const already = assignedShifts[dateStr] || [];
+              if (already.length >= 3) continue;
+              const assignedNames = already.map((s: any) => s.name);
+              const avail = allStaff.filter(staff => {
+                if (assignedNames.includes(staff.name)) return false;
+                const req = requests[`${staff.name}_${dateStr}`];
+                return req !== '✕' && req !== '午前✕' && req !== '午後✕';
+              });
+              const toAdd = avail.slice(0, 3 - already.length);
+              if (toAdd.length === 0) continue;
+              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: [...already, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))], updatedAt: new Date() });
+              updatedCount++;
+            }
+            if (Platform.OS === 'web') window.alert(`完了: ${updatedCount}日分を自動入力しました`);
+            else Alert.alert('完了', `${updatedCount}日分を自動入力しました`);
+          } catch (e) {
+            if (Platform.OS === 'web') window.alert('エラー: 一部保存に失敗しました');
+            else Alert.alert('エラー', '一部保存に失敗しました');
+          } finally { setLoading(false); }
+        }}
+        activeOpacity={0.85}
+      >
+        {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="flash" size={22} color={COLORS.white} />}
+        <Text style={styles.fabAutoFillText}>一括自動入力</Text>
+      </TouchableOpacity>
 
       {/* ==========================================
           ★ 1画面完全フィットシフト表 (土日幅縮小版)
@@ -515,7 +708,22 @@ export default function ShiftCreateScreen() {
 
             <ScrollView style={{ flex: 1, padding: 20 }}>
               
-              <Text style={[styles.sectionTitle, { color: COLORS.primary }]}>出勤可能なスタッフ</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.sectionTitle, { color: COLORS.primary, marginBottom: 0, borderBottomWidth: 0 }]}>出勤可能なスタッフ</Text>
+                <TouchableOpacity
+                  style={styles.autoFillBtn}
+                  onPress={() => {
+                    const alreadyAssigned = currentDayAssigned.map(a => a.name);
+                    const candidates = availableStaff.filter(s => !alreadyAssigned.includes(s.name));
+                    const toAdd = candidates.slice(0, Math.max(0, 3 - currentDayAssigned.length));
+                    if (toAdd.length === 0) return;
+                    setCurrentDayAssigned([...currentDayAssigned, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))]);
+                  }}
+                >
+                  <Ionicons name="flash" size={14} color={COLORS.white} />
+                  <Text style={styles.autoFillBtnText}>3名まで自動追加</Text>
+                </TouchableOpacity>
+              </View>
               {availableStaff.map((s, i) => {
                 const isAssigned = currentDayAssigned.some(a => a.name === s.name);
                 return (
@@ -684,7 +892,7 @@ const styles = StyleSheet.create({
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   
   calCellEmpty: { width: '14.28%', minHeight: 80 },
-  calCell: { width: '14.28%', minHeight: 80, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  calCell: { width: '14.28%', minHeight: 90, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
   
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calDayText: { fontSize: 12, fontWeight: 'bold' },
@@ -692,6 +900,9 @@ const styles = StyleSheet.create({
   cellCountText: { fontSize: 10, color: COLORS.primary, fontWeight: 'bold' },
   
   cellStaffText: { fontSize: 9, color: '#333', marginBottom: 4, lineHeight: 12 },
+  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2 },
+  cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
+  cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   
   eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
   eventBadgeText: { fontSize: 8, color: COLORS.white, fontWeight: 'bold', textAlign: 'center' },
@@ -773,5 +984,11 @@ const styles = StyleSheet.create({
   ssNameText: { fontSize: 10, fontWeight: 'bold', color: '#333', textAlign: 'center', paddingHorizontal: 2 },
   
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
-  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 }, // ★ 行間を少し詰める
+  ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
+  fabDelete: { position: 'absolute', bottom: 28, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.danger, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabDeleteText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
+  fabAutoFill: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabAutoFillText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
+  autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  autoFillBtnText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
 });

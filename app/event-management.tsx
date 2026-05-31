@@ -249,14 +249,14 @@ export default function EventManagementScreen() {
 
             <ScrollView style={{ flex: 1, padding: 20 }} showsVerticalScrollIndicator={false}>
               <Text style={styles.label}>イベント名</Text>
-              <TextInput style={styles.input} value={eventTitle} onChangeText={setEventTitle} placeholder="例: 春の遠足" editable={isAdmin} />
+              <TextInput style={styles.input} value={eventTitle} onChangeText={setEventTitle} placeholder="例: 春の遠足" placeholderTextColor="#BBBBBB" editable={isAdmin} />
               
               <Text style={styles.label}>説明・詳細</Text>
               <TextInput 
                 style={[styles.input, { height: 80 }]} 
                 value={eventDesc} 
                 onChangeText={setEventDesc} 
-                placeholder="持ち物や集合時間など" 
+                placeholder="持ち物や集合時間など" placeholderTextColor="#BBBBBB" 
                 multiline 
                 editable={isAdmin}
               />
@@ -304,10 +304,10 @@ export default function EventManagementScreen() {
                   {isAdmin && (
                     <View style={styles.addExtBox}>
                       <Text style={{fontWeight: 'bold', marginBottom: 8}}>外部参加者の追加</Text>
-                      <TextInput style={styles.smallInput} placeholder="氏名" value={extName} onChangeText={setExtName} />
+                      <TextInput style={styles.smallInput} placeholder="氏名" placeholderTextColor="#BBBBBB" value={extName} onChangeText={setExtName} />
                       <View style={{flexDirection: 'row', gap: 8, marginVertical: 8}}>
-                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学校名" value={extSchool} onChangeText={setExtSchool} />
-                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学年" value={extGrade} onChangeText={setExtGrade} />
+                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学校名" placeholderTextColor="#BBBBBB" value={extSchool} onChangeText={setExtSchool} />
+                        <TextInput style={[styles.smallInput, {flex: 1}]} placeholder="学年" placeholderTextColor="#BBBBBB" value={extGrade} onChangeText={setExtGrade} />
                       </View>
                       <TouchableOpacity style={styles.addExtBtn} onPress={addExternalParticipant}>
                         <Text style={{color: COLORS.white, fontWeight:'bold'}}>追加</Text>

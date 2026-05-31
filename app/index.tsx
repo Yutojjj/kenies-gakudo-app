@@ -121,9 +121,9 @@ export default function LoginScreen() {
 
         <View style={styles.formContainer}>
           <Text style={styles.label}>ログインID</Text>
-          <TextInput style={styles.input} placeholder="IDを入力" value={id} onChangeText={setId} autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="IDを入力" placeholderTextColor="#BBBBBB" value={id} onChangeText={setId} autoCapitalize="none" />
           <Text style={styles.label}>パスワード</Text>
-          <TextInput style={styles.input} placeholder="パスワードを入力" value={password} onChangeText={setPassword} secureTextEntry />
+          <TextInput style={styles.input} placeholder="パスワードを入力" placeholderTextColor="#BBBBBB" value={password} onChangeText={setPassword} secureTextEntry />
           <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
             <Text style={styles.loginBtnText}>ログイン</Text>
           </TouchableOpacity>

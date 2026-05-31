@@ -6,7 +6,7 @@ import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, Tex
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
-type HolidayPeriod = { id: string, name: string, start: string, end: string };
+type HolidayPeriod = { id: string, name: string, start: string, end: string, color?: string };
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -17,7 +17,19 @@ export default function HolidaysSettingScreen() {
   const router = useRouter();
   const [periods, setPeriods] = useState<HolidayPeriod[]>([]);
 
+  const PALETTE = [
+    { label: '桃', value: '#FFD6D6' },
+    { label: '橙', value: '#FFE5CC' },
+    { label: '黄', value: '#FFFACC' },
+    { label: '黄緑', value: '#D6FFDA' },
+    { label: '水', value: '#CCF0FF' },
+    { label: '青', value: '#D6E4FF' },
+    { label: '紫', value: '#EDD6FF' },
+    { label: '灰', value: '#E8E8E8' },
+  ];
+
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedColor, setSelectedColor] = useState('#CCF0FF');
   const [periodName, setPeriodName] = useState('');
   const [startDateObj, setStartDateObj] = useState(new Date());
   const [endDateObj, setEndDateObj] = useState(new Date());
@@ -75,6 +87,7 @@ export default function HolidaysSettingScreen() {
       name: periodName,
       start: toDateStr(startDateObj),
       end: toDateStr(endDateObj),
+      color: selectedColor,
     };
     const newPeriods = [...periods, newPeriod].sort((a, b) => a.start.localeCompare(b.start));
     try {
@@ -106,6 +119,7 @@ export default function HolidaysSettingScreen() {
     setStartDateObj(today);
     setEndDateObj(today);
     setPeriodName('');
+    setSelectedColor('#CCF0FF');
     setModalVisible(true);
   };
 
@@ -124,7 +138,8 @@ export default function HolidaysSettingScreen() {
         </Text>
 
         {periods.map(p => (
-          <View key={p.id} style={styles.card}>
+          <View key={p.id} style={[styles.card, { borderLeftWidth: 6, borderLeftColor: p.color || '#CCF0FF' }]}>
+            <View style={[styles.colorDot, { backgroundColor: p.color || '#CCF0FF' }]} />
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>{p.name}</Text>
               <Text style={styles.cardDate}>{p.start} 〜 {p.end}</Text>
@@ -156,7 +171,7 @@ export default function HolidaysSettingScreen() {
             </View>
 
             <Text style={styles.label}>名称 (例: 夏休み, 祝日)</Text>
-            <TextInput style={styles.input} value={periodName} onChangeText={setPeriodName} placeholder="期間の名称" />
+            <TextInput style={styles.input} value={periodName} onChangeText={setPeriodName} placeholder="期間の名称" placeholderTextColor="#BBBBBB" />
 
             <Text style={styles.label}>開始日</Text>
             <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('start')}>
@@ -174,6 +189,22 @@ export default function HolidaysSettingScreen() {
             <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 20 }}>
               ※1日だけの場合は、開始と終了を同じ日付にしてください。
             </Text>
+
+            <Text style={styles.label}>カレンダーの背景色</Text>
+            <View style={styles.paletteRow}>
+              {PALETTE.map(c => (
+                <TouchableOpacity
+                  key={c.value}
+                  style={[styles.paletteCell, { backgroundColor: c.value }, selectedColor === c.value && styles.paletteCellActive]}
+                  onPress={() => setSelectedColor(c.value)}
+                >
+                  {selectedColor === c.value && <Ionicons name="checkmark" size={16} color="#333" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={[styles.colorPreview, { backgroundColor: selectedColor }]}>
+              <Text style={styles.colorPreviewText}>プレビュー：{selectedColor}</Text>
+            </View>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
               <Text style={styles.saveBtnText}>登録する</Text>
@@ -246,6 +277,12 @@ const styles = StyleSheet.create({
   scrollArea: { padding: 16 },
   instructionText: { fontSize: 14, color: COLORS.textLight, marginBottom: 16, lineHeight: 20 },
   card: { flexDirection: 'row', backgroundColor: COLORS.white, padding: 16, borderRadius: 12, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  colorDot: { width: 20, height: 20, borderRadius: 10, marginRight: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  paletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  paletteCell: { width: 44, height: 44, borderRadius: 10, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
+  paletteCellActive: { borderColor: '#333', borderWidth: 2 },
+  colorPreview: { borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  colorPreviewText: { fontSize: 12, color: '#555', fontWeight: 'bold' },
   cardTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
   cardDate: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
   deleteBtn: { padding: 8, backgroundColor: '#FFF0F0', borderRadius: 8, borderWidth: 1, borderColor: '#FFE0E0' },

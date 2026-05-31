@@ -12,6 +12,7 @@ import {
   onSnapshot, orderBy, query, serverTimestamp, setDoc,
   where
 } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,12 +27,12 @@ import {
 import { COLORS } from '../constants/theme';
 import { useCall } from '../contexts/CallContext';
 import { db, storage } from '../firebase';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
   id: string; type: 'direct' | 'group'; name: string;
   lastMessage?: string; lastMessageAt?: any; unreadFor?: string[];
+  participants?: string[];
   settings?: { allowChat?: boolean; allowCall?: boolean };
 };
 type Message = {
@@ -538,7 +539,7 @@ export default function MessagesScreen() {
   const isGroup = activeConv?.type === 'group';
   
   // 修正：ダイレクトメッセージなら常にOK、グループなら設定に従う。管理者は常にOK
-  const canChat = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowChat !== false);
+  const canChat = true; // 利用者・スタッフ全員チャット可能
   const canCall = (isDirect || (isGroup && (isAdmin || activeConv?.settings?.allowCall !== false)));
 
   if (loading) {
@@ -654,8 +655,7 @@ export default function MessagesScreen() {
                 <Text style={styles.modalSubLabel}>グループ名</Text>
                 <TextInput
                   style={styles.textInputLarge}
-                  placeholder="読みやすい名前を入力"
-                  placeholderTextColor={COLORS.textLight}
+                  placeholder="読みやすい名前を入力" placeholderTextColor="#BBBBBB"
                   value={newGroupName}
                   onChangeText={setNewGroupName}
                 />
@@ -690,7 +690,7 @@ export default function MessagesScreen() {
                   <Ionicons name="search" size={20} color={COLORS.textLight} style={{marginRight: 8}} />
                   <TextInput
                     style={{ flex: 1, fontSize: 16 }}
-                    placeholder="名前・かなで検索"
+                    placeholder="名前・かなで検索" placeholderTextColor="#BBBBBB"
                     value={groupSearchQuery}
                     onChangeText={setGroupSearchQuery}
                   />
@@ -807,6 +807,20 @@ export default function MessagesScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {activeConv?.name || 'チャット'}
         </Text>
+        {isAdmin && activeConv?.type === 'direct' && (
+          <TouchableOpacity
+            style={styles.callHeaderBtn}
+            onPress={() => {
+              const otherId = (activeConv?.participants || []).find((id: string) => id !== ADMIN_ID);
+              if (otherId) {
+                const acc = availableAccounts?.find((a: any) => a.id === otherId);
+                router.push({ pathname: '/schedule', params: { name: acc?.name || activeConv?.name || '' } } as any);
+              }
+            }}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#5D4037" />
+          </TouchableOpacity>
+        )}
         {canCall && callStatus === 'idle' && (
           <TouchableOpacity style={styles.callHeaderBtn} onPress={() => startCall(activeConv!.id, calleeDisplayName, true)}>
             <Ionicons name="call" size={20} color="#5D4037" />
@@ -871,7 +885,7 @@ export default function MessagesScreen() {
               style={styles.textInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="メッセージ..."
+              placeholder="メッセージ..." placeholderTextColor="#BBBBBB"
               multiline
             />
             <TouchableOpacity

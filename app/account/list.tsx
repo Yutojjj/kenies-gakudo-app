@@ -195,7 +195,7 @@ export default function AccountManagementScreen() {
           <Ionicons name="search" size={20} color={COLORS.textLight} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="名前やニックネームで検索"
+            placeholder="名前やニックネームで検索" placeholderTextColor="#BBBBBB"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />

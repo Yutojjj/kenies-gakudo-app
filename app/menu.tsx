@@ -495,7 +495,7 @@ export default function MenuScreen() {
             <Text style={styles.modalTitle}>🔒 パスワード変更</Text>
             <TextInput
               style={[styles.input, { marginVertical: 20 }]}
-              placeholder="新しいパスワード"
+              placeholder="新しいパスワード" placeholderTextColor="#BBBBBB"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry

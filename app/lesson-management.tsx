@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert, Modal, Platform, SafeAreaView, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View
+  Alert, Modal, Platform, SafeAreaView, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -68,8 +68,11 @@ export default function LessonManagementScreen() {
   const [selectedTime, setSelectedTime] = useState('15:00');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterSchool, setFilterSchool] = useState('');
+  const [filterGrade, setFilterGrade] = useState('');
 
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
+  const [activeDayTab, setActiveDayTab] = useState('全て');
 
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [tempHour, setTempHour] = useState(15);
@@ -158,14 +161,25 @@ export default function LessonManagementScreen() {
     }
   };
 
+  const allSchools = useMemo(() => [...new Set(kids.map(k => k.school).filter(Boolean))].sort(), [kids]);
+  const allGrades = useMemo(() => {
+    const g = [...new Set(kids.map(k => k.grade).filter(Boolean))];
+    return g.sort((a, b) => {
+      const na = parseInt(a.match(/\d/)?.[0] || '99');
+      const nb = parseInt(b.match(/\d/)?.[0] || '99');
+      return na - nb;
+    });
+  }, [kids]);
+
   const filteredKids = useMemo(() => {
-    if (!searchQuery.trim()) return kids;
-    const q = searchQuery.trim().toLowerCase();
-    return kids.filter(k =>
-      k.name.toLowerCase().includes(q) ||
-      k.nicknameKana.toLowerCase().includes(q)
-    );
-  }, [kids, searchQuery]);
+    return kids.filter(k => {
+      if (filterSchool && k.school !== filterSchool) return false;
+      if (filterGrade && k.grade !== filterGrade) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.trim().toLowerCase();
+      return k.name.toLowerCase().includes(q) || k.nicknameKana.toLowerCase().includes(q);
+    });
+  }, [kids, searchQuery, filterSchool, filterGrade]);
 
   const openTimePicker = () => {
     const [h, m] = selectedTime.split(':').map(Number);
@@ -189,22 +203,40 @@ export default function LessonManagementScreen() {
     if (!lessonName.trim()) { customAlert('エラー', '習い事の名前を入力してください'); return; }
     if (selectedKidIds.length === 0) { customAlert('エラー', '児童を1人以上選択してください'); return; }
 
-    try {
-      for (const kidId of selectedKidIds) {
-        const kid = kids.find(k => k.id === kidId);
-        if (!kid) continue;
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (const kidId of selectedKidIds) {
+      const kid = kids.find(k => k.id === kidId);
+      if (!kid) {
+        errors.push(`ID:${kidId} が見つかりません`);
+        continue;
+      }
+      try {
         await addDoc(collection(db, 'lessons'), {
-          childId: kid.id, childName: kid.name, school: kid.school,
-          lessonName: lessonName.trim(), lessonTime: selectedTime,
+          childId: kid.id,
+          childName: kid.name,
+          school: kid.school,
+          lessonName: lessonName.trim(),
+          lessonTime: selectedTime,
           dayOfWeek: selectedDayOfWeek,
         });
+        successCount++;
+      } catch (e: any) {
+        console.error(`${kid.name} の登録失敗:`, e);
+        errors.push(`${kid.name}: ${e?.message || String(e)}`);
       }
-      customAlert('成功', `${selectedKidIds.length}名に習い事を登録しました`);
+    }
+
+    if (errors.length > 0) {
+      customAlert('一部エラー', `${successCount}名登録成功\n失敗:\n${errors.join('\n')}`);
+    } else {
+      customAlert('成功', `${successCount}名に習い事を登録しました`);
+    }
+    if (successCount > 0) {
       resetForm();
-      fetchData();
+      await fetchData();
       setViewMode('list');
-    } catch (e) {
-      customAlert('エラー', '登録に失敗しました');
     }
   };
 
@@ -230,6 +262,8 @@ export default function LessonManagementScreen() {
     setTempMinute(0);
     setSelectedKidIds([]);
     setSearchQuery('');
+    setFilterSchool('');
+    setFilterGrade('');
   };
 
   return (
@@ -251,42 +285,73 @@ export default function LessonManagementScreen() {
       </View>
 
       {viewMode === 'list' ? (
-        <ScrollView style={styles.mainScroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-          {lessons.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="book-outline" size={48} color={COLORS.textLight} />
-              <Text style={styles.emptyText}>登録されている習い事はありません</Text>
-            </View>
-          ) : (
-            lessons.map(lesson => (
-              <View key={lesson.id} style={styles.lessonCard}>
-                <View style={styles.lessonCardLeft}>
-                  <Text style={styles.lessonCardName}>{lesson.childName}</Text>
-                  <Text style={styles.lessonCardSchool}>{lesson.school}</Text>
-                  <View style={styles.lessonBadgeRow}>
-                    <View style={styles.lessonBadge}>
-                      <Ionicons name="book-outline" size={12} color={COLORS.primary} />
-                      <Text style={styles.lessonBadgeText}>{lesson.lessonName}</Text>
+        <>
+          {/* 曜日タブ */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayTabScroll} contentContainerStyle={styles.dayTabContent}>
+            {(['全て', '月', '火', '水', '木', '金'] as const).map((day) => {
+              const count = day === '全て' ? lessons.length : lessons.filter(l => l.dayOfWeek === day).length;
+              return (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayTab, activeDayTab === day && styles.dayTabActive]}
+                  onPress={() => setActiveDayTab(day)}
+                >
+                  <Text style={[styles.dayTabText, activeDayTab === day && styles.dayTabTextActive]}>
+                    {day === '全て' ? '全て' : `${day}曜`}
+                  </Text>
+                  {count > 0 && (
+                    <View style={[styles.dayTabBadge, activeDayTab === day && styles.dayTabBadgeActive]}>
+                      <Text style={[styles.dayTabBadgeText, activeDayTab === day && styles.dayTabBadgeTextActive]}>{count}</Text>
                     </View>
-                    {lesson.dayOfWeek && (
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <ScrollView style={styles.mainScroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {(() => {
+              const filtered = activeDayTab === '全て'
+                ? lessons
+                : lessons.filter(l => l.dayOfWeek === (activeDayTab as string));
+              if (filtered.length === 0) return (
+                <View style={styles.emptyBox}>
+                  <Ionicons name="book-outline" size={48} color={COLORS.textLight} />
+                  <Text style={styles.emptyText}>
+                    {activeDayTab === '全て' ? '登録されている習い事はありません' : `${activeDayTab}曜日の習い事はありません`}
+                  </Text>
+                </View>
+              );
+              return filtered.map(lesson => (
+                <View key={lesson.id} style={styles.lessonCard}>
+                  <View style={styles.lessonCardLeft}>
+                    <Text style={styles.lessonCardName}>{lesson.childName}</Text>
+                    <Text style={styles.lessonCardSchool}>{lesson.school}</Text>
+                    <View style={styles.lessonBadgeRow}>
                       <View style={styles.lessonBadge}>
-                        <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
-                        <Text style={styles.lessonBadgeText}>{lesson.dayOfWeek}曜日</Text>
+                        <Ionicons name="book-outline" size={12} color={COLORS.primary} />
+                        <Text style={styles.lessonBadgeText}>{lesson.lessonName}</Text>
                       </View>
-                    )}
-                    <View style={styles.lessonBadge}>
-                      <Ionicons name="time-outline" size={12} color={COLORS.primary} />
-                      <Text style={styles.lessonBadgeText}>{lesson.lessonTime}</Text>
+                      {lesson.dayOfWeek && (
+                        <View style={styles.lessonBadge}>
+                          <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
+                          <Text style={styles.lessonBadgeText}>{lesson.dayOfWeek}曜日</Text>
+                        </View>
+                      )}
+                      <View style={styles.lessonBadge}>
+                        <Ionicons name="time-outline" size={12} color={COLORS.primary} />
+                        <Text style={styles.lessonBadgeText}>{lesson.lessonTime}</Text>
+                      </View>
                     </View>
                   </View>
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(lesson.id || '')}>
+                    <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(lesson.id || '')}>
-                  <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </ScrollView>
+              ));
+            })()}
+          </ScrollView>
+        </>
       ) : (
         <ScrollView style={styles.mainScroll} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
 
@@ -299,6 +364,7 @@ export default function LessonManagementScreen() {
             <TextInput
               style={styles.input}
               placeholder="例: 習字、ピアノ、野球"
+              placeholderTextColor="#BBBBBB"
               value={lessonName}
               onChangeText={setLessonName}
             />
@@ -354,6 +420,7 @@ export default function LessonManagementScreen() {
               <TextInput
                 style={styles.searchInput}
                 placeholder="名前またはニックネームで検索"
+                placeholderTextColor="#BBBBBB"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 clearButtonMode="while-editing"
@@ -363,6 +430,30 @@ export default function LessonManagementScreen() {
                   <Ionicons name="close-circle" size={18} color={COLORS.textLight} />
                 </TouchableOpacity>
               )}
+            </View>
+
+            {/* 学校・学年フィルター */}
+            <View style={{ marginBottom: 10 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+                <TouchableOpacity style={[styles.filterChip, !filterSchool && styles.filterChipActive]} onPress={() => setFilterSchool('')}>
+                  <Text style={[styles.filterChipText, !filterSchool && styles.filterChipTextActive]}>全校</Text>
+                </TouchableOpacity>
+                {allSchools.map(s => (
+                  <TouchableOpacity key={s} style={[styles.filterChip, filterSchool === s && styles.filterChipActive]} onPress={() => setFilterSchool(filterSchool === s ? '' : s)}>
+                    <Text style={[styles.filterChipText, filterSchool === s && styles.filterChipTextActive]}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 4 }}>
+                <TouchableOpacity style={[styles.filterChip, !filterGrade && styles.filterChipActive]} onPress={() => setFilterGrade('')}>
+                  <Text style={[styles.filterChipText, !filterGrade && styles.filterChipTextActive]}>全学年</Text>
+                </TouchableOpacity>
+                {allGrades.map(g => (
+                  <TouchableOpacity key={g} style={[styles.filterChip, filterGrade === g && styles.filterChipActive]} onPress={() => setFilterGrade(filterGrade === g ? '' : g)}>
+                    <Text style={[styles.filterChipText, filterGrade === g && styles.filterChipTextActive]}>{g}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             {/* 選択済みタグ */}
@@ -496,8 +587,22 @@ const styles = StyleSheet.create({
   timeSelectBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F8FF', borderRadius: 10, padding: 16, borderWidth: 1, borderColor: COLORS.primary + '50', gap: 12 },
   timeSelectText: { fontSize: 28, fontWeight: 'bold', color: COLORS.primary, flex: 1 },
   timeSelectHint: { fontSize: 12, color: COLORS.textLight },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+  dayTabScroll: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border, maxHeight: 56, flexShrink: 0 },
+  dayTabContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
+  dayTab: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F0F0', borderWidth: 1.5, borderColor: 'transparent', gap: 6 },
+  dayTabActive: { backgroundColor: COLORS.primary + '15', borderColor: COLORS.primary },
+  dayTabText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
+  dayTabTextActive: { color: COLORS.primary },
+  dayTabBadge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.textLight + '40', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
+  dayTabBadgeActive: { backgroundColor: COLORS.primary },
+  dayTabBadgeText: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
+  dayTabBadgeTextActive: { color: COLORS.white },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, borderWidth: 1, borderColor: COLORS.border },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.text },
+  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#F5F5F5' },
+  filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  filterChipText: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight },
+  filterChipTextActive: { color: COLORS.white },
   selectedTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   selectedTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5 },
   selectedTagText: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
