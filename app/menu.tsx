@@ -21,6 +21,21 @@ const ANIMALS = {
   rabbit:  require('../assets/animals/rabbit.png'),
 };
 
+// ── メニューアイコン画像（assets/menu/に配置済みのファイルを使用）──
+const MENU_ICONS = {
+  attendance:      require('../assets/menu/attendance.png'),
+  eventManagement: require('../assets/menu/event-management.png'),
+  shiftCreate:     require('../assets/menu/shift-create.png'),
+  shiftView:       require('../assets/menu/shift-view.png'),
+  album:           require('../assets/menu/album.png'),
+  accountList:     require('../assets/menu/account-list.png'),
+  messages:        require('../assets/menu/messages.png'),
+  scheduleChanges: require('../assets/menu/schedule-changes.png'),
+  // schedule.png・event-list.pngは未配置のため既存画像を使用
+  schedule:        ANIMALS.dolphin,
+  eventList:       ANIMALS.chick,
+};
+
 const { width } = Dimensions.get('window');
 
 const customAlert = (title: string, message?: string) => {
@@ -71,17 +86,13 @@ function MenuCard({
       ],
     }]}>
       <TouchableWithoutFeedback onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
-        <Animated.View style={[styles.card, { backgroundColor: bgColor, transform: [{ scale }] }]}>
+        <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           {badge != null && badge > 0 && (
             <View style={styles.badgeWrap}>
               <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
             </View>
           )}
-          <Image source={image} style={styles.cardImage} resizeMode="contain" />
-          <View style={styles.cardLabelWrap}>
-            <Text style={styles.cardTitle}>{title}</Text>
-            {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
-          </View>
+          <Image source={image} style={styles.cardImage} resizeMode="cover" />
         </Animated.View>
       </TouchableWithoutFeedback>
     </Animated.View>
@@ -312,24 +323,24 @@ export default function MenuScreen() {
             <>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={ANIMALS.dolphin} title="利用日・習い事" subtitle="予定を見る" bgColor="#87CEEB"
+                  image={MENU_ICONS.schedule} title="利用日・習い事" subtitle="予定を見る" bgColor="#87CEEB"
                   onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)}
                   animValue={cardAnims[0]}
                 />
                 <MenuCard
-                  image={ANIMALS.rabbit} title="アルバム" subtitle="思い出の写真" bgColor="#C9AADF"
+                  image={MENU_ICONS.album} title="アルバム" subtitle="思い出の写真" bgColor="#C49FD8"
                   onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}
                   animValue={cardAnims[1]}
                 />
               </View>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={ANIMALS.chick} title="イベント参加" subtitle="行事の予定" bgColor="#F5DCA8"
+                  image={MENU_ICONS.eventList} title="イベント参加" subtitle="行事の予定" bgColor="#F5DCA8"
                   onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
                   animValue={cardAnims[2]}
                 />
                 <MenuCard
-                  image={ANIMALS.koala} title="メッセージ" subtitle="先生に連絡" bgColor="#C9AADF"
+                  image={MENU_ICONS.messages} title="メッセージ" subtitle="先生に連絡" bgColor="#C9AADF"
                   onPress={() => router.push('/messages' as any)}
                   animValue={cardAnims[3]}
                   badge={unreadCount}
@@ -340,22 +351,22 @@ export default function MenuScreen() {
             <>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={ANIMALS.cat} title="出欠一覧" subtitle="今日の出席を確認" bgColor="#EFA060"
+                  image={MENU_ICONS.attendance} title="出欠一覧" subtitle="今日の出席を確認" bgColor="#F4A460"
                   onPress={() => router.push('/attendance')}
                   animValue={cardAnims[0]}
                 />
                 <MenuCard
-                  image={ANIMALS.chick} title="イベント管理" subtitle="行事の管理" bgColor="#F5DCA8"
+                  image={MENU_ICONS.eventManagement} title="イベント管理" subtitle="行事の管理" bgColor="#F5C842"
                   onPress={() => router.push({ pathname: '/event-management', params: { role: role || '' } } as any)}
                   animValue={cardAnims[1]}
                 />
               </View>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={ANIMALS.frog}
+                  image={MENU_ICONS.shiftCreate}
                   title={role === 'admin' ? 'シフト作成' : 'シフト提出'}
                   subtitle="シフトを管理"
-                  bgColor="#B8DF78"
+                  bgColor="#8CC84B"
                   onPress={() =>
                     role === 'admin'
                       ? router.push('/shift-create')
@@ -364,25 +375,25 @@ export default function MenuScreen() {
                   animValue={cardAnims[2]}
                 />
                 <MenuCard
-                  image={ANIMALS.dolphin} title="シフトを見る" subtitle="シフトを確認" bgColor="#87CEEB"
+                  image={MENU_ICONS.shiftView} title="シフトを見る" subtitle="シフトを確認" bgColor="#6CBDE8"
                   onPress={() => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any)}
                   animValue={cardAnims[3]}
                 />
               </View>
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={ANIMALS.rabbit} title="アルバム" subtitle="思い出の写真" bgColor="#C9AADF"
+                  image={MENU_ICONS.album} title="アルバム" subtitle="思い出の写真" bgColor="#C49FD8"
                   onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}
                   animValue={cardAnims[4]}
                 />
                 {role === 'admin'
                   ? <MenuCard
-                      image={ANIMALS.panda} title="アカウント管理" subtitle="プロフィール設定" bgColor="#FAD2D2"
+                      image={MENU_ICONS.accountList} title="アカウント管理" subtitle="プロフィール設定" bgColor="#F9C0C0"
                       onPress={() => router.push('/account/list')}
                       animValue={cardAnims[5]}
                     />
                   : <MenuCard
-                      image={ANIMALS.koala} title="メッセージ" subtitle="管理者に連絡" bgColor="#C9AADF"
+                      image={MENU_ICONS.messages} title="メッセージ" subtitle="管理者に連絡" bgColor="#C9AADF"
                       onPress={() => router.push('/messages' as any)}
                       animValue={cardAnims[5]}
                       badge={unreadCount}
@@ -392,13 +403,13 @@ export default function MenuScreen() {
               {role === 'admin' && (
                 <View style={styles.gridRow}>
                   <MenuCard
-                    image={ANIMALS.koala} title="メッセージ" subtitle="利用者・スタッフと連絡" bgColor="#C9AADF"
+                    image={MENU_ICONS.messages} title="メッセージ" subtitle="利用者・スタッフと連絡" bgColor="#C9AADF"
                     onPress={() => router.push('/messages' as any)}
                     animValue={cardAnims[6]}
                     badge={unreadCount}
                   />
                   <MenuCard
-                    image={ANIMALS.bear} title="変更履歴" subtitle="スケジュール変更を確認" bgColor="#F5DCA8"
+                    image={MENU_ICONS.scheduleChanges} title="変更履歴" subtitle="スケジュール変更を確認" bgColor="#E8C97A"
                     onPress={() => router.push('/schedule-changes' as any)}
                     animValue={cardAnims[7]}
                   />
@@ -566,28 +577,30 @@ const styles = StyleSheet.create({
 
   // ── グリッド ──
   grid: { paddingHorizontal: 14, gap: 12 },
-  gridRow: { flexDirection: 'row', gap: 12 },
+  gridRow: { flexDirection: 'row', gap: 12, marginBottom: 0 },
 
   // ── カード ──
   card: {
     flex: 1,
     borderRadius: 22,
-    paddingTop: 16,
-    paddingBottom: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: '#8B7340',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 5,
-    minHeight: 140,
-    justifyContent: 'space-between',
+    elevation: 6,
+    aspectRatio: 1.35,
   },
-  cardImage: { width: 76, height: 76 },
-  cardLabelWrap: { width: '100%', alignItems: 'center', paddingBottom: 2 },
-  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#5D4037', textAlign: 'center' },
-  cardSubtitle: { fontSize: 11, color: '#8D6E63', textAlign: 'center', marginTop: 2 },
+  cardImage: { width: '100%', height: '100%' },
+  cardLabelWrap: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingVertical: 8, paddingHorizontal: 6,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+  },
+  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#fff', textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  cardSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.85)', textAlign: 'center', marginTop: 1 },
   badgeWrap: {
     position: 'absolute', top: 8, right: 8, zIndex: 10,
     minWidth: 22, height: 22, borderRadius: 11,

@@ -47,7 +47,7 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 export default function EventManagementScreen() {
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: string }>();
-  const isAdmin = role === 'admin';
+  const isAdmin = true; // スタッフも編集可能
 
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -179,7 +179,7 @@ export default function EventManagementScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>イベント管理 {isAdmin ? '' : '(閲覧のみ)'}</Text>
+        <Text style={styles.headerTitle}>イベント管理</Text>
       </View>
 
       <View style={styles.monthSelector}>

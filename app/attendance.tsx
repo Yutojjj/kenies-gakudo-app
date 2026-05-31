@@ -476,8 +476,8 @@ export default function AttendanceScreen() {
                                       <Text style={styles.timeCountBadge}>{kids.length}名</Text>
                                     </View>
                                     <View style={styles.kidNamesContainer}>
-                                      {kids.map(k => (
-                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}</Text>
+                                      {sortKidsByGrade(kids).map(k => (
+                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}<Text style={styles.kidGradeText}> {k.grade}</Text></Text>
                                       ))}
                                     </View>
                                   </>
@@ -514,8 +514,8 @@ export default function AttendanceScreen() {
                                 <Text style={[styles.timeCountBadge, { color: '#4682B4', backgroundColor: '#4682B420' }]}>{kids.length}名</Text>
                               </View>
                               <View style={styles.kidNamesContainer}>
-                                {kids.map(k => (
-                                  <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
+                                {sortKidsByGrade(kids).map(k => (
+                                  <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}<Text style={[styles.kidGradeText, { color: '#4682B4' }]}> {k.grade}</Text></Text>
                                 ))}
                               </View>
                             </TouchableOpacity>
@@ -752,6 +752,7 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
   timeCountBadge: { fontSize: 10, fontWeight: 'bold', color: COLORS.primary, backgroundColor: COLORS.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   kidNamesContainer: { gap: 3, width: '100%' },
+  kidGradeText: { fontSize: 9, fontWeight: 'normal', opacity: 0.7 },
   kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
