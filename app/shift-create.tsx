@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -31,6 +31,15 @@ export default function ShiftCreateScreen() {
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  // 自動入力設定（Firestoreに保存）
+  const [autoFillSettings, setAutoFillSettings] = useState<{
+    staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
+    dayMaxCount: { '月':number; '火':number; '水':number; '木':number; '金':number };
+  }>({
+    staffSettings: [],
+    dayMaxCount: { '月':3, '火':3, '水':3, '木':3, '金':3 },
+  });
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
@@ -426,6 +435,11 @@ export default function ShiftCreateScreen() {
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
 
+  const saveAutoFillSettings = async (settings: typeof autoFillSettings) => {
+    setAutoFillSettings(settings);
+    await setDoc(doc(db, 'settings', 'autoFillSettings'), settings);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -565,16 +579,25 @@ export default function ShiftCreateScreen() {
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
               if (publicHolidays[dateStr]) continue;
               const already = assignedShifts[dateStr] || [];
-              if (already.length >= 3) continue;
-              const assignedNames = already.map((s: any) => s.name);
-              const avail = allStaff.filter(staff => {
-                if (assignedNames.includes(staff.name)) return false;
-                const req = requests[`${staff.name}_${dateStr}`];
-                return req !== '✕' && req !== '午前✕' && req !== '午後✕';
-              });
-              const toAdd = avail.slice(0, 3 - already.length);
-              if (toAdd.length === 0) continue;
-              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: [...already, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))], updatedAt: new Date() });
+              const assignedNames = [...already.map((s: any) => s.name)];
+              const newEntries: { name: string; start: string; end: string }[] = [...already];
+              const dowName = ['日','月','火','水','木','金','土'][new Date(year, month, d).getDay()] as '月'|'火'|'水'|'木'|'金';
+              const maxCount = (autoFillSettings.dayMaxCount as any)[dowName] ?? 3;
+              const sortedSettings = [...autoFillSettings.staffSettings]
+                .filter(s => s.enabled)
+                .sort((a, b) => a.priority - b.priority);
+              for (const setting of sortedSettings) {
+                if (assignedNames.includes(setting.name)) continue;
+                const req = requests[`${setting.name}_${dateStr}`];
+                if (req === '✕' || req === '午前✕' || req === '午後✕') continue;
+                const isInaguma = setting.name === '稲熊';
+                const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
+                if (!isInaguma && othersCount >= maxCount) continue;
+                newEntries.push({ name: setting.name, start: setting.start, end: setting.end });
+                assignedNames.push(setting.name);
+              }
+              if (newEntries.length === already.length) continue;
+              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() });
               updatedCount++;
             }
             if (Platform.OS === 'web') window.alert(`完了: ${updatedCount}日分を自動入力しました`);
@@ -816,9 +839,21 @@ export default function ShiftCreateScreen() {
             <ScrollView style={{maxHeight: 180, marginVertical: 8}} showsVerticalScrollIndicator={false}>
               <View style={styles.masterTimesGrid}>
                 {masterTimes.map(t => (
-                  <TouchableOpacity key={t} style={styles.masterTimeBtn} onPress={() => handleMasterTimeSelect(t)}>
-                    <Text style={styles.masterTimeText}>{t}</Text>
-                  </TouchableOpacity>
+                  <View key={t} style={styles.masterTimeBtnWrap}>
+                    <TouchableOpacity style={styles.masterTimeBtn} onPress={() => handleMasterTimeSelect(t)}>
+                      <Text style={styles.masterTimeText}>{t}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.masterTimeDeleteBtn}
+                      onPress={() => {
+                        const newTimes = masterTimes.filter(x => x !== t);
+                        setMasterTimes(newTimes);
+                        setDoc(doc(db, 'settings', 'masterTimes'), { times: newTimes });
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={16} color="#E53935" />
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </View>
             </ScrollView>
@@ -878,6 +913,113 @@ export default function ShiftCreateScreen() {
               <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#CCC'}]} onPress={()=>setTimePickerVisible(false)}><Text>キャンセル</Text></TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, {backgroundColor: COLORS.primary}]} onPress={saveTimeEdit}><Text style={{color: COLORS.white, fontWeight:'bold'}}>変更を確定</Text></TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 設定モーダル ── */}
+      <Modal visible={settingsVisible} animationType="slide" transparent>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'90%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#333' }}>⚙ 自動入力設定</Text>
+              <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding:16 }}>
+
+              {/* 曜日別最大人数 */}
+              <Text style={styles.settingSectionTitle}>曜日別 最大入力人数（稲熊除く）</Text>
+              {(['月','火','水','木','金'] as const).map(dow => (
+                <View key={dow} style={styles.settingRow}>
+                  <Text style={styles.settingLabel}>{dow}曜日</Text>
+                  <View style={{ flexDirection:'row', gap:6 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <TouchableOpacity
+                        key={n}
+                        style={[styles.settingNumBtn, autoFillSettings.dayMaxCount[dow] === n && styles.settingNumBtnActive]}
+                        onPress={() => saveAutoFillSettings({ ...autoFillSettings, dayMaxCount: { ...autoFillSettings.dayMaxCount, [dow]: n } })}
+                      >
+                        <Text style={[styles.settingNumText, autoFillSettings.dayMaxCount[dow] === n && { color:'#fff' }]}>{n}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              {/* スタッフ別設定 */}
+              <Text style={[styles.settingSectionTitle, { marginTop:20 }]}>スタッフ別設定（優先順位・時間）</Text>
+              <Text style={{ fontSize:11, color:'#888', marginBottom:8 }}>↑↓で優先順位を変更、時間をタップで編集</Text>
+              {autoFillSettings.staffSettings.map((s, idx) => (
+                <View key={s.name} style={styles.settingStaffRow}>
+                  <View style={{ flexDirection:'column', gap:2, marginRight:6 }}>
+                    <TouchableOpacity
+                      style={[styles.settingArrowBtn, idx === 0 && { opacity:0.3 }]}
+                      disabled={idx === 0}
+                      onPress={() => {
+                        const arr = [...autoFillSettings.staffSettings];
+                        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+                        arr.forEach((x,i) => x.priority = i+1);
+                        saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                      }}
+                    ><Ionicons name="chevron-up" size={14} color="#555" /></TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.settingArrowBtn, idx === autoFillSettings.staffSettings.length-1 && { opacity:0.3 }]}
+                      disabled={idx === autoFillSettings.staffSettings.length-1}
+                      onPress={() => {
+                        const arr = [...autoFillSettings.staffSettings];
+                        [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+                        arr.forEach((x,i) => x.priority = i+1);
+                        saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                      }}
+                    ><Ionicons name="chevron-down" size={14} color="#555" /></TouchableOpacity>
+                  </View>
+                  <Text style={styles.settingPriority}>{idx+1}</Text>
+                  <TouchableOpacity
+                    style={[styles.settingEnabledBtn, s.enabled && styles.settingEnabledBtnOn]}
+                    onPress={() => {
+                      const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, enabled:!x.enabled} : x);
+                      saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                    }}
+                  >
+                    <Text style={{ fontSize:10, color: s.enabled ? '#fff' : '#999', fontWeight:'bold' }}>{s.enabled ? 'ON' : 'OFF'}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.settingStaffName}>{s.name}</Text>
+                  <View style={{ flex:1 }}>
+                    <View style={{ flexDirection:'row', gap:4, alignItems:'center' }}>
+                      <Text style={styles.settingTimeLabel}>開始</Text>
+                      <TextInput
+                        style={styles.settingTimeInput}
+                        value={s.start}
+                        onChangeText={v => {
+                          const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, start:v} : x);
+                          setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                        }}
+                        onBlur={() => saveAutoFillSettings(autoFillSettings)}
+                        placeholder="14:00"
+                        placeholderTextColor="#bbb"
+                        keyboardType="numbers-and-punctuation"
+                      />
+                      <Text style={styles.settingTimeLabel}>終了</Text>
+                      <TextInput
+                        style={styles.settingTimeInput}
+                        value={s.end}
+                        onChangeText={v => {
+                          const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, end:v} : x);
+                          setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                        }}
+                        onBlur={() => saveAutoFillSettings(autoFillSettings)}
+                        placeholder="18:30"
+                        placeholderTextColor="#bbb"
+                        keyboardType="numbers-and-punctuation"
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+              <View style={{ height:40 }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -957,6 +1099,22 @@ const styles = StyleSheet.create({
   timeTargetValueActive: { color: COLORS.primary },
   
   masterTimesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  masterTimeBtnWrap: { position: 'relative', flexDirection: 'row', alignItems: 'center' },
+  masterTimeDeleteBtn: { marginLeft: -8, marginTop: -16, zIndex: 1 },
+  settingSectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#444', marginBottom: 10 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F5F5F5', borderRadius: 10 },
+  settingLabel: { fontSize: 14, fontWeight: 'bold', color: '#333', width: 44 },
+  settingNumBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: '#CCC', alignItems: 'center', justifyContent: 'center' },
+  settingNumBtnActive: { backgroundColor: '#5B9BD5', borderColor: '#5B9BD5' },
+  settingNumText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
+  settingStaffRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, padding: 8, backgroundColor: '#F8F8F8', borderRadius: 12 },
+  settingArrowBtn: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEE', borderRadius: 4 },
+  settingPriority: { fontSize: 13, fontWeight: 'bold', color: '#888', width: 18, textAlign: 'center' },
+  settingEnabledBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 8, backgroundColor: '#DDD' },
+  settingEnabledBtnOn: { backgroundColor: '#4CAF50' },
+  settingStaffName: { fontSize: 13, fontWeight: 'bold', color: '#333', width: 50 },
+  settingTimeLabel: { fontSize: 10, color: '#888' },
+  settingTimeInput: { borderWidth: 1, borderColor: '#CCC', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontSize: 12, width: 56, textAlign: 'center', color: '#333' },
   masterTimeBtn: { width: '48%', backgroundColor: '#FFFDF5', borderWidth: 1, borderColor: '#F3E5AB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   masterTimeText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   
