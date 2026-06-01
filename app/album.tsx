@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -19,6 +19,11 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 // iOSかどうかを判定するヘルパー
 const isIOSWeb = Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+const ALBUM_IMAGES = {
+  watch: require('../assets/menu/album_watch.png'),
+  add:   require('../assets/menu/album_add.png'),
+};
 
 const getLocalDateString = (date: Date) => {
   const year = date.getFullYear();
@@ -132,6 +137,33 @@ export default function AlbumScreen() {
     }
   };
 
+  // 追加から1年以上経過した写真を自動削除
+  useEffect(() => {
+    const cleanupOldPhotos = async () => {
+      try {
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const snap = await getDocs(collection(db, 'albums'));
+        for (const d of snap.docs) {
+          const data = d.data();
+          const createdAt = data.createdAt?.toDate?.();
+          if (createdAt && createdAt < oneYearAgo) {
+            // Storageからも削除
+            if (data.storagePath) {
+              try {
+                await deleteObject(ref(storage, data.storagePath));
+              } catch (_) {}
+            }
+            await deleteDoc(doc(db, 'albums', d.id));
+          }
+        }
+      } catch (e) {
+        console.log('古い写真の自動削除:', e);
+      }
+    };
+    cleanupOldPhotos();
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const fetchUser = async () => {
@@ -224,6 +256,50 @@ export default function AlbumScreen() {
       } finally {
         setIsUploading(false);
       }
+    }
+  };
+
+  const restoreFromStorage = async () => {
+    if (Platform.OS === 'web') {
+      if (!window.confirm('Storageのファイルを元にFirestoreを復元しますか？\n※既存データと重複する可能性があります')) return;
+    } else {
+      await new Promise<void>((resolve, reject) =>
+        Alert.alert('復元確認', 'Storageのファイルを元にFirestoreを復元しますか？', [
+          { text: 'キャンセル', onPress: () => reject() },
+          { text: '復元', onPress: () => resolve() }
+        ])
+      ).catch(() => { return; });
+    }
+    setIsUploading(true);
+    try {
+      const albumsRef = ref(storage, 'albums');
+      const listResult = await listAll(albumsRef);
+      let count = 0;
+      for (const itemRef of listResult.items) {
+        const url = await getDownloadURL(itemRef);
+        // 既にFirestoreに存在するか確認
+        const existing = await getDocs(query(collection(db, 'albums'), where('storagePath', '==', `albums/${itemRef.name}`)));
+        if (existing.empty) {
+          // ファイル名からカテゴリを推測（デフォルトは日付から）
+          const category = 'restored';
+          await addDoc(collection(db, 'albums'), {
+            uri: url,
+            storagePath: `albums/${itemRef.name}`,
+            uploader: '復元',
+            category,
+            createdAt: serverTimestamp(),
+          });
+          count++;
+        }
+      }
+      if (Platform.OS === 'web') window.alert(`${count}件のファイルを復元しました`);
+      else Alert.alert('復元完了', `${count}件のファイルを復元しました`);
+    } catch (e: any) {
+      console.error('復元エラー:', e);
+      if (Platform.OS === 'web') window.alert('復元失敗: ' + (e?.message || String(e)));
+      else Alert.alert('エラー', '復元失敗: ' + (e?.message || String(e)));
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -561,13 +637,11 @@ export default function AlbumScreen() {
 
       {mode === 'top' && (
         <View style={styles.topContainerFull}>
-          <TouchableOpacity style={[styles.mainCardHuge, { backgroundColor: '#E0FFFF' }]} onPress={() => setMode('view')}>
-            <Ionicons name="images-outline" size={80} color="#4682B4" />
-            <Text style={styles.mainCardTitleHuge}>見る</Text>
+          <TouchableOpacity style={styles.albumImgCard} onPress={() => setMode('view')}>
+            <Image source={ALBUM_IMAGES.watch} style={styles.albumImgCardImg} resizeMode="cover" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.mainCardHuge, { backgroundColor: '#FFE4E1' }]} onPress={() => setMode('add')}>
-            <Ionicons name="add-circle-outline" size={80} color="#D87093" />
-            <Text style={styles.mainCardTitleHuge}>追加する</Text>
+          <TouchableOpacity style={styles.albumImgCard} onPress={() => setMode('add')}>
+            <Image source={ALBUM_IMAGES.add} style={styles.albumImgCardImg} resizeMode="cover" />
           </TouchableOpacity>
         </View>
       )}
@@ -1008,6 +1082,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
+  albumImgCard: { flex: 0.48, aspectRatio: 1, borderRadius: 22, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 6 },
+  albumImgCardImg: { width: '100%', height: '100%' },
   mainCardHuge: { width: '100%', flex: 0.45, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
   mainCardTitleHuge: { fontSize: 32, fontWeight: 'bold', color: COLORS.text, marginTop: 24 },
   addGrid: { padding: 20, gap: 16 },

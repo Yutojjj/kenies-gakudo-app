@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, onSnapshot, query } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -64,7 +65,7 @@ export default function AttendanceScreen() {
   const router = useRouter();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
-  const [showKidNames, setShowKidNames] = useState(true);
+  const [showKidNames, setShowKidNames] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [kids, setKids] = useState<Kid[]>([]);
@@ -82,10 +83,14 @@ export default function AttendanceScreen() {
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
+  const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
+  const [allStaffList, setAllStaffList] = useState<string[]>([]);
+  const [transportWeekOffset, setTransportWeekOffset] = useState(0);
+  const [selectedTransportDate, setSelectedTransportDate] = useState<string | null>(null);
+  const [transportModalVisible, setTransportModalVisible] = useState(false);
   const [holidays, setHolidays] = useState<any[]>([]); 
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
-  const [lessonsData, setLessonsData] = useState<any[]>([]); // 習い事一覧管理のデータ
 
   const [activeSchool, setActiveSchool] = useState<string | null>(null);
 
@@ -185,14 +190,7 @@ export default function AttendanceScreen() {
           const sData: Record<string, any> = {};
           snap.forEach(d => {
             const item = d.data();
-            // lessons配列（新形式）とlesson単体（旧形式）の両方に対応
-            let lessons: any[] = [];
-            if (item.lessons && Array.isArray(item.lessons)) {
-              lessons = item.lessons;
-            } else if (item.lesson) {
-              lessons = [item.lesson];
-            }
-            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons, memo: item.memo };
+            sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson, memo: item.memo };
           });
           setScheduleOverrides(sData);
         });
@@ -209,6 +207,19 @@ export default function AttendanceScreen() {
           setAssignedShifts(shifts);
         });
 
+        onSnapshot(collection(db, 'pickup_assignments'), (snap) => {
+          const data: Record<string, any> = {};
+          snap.forEach(d => { data[d.id] = d.data(); });
+          setPickupAssignments(data);
+        });
+
+        getDocs(query(collection(db, 'accounts'))).then(snap => {
+          const names = snap.docs
+            .filter(d => ['staff','admin'].includes(d.data().role))
+            .map(d => d.data().name as string).filter(Boolean);
+          setAllStaffList(names);
+        });
+
         onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
           if (docSnap.exists() && docSnap.data().periods) {
             setHolidays(docSnap.data().periods);
@@ -221,11 +232,6 @@ export default function AttendanceScreen() {
           const eData: Record<string, string> = {};
           snap.forEach(d => { eData[d.id] = d.data().title; });
           setEventsData(eData);
-        });
-
-        // 習い事一覧管理のデータをリアルタイム取得
-        onSnapshot(collection(db, 'lessons'), (snap) => {
-          setLessonsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
       } catch (error) {
@@ -255,22 +261,8 @@ export default function AttendanceScreen() {
     
     const override = scheduleOverrides[`${kid.id}_${dateStr}`];
     const memo = override?.memo || null;
-
-    // スケジュール個別登録のlessons（新形式:配列、旧形式:単体 両対応）
-    let overrideLessons: any[] = [];
-    if (override?.lessons && Array.isArray(override.lessons)) {
-      overrideLessons = override.lessons;
-    } else if (override?.lesson) {
-      overrideLessons = [override.lesson];
-    }
-
     if (override && override.pickupTime !== undefined) {
-      return { pickupTime: override.pickupTime, lessons: overrideLessons, isManual: true, memo };
-    }
-
-    // pickupTimeがなくても習い事だけ登録されている場合（出欠には表示するが登校扱いにはしない）
-    if (override && overrideLessons.length > 0) {
-      return { pickupTime: null, lessons: overrideLessons, isManual: false, memo };
+      return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true, memo };
     }
 
     let autoPickup = null;
@@ -291,14 +283,7 @@ export default function AttendanceScreen() {
       }
     }
 
-    // 習い事一覧管理の定期習い事（その曜日に一致するもの全件）
-    const regularLessons = lessonsData
-      .filter(l => l.childId === kid.id && l.dayOfWeek === dayOfWeekStr)
-      .map(l => ({ name: l.lessonName, time: l.lessonTime }));
-
-    const finalLessons = overrideLessons.length > 0 ? overrideLessons : regularLessons;
-
-    return { pickupTime: autoPickup, lessons: finalLessons, isManual: false, memo };
+    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false, memo };
   };
 
   const getAttendanceForDay = (date: Date) => {
@@ -312,7 +297,7 @@ export default function AttendanceScreen() {
     let totalCount = 0;
 
     kids.forEach((kid) => {
-      const { pickupTime, lessons: kidLessons, isManual, memo } = getCalculatedTime(dateStr, kid);
+      const { pickupTime, lesson, isManual, memo } = getCalculatedTime(dateStr, kid);
       const displayKid = { ...kid, isManualOverride: isManual, hasMemo: !!memo };
 
       if (pickupTime) {
@@ -322,13 +307,10 @@ export default function AttendanceScreen() {
         schools[kid.school][pickupTime].push(displayKid);
       }
 
-      if (kidLessons && kidLessons.length > 0) {
-        kidLessons.forEach((lesson: any) => {
-          totalCount++;
-          const key = `${lesson.time} ${lesson.name}`;
-          if (!lessons[key]) lessons[key] = [];
-          lessons[key].push(displayKid);
-        });
+      if (lesson) {
+        const key = `${lesson.time} ${lesson.name}`;
+        if (!lessons[key]) lessons[key] = [];
+        lessons[key].push(displayKid);
       }
     });
 
@@ -476,8 +458,8 @@ export default function AttendanceScreen() {
                                       <Text style={styles.timeCountBadge}>{kids.length}名</Text>
                                     </View>
                                     <View style={styles.kidNamesContainer}>
-                                      {sortKidsByGrade(kids).map(k => (
-                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}<Text style={styles.kidGradeText}> {k.grade}</Text></Text>
+                                      {kids.map(k => (
+                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}</Text>
                                       ))}
                                     </View>
                                   </>
@@ -495,32 +477,33 @@ export default function AttendanceScreen() {
                     );
                   })}
                   {hasLessons && (
-                    <View style={[styles.schoolCard, { backgroundColor: '#EEF4FF' }]}>
+                    <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
                       <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(Object.values(attendanceData.lessons).flat()) })}>
-                        <Text style={[styles.schoolNameText, { color: '#4682B4' }]}>習い事</Text>
+                        <Text style={[styles.schoolNameText, { color: '#4682B4' }]}><Ionicons name="color-wand" size={12} /> 習い事</Text>
                       </TouchableOpacity>
                       <View style={styles.timeGroupContainer}>
-                        {Object.entries(attendanceData.lessons).sort(([a], [b]) => a.localeCompare(b)).map(([lessonKey, kids]) => {
-                          const spaceIdx = lessonKey.indexOf(' ');
-                          const lessonTime = spaceIdx !== -1 ? lessonKey.substring(0, spaceIdx) : lessonKey;
-                          const lessonName = spaceIdx !== -1 ? lessonKey.substring(spaceIdx + 1) : '';
-                          return (
-                            <TouchableOpacity key={lessonKey} style={[styles.timeButton, styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
-                              <View style={styles.timeHeaderRow}>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={[styles.timeLabel, { color: '#4682B4', fontSize: 12 }]}>{lessonTime}</Text>
-                                  {lessonName ? <Text style={[styles.kidNameText, { color: '#4682B4', fontSize: 11 }]} numberOfLines={1}>{lessonName}</Text> : null}
+                        {Object.entries(attendanceData.lessons).map(([lessonKey, kids]) => (
+                          <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                            {showKidNames ? (
+                              <>
+                                <View style={styles.timeHeaderRow}>
+                                  <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonKey}</Text>
+                                  <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
                                 </View>
-                                <Text style={[styles.timeCountBadge, { color: '#4682B4', backgroundColor: '#4682B420' }]}>{kids.length}名</Text>
-                              </View>
-                              <View style={styles.kidNamesContainer}>
-                                {sortKidsByGrade(kids).map(k => (
-                                  <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}<Text style={[styles.kidGradeText, { color: '#4682B4' }]}> {k.grade}</Text></Text>
-                                ))}
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
+                                <View style={styles.kidNamesContainer}>
+                                  {kids.map(k => (
+                                    <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
+                                  ))}
+                                </View>
+                              </>
+                            ) : (
+                              <>
+                                <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
+                                <Text style={styles.timeCountText}>{kids.length}名</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
                   )}
@@ -585,12 +568,109 @@ export default function AttendanceScreen() {
     </ScrollView>
   );
 
-  const renderTransportView = () => (
-    <View style={styles.centerBox}>
-      <Ionicons name="bus-outline" size={64} color={COLORS.textLight} />
-      <Text style={styles.instruction}>送迎一覧の機能は準備中です</Text>
-    </View>
-  );
+  // 送迎一覧
+  const transportDates = (() => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i + transportWeekOffset * 7);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      dates.push({ date: d, dateStr: ds });
+    }
+    return dates;
+  })();
+
+  const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
+    const docRef = doc(db, 'pickup_assignments', dateStr);
+    const current = pickupAssignments[dateStr] || {};
+    await setDoc(docRef, { ...current, [blockKey]: staffName }, { merge: true });
+  };
+
+  const renderTransportView = () => {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.weekNav}>
+          <TouchableOpacity style={styles.weekNavBtn} onPress={() => setTransportWeekOffset(w => w - 1)}>
+            <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+            <Text style={styles.weekNavText}>前の週</Text>
+          </TouchableOpacity>
+          <Text style={styles.weekNavTitle}>
+            {transportWeekOffset === 0 ? '今週' : transportWeekOffset > 0 ? `${transportWeekOffset}週間後` : `${-transportWeekOffset}週間前`}
+          </Text>
+          <TouchableOpacity style={styles.weekNavBtn} onPress={() => setTransportWeekOffset(w => w + 1)}>
+            <Text style={styles.weekNavText}>次の週</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
+          {transportDates.map(({ date, dateStr }) => {
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+            const isToday = dateStr === todayStr;
+            const shiftStaffList = assignedShifts[dateStr] || [];
+            const att = getAttendanceForDay(date);
+            const totalBlocks = Object.keys(att.schools).reduce((acc, s) => acc + Object.keys(att.schools[s]).length, 0)
+              + Object.keys(att.lessons || {}).length;
+            const savedData = pickupAssignments[dateStr];
+            let assignedCount = 0;
+            try {
+              if (savedData?.entries) {
+                const parsed = JSON.parse(savedData.entries);
+                assignedCount = new Set((parsed.entries || []).flatMap((e: any) =>
+                  (e.trips || []).flatMap((t: any) => (t.blockKeys || []).filter((k: string) => k !== 'other'))
+                )).size;
+              }
+            } catch {}
+            const isPH = !!publicHolidays[dateStr];
+            const isSun = date.getDay() === 0, isSat = date.getDay() === 6;
+            const bgColor = isToday ? '#FFF9E6' : (isPH||isSun) ? '#FFF0F0' : isSat ? '#F0F6FF' : COLORS.white;
+            const dowColor = (isPH||isSun) ? '#CC0000' : isSat ? '#0055CC' : COLORS.text;
+
+            return (
+              <TouchableOpacity
+                key={dateStr}
+                style={[styles.transportDateCard, { backgroundColor: bgColor }, isToday && styles.transportDateCardToday]}
+                onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.transportDateCardLeft}>
+                  <Text style={[styles.transportDateNum, { color: dowColor }]}>{date.getMonth()+1}/{date.getDate()}</Text>
+                  <Text style={[styles.transportDow, { color: dowColor }]}>({DAY_NAMES[date.getDay()]})</Text>
+                  {isToday && <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>今日</Text></View>}
+                </View>
+                <View style={styles.transportDateCardRight}>
+                  <Text style={styles.transportStaffCount}>出勤スタッフ: {shiftStaffList.length}名</Text>
+                  {totalBlocks === 0 ? null : assignedCount >= totalBlocks
+                    ? <Text style={styles.transportDoneText}>✅ 記入済み</Text>
+                    : assignedCount > 0
+                      ? <Text style={styles.transportProgressText}>{assignedCount}/{totalBlocks}件入力済み</Text>
+                      : <Text style={styles.transportEmptyText}>未入力</Text>
+                  }
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {selectedTransportDate && (
+          <TransportModal
+            dateStr={selectedTransportDate}
+            visible={transportModalVisible}
+            onClose={() => setTransportModalVisible(false)}
+            attendance={getAttendanceForDay(new Date(selectedTransportDate + 'T00:00:00'))}
+            shiftStaff={assignedShifts[selectedTransportDate] || []}
+            allStaffList={allStaffList}
+            assignments={pickupAssignments[selectedTransportDate] || {}}
+            onAssign={savePickupAssignment}
+            publicHolidays={publicHolidays}
+          />
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -625,8 +705,7 @@ export default function AttendanceScreen() {
           onPress={() => setShowKidNames(!showKidNames)}
           activeOpacity={0.85}
         >
-          <Ionicons name={showKidNames ? "eye-off" : "person"} size={22} color={COLORS.white} />
-          <Text style={styles.fabLabel}>{showKidNames ? '隠す' : '名前'}</Text>
+          <Ionicons name={showKidNames ? "swap-vertical" : "swap-vertical"} size={22} color={COLORS.white} />
         </TouchableOpacity>
       )}
 
@@ -752,7 +831,6 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
   timeCountBadge: { fontSize: 10, fontWeight: 'bold', color: COLORS.primary, backgroundColor: COLORS.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   kidNamesContainer: { gap: 3, width: '100%' },
-  kidGradeText: { fontSize: 9, fontWeight: 'normal', opacity: 0.7 },
   kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
@@ -784,9 +862,22 @@ const styles = StyleSheet.create({
   editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   msgIconBtn: { padding: 10, marginLeft: 4 },
   editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  weekNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  weekNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  weekNavText: { fontSize: 13, color: COLORS.primary, fontWeight: 'bold' },
+  weekNavTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
+  transportDateCard: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  transportDateCardToday: { borderColor: COLORS.primary, borderWidth: 2 },
+  transportDateCardLeft: { alignItems: 'center', marginRight: 16, minWidth: 56 },
+  transportDateCardRight: { flex: 1 },
+  transportDateNum: { fontSize: 22, fontWeight: 'bold' },
+  transportDow: { fontSize: 13, fontWeight: 'bold' },
+  transportStaffCount: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  transportDoneText: { fontSize: 12, color: '#4CAF50', fontWeight: 'bold', marginTop: 2 },
+  transportProgressText: { fontSize: 12, color: '#FF9800', fontWeight: 'bold', marginTop: 2 },
+  transportEmptyText: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  todayBadge: { marginTop: 4, backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  todayBadgeText: { fontSize: 10, color: COLORS.white, fontWeight: 'bold' },
   fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.danger },
-  fabLabel: { color: COLORS.white, fontSize: 9, fontWeight: 'bold', marginTop: 2 },
-  hideNamesBar: { backgroundColor: COLORS.primary, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 8 },
-  hideNamesBarText: { color: COLORS.white, fontSize: 13, fontWeight: 'bold' },
 });

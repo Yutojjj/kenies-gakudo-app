@@ -5,6 +5,7 @@ import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTime
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   Platform,
   SafeAreaView,
@@ -41,6 +42,8 @@ type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+
+const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
 
 export default function ScheduleScreen() {
   const router = useRouter();
@@ -683,8 +686,8 @@ export default function ScheduleScreen() {
       </ScrollView>
 
       {!isStampingMode && (
-        <TouchableOpacity style={styles.fab} onPress={() => { setTemplateSelectMode('stamping'); setTemplateModalVisible(true); }}>
-          <Text style={styles.fabText}>習い事</Text>
+        <TouchableOpacity style={styles.fabLesson} onPress={() => { setTemplateSelectMode('stamping'); setTemplateModalVisible(true); }}>
+          <Image source={LESSON_ACTION_IMG} style={styles.fabLessonImg} resizeMode="cover" />
         </TouchableOpacity>
       )}
 
@@ -1187,6 +1190,8 @@ const styles = StyleSheet.create({
     color: '#4682B4', 
     textAlign: 'center' 
   },
+  fabLesson: { position: 'absolute', bottom: 24, right: 20, width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabLessonImg: { width: '100%', height: '100%' },
   fab: { 
     position: 'absolute', 
     right: 20, 

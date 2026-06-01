@@ -1,5 +1,7 @@
-import { Stack } from 'expo-router';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { CallProvider } from '../contexts/CallContext';
@@ -18,11 +20,47 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
   }
 }
 
+// ログイン不要のパス
+const PUBLIC_PATHS = ['/', '/index'];
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      // ログイン画面は認証不要
+      if (PUBLIC_PATHS.includes(pathname)) {
+        setChecked(true);
+        return;
+      }
+      const raw = await AsyncStorage.getItem('loggedInUser');
+      if (!raw) {
+        router.replace('/');
+        return;
+      }
+      setChecked(true);
+    };
+    check();
+  }, [pathname]);
+
+  if (!checked) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF8F0' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   return (
     // SafeAreaProvider でアプリ全体を包みます
     <SafeAreaProvider>
       <CallProvider>
+      <AuthGuard>
       <SafeAreaView style={styles.container}>
         <Stack
           screenOptions={{
@@ -44,6 +82,7 @@ export default function RootLayout() {
           <Stack.Screen name="schedule-changes" />
         </Stack>
       </SafeAreaView>
+      </AuthGuard>
       </CallProvider>
     </SafeAreaProvider>
   );

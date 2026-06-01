@@ -4,9 +4,14 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+
+const SHIFT_IMAGES = {
+  autoFill: require('../assets/menu/shift_auto.png'),
+  delete:   require('../assets/menu/shift_delete.png'),
+};
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
@@ -525,8 +530,7 @@ export default function ShiftCreateScreen() {
         }}
         activeOpacity={0.85}
       >
-        <Ionicons name="trash" size={20} color={COLORS.white} />
-        <Text style={styles.fabDeleteText}>月一括削除</Text>
+        <Image source={SHIFT_IMAGES.delete} style={styles.fabImg} resizeMode="cover" />
       </TouchableOpacity>
 
       {/* 自動入力FAB（左下）- 当月全日一括 */}
@@ -574,8 +578,10 @@ export default function ShiftCreateScreen() {
         }}
         activeOpacity={0.85}
       >
-        {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="flash" size={22} color={COLORS.white} />}
-        <Text style={styles.fabAutoFillText}>一括自動入力</Text>
+        {loading
+          ? <ActivityIndicator size="small" color={COLORS.white} style={{ position: 'absolute', zIndex: 10 }} />
+          : null}
+        <Image source={SHIFT_IMAGES.autoFill} style={[styles.fabImg, loading && { opacity: 0.5 }]} resizeMode="cover" />
       </TouchableOpacity>
 
       {/* ==========================================
@@ -985,10 +991,11 @@ const styles = StyleSheet.create({
   
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
-  fabDelete: { position: 'absolute', bottom: 28, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.danger, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabDelete: { position: 'absolute', bottom: 28, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabDeleteText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
-  fabAutoFill: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabAutoFill: { position: 'absolute', bottom: 108, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabAutoFillText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
+  fabImg: { width: '100%', height: '100%' },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   autoFillBtnText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
 });

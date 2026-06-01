@@ -138,7 +138,12 @@ function DecoBackground() {
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { role, name } = useLocalSearchParams<{ role: string; name: string }>();
+  const { role: roleParam, name: nameParam } = useLocalSearchParams<{ role: string; name: string }>();
+  const [role, setRole] = useState(roleParam || '');
+  const [name, setName] = useState(nameParam || '');
+  const [authChecked, setAuthChecked] = useState(false);
+  const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
+  const [showAllPickup, setShowAllPickup] = useState(false);
 
   const userDocIdRef = useRef<string>('');
   const [fetchingDocId, setFetchingDocId] = useState(false);
@@ -156,6 +161,29 @@ export default function MenuScreen() {
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
+
+  // ── 認証チェック：AsyncStorageのログイン状態を必ず確認 ──
+  useEffect(() => {
+    const checkAuth = async () => {
+      const raw = await AsyncStorage.getItem('loggedInUser');
+      if (!raw) {
+        // ログイン情報なし → ログイン画面に強制リダイレクト
+        router.replace('/');
+        return;
+      }
+      const user = JSON.parse(raw);
+      // URLパラメータのroleがAsyncStorageと一致するか確認
+      if (user.role !== roleParam) {
+        // 不一致の場合は正しいroleで上書き（URLの改ざん対策）
+        router.replace('/');
+        return;
+      }
+      setRole(user.role || '');
+      setName(user.name || '');
+      setAuthChecked(true);
+    };
+    checkAuth();
+  }, []);
 
   // 未読メッセージ数を購読
   useEffect(() => {
@@ -179,6 +207,16 @@ export default function MenuScreen() {
       });
     })();
     return () => { unsub?.(); };
+  }, []);
+
+  useEffect(() => {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const unsub2 = onSnapshot(doc(db, 'pickup_assignments', dateStr), snap => {
+      if (snap.exists()) setTodayPickup(snap.data() as Record<string, string>);
+      else setTodayPickup({});
+    });
+    return () => unsub2();
   }, []);
 
   useEffect(() => {
@@ -272,6 +310,15 @@ export default function MenuScreen() {
     transform: [{ rotate: waveAnim.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-20deg', '0deg', '20deg'] }) }],
   };
 
+  // 認証チェック中はローディング表示
+  if (!authChecked) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF8F0' }}>
+        <ActivityIndicator size="large" color='#5B9BD5' />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <DecoBackground />
@@ -311,9 +358,58 @@ export default function MenuScreen() {
           </View>
         </Animated.View>
 
+        {/* ── 今日の送迎先（スタッフ用） ── */}
+        {(role === 'staff' || role === 'admin') && Object.keys(todayPickup).length > 0 && (
+          <View style={styles.pickupSection}>
+            <View style={styles.pickupSectionHeader}>
+              <Text style={styles.pickupSectionTitle}>🚗 今日の送迎担当</Text>
+              <TouchableOpacity
+                style={styles.pickupToggleBtn}
+                onPress={() => setShowAllPickup(v => !v)}
+              >
+                <Text style={styles.pickupToggleBtnText}>
+                  {showAllPickup ? '自分のみ' : '全員表示'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {(() => {
+              // 新形式（entries JSON）をパース
+              let rows: { staffName: string; blockLabel: string }[] = [];
+              try {
+                if (todayPickup.entries) {
+                  const parsed = JSON.parse(todayPickup.entries as string);
+                  (parsed.entries || []).forEach((e: any) => {
+                    (e.trips || []).forEach((t: any) => {
+                      (t.blockKeys || []).forEach((bk: string) => {
+                        const parts = bk.split('_');
+                        const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
+                        rows.push({ staffName: e.staffName, blockLabel: label });
+                      });
+                    });
+                  });
+                }
+              } catch {}
+              const filtered = showAllPickup ? rows : rows.filter(r => r.staffName === name);
+              return filtered.map((row, idx) => {
+                const isMe = row.staffName === name;
+                return (
+                  <View key={idx} style={[styles.pickupRow, isMe && styles.pickupRowMe]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickupBlockLabel}>{row.blockLabel}</Text>
+                    </View>
+                    <View style={[styles.pickupStaffBadge, isMe && styles.pickupStaffBadgeMe]}>
+                      <Text style={[styles.pickupStaffText, isMe && { color: '#FFFFFF' }]}>{row.staffName}</Text>
+                    </View>
+                  </View>
+                );
+              });
+            })()}
+          </View>
+        )}
+
         {/* ── セクションラベル ── */}
         <View style={styles.sectionLabelWrap}>
-          <Text style={styles.sectionLabel}>📋 きょうのメニュー</Text>
+          <Text style={styles.sectionLabel}>MENU</Text>
         </View>
 
         {/* ── メニューグリッド ── */}
@@ -569,8 +665,28 @@ const styles = StyleSheet.create({
   },
 
   // ── セクションラベル ──
+  pickupSection: { marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  pickupSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  pickupSectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#5D4037' },
+  pickupToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 12, borderWidth: 1, borderColor: '#FFCC80' },
+  pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#E65100' },
+  pickupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, marginBottom: 6, backgroundColor: '#F5F5F5' },
+  pickupRowMe: { backgroundColor: '#FFF9E6', borderWidth: 1.5, borderColor: '#FFD54F' },
+  pickupBlockLabel: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
+  pickupStaffBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, backgroundColor: '#E0E0E0' },
+  pickupStaffBadgeMe: { backgroundColor: '#5B9BD5' },
+  pickupStaffText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
   sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 12 },
-  sectionLabel: { fontSize: 16, fontWeight: 'bold', color: '#5D4037' },
+  sectionLabel: {
+    fontSize: 38,
+    fontWeight: '900',
+    color: '#5D4037',
+    letterSpacing: 12,
+    fontStyle: 'italic',
+    textShadowColor: 'rgba(93,64,55,0.18)',
+    textShadowOffset: { width: 2, height: 3 },
+    textShadowRadius: 6,
+  },
 
   // ── グリッド ──
   grid: { paddingHorizontal: 14, gap: 12 },
