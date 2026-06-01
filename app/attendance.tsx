@@ -65,7 +65,7 @@ export default function AttendanceScreen() {
   const router = useRouter();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
-  const [showKidNames, setShowKidNames] = useState(false);
+  const [showKidNames, setShowKidNames] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [kids, setKids] = useState<Kid[]>([]);
@@ -83,6 +83,7 @@ export default function AttendanceScreen() {
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
+  const [lessonsData, setLessonsData] = useState<any[]>([]);
   const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
   const [allStaffList, setAllStaffList] = useState<string[]>([]);
   const [transportWeekOffset, setTransportWeekOffset] = useState(0);
@@ -201,6 +202,10 @@ export default function AttendanceScreen() {
           setSchoolTimesData(times);
         });
 
+        onSnapshot(collection(db, 'lessons'), (snap) => {
+          setLessonsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
         onSnapshot(collection(db, 'assigned_shifts'), (snap) => {
           const shifts: Record<string, any[]> = {};
           snap.forEach(d => { shifts[d.id] = d.data().staff || []; });
@@ -283,7 +288,13 @@ export default function AttendanceScreen() {
       }
     }
 
-    return { pickupTime: autoPickup, lesson: override?.lesson || null, isManual: false, memo };
+    // 習い事一覧管理の定期習い事（その曜日に一致するもの）
+    const regularLesson = lessonsData.find(
+      l => l.childId === kid.id && l.dayOfWeek === dayOfWeekStr
+    );
+    const finalLesson = override?.lesson || (regularLesson ? { name: regularLesson.lessonName, time: regularLesson.lessonTime } : null);
+
+    return { pickupTime: autoPickup, lesson: finalLesson, isManual: false, memo };
   };
 
   const getAttendanceForDay = (date: Date) => {

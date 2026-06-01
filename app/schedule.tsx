@@ -68,6 +68,7 @@ export default function ScheduleScreen() {
   const [participantData, setParticipantData] = useState<Record<string, any>>({});
 
   const [lessonTemplates, setLessonTemplates] = useState<LessonTemplate[]>([]);
+  const [scheduleLessons, setScheduleLessons] = useState<any[]>([]);
   const [isStampingMode, setIsStampingMode] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
 
@@ -225,6 +226,10 @@ export default function ScheduleScreen() {
           } else {
             setHolidays([]);
           }
+        });
+
+        onSnapshot(collection(db, 'lessons'), (snap) => {
+          setScheduleLessons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
         onSnapshot(collection(db, 'events'), (snap) => {
@@ -446,7 +451,23 @@ export default function ScheduleScreen() {
     const autoPickup = child ? getAutoPickupTime(dateStr, child) : null;
     const finalPickup = userOverride.pickupTime !== undefined ? userOverride.pickupTime : autoPickup;
     
-    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: userOverride.lessons || [], memo: userOverride.memo };
+    // 定期習い事を追加（習い事一覧管理から取得）
+    const d = new Date(dateStr);
+    const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+    const childId = child?.id;
+    const regularLessons = childId
+      ? scheduleLessons
+          .filter(l => l.childId === childId && l.dayOfWeek === dow)
+          .map(l => ({ id: l.id, name: l.lessonName, time: l.lessonTime }))
+      : [];
+    const overrideLessons = userOverride.lessons || [];
+    // overrideとregularをマージ（override優先、重複除外）
+    const allLessons = [
+      ...overrideLessons,
+      ...regularLessons.filter(r => !overrideLessons.find((o: any) => o.name === r.name)),
+    ];
+
+    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: allLessons, memo: userOverride.memo };
   };
 
   const changeMonth = (offset: number) => {

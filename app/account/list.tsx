@@ -313,11 +313,11 @@ export default function AccountManagementScreen() {
                         const id = selectedAccount.id;
                         const name = selectedAccount.name;
                         setSelectedAccount(null);
-                        startCall(`direct_${id}`, name, true);
+                        startCall(`direct_${id}`, name, false);
                       }}
                     >
-                      <Ionicons name="videocam" size={18} color={COLORS.white} />
-                      <Text style={styles.modalBtnTextWhite}>ビデオ通話</Text>
+                      <Ionicons name="call" size={18} color={COLORS.white} />
+                      <Text style={styles.modalBtnTextWhite}>通話</Text>
                     </TouchableOpacity>
                   </View>
 

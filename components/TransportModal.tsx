@@ -354,6 +354,17 @@ export default function TransportModal({
                             </TouchableOpacity>
                           );
                         })}
+                        {/* 新しい回を追加するボタン（selectedBlock選択中のみ） */}
+                        {selectedBlock && !isNoTransport && (
+                          <TouchableOpacity
+                            style={[styles.tripSlot, styles.tripSlotAdd]}
+                            onPress={() => assignBlockToStaff(sIdx, null, selectedBlock.key)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                            <Text style={styles.addSlotText}>{TRIP_LABELS[entry.trips.length] || `${entry.trips.length+1}回目`}</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );

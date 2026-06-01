@@ -391,8 +391,9 @@ export default function ShiftCreateScreen() {
         const { uri } = await Print.printToFileAsync({ html, base64: false });
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
       }
-    } catch (e) {
-      Alert.alert('エラー', 'PDF作成に失敗しました');
+    } catch (e: any) {
+      console.error('PDF error:', e);
+      Alert.alert('エラー', `PDF作成に失敗しました: ${e?.message || String(e)}`);
     }
   };
 
