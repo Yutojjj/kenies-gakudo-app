@@ -21,6 +21,7 @@ export default function ShiftViewScreen() {
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const [showTimeInCalendar, setShowTimeInCalendar] = useState(true);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -57,12 +58,13 @@ export default function ShiftViewScreen() {
   }, []);
 
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   const generateDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
-    const firstDay = new Date(year, month, 1).getDay();
+    const firstDay = getFirstDayOfMonth(year, month);
     const days: ({ day: number; dateStr: string } | null)[] = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) {
@@ -87,18 +89,23 @@ export default function ShiftViewScreen() {
         <Text style={styles.headerTitle}>シフト確認</Text>
       </View>
 
-      {/* 月ナビゲーション */}
+      {/* 月ナビゲーションと時間表示トグル */}
       <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
-          <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
+          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
+            <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
+          <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={16} color={COLORS.primary} style={{marginRight: 4}} />
+          <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* カレンダー */}
       <ScrollView style={{ paddingHorizontal: 8 }}>
         {/* 曜日ヘッダー */}
         <View style={styles.calHeaderRow}>
@@ -124,17 +131,20 @@ export default function ShiftViewScreen() {
             else if (isSaturday) dateColor = 'blue';
 
             const assignedList = assignedShifts[item.dateStr] || [];
+            const assignedCount = assignedList.length;
             const myShift = assignedList.find(s => s.name === myName);
-            // 自分のシフトがある日は薄黄色背景
+            
+            // 自分のシフトがある日は薄黄色背景、それ以外は休日設定の色または白
             const cellBg = myShift ? '#FFFDE7' : hPeriod?.color || COLORS.white;
 
             return (
               <View key={item.dateStr} style={[styles.calCell, { backgroundColor: cellBg }]}>
+                {/* 日付と人数（右寄せ） */}
                 <View style={styles.cellTopRow}>
                   <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
-                  {assignedList.length > 0 && (
-                    <Text style={styles.cellCountText}>{assignedList.length}名</Text>
-                  )}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    {assignedCount > 0 && <Text style={styles.cellCountText}>{assignedCount}名</Text>}
+                  </View>
                 </View>
 
                 {isEventDay && (
@@ -143,7 +153,8 @@ export default function ShiftViewScreen() {
                   </View>
                 )}
 
-                <View style={{ flex: 1, marginTop: 3 }}>
+                {/* スクロールなしで縦に伸びる View */}
+                <View style={{ flex: 1, marginTop: 4 }}>
                   {displayStaff.map(staff => {
                     const assigned = assignedList.find(s => s.name === staff.name);
                     if (!assigned) return null;
@@ -151,8 +162,9 @@ export default function ShiftViewScreen() {
                     return (
                       <View key={staff.id} style={[styles.cellStaffRow, isMe && styles.cellStaffRowMe]}>
                         <Text style={[styles.cellStaffName, isMe && styles.cellStaffNameMe]} numberOfLines={1}>{staff.name}</Text>
-                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>開始:{assigned.start}</Text>
-                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>終了:{assigned.end}</Text>
+                        {showTimeInCalendar && (
+                          <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}-{assigned.end}</Text>
+                        )}
                       </View>
                     );
                   })}
@@ -182,24 +194,35 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
+  
+  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
+  
+  toggleTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0FFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#AFEEEE' },
+  toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
+
   calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.text },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  
+  // マス自体が縦に伸びるよう minHeight を使用
   calCellEmpty: { width: '14.28%', minHeight: 90 },
-  calCell: { width: '14.28%', minHeight: 100, borderWidth: 0.5, borderColor: COLORS.border, padding: 4 },
+  calCell: { width: '14.28%', minHeight: 90, borderWidth: 0.5, borderColor: COLORS.border, padding: 4 },
+  
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calDayText: { fontSize: 12, fontWeight: 'bold' },
   cellCountText: { fontSize: 10, color: COLORS.primary, fontWeight: 'bold' },
+  
   eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
   eventBadgeText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center' },
-  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, minHeight: 34 },
-  cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825', minHeight: 34 },
+  
+  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2 },
+  cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825' },
   cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffNameMe: { color: '#E65100' },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   cellStaffTimeMe: { color: '#E65100', fontWeight: 'bold' },
+  
   fab: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.secondary },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
