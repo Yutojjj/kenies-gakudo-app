@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   countBtnActive: { backgroundColor: COLORS.secondary, borderColor: COLORS.secondary },
   countBtnText: { fontSize: 11, fontWeight: 'bold', color: COLORS.text },
   schoolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  schoolCard: { width: '31%', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
+  schoolCard: { width: '48%', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
   schoolHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
   schoolHeaderText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary, flex: 1 },
   schoolHeaderBadge: { backgroundColor: '#EEF5FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
