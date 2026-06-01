@@ -151,7 +151,8 @@ export default function ShiftViewScreen() {
                     return (
                       <View key={staff.id} style={[styles.cellStaffRow, isMe && styles.cellStaffRowMe]}>
                         <Text style={[styles.cellStaffName, isMe && styles.cellStaffNameMe]} numberOfLines={1}>{staff.name}</Text>
-                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}-{assigned.end}</Text>
+                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>開:{assigned.start}</Text>
+                        <Text style={[styles.cellStaffTime, isMe && styles.cellStaffTimeMe]}>終:{assigned.end}</Text>
                       </View>
                     );
                   })}
@@ -160,7 +161,7 @@ export default function ShiftViewScreen() {
             );
           })}
         </View>
-        <View style={{ height: 50 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* 自分のみ表示ボタン（左下） */}
@@ -195,10 +196,10 @@ const styles = StyleSheet.create({
   eventBadgeText: { fontSize: 8, color: '#fff', fontWeight: 'bold', textAlign: 'center' },
   cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, minHeight: 34 },
   cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825', minHeight: 34 },
-  cellStaffName: { fontSize: 6, fontWeight: 'bold', color: '#333', lineHeight: 9 },
+  cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffNameMe: { color: '#E65100' },
-  cellStaffTime: { fontSize: 6, color: COLORS.primary, lineHeight: 9 },
-  cellStaffTimeMe: { color: '#E65100' },
+  cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
+  cellStaffTimeMe: { color: '#E65100', fontWeight: 'bold' },
   fab: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.secondary },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
