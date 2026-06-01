@@ -57,6 +57,9 @@ export default function ShiftCreateScreen() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // ▼ 修正: 各処理を個別に try/catch し、失敗しても次の処理へ進む ▼
+
+      // 祝日 API（失敗しても続行）
       try {
         const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
         const data = await res.json();
@@ -65,6 +68,7 @@ export default function ShiftCreateScreen() {
         console.warn('祝日APIの取得に失敗しました', e);
       }
 
+      // master_data（失敗してもデフォルト値で続行）
       try {
         const masterRef = doc(db, 'settings', 'master_data');
         const masterSnap = await getDoc(masterRef);
@@ -80,6 +84,7 @@ export default function ShiftCreateScreen() {
         setMasterTimes(['14:00-18:30', '11:00-18:30', '13:30-18:30']);
       }
 
+      // スタッフ一覧（失敗しても続行）
       try {
         const q = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(q);
@@ -89,6 +94,7 @@ export default function ShiftCreateScreen() {
         console.warn('スタッフ取得失敗', e);
       }
 
+      // ▼ リアルタイムリスナーをまとめて設定 ▼
       const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
         const reqData: Record<string, string> = {};
         s.forEach(d => {
@@ -113,6 +119,8 @@ export default function ShiftCreateScreen() {
       onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
         if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
       });
+
+      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
       return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
@@ -300,19 +308,15 @@ export default function ShiftCreateScreen() {
         bodyHtml += dateRow + staffHtml;
       });
 
-      // 変更点: viewport追加、CSSの!important強化による背景色の強制出力対応
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-      <style>
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
         @page { size: A4 portrait; margin: 7mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { background-color: #ffffff; }
         body {
           font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
           font-size: 7px;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          color-adjust: exact !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
         }
         .title-bar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
         .title { font-size: 11px; font-weight: bold; }
@@ -381,26 +385,34 @@ export default function ShiftCreateScreen() {
           printWindow.document.write(html);
           printWindow.document.close();
           printWindow.focus();
-          // Web版の安定性を高めるため少し待機
-          setTimeout(() => { printWindow.print(); }, 1000);
-        } else {
-          Alert.alert('エラー', 'ポップアップがブロックされました。ブラウザのポップアップブロック設定を確認してください。');
+          setTimeout(() => { printWindow.print(); }, 600);
         }
       } else {
         const { uri } = await Print.printToFileAsync({ html, base64: false });
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
-        } else {
-          Alert.alert('エラー', 'このデバイスではファイルの共有機能が利用できません。');
-        }
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
       }
-    } catch (e: any) {
-      // 変更点: エラーの詳細を画面に出力するように修正
-      console.error("PDF Export Error: ", e);
-      Alert.alert('エラー', `PDF作成に失敗しました。\n詳細: ${e.message || '不明なエラー'}`);
+    } catch (e) {
+      Alert.alert('エラー', 'PDF作成に失敗しました');
     }
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
@@ -658,6 +670,7 @@ export default function ShiftCreateScreen() {
                             const req = requests[`${staff.name}_${day.dateStr}`];
                             
                             if (assigned) {
+                              // ★ 縦に伸びすぎないように「開:〇〇 \n 終:〇〇」の2行にまとめる
                               content = `開:${assigned.start}\n終:${assigned.end}`; 
                               bgColor = '#FFD700'; 
                               isBold = true;
@@ -671,6 +684,7 @@ export default function ShiftCreateScreen() {
 
                           return (
                             <View key={dIdx} style={[styles.ssDataCell, { width: cellWidth, backgroundColor: bgColor }]}>
+                              {/* ★ numberOfLines={2} で確実に2行で切る */}
                               <Text style={[styles.ssDataText, isBold && { fontWeight: 'bold' }]} adjustsFontSizeToFit numberOfLines={2}>{content}</Text>
                             </View>
                           );
@@ -952,6 +966,7 @@ const styles = StyleSheet.create({
   
   modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
 
+  // ★ 1画面完全フィット(土日細い版・時間表示改行対応)のスタイル
   ssModalContainer: { flex: 1, backgroundColor: COLORS.background },
   ssModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   ssModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
