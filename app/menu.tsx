@@ -35,6 +35,12 @@ const MENU_ICONS = {
   eventList:       require('../assets/menu/event-list.png'),
 };
 
+const STAFF_COLORS = [
+  '#FF8A65','#FFB74D','#FFD54F','#AED581','#4DB6AC',
+  '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
+];
+const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
+
 const { width } = Dimensions.get('window');
 
 const customAlert = (title: string, message?: string) => {
@@ -374,31 +380,60 @@ export default function MenuScreen() {
             </View>
             {(() => {
               // 新形式（entries JSON）をパース
-              let rows: { staffName: string; blockLabel: string }[] = [];
+              let parsedEntries: any[] = [];
               try {
                 if (todayPickup.entries) {
                   const parsed = JSON.parse(todayPickup.entries as string);
-                  (parsed.entries || []).forEach((e: any) => {
-                    (e.trips || []).forEach((t: any) => {
-                      (t.blockKeys || []).forEach((bk: string) => {
-                        const parts = bk.split('_');
-                        const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
-                        rows.push({ staffName: e.staffName, blockLabel: label });
-                      });
-                    });
-                  });
+                  parsedEntries = parsed.entries || [];
                 }
               } catch {}
-              const filtered = showAllPickup ? rows : rows.filter(r => r.staffName === name);
-              return filtered.map((row, idx) => {
-                const isMe = row.staffName === name;
+              
+              const filteredEntries = showAllPickup ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === name);
+
+              if (filteredEntries.length === 0) {
+                 return <Text style={{ color: '#888', textAlign: 'center', marginTop: 10, marginBottom: 10 }}>担当の送迎はありません</Text>;
+              }
+
+              return filteredEntries.map((entry, sIdx) => {
+                const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
+                
+                // トリップが1つもなく、blockKeysも空なら表示しないようにフィルタリングする
+                const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
+                if (activeTrips.length === 0) return null;
+
                 return (
-                  <View key={idx} style={[styles.pickupRow, isMe && styles.pickupRowMe]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.pickupBlockLabel}>{row.blockLabel}</Text>
+                  <View key={entry.staffName || sIdx} style={[styles.staffSection, { borderLeftColor: color }]}>
+                    <View style={styles.staffNameRow}>
+                      <View style={[styles.staffDot, { backgroundColor: color }]} />
+                      <Text style={styles.staffName}>{entry.staffName}</Text>
                     </View>
-                    <View style={[styles.pickupStaffBadge, isMe && styles.pickupStaffBadgeMe]}>
-                      <Text style={[styles.pickupStaffText, isMe && { color: '#FFFFFF' }]}>{row.staffName}</Text>
+
+                    <View style={styles.tripsRow}>
+                      {activeTrips.map((trip: any, tIdx: number) => {
+                        return (
+                          <View
+                            key={tIdx}
+                            style={[
+                              styles.tripSlot,
+                              { borderColor: color, backgroundColor: color + '11' }
+                            ]}
+                          >
+                            <Text style={styles.tripLabelText}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
+                            <View style={{ flex: 1 }}>
+                              {trip.blockKeys.map((bk: string, bkIdx: number) => {
+                                const parts = bk.split('_');
+                                const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
+                                const bkColor = STAFF_COLORS[bkIdx % STAFF_COLORS.length]; 
+                                return (
+                                  <Text key={bk} style={[styles.slotFilledText, { color: bkColor }]} numberOfLines={1}>
+                                    {label}
+                                  </Text>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </View>
                 );
@@ -664,18 +699,50 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 
-  // ── セクションラベル ──
+  // ── 今日の送迎先 ──
   pickupSection: { marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   pickupSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   pickupSectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#5D4037' },
   pickupToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 12, borderWidth: 1, borderColor: '#FFCC80' },
   pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#E65100' },
+  
+  // 新しい送迎UI用スタイル
+  staffSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 10,
+    padding: 10,
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  staffNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  staffDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  staffName: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
+  tripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tripSlot: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    minWidth: 100,
+    borderStyle: 'solid'
+  },
+  tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1 },
+  slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
+
+  // 元の不要スタイル（念のため保持）
   pickupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, marginBottom: 6, backgroundColor: '#F5F5F5' },
   pickupRowMe: { backgroundColor: '#FFF9E6', borderWidth: 1.5, borderColor: '#FFD54F' },
   pickupBlockLabel: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
   pickupStaffBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, backgroundColor: '#E0E0E0' },
   pickupStaffBadgeMe: { backgroundColor: '#5B9BD5' },
   pickupStaffText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
+
+  // ── セクションラベル ──
   sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 12 },
   sectionLabel: {
     fontSize: 38,
