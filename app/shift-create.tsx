@@ -380,12 +380,10 @@ export default function ShiftCreateScreen() {
       </body></html>`;
 
       if (Platform.OS === 'web') {
-        // PWA/Edge対応：Blob URLをiframeで印刷（ポップアップブロック回避）
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
+        // srcdoc方式（Vercel HTTPS環境対応・ポップアップ不要）
         const iframe = document.createElement('iframe');
         iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;visibility:hidden;';
-        iframe.src = url;
+        iframe.srcdoc = html;
         document.body.appendChild(iframe);
         iframe.onload = () => {
           setTimeout(() => {
@@ -393,7 +391,6 @@ export default function ShiftCreateScreen() {
             iframe.contentWindow?.print();
             setTimeout(() => {
               document.body.removeChild(iframe);
-              URL.revokeObjectURL(url);
             }, 1000);
           }, 300);
         };
