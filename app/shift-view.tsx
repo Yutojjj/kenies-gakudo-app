@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   cellStaffRowMe: { backgroundColor: '#FFF9C4', borderWidth: 1, borderColor: '#F9A825', minHeight: 34 },
   cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffNameMe: { color: '#E65100' },
-  cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
+  cellStaffTime: { fontSize: 7, color: COLORS.primary, lineHeight: 9 },
   cellStaffTimeMe: { color: '#E65100', fontWeight: 'bold' },
   fab: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.secondary },
