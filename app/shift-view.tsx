@@ -160,7 +160,7 @@ export default function ShiftViewScreen() {
             );
           })}
         </View>
-        <View style={{ height: 100 }} />
+        <View style={{ height: 50 }} />
       </ScrollView>
 
       {/* 自分のみ表示ボタン（左下） */}
