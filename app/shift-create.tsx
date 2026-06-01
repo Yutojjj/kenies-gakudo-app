@@ -380,13 +380,23 @@ export default function ShiftCreateScreen() {
       </body></html>`;
 
       if (Platform.OS === 'web') {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(html);
-          printWindow.document.close();
-          printWindow.focus();
-          setTimeout(() => { printWindow.print(); }, 600);
-        }
+        // PWA/Edge対応：Blob URLをiframeで印刷（ポップアップブロック回避）
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;visibility:hidden;';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          setTimeout(() => {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+            setTimeout(() => {
+              document.body.removeChild(iframe);
+              URL.revokeObjectURL(url);
+            }, 1000);
+          }, 300);
+        };
       } else {
         const { uri } = await Print.printToFileAsync({ html, base64: false });
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
