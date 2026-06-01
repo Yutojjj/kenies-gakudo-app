@@ -56,24 +56,39 @@ export default function TransportModal({
   useEffect(() => {
     if (!visible) return;
     setSelectedBlock(null);
+    
+    // シフト作成画面で出勤が確定しているメンバーの名前リスト ＋ 「送迎しない」
     const shiftNames = shiftStaff.map(s => s.name);
+    const allNames = [...shiftNames, '送迎しない'];
+    
+    let loadedEntries: StaffEntry[] = [];
     if (assignments?.entries) {
       try {
         const parsed = JSON.parse(assignments.entries);
         if (parsed.entries) {
-          // blockKey(旧形式)をblockKeysに変換
-          const migrated = parsed.entries.map((e: any) => ({
+          // blockKey(旧形式)をblockKeysに変換して読み込み
+          loadedEntries = parsed.entries.map((e: any) => ({
             ...e,
             trips: e.trips.map((t: any) => ({
               ...t,
               blockKeys: t.blockKeys || (t.blockKey ? [t.blockKey] : [])
             }))
           }));
-          setStaffEntries(migrated); return;
         }
       } catch {}
     }
-    setStaffEntries(shiftNames.map(name => ({ staffName: name, trips: [{ tripIndex: 0, blockKeys: [] }] })));
+
+    // 保存済みのデータがあっても、シフト出勤メンバー＋「送迎しない」のみにフィルタリングし、順番も同期させる
+    const syncedEntries = allNames.map(name => {
+      const existing = loadedEntries.find(e => e.staffName === name);
+      if (existing) {
+        return existing;
+      }
+      // 新しく追加されたメンバーや「送迎しない」項目は空の枠を作成
+      return { staffName: name, trips: [{ tripIndex: 0, blockKeys: [] }] };
+    });
+
+    setStaffEntries(syncedEntries);
   }, [visible, shiftStaff, assignments]);
 
   const save = async (entries: StaffEntry[]) => {
@@ -137,25 +152,19 @@ export default function TransportModal({
             </View>
           )}
 
-          {/* ヒント */}
-          <View style={[styles.hintBar, selectedBlock && styles.hintBarActive]}>
-            <Text style={selectedBlock ? styles.hintTextActive : styles.hintText}>
-              {selectedBlock
-                ? `「${selectedBlock.label}」→ 担当スタッフをタップして割り当て`
-                : '① 上の送迎先をタップ → ② スタッフの行き先スロットをタップ'}
-            </Text>
-          </View>
-
           <View style={styles.body}>
           {/* 左：スタッフ一覧 */}
           <ScrollView style={styles.staffScroll} showsVerticalScrollIndicator={false}>
             {staffEntries.map((entry, sIdx) => {
-              const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
+              const isNoTransport = entry.staffName === '送迎しない';
+              // 「送迎しない」の場合はグレーの色を使用
+              const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[sIdx % STAFF_COLORS.length];
+              
               return (
                 <View key={entry.staffName} style={[styles.staffSection, { borderLeftColor: color }]}>
                   <View style={styles.staffNameRow}>
                     <View style={[styles.staffDot, { backgroundColor: color }]} />
-                    <Text style={styles.staffName}>{entry.staffName}</Text>
+                    <Text style={[styles.staffName, isNoTransport && { color: '#757575' }]}>{entry.staffName}</Text>
                   </View>
 
                   <View style={styles.tripsRow}>
@@ -192,9 +201,6 @@ export default function TransportModal({
                                   </Text>
                                 ) : null;
                               })}
-                              <Text style={{ fontSize: 9, color: '#aaa', marginTop: 2 }}>
-                                {selectedBlock ? '＋ タップして追加' : '✎ タップして編集'}
-                              </Text>
                             </View>
                           ) : (
                             <Text style={[styles.slotEmptyText, selectedBlock && styles.slotSelectableText]}>
@@ -270,7 +276,6 @@ export default function TransportModal({
         {slotDetail && (() => {
           const entry = staffEntries[slotDetail.sIdx];
           const trip = entry?.trips[slotDetail.tIdx];
-          const color = STAFF_COLORS[slotDetail.sIdx % STAFF_COLORS.length];
           if (!entry || !trip) return null;
           return (
             <View style={styles.detailOverlay}>
@@ -355,10 +360,6 @@ const styles = StyleSheet.create({
   lastWeekBtnText: { fontSize: 11, color: COLORS.primary, fontWeight: 'bold' },
   lastWeekBanner: { backgroundColor: '#FFF9C4', padding: 7, alignItems: 'center' },
   lastWeekBannerText: { fontSize: 11, color: '#856404', fontWeight: 'bold' },
-  hintBar: { backgroundColor: '#E8F0FE', paddingVertical: 8, paddingHorizontal: 12 },
-  hintBarActive: { backgroundColor: '#FFF3E0' },
-  hintText: { fontSize: 11, color: '#3C5A99', textAlign: 'center' },
-  hintTextActive: { fontSize: 11, color: '#E65100', textAlign: 'center', fontWeight: 'bold' },
 
   body: { flex: 1, flexDirection: 'row' },
   rightPanel: { width: 110, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 8 },
