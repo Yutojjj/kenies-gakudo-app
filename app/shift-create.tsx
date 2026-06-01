@@ -32,6 +32,7 @@ export default function ShiftCreateScreen() {
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'dow'|'staff'>('dow');
   // 自動入力設定（Firestoreに保存）
   const [autoFillSettings, setAutoFillSettings] = useState<{
     staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
@@ -99,6 +100,27 @@ export default function ShiftCreateScreen() {
         const snap = await getDocs(q);
         const staffList = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
         setAllStaff(staffList);
+
+        // autoFillSettings初期化（Firestoreの保存データをマージ）
+        getDoc(doc(db, 'settings', 'autoFillSettings')).then(settingSnap => {
+          const saved = settingSnap.exists() ? settingSnap.data() : {};
+          const savedStaff: any[] = saved.staffSettings || [];
+          const merged = staffList.map((s, i) => {
+            const found = savedStaff.find((x: any) => x.name === s.name);
+            if (found) return found;
+            return {
+              name: s.name,
+              start: s.name === '稲熊' ? '11:00' : '14:00',
+              end:   s.name === '稲熊' ? '20:00' : '18:30',
+              priority: i + 1,
+              enabled: true,
+            };
+          });
+          setAutoFillSettings({
+            staffSettings: merged,
+            dayMaxCount: saved.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
+          });
+        });
       } catch (e) {
         console.warn('スタッフ取得失敗', e);
       }
@@ -931,8 +953,25 @@ export default function ShiftCreateScreen() {
                 <Ionicons name="close" size={26} color="#333" />
               </TouchableOpacity>
             </View>
+            {/* タブ */}
+            <View style={{ flexDirection:'row', borderBottomWidth:1, borderColor:'#eee' }}>
+              <TouchableOpacity
+                style={{ flex:1, paddingVertical:12, alignItems:'center', borderBottomWidth:2, borderBottomColor: settingsTab==='dow' ? '#5B9BD5' : 'transparent' }}
+                onPress={() => setSettingsTab('dow')}
+              >
+                <Text style={{ fontWeight:'bold', color: settingsTab==='dow' ? '#5B9BD5' : '#888' }}>曜日別設定</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex:1, paddingVertical:12, alignItems:'center', borderBottomWidth:2, borderBottomColor: settingsTab==='staff' ? '#5B9BD5' : 'transparent' }}
+                onPress={() => setSettingsTab('staff')}
+              >
+                <Text style={{ fontWeight:'bold', color: settingsTab==='staff' ? '#5B9BD5' : '#888' }}>スタッフ別設定</Text>
+              </TouchableOpacity>
+            </View>
+
             <ScrollView style={{ padding:16 }}>
 
+              {settingsTab === 'dow' && <>
               {/* 曜日別最大人数 */}
               <Text style={styles.settingSectionTitle}>曜日別 最大入力人数（稲熊除く）</Text>
               {(['月','火','水','木','金'] as const).map(dow => (
@@ -952,9 +991,12 @@ export default function ShiftCreateScreen() {
                 </View>
               ))}
 
+              </>}
+
+              {settingsTab === 'staff' && <>
               {/* スタッフ別設定 */}
-              <Text style={[styles.settingSectionTitle, { marginTop:20 }]}>スタッフ別設定（優先順位・時間）</Text>
-              <Text style={{ fontSize:11, color:'#888', marginBottom:8 }}>↑↓で優先順位を変更、時間をタップで編集</Text>
+              <Text style={styles.settingSectionTitle}>スタッフ別設定（優先順位・時間）</Text>
+              <Text style={{ fontSize:11, color:'#888', marginBottom:8 }}>↑↓で優先順位を変更、ON/OFFで対象外に</Text>
               {autoFillSettings.staffSettings.map((s, idx) => (
                 <View key={s.name} style={styles.settingStaffRow}>
                   <View style={{ flexDirection:'column', gap:2, marginRight:6 }}>
@@ -1022,6 +1064,7 @@ export default function ShiftCreateScreen() {
                   </View>
                 </View>
               ))}
+              </>}
               <View style={{ height:40 }} />
             </ScrollView>
           </View>
