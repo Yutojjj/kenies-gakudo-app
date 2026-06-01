@@ -446,6 +446,10 @@ export default function ShiftCreateScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={() => setSettingsVisible(true)} style={[styles.pdfBtn, { backgroundColor: '#78909C' }]}>
+            <Ionicons name="settings-outline" size={20} color={COLORS.white} />
+            <Text style={styles.pdfBtnText}>設定</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
             <Ionicons name="document-text" size={20} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>PDF出力</Text>
