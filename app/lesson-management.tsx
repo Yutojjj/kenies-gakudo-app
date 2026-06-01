@@ -50,6 +50,7 @@ interface Lesson {
   lessonName: string;
   lessonTime: string;
   dayOfWeek?: string;
+  isPaid?: boolean;
 }
 
 const getGradeNum = (grade: string) => {
@@ -64,6 +65,9 @@ export default function LessonManagementScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   const [lessonName, setLessonName] = useState('');
+  const [isPaid, setIsPaid] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<any>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState('月');
   const [selectedTime, setSelectedTime] = useState('15:00');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
@@ -152,7 +156,9 @@ export default function LessonManagementScreen() {
       });
 
       allKids.sort((a, b) => a.gradeNum - b.gradeNum);
-      setKids(allKids);
+      // 重複ID除去
+      const uniqueKids = allKids.filter((k, i, arr) => arr.findIndex(x => x.id === k.id) === i);
+      setKids(uniqueKids);
 
       const lessonsSnap = await getDocs(collection(db, 'lessons'));
       setLessons(lessonsSnap.docs.map(d => ({ id: d.id, ...d.data() } as Lesson)));
@@ -160,6 +166,19 @@ export default function LessonManagementScreen() {
       console.error(e);
     }
   };
+
+  // lessonsが更新されたら全グループを開く
+  useEffect(() => {
+    if (lessons.length === 0) return;
+    const keys = new Set<string>();
+    lessons.forEach(l => {
+      const nameKey = `name_${l.lessonName}`;
+      const subKey = `${nameKey}_${l.lessonTime}||${l.dayOfWeek||''}`;
+      keys.add(nameKey);
+      keys.add(subKey);
+    });
+    setExpandedGroups(keys);
+  }, [lessons]);
 
   const allSchools = useMemo(() => [...new Set(kids.map(k => k.school).filter(Boolean))].sort(), [kids]);
   const allGrades = useMemo(() => {
@@ -172,7 +191,10 @@ export default function LessonManagementScreen() {
   }, [kids]);
 
   const filteredKids = useMemo(() => {
+    const seen = new Set<string>();
     return kids.filter(k => {
+      if (seen.has(k.id)) return false;
+      seen.add(k.id);
       if (filterSchool && k.school !== filterSchool) return false;
       if (filterGrade && k.grade !== filterGrade) return false;
       if (!searchQuery.trim()) return true;
@@ -220,6 +242,7 @@ export default function LessonManagementScreen() {
           lessonName: lessonName.trim(),
           lessonTime: selectedTime,
           dayOfWeek: selectedDayOfWeek,
+          isPaid: isPaid,
         });
         successCount++;
       } catch (e: any) {
@@ -322,33 +345,171 @@ export default function LessonManagementScreen() {
                   </Text>
                 </View>
               );
-              return filtered.map(lesson => (
-                <View key={lesson.id} style={styles.lessonCard}>
-                  <View style={styles.lessonCardLeft}>
-                    <Text style={styles.lessonCardName}>{lesson.childName}</Text>
-                    <Text style={styles.lessonCardSchool}>{lesson.school}</Text>
-                    <View style={styles.lessonBadgeRow}>
-                      <View style={styles.lessonBadge}>
-                        <Ionicons name="book-outline" size={12} color={COLORS.primary} />
-                        <Text style={styles.lessonBadgeText}>{lesson.lessonName}</Text>
-                      </View>
-                      {lesson.dayOfWeek && (
-                        <View style={styles.lessonBadge}>
-                          <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
-                          <Text style={styles.lessonBadgeText}>{lesson.dayOfWeek}曜日</Text>
+              // 習い事名でグルーピング → その中を時間でサブグルーピング
+              const nameGroups = new Map<string, typeof filtered>();
+              filtered.forEach(l => {
+                if (!nameGroups.has(l.lessonName)) nameGroups.set(l.lessonName, []);
+                nameGroups.get(l.lessonName)!.push(l);
+              });
+              const nameEntries = [...nameGroups.entries()].sort(([a],[b]) => a.localeCompare(b, 'ja'));
+
+              return nameEntries.map(([lessonName, nameGroup]) => {
+                const nameKey = `name_${lessonName}`;
+                const isNameOpen = expandedGroups.has(nameKey);
+                const isPaid = nameGroup.some(l => l.isPaid);
+                const totalCount = nameGroup.length;
+
+                // 時間でサブグループ化
+                const timeGroups = new Map<string, typeof filtered>();
+                nameGroup.forEach(l => {
+                  const tkey = `${l.lessonTime}||${l.dayOfWeek||''}`;
+                  if (!timeGroups.has(tkey)) timeGroups.set(tkey, []);
+                  timeGroups.get(tkey)!.push(l);
+                });
+                const timeEntries = [...timeGroups.entries()].sort(([a],[b]) => a.localeCompare(b));
+
+                return (
+                  <View key={nameKey} style={styles.groupCard}>
+                    {/* 習い事名ヘッダー */}
+                    <TouchableOpacity
+                      style={styles.groupHeader}
+                      onPress={() => {
+                        const next = new Set(expandedGroups);
+                        isNameOpen ? next.delete(nameKey) : next.add(nameKey);
+                        setExpandedGroups(next);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <View style={{ flex:1 }}>
+                        <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:4 }}>
+                          <Text style={styles.groupName}>{lessonName}</Text>
+                          {isPaid && <View style={styles.paidBadge}><Text style={styles.paidBadgeText}>有料</Text></View>}
                         </View>
-                      )}
-                      <View style={styles.lessonBadge}>
-                        <Ionicons name="time-outline" size={12} color={COLORS.primary} />
-                        <Text style={styles.lessonBadgeText}>{lesson.lessonTime}</Text>
+                        <View style={{ flexDirection:'row', gap:6 }}>
+                          <View style={[styles.lessonBadge, { backgroundColor: '#E8F5E9' }]}>
+                            <Text style={[styles.lessonBadgeText, { color:'#388E3C' }]}>計{totalCount}名</Text>
+                          </View>
+                          <View style={styles.lessonBadge}>
+                            <Text style={styles.lessonBadgeText}>{timeGroups.size}クラス</Text>
+                          </View>
+                        </View>
                       </View>
-                    </View>
+                      <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+                        <TouchableOpacity
+                          style={styles.groupAddBtn}
+                          onPress={() => {
+                            setLessonName(lessonName);
+                            setIsPaid(!!isPaid);
+                            setViewMode('edit');
+                          }}
+                        >
+                          <Ionicons name="person-add-outline" size={16} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <Ionicons name={isNameOpen ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* 時間別サブグループ（展開時） */}
+                    {isNameOpen && (
+                      <View style={{ paddingHorizontal:8, paddingBottom:8 }}>
+                        {timeEntries.map(([tkey, timeGroup]) => {
+                          const [lessonTime, dayOfWeek] = tkey.split('||');
+                          const subKey = `${nameKey}_${tkey}`;
+                          const isSubOpen = expandedGroups.has(subKey);
+                          return (
+                            <View key={subKey} style={styles.subGroupCard}>
+                              {/* 時間ヘッダー */}
+                              <TouchableOpacity
+                                style={styles.subGroupHeader}
+                                onPress={() => {
+                                  const next = new Set(expandedGroups);
+                                  isSubOpen ? next.delete(subKey) : next.add(subKey);
+                                  setExpandedGroups(next);
+                                }}
+                                activeOpacity={0.75}
+                              >
+                                <View style={{ flexDirection:'row', alignItems:'center', gap:6, flex:1 }}>
+                                  {dayOfWeek && (
+                                    <View style={[styles.lessonBadge, { backgroundColor:'#EDE7F6' }]}>
+                                      <Text style={[styles.lessonBadgeText, { color:'#7B1FA2' }]}>{dayOfWeek}曜</Text>
+                                    </View>
+                                  )}
+                                  <View style={styles.lessonBadge}>
+                                    <Ionicons name="time-outline" size={11} color={COLORS.primary} />
+                                    <Text style={styles.lessonBadgeText}>{lessonTime}</Text>
+                                  </View>
+                                  <Text style={{ fontSize:12, color:COLORS.textLight }}>{timeGroup.length}名</Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={styles.groupAddBtn}
+                                  onPress={() => {
+                                    setLessonName(lessonName);
+                                    setSelectedTime(lessonTime);
+                                    setSelectedDayOfWeek(dayOfWeek || '月');
+                                    setIsPaid(!!isPaid);
+                                    setViewMode('edit');
+                                  }}
+                                >
+                                  <Ionicons name="person-add-outline" size={15} color={COLORS.primary} />
+                                </TouchableOpacity>
+                                <Ionicons name={isSubOpen ? 'chevron-up' : 'chevron-down'} size={15} color={COLORS.textLight} style={{ marginLeft:4 }} />
+                              </TouchableOpacity>
+
+                              {/* 利用者カード */}
+                              {isSubOpen && (
+                                <View style={styles.groupChildList}>
+                                  {timeGroup.map(lesson => (
+                                    <View key={lesson.id} style={styles.groupChildRow}>
+                                      <View style={styles.groupChildAvatar}>
+                                        <Text style={styles.groupChildAvatarText}>{lesson.childName.charAt(0)}</Text>
+                                      </View>
+                                      <View style={{ flex:1 }}>
+                                        <Text style={styles.groupChildName}>{lesson.childName}</Text>
+                                        <View style={{ flexDirection:'row', gap:4, marginTop:2 }}>
+                                          {lesson.dayOfWeek && (
+                                            <View style={[styles.lessonBadge, { backgroundColor:'#EDE7F6', paddingHorizontal:5, paddingVertical:1 }]}>
+                                              <Text style={[styles.lessonBadgeText, { color:'#7B1FA2', fontSize:9 }]}>{lesson.dayOfWeek}曜</Text>
+                                            </View>
+                                          )}
+                                          {lesson.isPaid && (
+                                            <View style={[styles.lessonBadge, { backgroundColor:'#FBE9E7', paddingHorizontal:5, paddingVertical:1 }]}>
+                                              <Text style={[styles.lessonBadgeText, { color:'#FF7043', fontSize:9 }]}>有料</Text>
+                                            </View>
+                                          )}
+                                        </View>
+                                      </View>
+                                      <TouchableOpacity
+                                        style={[styles.groupAddBtn, { marginRight:6 }]}
+                                        onPress={() => {
+                                          setEditingLesson(lesson);
+                                          setLessonName(lesson.lessonName);
+                                          setSelectedTime(lesson.lessonTime);
+                                          setSelectedDayOfWeek(lesson.dayOfWeek || '月');
+                                          setIsPaid(!!lesson.isPaid);
+                                          setSelectedKidIds([lesson.childId]);
+                                          setViewMode('edit');
+                                        }}
+                                      >
+                                        <Ionicons name="pencil-outline" size={16} color={COLORS.primary} />
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.groupChildDeleteBtn}
+                                        onPress={() => handleDelete(lesson.id || '')}
+                                      >
+                                        <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                                      </TouchableOpacity>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
                   </View>
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(lesson.id || '')}>
-                    <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
-                  </TouchableOpacity>
-                </View>
-              ));
+                );
+              });
             })()}
           </ScrollView>
         </>
@@ -368,6 +529,15 @@ export default function LessonManagementScreen() {
               value={lessonName}
               onChangeText={setLessonName}
             />
+
+            {/* 有料トグル */}
+            <TouchableOpacity
+              style={[styles.paidToggle, isPaid && styles.paidToggleActive]}
+              onPress={() => setIsPaid(!isPaid)}
+            >
+              <Ionicons name={isPaid ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={isPaid ? '#fff' : COLORS.textLight} />
+              <Text style={[styles.paidToggleText, isPaid && { color: '#fff' }]}>有料送迎（500円/回）</Text>
+            </TouchableOpacity>
           </View>
 
           {/* STEP 2: 曜日 */}
@@ -568,11 +738,29 @@ const styles = StyleSheet.create({
   mainScroll: { flex: 1 },
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { color: COLORS.textLight, fontSize: 14, marginTop: 16 },
+  subGroupCard: { backgroundColor: '#F8F8F8', borderRadius: 12, marginBottom: 6, overflow: 'hidden' },
+  subGroupHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8 },
+  groupCard: { backgroundColor: COLORS.white, borderRadius: 16, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2 },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  groupName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  paidBadge: { backgroundColor: '#FF7043', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  paidBadgeText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },
+  groupAddBtn: { padding: 6, backgroundColor: '#EEF5FF', borderRadius: 10 },
+  groupChildList: { borderTopWidth: 1, borderColor: COLORS.border, padding: 10, gap: 6 },
+  groupChildRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#FAFAFA', borderRadius: 12 },
+  groupChildAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  groupChildAvatarText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  groupChildName: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  groupChildSchool: { fontSize: 11, color: COLORS.textLight, marginTop: 1 },
+  groupChildDeleteBtn: { padding: 4 },
   lessonCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 4, elevation: 2 },
   lessonCardLeft: { flex: 1 },
   lessonCardName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 2 },
   lessonCardSchool: { fontSize: 11, color: COLORS.textLight, marginBottom: 8 },
   lessonBadgeRow: { flexDirection: 'row', gap: 8 },
+  paidToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, marginTop: 10 },
+  paidToggleActive: { backgroundColor: '#FF7043', borderColor: '#FF7043' },
+  paidToggleText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
   lessonBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
   lessonBadgeText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
   deleteBtn: { padding: 10 },

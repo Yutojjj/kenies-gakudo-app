@@ -1,13 +1,15 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image, ImageSourcePropType, Modal,
   Platform, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
+import SignaturePad from '../components/SignaturePad';
 import { db } from '../firebase';
 
 const ANIMALS = {
@@ -149,7 +151,17 @@ export default function MenuScreen() {
   const [name, setName] = useState(nameParam || '');
   const [authChecked, setAuthChecked] = useState(false);
   const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
+  const [paidTransportCount, setPaidTransportCount] = useState(0);
+  const [signModalVisible, setSignModalVisible] = useState(false);
   const [showAllPickup, setShowAllPickup] = useState(false);
+  const [noticeVisible, setNoticeVisible] = useState(false);
+  const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
+  const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
+  const [newNotice, setNewNotice] = useState('');
+  const [gradeUpModalVisible, setGradeUpModalVisible] = useState(false);
+  const [gradeUpPreview, setGradeUpPreview] = useState<{id:string; name:string; oldGrade:string; newGrade:string; role:string}[]>([]);
+  const [gradeUpLoading, setGradeUpLoading] = useState(false);
+  const [gradeUpDirection, setGradeUpDirection] = useState<'up'|'down'>('up');
 
   const userDocIdRef = useRef<string>('');
   const [fetchingDocId, setFetchingDocId] = useState(false);
@@ -158,6 +170,11 @@ export default function MenuScreen() {
   const [periodModal, setPeriodModal] = useState(false);
   const [startDay, setStartDay] = useState('1');
   const [endDay, setEndDay] = useState('15');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [calendarTarget, setCalendarTarget] = useState<'start'|'end'>('start');
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [passwordModal, setPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
 
@@ -213,6 +230,46 @@ export default function MenuScreen() {
       });
     })();
     return () => { unsub?.(); };
+  }, []);
+
+  // 有料送迎カウント（利用者向け）
+  useEffect(() => {
+    if (role !== 'user') return;
+    const today = new Date();
+    const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+    // その月の有料送迎回数を集計
+    getDocs(query(collection(db, 'paid_transport_records'),
+      where('userName', '==', name),
+      where('month', '==', ym)
+    )).then(snap => {
+      setPaidTransportCount(snap.docs.reduce((sum, d) => sum + (d.data().count || 0), 0));
+    });
+  }, [role, name]);
+
+  // 今日のメモと管理者お知らせを取得
+  useEffect(() => {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+    // scheduleOverridesからメモを取得
+    const unsubMemos = onSnapshot(collection(db, 'schedules'), snap => {
+      const memos: {kidName: string; memo: string}[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        if (d.id.endsWith(`_${dateStr}`) && data.memo) {
+          memos.push({ kidName: data.kidName || '', memo: data.memo });
+        }
+      });
+      setTodayMemos(memos);
+    });
+
+    // 管理者お知らせ
+    const unsubNotices = onSnapshot(
+      query(collection(db, 'admin_notices'), where('date', '==', dateStr)),
+      snap => setAdminNotices(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))
+    );
+
+    return () => { unsubMemos(); unsubNotices(); };
   }, []);
 
   useEffect(() => {
@@ -324,6 +381,87 @@ export default function MenuScreen() {
       </SafeAreaView>
     );
   }
+
+  const GRADE_UP_MAP: Record<string, string> = {
+    '小1': '小2', '小2': '小3', '小3': '小4',
+    '小4': '小5', '小5': '小6', '小6': '卒業',
+  };
+  const GRADE_DOWN_MAP: Record<string, string> = {
+    '小2': '小1', '小3': '小2', '小4': '小3',
+    '小5': '小4', '小6': '小5', '卒業': '小6',
+  };
+
+  const prepareGradeUp = async (direction: 'up' | 'down') => {
+    setGradeUpDirection(direction);
+    setGradeUpLoading(true);
+    const MAP = direction === 'up' ? GRADE_UP_MAP : GRADE_DOWN_MAP;
+    try {
+      const snap = await getDocs(collection(db, 'accounts'));
+      const preview: {id:string; name:string; oldGrade:string; newGrade:string; role:string}[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        const role = data.role || '';
+        if (role !== 'user' && role !== 'staff') return;
+        if (role === 'user') {
+          if (data.grade && MAP[data.grade]) {
+            preview.push({ id: d.id, name: data.name || '', oldGrade: data.grade, newGrade: MAP[data.grade], role });
+          }
+          (data.siblings || []).forEach((s: any, i: number) => {
+            if (s.grade && MAP[s.grade]) {
+              preview.push({ id: `${d.id}__sib__${i}`, name: s.name || '', oldGrade: s.grade, newGrade: MAP[s.grade], role });
+            }
+          });
+        }
+        if (role === 'staff') {
+          (data.staffChildren || []).forEach((c: any, i: number) => {
+            if (c.grade && MAP[c.grade]) {
+              preview.push({ id: `${d.id}__staffchild__${i}`, name: c.name || '', oldGrade: c.grade, newGrade: MAP[c.grade], role: 'staffchild' });
+            }
+          });
+        }
+      });
+      preview.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+      setGradeUpPreview(preview);
+      setGradeUpModalVisible(true);
+    } catch (e) {
+      Alert.alert('エラー', '読み込みに失敗しました');
+    } finally {
+      setGradeUpLoading(false);
+    }
+  };
+
+  const executeGradeUp = async () => {
+    setGradeUpLoading(true);
+    const MAP = gradeUpDirection === 'up' ? GRADE_UP_MAP : GRADE_DOWN_MAP;
+    try {
+      const snap = await getDocs(collection(db, 'accounts'));
+      for (const d of snap.docs) {
+        const data = d.data();
+        const role = data.role || '';
+        if (role !== 'user' && role !== 'staff') continue;
+        const updates: any = {};
+        let changed = false;
+        if (role === 'user') {
+          if (data.grade && MAP[data.grade]) { updates.grade = MAP[data.grade]; changed = true; }
+          const siblings = data.siblings || [];
+          const newSibs = siblings.map((s: any) => s.grade && MAP[s.grade] ? { ...s, grade: MAP[s.grade] } : s);
+          if (JSON.stringify(newSibs) !== JSON.stringify(siblings)) { updates.siblings = newSibs; changed = true; }
+        }
+        if (role === 'staff') {
+          const children = data.staffChildren || [];
+          const newChildren = children.map((c: any) => c.grade && MAP[c.grade] ? { ...c, grade: MAP[c.grade] } : c);
+          if (JSON.stringify(newChildren) !== JSON.stringify(children)) { updates.staffChildren = newChildren; changed = true; }
+        }
+        if (changed) await setDoc(doc(db, 'accounts', d.id), updates, { merge: true });
+      }
+      setGradeUpModalVisible(false);
+      Alert.alert('完了', gradeUpDirection === 'up' ? '学年を1つ上げました。小6は「卒業」になりました。' : '学年を1つ下げました。');
+    } catch (e: any) {
+      Alert.alert('エラー', `更新失敗: ${e?.message}`);
+    } finally {
+      setGradeUpLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -445,12 +583,40 @@ export default function MenuScreen() {
         {/* ── セクションラベル ── */}
         <View style={styles.sectionLabelWrap}>
           <Text style={styles.sectionLabel}>MENU</Text>
+          {(role === 'staff' || role === 'admin') && (
+            <TouchableOpacity
+              style={styles.noticeBtn}
+              onPress={() => setNoticeVisible(true)}
+            >
+              <Text style={styles.noticeBtnText}>連絡事項</Text>
+              {(todayMemos.length + adminNotices.length) > 0 && (
+                <View style={styles.noticeBadge}>
+                  <Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── メニューグリッド ── */}
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
+              {paidTransportCount > 0 && (
+                <TouchableOpacity
+                  style={styles.paidBanner}
+                  onPress={() => setSignModalVisible(true)}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.paidBannerTitle}>🚗 今月の有料送迎</Text>
+                    <Text style={styles.paidBannerCount}>{paidTransportCount}回 ＝ {paidTransportCount * 500}円</Text>
+                  </View>
+                  <View style={styles.paidBannerBtn}>
+                    <Text style={styles.paidBannerBtnText}>サインで確認</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
               <Animated.View style={[{ opacity: cardAnims[0], transform: [{ scale: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
                 <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)} activeOpacity={0.85}>
                   <Image source={MENU_ICONS.schedule} style={styles.cardWideImage} resizeMode="contain" />
@@ -550,6 +716,165 @@ export default function MenuScreen() {
 
       </ScrollView>
 
+      {/* ── 学年一括更新モーダル ── */}
+      <Modal visible={gradeUpModalVisible} animationType="slide" transparent>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>🎓 学年一括更新（進級）</Text>
+              <TouchableOpacity onPress={() => setGradeUpModalVisible(false)}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding:14, backgroundColor:'#FFF8E1', borderBottomWidth:1, borderColor:'#eee' }}>
+              <Text style={{ fontSize:13, color:'#856404' }}>
+                ⚠️ {gradeUpDirection === 'up' ? `以下の${gradeUpPreview.length}名の学年を1つ上げます。小6は「卒業」になります。` : `以下の${gradeUpPreview.length}名の学年を1つ下げます。`}実行前にご確認ください。
+              </Text>
+            </View>
+            <ScrollView style={{ maxHeight:320 }} contentContainerStyle={{ padding:12, gap:6 }}>
+              {gradeUpPreview.map((p, i) => (
+                <View key={i} style={{ flexDirection:'row', alignItems:'center', padding:10, backgroundColor:'#F8F8F8', borderRadius:10 }}>
+                  <Text style={{ flex:1, fontSize:14, fontWeight:'bold', color:'#333' }}>{p.name}</Text>
+                  <Text style={{ fontSize:10, color:'#888', marginRight:4 }}>{p.role === 'staffchild' ? 'スタッフ子' : '利用者'}</Text>
+                  <Text style={{ fontSize:13, color:'#888', marginRight:8 }}>{p.oldGrade}</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#5B9BD5" />
+                  <Text style={{ fontSize:13, fontWeight:'bold', color: p.newGrade === '卒業' ? '#E53935' : '#4CAF50', marginLeft:8 }}>{p.newGrade}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection:'row', gap:10, padding:16 }}>
+              <TouchableOpacity
+                style={{ flex:1, paddingVertical:14, borderRadius:14, borderWidth:1.5, borderColor:'#ccc', alignItems:'center' }}
+                onPress={() => setGradeUpModalVisible(false)}
+              >
+                <Text style={{ color:'#666', fontWeight:'bold', fontSize:15 }}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex:2, paddingVertical:14, borderRadius:14, backgroundColor: gradeUpLoading ? '#ccc' : gradeUpDirection === 'up' ? '#4CAF50' : '#FF9800', alignItems:'center' }}
+                onPress={executeGradeUp}
+                disabled={gradeUpLoading}
+              >
+                <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>
+                  {gradeUpLoading ? '更新中...' : gradeUpDirection === 'up' ? `${gradeUpPreview.length}名を進級させる` : `${gradeUpPreview.length}名の学年を下げる`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 有料送迎サインモーダル ── */}
+      <Modal visible={signModalVisible} animationType="slide" transparent>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, padding:20 }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>🚗 有料送迎 確認書</Text>
+              <TouchableOpacity onPress={() => setSignModalVisible(false)}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ backgroundColor:'#FFF8F0', borderRadius:12, padding:16, marginBottom:16 }}>
+              <Text style={{ fontSize:13, color:'#888', marginBottom:8 }}>今月の有料送迎サービス利用料金をご確認ください。</Text>
+              <Text style={{ fontSize:16, color:'#333', marginBottom:4 }}>利用回数：<Text style={{ fontWeight:'bold', color:'#FF7043' }}>{paidTransportCount}回</Text></Text>
+              <Text style={{ fontSize:16, color:'#333', marginBottom:8 }}>お支払い金額：<Text style={{ fontWeight:'bold', color:'#FF7043' }}>{paidTransportCount * 500}円</Text></Text>
+              <Text style={{ fontSize:13, color:'#888' }}>上記の内容でよろしければ、以下の枠内にサインをしてください。</Text>
+            </View>
+            <SignaturePad
+              onSave={async (signData: string) => {
+                const today = new Date();
+                const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+                await setDoc(doc(db, 'paid_transport_records', `${name}_${ym}`), {
+                  userName: name,
+                  month: ym,
+                  count: paidTransportCount,
+                  amount: paidTransportCount * 500,
+                  signatureData: signData,
+                  signedAt: new Date(),
+                }, { merge: true });
+                setSignModalVisible(false);
+                Alert.alert('完了', 'サインを保存しました');
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 連絡事項モーダル ── */}
+      <Modal visible={noticeVisible} animationType="slide" transparent>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>📋 連絡事項</Text>
+              <TouchableOpacity onPress={() => setNoticeVisible(false)}>
+                <Ionicons name="close" size={26} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding:16 }}>
+              {/* 管理者お知らせ */}
+              {adminNotices.length > 0 && (
+                <View style={{ marginBottom:16 }}>
+                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📢 管理者からのお知らせ</Text>
+                  {adminNotices.map(n => (
+                    <View key={n.id} style={{ backgroundColor:'#FFF8E1', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#FFB300' }}>
+                      <Text style={{ fontSize:14, color:'#333' }}>{n.content}</Text>
+                      {role === 'admin' && (
+                        <TouchableOpacity style={{ alignSelf:'flex-end', marginTop:4 }} onPress={async () => {
+                          await deleteDoc(doc(db, 'admin_notices', n.id));
+                        }}>
+                          <Ionicons name="trash-outline" size={16} color="#E53935" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              {/* 今日のメモ */}
+              {todayMemos.length > 0 && (
+                <View style={{ marginBottom:16 }}>
+                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📝 今日のメモ（スケジュール）</Text>
+                  {todayMemos.map((m, i) => (
+                    <View key={i} style={{ backgroundColor:'#F3F9FF', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#5B9BD5' }}>
+                      <Text style={{ fontSize:12, fontWeight:'bold', color:'#5B9BD5', marginBottom:4 }}>{m.kidName}</Text>
+                      <Text style={{ fontSize:14, color:'#333' }}>{m.memo}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {adminNotices.length === 0 && todayMemos.length === 0 && (
+                <Text style={{ textAlign:'center', color:'#aaa', marginTop:20 }}>今日の連絡事項はありません</Text>
+              )}
+              {/* 管理者：お知らせ投稿 */}
+              {role === 'admin' && (
+                <View style={{ marginTop:16, borderTopWidth:1, borderColor:'#eee', paddingTop:16 }}>
+                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📢 お知らせを投稿</Text>
+                  <TextInput
+                    style={{ borderWidth:1, borderColor:'#ddd', borderRadius:12, padding:12, fontSize:14, minHeight:80, textAlignVertical:'top', color:'#333' }}
+                    placeholder="全スタッフに知らせたい内容を入力..."
+                    placeholderTextColor="#bbb"
+                    multiline
+                    value={newNotice}
+                    onChangeText={setNewNotice}
+                  />
+                  <TouchableOpacity
+                    style={{ marginTop:8, backgroundColor:'#5B9BD5', borderRadius:12, padding:12, alignItems:'center' }}
+                    onPress={async () => {
+                      if (!newNotice.trim()) return;
+                      const today = new Date();
+                      const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                      await addDoc(collection(db, 'admin_notices'), { content: newNotice.trim(), date: dateStr, createdAt: new Date() });
+                      setNewNotice('');
+                    }}
+                  >
+                    <Text style={{ color:'#fff', fontWeight:'bold', fontSize:14 }}>投稿する</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View style={{ height:40 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── 設定ドロワー ── */}
       {settingsVisible && (
         <View style={styles.drawerOverlay}>
@@ -577,11 +902,27 @@ export default function MenuScreen() {
                     <Text style={styles.drawerIcon}>📚</Text>
                     <Text style={styles.drawerItemText}>習い事一覧</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/regular-users' as any); }}>
+                    <Text style={styles.drawerIcon}>📋</Text>
+                    <Text style={styles.drawerItemText}>定期利用者一覧</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); prepareGradeUp('up'); }}>
+                    <Text style={styles.drawerIcon}>🎓</Text>
+                    <Text style={styles.drawerItemText}>学年を一括で上げる（進級）</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); prepareGradeUp('down'); }}>
+                    <Text style={styles.drawerIcon}>↩️</Text>
+                    <Text style={styles.drawerItemText}>学年を一括で下げる（戻す）</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/paid-transport' as any); }}>
+                    <Text style={styles.drawerIcon}>🚗</Text>
+                    <Text style={styles.drawerItemText}>有料送迎 管理</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); setPeriodModal(true); }}>
                     <Text style={styles.drawerIcon}>📆</Text>
                     <Text style={styles.drawerItemText}>シフト入力期間の設定</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); customAlert('集計機能', 'スタッフ別の合計勤務時間を集計する画面へ遷移します。'); }}>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/staff-hours' as any); }}>
                     <Text style={styles.drawerIcon}>⏱️</Text>
                     <Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text>
                   </TouchableOpacity>
@@ -606,22 +947,115 @@ export default function MenuScreen() {
         </View>
       )}
 
-      <Modal visible={periodModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>📆 シフト入力期間の設定</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 20 }}>
-              <TextInput style={styles.numInput} value={startDay} onChangeText={setStartDay} keyboardType="number-pad" />
-              <Text style={{ marginHorizontal: 10, color: '#5D4037' }}>日 〜 </Text>
-              <TextInput style={styles.numInput} value={endDay} onChangeText={setEndDay} keyboardType="number-pad" />
-              <Text style={{ marginLeft: 10, color: '#5D4037' }}>日</Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#CCC' }]} onPress={() => setPeriodModal(false)}>
-                <Text style={{ color: '#555' }}>キャンセル</Text>
+      <Modal visible={periodModal} transparent animationType="slide">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
+          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>📆 シフト入力期間の設定</Text>
+              <TouchableOpacity onPress={() => setPeriodModal(false)}>
+                <Ionicons name="close" size={26} color="#333" />
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#D4AF37' }]} onPress={saveShiftPeriod}>
-                <Text style={{ color: '#FFF', fontWeight: 'bold' }}>保存</Text>
+            </View>
+
+            {/* 選択中の期間表示 */}
+            <View style={{ flexDirection:'row', justifyContent:'center', alignItems:'center', gap:12, padding:14, backgroundColor:'#FFF8F0' }}>
+              <TouchableOpacity
+                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor: calendarTarget==='start' ? '#D4AF37' : '#F5F5F5', borderRadius:12, minWidth:100, alignItems:'center' }}
+                onPress={() => setCalendarTarget('start')}
+              >
+                <Text style={{ fontSize:11, color: calendarTarget==='start' ? '#fff' : '#888' }}>開始日</Text>
+                <Text style={{ fontSize:16, fontWeight:'bold', color: calendarTarget==='start' ? '#fff' : '#333' }}>
+                  {startDate || '未選択'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize:18, color:'#888' }}>〜</Text>
+              <TouchableOpacity
+                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor: calendarTarget==='end' ? '#D4AF37' : '#F5F5F5', borderRadius:12, minWidth:100, alignItems:'center' }}
+                onPress={() => setCalendarTarget('end')}
+              >
+                <Text style={{ fontSize:11, color: calendarTarget==='end' ? '#fff' : '#888' }}>終了日</Text>
+                <Text style={{ fontSize:16, fontWeight:'bold', color: calendarTarget==='end' ? '#fff' : '#333' }}>
+                  {endDate || '未選択'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* カレンダー */}
+            <View style={{ padding:12 }}>
+              {/* 月ナビ */}
+              <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <TouchableOpacity style={{ padding:8 }} onPress={() => {
+                  if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y-1); }
+                  else setCalendarMonth(m => m-1);
+                }}>
+                  <Ionicons name="chevron-back" size={22} color="#5D4037" />
+                </TouchableOpacity>
+                <Text style={{ fontSize:16, fontWeight:'bold', color:'#5D4037' }}>
+                  {calendarYear}年 {calendarMonth+1}月
+                </Text>
+                <TouchableOpacity style={{ padding:8 }} onPress={() => {
+                  if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y+1); }
+                  else setCalendarMonth(m => m+1);
+                }}>
+                  <Ionicons name="chevron-forward" size={22} color="#5D4037" />
+                </TouchableOpacity>
+              </View>
+
+              {/* 曜日ヘッダー */}
+              <View style={{ flexDirection:'row', marginBottom:4 }}>
+                {['日','月','火','水','木','金','土'].map((d,i) => (
+                  <Text key={d} style={{ flex:1, textAlign:'center', fontSize:11, fontWeight:'bold', color: i===0?'#CC0000':i===6?'#0055CC':'#555' }}>{d}</Text>
+                ))}
+              </View>
+
+              {/* 日グリッド */}
+              {(() => {
+                const firstDow = new Date(calendarYear, calendarMonth, 1).getDay();
+                const daysInMonth = new Date(calendarYear, calendarMonth+1, 0).getDate();
+                const cells: (number|null)[] = Array(firstDow).fill(null);
+                for (let d=1; d<=daysInMonth; d++) cells.push(d);
+                while (cells.length % 7 !== 0) cells.push(null);
+                const weeks: (number|null)[][] = [];
+                for (let i=0; i<cells.length; i+=7) weeks.push(cells.slice(i,i+7));
+                return weeks.map((week, wi) => (
+                  <View key={wi} style={{ flexDirection:'row', marginBottom:2 }}>
+                    {week.map((day, di) => {
+                      if (!day) return <View key={di} style={{ flex:1, height:36 }} />;
+                      const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                      const isStart = dateStr === startDate;
+                      const isEnd = dateStr === endDate;
+                      const inRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
+                      const isSun = di===0, isSat = di===6;
+                      return (
+                        <TouchableOpacity
+                          key={di}
+                          style={{ flex:1, height:36, alignItems:'center', justifyContent:'center', borderRadius:18,
+                            backgroundColor: (isStart||isEnd) ? '#D4AF37' : inRange ? '#FFF3CD' : 'transparent' }}
+                          onPress={() => {
+                            if (calendarTarget === 'start') { setStartDate(dateStr); setCalendarTarget('end'); }
+                            else { setEndDate(dateStr); }
+                          }}
+                        >
+                          <Text style={{ fontSize:14, fontWeight:(isStart||isEnd)?'bold':'normal',
+                            color:(isStart||isEnd)?'#fff':isSun?'#CC0000':isSat?'#0055CC':'#333' }}>{day}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ));
+              })()}
+            </View>
+
+            <View style={{ flexDirection:'row', gap:10, padding:16 }}>
+              <TouchableOpacity style={{ flex:1, paddingVertical:13, borderRadius:14, borderWidth:1.5, borderColor:'#ccc', alignItems:'center' }} onPress={() => setPeriodModal(false)}>
+                <Text style={{ color:'#666', fontWeight:'bold' }}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor: startDate&&endDate ? '#D4AF37' : '#ccc', alignItems:'center' }}
+                onPress={saveShiftPeriod}
+                disabled={!startDate || !endDate}
+              >
+                <Text style={{ color:'#fff', fontWeight:'bold' }}>保存</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -743,7 +1177,16 @@ const styles = StyleSheet.create({
   pickupStaffText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
 
   // ── セクションラベル ──
-  sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 12 },
+  sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  paidBanner: { marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFF3E0', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#FF7043' },
+  paidBannerTitle: { fontSize: 13, fontWeight: 'bold', color: '#FF7043' },
+  paidBannerCount: { fontSize: 18, fontWeight: 'bold', color: '#333', marginTop: 2 },
+  paidBannerBtn: { backgroundColor: '#FF7043', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  paidBannerBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  noticeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#5B9BD5', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, gap: 6 },
+  noticeBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  noticeBadge: { backgroundColor: '#E53935', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  noticeBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   sectionLabel: {
     fontSize: 38,
     fontWeight: '900',

@@ -284,7 +284,25 @@ export default function AccountManagementScreen() {
                     <>
                       <View style={styles.detailRow}><Ionicons name="business-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>学校:</Text><Text style={styles.detailData}>{selectedAccount.school || '未登録'}</Text></View>
                       <View style={styles.detailRow}><Ionicons name="book-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>学年:</Text><Text style={styles.detailData}>{selectedAccount.grade || '未登録'}</Text></View>
-                      <View style={styles.detailRow}><Ionicons name="calendar-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>利用形態:</Text><Text style={styles.detailData}>{selectedAccount.usageType}</Text></View>
+                      <View style={styles.detailRow}>
+                        <Ionicons name="calendar-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/>
+                        <Text style={styles.detailTitle}>利用形態:</Text>
+                        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                          <Text style={styles.detailData}>{selectedAccount.usageType}</Text>
+                          {selectedAccount.usageType === '定期利用' && selectedAccount.days && (() => {
+                            const activeDays = Object.entries(selectedAccount.days).filter(([_, v]) => v).map(([k]) => k);
+                            const count = activeDays.length;
+                            return count > 0 ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={{ fontSize: 13, color: COLORS.text }}>（{activeDays.join('・')}）</Text>
+                                <View style={{ backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                                  <Text style={{ fontSize: 11, color: '#fff', fontWeight: 'bold' }}>週{count}回</Text>
+                                </View>
+                              </View>
+                            ) : null;
+                          })()}
+                        </View>
+                      </View>
                       {selectedAccount.siblings && selectedAccount.siblings.length > 0 && (
                         <View style={styles.detailRow}><Ionicons name="people-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>兄弟登録:</Text><Text style={styles.detailData}>{selectedAccount.siblings.length} 名</Text></View>
                       )}
