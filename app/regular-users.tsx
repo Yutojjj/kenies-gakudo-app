@@ -14,6 +14,15 @@ type Kid = {
 };
 
 const DOW = ['月','火','水','木','金'] as const;
+const SCHOOL_COLORS = [
+  '#FFE0B2','#F8BBD0','#DCEDC8','#B3E5FC','#E1BEE7',
+  '#FFE082','#B2DFDB','#FFCCBC','#C5CAE9','#F0F4C3',
+];
+const getSchoolColor = (school: string) => {
+  let hash = 0;
+  for (let i = 0; i < school.length; i++) hash = school.charCodeAt(i) + ((hash << 5) - hash);
+  return SCHOOL_COLORS[Math.abs(hash) % SCHOOL_COLORS.length];
+};
 
 const GRADE_ORDER: Record<string, number> = {
   '小1':1,'小2':2,'小3':3,'小4':4,'小5':5,'小6':6,'卒業':7,
@@ -171,7 +180,7 @@ export default function RegularUsersScreen() {
                   const kids_ = schoolMap.get(school)!;
                   const isOpen = expandedSchools.has(school);
                   return (
-                    <View key={school} style={styles.schoolCard}>
+                    <View key={school} style={[styles.schoolCard, { backgroundColor: getSchoolColor(school) }]}>
                       <TouchableOpacity
                         style={styles.schoolHeader}
                         onPress={() => {

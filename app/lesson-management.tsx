@@ -42,6 +42,16 @@ interface Kid {
   parentName?: string;
 }
 
+const LESSON_COLORS = [
+  '#FFE0B2','#F8BBD0','#DCEDC8','#B3E5FC','#E1BEE7',
+  '#FFE082','#B2DFDB','#FFCCBC','#C5CAE9','#F0F4C3',
+];
+const getLessonColor = (name: string): string => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return LESSON_COLORS[Math.abs(hash) % LESSON_COLORS.length];
+};
+
 interface Lesson {
   id?: string;
   childId: string;
@@ -369,7 +379,7 @@ export default function LessonManagementScreen() {
                 const timeEntries = [...timeGroups.entries()].sort(([a],[b]) => a.localeCompare(b));
 
                 return (
-                  <View key={nameKey} style={styles.groupCard}>
+                  <View key={nameKey} style={[styles.groupCard, { backgroundColor: getLessonColor(lessonName) }]}>
                     {/* 習い事名ヘッダー */}
                     <TouchableOpacity
                       style={styles.groupHeader}

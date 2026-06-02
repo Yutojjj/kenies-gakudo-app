@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router'; // useRouterを追加
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -12,11 +13,28 @@ type AssignedStaff = { name: string, start: string, end: string };
 
 export default function ShiftScreen() {
   const router = useRouter(); // ★ 追加
-  const { name } = useLocalSearchParams<{ name: string }>();
+  const { name: nameParam } = useLocalSearchParams<{ name: string }>();
+  const [staffName, setStaffName] = useState(nameParam || '');
+
+  // AsyncStorageからもログイン中のユーザー名を取得（リロード対応）
+  useEffect(() => {
+    const loadName = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('loggedInUser');
+        if (raw) {
+          const user = JSON.parse(raw);
+          if (user.name) setStaffName(user.name);
+        }
+      } catch {}
+    };
+    if (!nameParam) loadName();
+    else setStaffName(nameParam);
+  }, [nameParam]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
+  const shiftDataRef = useRef<Record<string, ShiftType>>({});
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
   const [stampModalVisible, setStampModalVisible] = useState(false);
 
@@ -36,14 +54,15 @@ export default function ShiftScreen() {
           .then(data => setPublicHolidays(data))
           .catch(e => console.warn('祝日API取得失敗', e));
 
-        const staffName = name || '不明なスタッフ';
-        const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', staffName));
+        const resolvedName = staffName || '不明なスタッフ';
+        const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', resolvedName));
         const unsubMy = onSnapshot(qMyShifts, (snapshot) => {
           const data: Record<string, ShiftType> = {};
           snapshot.forEach((doc) => {
             const item = doc.data();
             data[item.dateStr] = item.type;
           });
+          shiftDataRef.current = data;
           setShiftData(data);
         });
         unsubscribes.push(unsubMy);
@@ -79,7 +98,7 @@ export default function ShiftScreen() {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [name]);
+  }, [staffName]);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -113,27 +132,28 @@ export default function ShiftScreen() {
   };
 
   const handleDayPress = async (dateStr: string) => {
-    const staffName = name || '不明なスタッフ';
-    const docId = `${staffName}_${dateStr}`;
+    const resolvedName = staffName || '不明なスタッフ';
+    const docId = `${resolvedName}_${dateStr}`;
     const docRef = doc(db, 'shifts', docId);
 
-    const currentStamp = shiftData[dateStr];
+    const currentStamp = shiftDataRef.current[dateStr]; // refから最新値を読む（クロージャ問題回避）
 
-    setShiftData(prev => {
-      if (currentStamp === activeStamp) {
-        const newData = { ...prev };
-        delete newData[dateStr];
-        return newData;
-      }
-      return { ...prev, [dateStr]: activeStamp };
-    });
+    // 楽観的更新（UIを即座に反映）
+    const newShiftData = { ...shiftDataRef.current };
+    if (currentStamp === activeStamp) {
+      delete newShiftData[dateStr];
+    } else {
+      newShiftData[dateStr] = activeStamp;
+    }
+    shiftDataRef.current = newShiftData;
+    setShiftData(newShiftData);
 
     try {
       if (currentStamp === activeStamp) {
         await deleteDoc(docRef);
       } else {
         await setDoc(docRef, {
-          staffName,
+          staffName: resolvedName,
           dateStr,
           type: activeStamp,
           updatedAt: new Date()
@@ -304,8 +324,8 @@ export default function ShiftScreen() {
 
                     {allStaff.map(staff => (
                       <View key={staff.id} style={styles.ssRow}>
-                        <View style={[styles.ssNameCell, { width: '16%', backgroundColor: staff.name === name ? '#FFDAB9' : '#FFC0CB' }]}>
-                          <Text style={[styles.ssNameText, staff.name === name && { color: COLORS.primary }]} adjustsFontSizeToFit numberOfLines={1}>{staff.name}</Text>
+                        <View style={[styles.ssNameCell, { width: '16%', backgroundColor: staff.name === staffName ? '#FFDAB9' : '#FFC0CB' }]}>
+                          <Text style={[styles.ssNameText, staff.name === staffName && { color: COLORS.primary }]} adjustsFontSizeToFit numberOfLines={1}>{staff.name}</Text>
                         </View>
                         {week.map((day, dIdx) => {
                           let content = '';
