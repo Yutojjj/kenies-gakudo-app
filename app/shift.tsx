@@ -35,6 +35,8 @@ export default function ShiftScreen() {
   
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
   const shiftDataRef = useRef<Record<string, ShiftType>>({});
+  const [pendingChanges, setPendingChanges] = useState<Record<string, ShiftType | null>>({});
+  const [saving, setSaving] = useState(false);
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
   const [stampModalVisible, setStampModalVisible] = useState(false);
 
@@ -62,8 +64,14 @@ export default function ShiftScreen() {
             const item = doc.data();
             data[item.dateStr] = item.type;
           });
-          shiftDataRef.current = data;
-          setShiftData(data);
+          // 未保存の変更がある日付はFirestoreの値で上書きしない
+          const merged = { ...data };
+          Object.entries(pendingChanges).forEach(([dateStr, val]) => {
+            if (val === null) delete merged[dateStr];
+            else merged[dateStr] = val;
+          });
+          shiftDataRef.current = merged;
+          setShiftData(merged);
         });
         unsubscribes.push(unsubMy);
 
@@ -131,38 +139,48 @@ export default function ShiftScreen() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
   };
 
-  const handleDayPress = async (dateStr: string) => {
-    const resolvedName = staffName || '不明なスタッフ';
-    const docId = `${resolvedName}_${dateStr}`;
-    const docRef = doc(db, 'shifts', docId);
+  // タップ：ローカル変更のみ（Firestore保存はsaveShiftsボタン）
+  const handleDayPress = (dateStr: string) => {
+    const currentStamp = shiftDataRef.current[dateStr];
+    const newValue = currentStamp === activeStamp ? null : activeStamp;
 
-    const currentStamp = shiftDataRef.current[dateStr]; // refから最新値を読む（クロージャ問題回避）
-
-    // 楽観的更新（UIを即座に反映）
     const newShiftData = { ...shiftDataRef.current };
-    if (currentStamp === activeStamp) {
+    if (newValue === null) {
       delete newShiftData[dateStr];
     } else {
-      newShiftData[dateStr] = activeStamp;
+      newShiftData[dateStr] = newValue as ShiftType;
     }
     shiftDataRef.current = newShiftData;
-    setShiftData(newShiftData);
+    setShiftData({ ...newShiftData });
+    setPendingChanges((prev: Record<string, ShiftType | null>) => ({ ...prev, [dateStr]: newValue }));
+  };
 
+  const saveShifts = async () => {
+    if (Object.keys(pendingChanges).length === 0) {
+      Alert.alert('問題なし', '変更がありません');
+      return;
+    }
+    setSaving(true);
+    const resolvedName = staffName || '不明なスタッフ';
     try {
-      if (currentStamp === activeStamp) {
-        await deleteDoc(docRef);
-      } else {
-        await setDoc(docRef, {
-          staffName: resolvedName,
-          dateStr,
-          type: activeStamp,
-          updatedAt: new Date()
-        });
+      for (const [dateStr, value] of Object.entries(pendingChanges)) {
+        const docId = `${resolvedName}_${dateStr}`;
+        const docRef = doc(db, 'shifts', docId);
+        if (value === null) {
+          await deleteDoc(docRef);
+        } else {
+          await setDoc(docRef, { staffName: resolvedName, dateStr, type: value, updatedAt: new Date() });
+        }
       }
-    } catch (error) {
-      Alert.alert('エラー', '保存に失敗しました。');
+      setPendingChanges({});
+      Alert.alert('保存完了', 'シフトを保存しました');
+    } catch (e) {
+      Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
+    } finally {
+      setSaving(false);
     }
   };
+
 
   const selectStamp = (stamp: ShiftType) => {
     setActiveStamp(stamp);
@@ -184,6 +202,17 @@ export default function ShiftScreen() {
           </TouchableOpacity>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#5D4037' }}>シフト提出</Text>
         </View>
+        {Object.keys(pendingChanges).length > 0 && (
+          <TouchableOpacity
+            style={{ backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginLeft: 8 }}
+            onPress={saveShifts}
+            disabled={saving}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+              {saving ? '保存中...' : `保存(${Object.keys(pendingChanges).length}件)`}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
           <Ionicons name="grid-outline" size={18} color={COLORS.white} />
           <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
@@ -411,6 +440,8 @@ export default function ShiftScreen() {
 }
 
 const styles = StyleSheet.create({
+  saveBtn: { backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginLeft: 8 },
+  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   container: { flex: 1, backgroundColor: COLORS.background },
   viewBoardBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   viewBoardBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },

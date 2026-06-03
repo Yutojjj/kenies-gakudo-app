@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -58,6 +58,7 @@ export default function ScheduleScreen() {
   const [parentDocId, setParentDocId] = useState('');
 
   const [scheduleData, setScheduleData] = useState<Record<string, DailyData>>({});
+  const scheduleDataRef = useRef<Record<string, DailyData>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
   
@@ -197,6 +198,7 @@ export default function ScheduleScreen() {
               }
               sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
             });
+            scheduleDataRef.current = sData;
             setScheduleData(sData);
           });
           
@@ -321,9 +323,12 @@ export default function ScheduleScreen() {
     const child = children[activeChildIdx];
     if (!child) return;
     const docId = `${child.id}_${dateStr}`;
-    const current = scheduleData[docId] || {};
+    const current = scheduleDataRef.current[docId] || {};
 
-    setScheduleData(prev => ({ ...prev, [docId]: { ...(prev[docId] || {}), ...data } }));
+    // refとstateを同時更新（onSnapshotとの競合防止）
+    const updated = { ...scheduleDataRef.current, [docId]: { ...(scheduleDataRef.current[docId] || {}), ...data } };
+    scheduleDataRef.current = updated;
+    setScheduleData({ ...updated });
 
     try {
       const saveData: any = { parentId: parentDocId, childId: child.id, dateStr, updatedAt: new Date() };
@@ -445,7 +450,7 @@ export default function ScheduleScreen() {
 
   const getCellData = (dateStr: string) => {
     const key = getScheduleKey(dateStr);
-    const userOverride = scheduleData[key] || {};
+    const userOverride = scheduleDataRef.current[key] || {};
     const child = children[activeChildIdx];
     
     const autoPickup = child ? getAutoPickupTime(dateStr, child) : null;
@@ -477,7 +482,7 @@ export default function ScheduleScreen() {
   const handleDayPress = (dateStr: string) => {
     if (isStampingMode && activeTemplate) {
       const key = getScheduleKey(dateStr);
-      const currentLessons = scheduleData[key]?.lessons || [];
+      const currentLessons = scheduleDataRef.current[key]?.lessons || [];
       const existingIdx = currentLessons.findIndex(l => l.id === activeTemplate.id);
       
       let newLessons = [...currentLessons];
@@ -490,7 +495,7 @@ export default function ScheduleScreen() {
     } else {
       setSelectedDateStr(dateStr);
       const key = getScheduleKey(dateStr);
-      setEditingMemo(scheduleData[key]?.memo || '');
+      setEditingMemo(scheduleDataRef.current[key]?.memo || '');
       if (eventsData[dateStr]) {
           setEventModalVisible(true);
       } else {
@@ -516,7 +521,7 @@ export default function ScheduleScreen() {
   const confirmTime = () => {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
-    const current = scheduleData[key] || {};
+    const current = scheduleDataRef.current[key] || {};
 
     if (timePickerTarget === 'pickup') {
       saveToFirestore(selectedDateStr, { pickupTime: timeStr });
@@ -533,7 +538,7 @@ export default function ScheduleScreen() {
     const child = children[activeChildIdx];
     if (!child) return;
     const key = getScheduleKey(selectedDateStr);
-    const current = scheduleData[key] || {};
+    const current = scheduleDataRef.current[key] || {};
 
     if (target === 'pickup') {
        saveToFirestore(selectedDateStr, { pickupTime: null });
@@ -566,8 +571,8 @@ export default function ScheduleScreen() {
       setTemplateModalVisible(false);
     } else {
       const key = getScheduleKey(selectedDateStr);
-      const currentLessons = scheduleData[key]?.lessons || [];
-      if (!currentLessons.find(l => l.id === template.id)) {
+      const currentLessons = scheduleDataRef.current[key]?.lessons || [];
+      if (!currentLessons.find((l: any) => l.id === template.id)) {
           const newLessons = [...currentLessons, template];
           saveToFirestore(selectedDateStr, { lessons: newLessons });
       }
