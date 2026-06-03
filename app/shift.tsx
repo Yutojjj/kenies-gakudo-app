@@ -36,6 +36,8 @@ export default function ShiftScreen() {
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
   const shiftDataRef = useRef<Record<string, ShiftType>>({});
   const [pendingChanges, setPendingChanges] = useState<Record<string, ShiftType | null>>({});
+  // ★ 修正：onSnapshot内で常に最新の未保存データを参照するためのRefを追加
+  const pendingChangesRef = useRef<Record<string, ShiftType | null>>({});
   const [saving, setSaving] = useState(false);
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
   const [stampModalVisible, setStampModalVisible] = useState(false);
@@ -66,7 +68,8 @@ export default function ShiftScreen() {
           });
           // 未保存の変更がある日付はFirestoreの値で上書きしない
           const merged = { ...data };
-          Object.entries(pendingChanges).forEach(([dateStr, val]) => {
+          // ★ 修正：古いクロージャの問題を避けるため、pendingChanges ではなく pendingChangesRef.current を参照する
+          Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
             if (val === null) delete merged[dateStr];
             else merged[dateStr] = val;
           });
@@ -152,7 +155,13 @@ export default function ShiftScreen() {
     }
     shiftDataRef.current = newShiftData;
     setShiftData({ ...newShiftData });
-    setPendingChanges((prev: Record<string, ShiftType | null>) => ({ ...prev, [dateStr]: newValue }));
+    
+    // ★ 修正：状態と同時に useRef の値も最新に更新する
+    setPendingChanges((prev: Record<string, ShiftType | null>) => {
+      const next = { ...prev, [dateStr]: newValue };
+      pendingChangesRef.current = next;
+      return next;
+    });
   };
 
   const saveShifts = async () => {
@@ -173,6 +182,8 @@ export default function ShiftScreen() {
         }
       }
       setPendingChanges({});
+      // ★ 修正：保存が完了したら useRef の値もリセットする
+      pendingChangesRef.current = {};
       Alert.alert('保存完了', 'シフトを保存しました');
     } catch (e) {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
