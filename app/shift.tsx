@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter } from 'expo-router'; // useRouterを追加
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,11 +12,10 @@ type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
 export default function ShiftScreen() {
-  const router = useRouter(); // ★ 追加
+  const router = useRouter();
   const { name: nameParam } = useLocalSearchParams<{ name: string }>();
   const [staffName, setStaffName] = useState(nameParam || '');
 
-  // AsyncStorageからもログイン中のユーザー名を取得（リロード対応）
   useEffect(() => {
     const loadName = async () => {
       try {
@@ -30,13 +29,13 @@ export default function ShiftScreen() {
     if (!nameParam) loadName();
     else setStaffName(nameParam);
   }, [nameParam]);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
   const shiftDataRef = useRef<Record<string, ShiftType>>({});
   const [pendingChanges, setPendingChanges] = useState<Record<string, ShiftType | null>>({});
-  // ★ 修正：onSnapshot内で常に最新の未保存データを参照するためのRefを追加
   const pendingChangesRef = useRef<Record<string, ShiftType | null>>({});
   const [saving, setSaving] = useState(false);
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
@@ -49,26 +48,37 @@ export default function ShiftScreen() {
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
+    if (!staffName) return; 
+
     let unsubscribes: (() => void)[] = [];
 
     const fetchAllData = async () => {
       try {
+        // ★ 絶対に消えないための処理1：通信開始前に、スマホ本体から未保存データを「確実に読み込み終わる」まで待機する
+        const localUnsaved = await AsyncStorage.getItem(`unsavedShifts_${staffName}`);
+        if (localUnsaved) {
+          const parsed = JSON.parse(localUnsaved);
+          pendingChangesRef.current = parsed;
+          setPendingChanges(parsed);
+        }
+
         fetch('https://holidays-jp.github.io/api/v1/date.json')
           .then(res => res.json())
           .then(data => setPublicHolidays(data))
           .catch(e => console.warn('祝日API取得失敗', e));
 
-        const resolvedName = staffName || '不明なスタッフ';
+        const resolvedName = staffName;
         const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', resolvedName));
+        
+        // ★ 復元が完了した後にデータベースの監視をスタートするため、上書き事故が起きない
         const unsubMy = onSnapshot(qMyShifts, (snapshot) => {
           const data: Record<string, ShiftType> = {};
           snapshot.forEach((doc) => {
             const item = doc.data();
             data[item.dateStr] = item.type;
           });
-          // 未保存の変更がある日付はFirestoreの値で上書きしない
+          
           const merged = { ...data };
-          // ★ 修正：古いクロージャの問題を避けるため、pendingChanges ではなく pendingChangesRef.current を参照する
           Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
             if (val === null) delete merged[dateStr];
             else merged[dateStr] = val;
@@ -142,7 +152,6 @@ export default function ShiftScreen() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
   };
 
-  // タップ：ローカル変更のみ（Firestore保存はsaveShiftsボタン）
   const handleDayPress = (dateStr: string) => {
     const currentStamp = shiftDataRef.current[dateStr];
     const newValue = currentStamp === activeStamp ? null : activeStamp;
@@ -156,10 +165,11 @@ export default function ShiftScreen() {
     shiftDataRef.current = newShiftData;
     setShiftData({ ...newShiftData });
     
-    // ★ 修正：状態と同時に useRef の値も最新に更新する
     setPendingChanges((prev: Record<string, ShiftType | null>) => {
       const next = { ...prev, [dateStr]: newValue };
       pendingChangesRef.current = next;
+      // ★ 絶対に消えないための処理2：タップした瞬間にスマホの物理ストレージへ記録する
+      AsyncStorage.setItem(`unsavedShifts_${staffName}`, JSON.stringify(next)).catch(() => {});
       return next;
     });
   };
@@ -182,8 +192,8 @@ export default function ShiftScreen() {
         }
       }
       setPendingChanges({});
-      // ★ 修正：保存が完了したら useRef の値もリセットする
       pendingChangesRef.current = {};
+      await AsyncStorage.removeItem(`unsavedShifts_${resolvedName}`);
       Alert.alert('保存完了', 'シフトを保存しました');
     } catch (e) {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
@@ -191,7 +201,6 @@ export default function ShiftScreen() {
       setSaving(false);
     }
   };
-
 
   const selectStamp = (stamp: ShiftType) => {
     setActiveStamp(stamp);
@@ -205,7 +214,6 @@ export default function ShiftScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      {/* ★ ヘッダー部分に戻るボタンを追加 */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
