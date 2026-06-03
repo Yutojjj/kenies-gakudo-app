@@ -66,9 +66,37 @@ export default function ShiftCreateScreen() {
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      // ▼ 修正: 各処理を個別に try/catch し、失敗しても次の処理へ進む ▼
+    // ▼ onSnapshotリスナーは即時登録し、unsubscribe関数をuseEffectから直接返す ▼
+    // （非同期関数内でreturnしてもuseEffectのクリーンアップにならないため分離）
 
+    // Firestoreリスナー（同期的に登録）
+    const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
+      const reqData: Record<string, string> = {};
+      s.forEach(d => {
+        const data = d.data();
+        reqData[`${data.staffName}_${data.dateStr}`] = data.type;
+      });
+      setRequests(reqData);
+    }, (e) => console.warn('shifts リスナーエラー', e));
+
+    const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
+      const asData: Record<string, AssignedStaff[]> = {};
+      s.forEach(d => { asData[d.id] = d.data().staff || []; });
+      setAssignedShifts(asData);
+    }, (e) => console.warn('assigned_shifts リスナーエラー', e));
+
+    const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
+      const eData: Record<string, string> = {};
+      snap.forEach(d => { eData[d.id] = d.data().title; });
+      setEventsData(eData);
+    }, (e) => console.warn('events リスナーエラー', e));
+
+    const holUnsub = onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
+    });
+
+    // ▼ 一度だけ実行する非同期処理（祝日API・マスタデータ・スタッフ一覧）▼
+    const fetchInitialData = async () => {
       // 祝日 API（失敗しても続行）
       try {
         const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
@@ -124,38 +152,12 @@ export default function ShiftCreateScreen() {
       } catch (e) {
         console.warn('スタッフ取得失敗', e);
       }
-
-      // ▼ リアルタイムリスナーをまとめて設定 ▼
-      const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
-        const reqData: Record<string, string> = {};
-        s.forEach(d => {
-          const data = d.data();
-          reqData[`${data.staffName}_${data.dateStr}`] = data.type;
-        });
-        setRequests(reqData);
-      }, (e) => console.warn('shifts リスナーエラー', e));
-
-      const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
-        const asData: Record<string, AssignedStaff[]> = {};
-        s.forEach(d => { asData[d.id] = d.data().staff || []; });
-        setAssignedShifts(asData);
-      }, (e) => console.warn('assigned_shifts リスナーエラー', e));
-
-      const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
-        const eData: Record<string, string> = {};
-        snap.forEach(d => { eData[d.id] = d.data().title; });
-        setEventsData(eData);
-      }, (e) => console.warn('events リスナーエラー', e));
-
-      onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
-        if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
-      });
-
-      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
-
-      return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
-    fetchData();
+
+    fetchInitialData();
+
+    // ▼ クリーンアップ: 全リスナーを確実に解除 ▼
+    return () => { reqUnsub(); asUnsub(); evUnsub(); holUnsub(); };
   }, []);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
