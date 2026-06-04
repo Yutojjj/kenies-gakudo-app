@@ -186,20 +186,28 @@ export default function ScheduleScreen() {
           const targetIndex = loadedChildren.findIndex(c => c.name === targetName);
           if (targetIndex !== -1) setActiveChildIdx(targetIndex);
 
+          // ★修正: 他の日の操作データが消えないように、docChangesを用いた差分更新に変更
           onSnapshot(query(collection(db, 'schedules'), where('parentId', '==', foundParentId)), (sSnap) => {
-            const sData: Record<string, DailyData> = {};
-            sSnap.forEach(d => {
-              const item = d.data();
-              let lessons: LessonTemplate[] = [];
-              if (item.lessons) {
-                  lessons = item.lessons;
-              } else if (item.lesson) {
-                  lessons = [item.lesson];
-              }
-              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
+            setScheduleData(prev => {
+              const currentData = { ...prev };
+              sSnap.docChanges().forEach((change) => {
+                const item = change.doc.data();
+                const key = `${item.childId}_${item.dateStr}`;
+                if (change.type === 'removed') {
+                  delete currentData[key];
+                } else {
+                  let lessons: LessonTemplate[] = [];
+                  if (item.lessons) {
+                      lessons = item.lessons;
+                  } else if (item.lesson) {
+                      lessons = [item.lesson];
+                  }
+                  currentData[key] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
+                }
+              });
+              scheduleDataRef.current = currentData;
+              return currentData;
             });
-            scheduleDataRef.current = sData;
-            setScheduleData(sData);
           });
           
           onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
@@ -325,10 +333,12 @@ export default function ScheduleScreen() {
     const docId = `${child.id}_${dateStr}`;
     const current = scheduleDataRef.current[docId] || {};
 
-    // refとstateを同時更新（onSnapshotとの競合防止）
-    const updated = { ...scheduleDataRef.current, [docId]: { ...(scheduleDataRef.current[docId] || {}), ...data } };
-    scheduleDataRef.current = updated;
-    setScheduleData({ ...updated });
+    // ★修正: 楽観的更新時に関数型アップデートを使用し、裏側での状態競合を防ぐ
+    setScheduleData(prev => {
+      const updated = { ...prev, [docId]: { ...(prev[docId] || {}), ...data } };
+      scheduleDataRef.current = updated;
+      return updated;
+    });
 
     try {
       const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };

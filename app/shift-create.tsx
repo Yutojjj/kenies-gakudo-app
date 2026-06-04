@@ -125,33 +125,54 @@ export default function ShiftCreateScreen() {
         console.warn('スタッフ取得失敗', e);
       }
 
-      // ▼ リアルタイムリスナーをまとめて設定 ▼
+      // ▼ リアルタイムリスナーをまとめて設定（★修正: 他データ書き込み時のリセット消失を防ぐため差分更新を使用）▼
       const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
-        const reqData: Record<string, string> = {};
-        s.forEach(d => {
-          const data = d.data();
-          reqData[`${data.staffName}_${data.dateStr}`] = data.type;
+        setRequests(prev => {
+          const reqData = { ...prev };
+          s.docChanges().forEach(change => {
+            const data = change.doc.data();
+            const key = `${data.staffName}_${data.dateStr}`;
+            if (change.type === 'removed') {
+              delete reqData[key];
+            } else {
+              reqData[key] = data.type;
+            }
+          });
+          return reqData;
         });
-        setRequests(reqData);
       }, (e) => console.warn('shifts リスナーエラー', e));
 
       const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
-        const asData: Record<string, AssignedStaff[]> = {};
-        s.forEach(d => { asData[d.id] = d.data().staff || []; });
-        setAssignedShifts(asData);
+        setAssignedShifts(prev => {
+          const asData = { ...prev };
+          s.docChanges().forEach(change => {
+            if (change.type === 'removed') {
+              delete asData[change.doc.id];
+            } else {
+              asData[change.doc.id] = change.doc.data().staff || [];
+            }
+          });
+          return asData;
+        });
       }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
       const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
-        const eData: Record<string, string> = {};
-        snap.forEach(d => { eData[d.id] = d.data().title; });
-        setEventsData(eData);
+        setEventsData(prev => {
+          const eData = { ...prev };
+          snap.docChanges().forEach(change => {
+            if (change.type === 'removed') {
+              delete eData[change.doc.id];
+            } else {
+              eData[change.doc.id] = change.doc.data().title;
+            }
+          });
+          return eData;
+        });
       }, (e) => console.warn('events リスナーエラー', e));
 
       onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
         if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
       });
-
-      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
       return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
@@ -434,24 +455,6 @@ export default function ShiftCreateScreen() {
       Alert.alert('エラー', `PDF作成に失敗しました: ${e?.message || String(e)}`);
     }
   };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
