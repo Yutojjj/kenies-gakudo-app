@@ -349,6 +349,10 @@ export default function AttendanceScreen() {
       if (!grouped[s]) grouped[s] = [];
       grouped[s].push(k);
     });
+    // 学年順でソート
+    Object.keys(grouped).forEach(s => {
+      grouped[s] = sortKidsByGrade(grouped[s]);
+    });
     return grouped;
   }, [kids]);
   
@@ -465,18 +469,18 @@ export default function AttendanceScreen() {
                                 {showKidNames ? (
                                   <>
                                     <View style={styles.timeHeaderRow}>
-                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' ！' : ''}</Text>
+                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' 📝' : ''}</Text>
                                       <Text style={styles.timeCountBadge}>{kids.length}名</Text>
                                     </View>
                                     <View style={styles.kidNamesContainer}>
                                       {kids.map(k => (
-                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '！' : ''}{k.name}</Text>
+                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '📝' : ''}{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
                                       ))}
                                     </View>
                                   </>
                                 ) : (
                                   <>
-                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' ！' : ''}</Text>
+                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' 📝' : ''}</Text>
                                     <Text style={styles.timeCountText}>{kids.length}名</Text>
                                   </>
                                 )}
@@ -487,37 +491,101 @@ export default function AttendanceScreen() {
                       </View>
                     );
                   })}
-                  {hasLessons && (
-                    <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
-                      <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(Object.values(attendanceData.lessons).flat()) })}>
-                        <Text style={[styles.schoolNameText, { color: '#4682B4' }]}><Ionicons name="color-wand" size={12} /> 習い事</Text>
-                      </TouchableOpacity>
-                      <View style={styles.timeGroupContainer}>
-                        {Object.entries(attendanceData.lessons).map(([lessonKey, kids]) => (
-                          <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
-                            {showKidNames ? (
-                              <>
-                                <View style={styles.timeHeaderRow}>
-                                  <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonKey}</Text>
-                                  <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
-                                </View>
-                                <View style={styles.kidNamesContainer}>
-                                  {kids.map(k => (
-                                    <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}</Text>
-                                  ))}
-                                </View>
-                              </>
-                            ) : (
-                              <>
-                                <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonKey}</Text>
-                                <Text style={styles.timeCountText}>{kids.length}名</Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  )}
+                  {hasLessons && (() => {
+                    // 習い事1（通常）と習い事2（スイミング・プログラミング・ダンス）に分離
+                    const LESSON2_NAMES = ['スイミング', 'プログラミング', 'ダンス'];
+                    const lesson1Entries = Object.entries(attendanceData.lessons)
+                      .filter(([key]) => !LESSON2_NAMES.some(n => key.includes(n)))
+                      .sort(([a], [b]) => a.localeCompare(b));
+                    const lesson2Entries = Object.entries(attendanceData.lessons)
+                      .filter(([key]) => LESSON2_NAMES.some(n => key.includes(n)))
+                      .sort(([a], [b]) => a.localeCompare(b));
+
+                    return (
+                      <>
+                        {lesson1Entries.length > 0 && (
+                          <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
+                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
+                              <Text style={[styles.schoolNameText, { color: '#4682B4' }]}>習い事</Text>
+                            </TouchableOpacity>
+                            <View style={styles.timeGroupContainer}>
+                              {lesson1Entries.map(([lessonKey, kids]) => {
+                                const spaceIdx = lessonKey.indexOf(' ');
+                                const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
+                                const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
+                                return (
+                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                                    {showKidNames ? (
+                                      <>
+                                        <View style={styles.timeHeaderRow}>
+                                          <View>
+                                            <Text style={[styles.timeLabel, { color: '#4682B4', fontWeight: 'bold' }]}>{lessonTime}</Text>
+                                            <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonName}</Text>
+                                          </View>
+                                          <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
+                                        </View>
+                                        <View style={styles.kidNamesContainer}>
+                                          {kids.map(k => (
+                                            <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
+                                          ))}
+                                        </View>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
+                                        <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
+                                        <Text style={styles.timeCountText}>{kids.length}名</Text>
+                                      </>
+                                    )}
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+                        {lesson2Entries.length > 0 && (
+                          <View style={[styles.schoolCard, { backgroundColor: '#F3E5F5' }]}>
+                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事2', kids: sortKidsByGrade(lesson2Entries.flatMap(([,kids]) => kids)) })}>
+                              <Text style={[styles.schoolNameText, { color: '#7B1FA2' }]}>習い事2</Text>
+                            </TouchableOpacity>
+                            <View style={styles.timeGroupContainer}>
+                              {lesson2Entries.map(([lessonKey, kids]) => {
+                                const spaceIdx = lessonKey.indexOf(' ');
+                                const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
+                                const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
+                                return (
+                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事2', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                                    {showKidNames ? (
+                                      <>
+                                        <View style={styles.timeHeaderRow}>
+                                          <View>
+                                            <Text style={[styles.timeLabel, { color: '#7B1FA2', fontWeight: 'bold' }]}>{lessonTime}</Text>
+                                            <Text style={[styles.timeLabel, { color: '#7B1FA2' }]} numberOfLines={1}>{lessonName}</Text>
+                                          </View>
+                                          <Text style={[styles.timeCountBadge, { color: '#7B1FA2' }]}>{kids.length}名</Text>
+                                        </View>
+                                        <View style={styles.kidNamesContainer}>
+                                          {kids.map(k => (
+                                            <Text key={k.id} style={[styles.kidNameText, { color: '#7B1FA2' }]} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
+                                          ))}
+                                        </View>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Text style={[styles.timeButtonText, { color: '#7B1FA2', fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
+                                        <Text style={[styles.timeButtonText, { color: '#7B1FA2', fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
+                                        <Text style={styles.timeCountText}>{kids.length}名</Text>
+                                      </>
+                                    )}
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               ) : (
                 <View style={styles.noDataBox}><Text style={styles.noDataText}>利用予定の児童はいません</Text></View>
@@ -559,7 +627,6 @@ export default function AttendanceScreen() {
                   <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
                   <View style={styles.userInfo}>
                     <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                    <Text style={styles.userKana}>{user.nicknameKana || ''}</Text>
                   </View>
                   <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
                 </TouchableOpacity>
@@ -737,7 +804,7 @@ export default function AttendanceScreen() {
                     <View key={kid.id} style={styles.modalListItem}>
                       <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
                         <Ionicons name="person" size={16} color={COLORS.primary} />
-                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '！' : ''}{kid.name}</Text>
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '📝' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
                       </TouchableOpacity>
@@ -775,7 +842,7 @@ export default function AttendanceScreen() {
                     <View key={kid.id} style={styles.modalListItem}>
                       <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
                         <Ionicons name="time" size={16} color={COLORS.info} />
-                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '！' : ''}{kid.name}</Text>
+                        <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '📝' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
                         <Ionicons name="chevron-forward" size={16} color={COLORS.textLight} style={{marginLeft: 8}} />
                       </TouchableOpacity>

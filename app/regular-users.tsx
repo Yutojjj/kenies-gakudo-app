@@ -190,7 +190,7 @@ export default function RegularUsersScreen() {
                         }}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="school-outline" size={14} color={COLORS.primary} />
+                        <Ionicons name="school-outline" size={14} color="#333" />
                         <Text style={styles.schoolHeaderText} numberOfLines={1}>{school}</Text>
                         <View style={styles.schoolHeaderBadge}>
                           <Text style={styles.schoolHeaderCount}>{kids_.length}名</Text>
@@ -211,8 +211,8 @@ export default function RegularUsersScreen() {
                                 activeOpacity={0.8}
                               >
                                 <View style={{ flex:1 }}>
-                                  <Text style={styles.kidName} numberOfLines={1}>{kid.name}</Text>
                                   <Text style={styles.kidSub} numberOfLines={1}>{kid.grade}{kid.parentName ? ' 兄弟' : ''}</Text>
+                                  <Text style={styles.kidName} numberOfLines={1}>{kid.name}</Text>
                                 </View>
                                 <View style={{ alignItems:'flex-end', gap:3 }}>
                                   <View style={styles.dayBadgesRow}>
@@ -304,10 +304,10 @@ const styles = StyleSheet.create({
   countBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border },
   countBtnActive: { backgroundColor: COLORS.secondary, borderColor: COLORS.secondary },
   countBtnText: { fontSize: 11, fontWeight: 'bold', color: COLORS.text },
-  schoolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  schoolCard: { width: '48%', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
+  schoolGrid: { flexDirection: 'column', gap: 10 },
+  schoolCard: { width: '100%', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
   schoolHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
-  schoolHeaderText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary, flex: 1 },
+  schoolHeaderText: { fontSize: 15, fontWeight: 'bold', color: '#222', flex: 1 },
   schoolHeaderBadge: { backgroundColor: '#EEF5FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   schoolHeaderCount: { fontSize: 12, color: COLORS.primary, fontWeight: 'bold' },
   kidGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 12, gap: 8 },

@@ -66,37 +66,9 @@ export default function ShiftCreateScreen() {
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
-    // ▼ onSnapshotリスナーは即時登録し、unsubscribe関数をuseEffectから直接返す ▼
-    // （非同期関数内でreturnしてもuseEffectのクリーンアップにならないため分離）
+    const fetchData = async () => {
+      // ▼ 修正: 各処理を個別に try/catch し、失敗しても次の処理へ進む ▼
 
-    // Firestoreリスナー（同期的に登録）
-    const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
-      const reqData: Record<string, string> = {};
-      s.forEach(d => {
-        const data = d.data();
-        reqData[`${data.staffName}_${data.dateStr}`] = data.type;
-      });
-      setRequests(reqData);
-    }, (e) => console.warn('shifts リスナーエラー', e));
-
-    const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
-      const asData: Record<string, AssignedStaff[]> = {};
-      s.forEach(d => { asData[d.id] = d.data().staff || []; });
-      setAssignedShifts(asData);
-    }, (e) => console.warn('assigned_shifts リスナーエラー', e));
-
-    const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
-      const eData: Record<string, string> = {};
-      snap.forEach(d => { eData[d.id] = d.data().title; });
-      setEventsData(eData);
-    }, (e) => console.warn('events リスナーエラー', e));
-
-    const holUnsub = onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
-      if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
-    });
-
-    // ▼ 一度だけ実行する非同期処理（祝日API・マスタデータ・スタッフ一覧）▼
-    const fetchInitialData = async () => {
       // 祝日 API（失敗しても続行）
       try {
         const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
@@ -152,12 +124,38 @@ export default function ShiftCreateScreen() {
       } catch (e) {
         console.warn('スタッフ取得失敗', e);
       }
+
+      // ▼ リアルタイムリスナーをまとめて設定 ▼
+      const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
+        const reqData: Record<string, string> = {};
+        s.forEach(d => {
+          const data = d.data();
+          reqData[`${data.staffName}_${data.dateStr}`] = data.type;
+        });
+        setRequests(reqData);
+      }, (e) => console.warn('shifts リスナーエラー', e));
+
+      const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
+        const asData: Record<string, AssignedStaff[]> = {};
+        s.forEach(d => { asData[d.id] = d.data().staff || []; });
+        setAssignedShifts(asData);
+      }, (e) => console.warn('assigned_shifts リスナーエラー', e));
+
+      const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
+        const eData: Record<string, string> = {};
+        snap.forEach(d => { eData[d.id] = d.data().title; });
+        setEventsData(eData);
+      }, (e) => console.warn('events リスナーエラー', e));
+
+      onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
+      });
+
+      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
+
+      return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
-
-    fetchInitialData();
-
-    // ▼ クリーンアップ: 全リスナーを確実に解除 ▼
-    return () => { reqUnsub(); asUnsub(); evUnsub(); holUnsub(); };
+    fetchData();
   }, []);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -847,98 +845,123 @@ export default function ShiftCreateScreen() {
       </Modal>
 
       {/* --- 時間変更＆候補追加モーダル --- */}
-      <Modal visible={timePickerVisible} transparent animationType="fade">
+      <Modal visible={timePickerVisible} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>{editingStaffName} の勤務時間</Text>
-            
+
+            {/* 開始/終了切り替えタブ */}
             <View style={styles.timeTargetRow}>
               <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'start' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('start')}>
-                <Text style={styles.timeTargetLabel}>開始</Text>
+                <Text style={styles.timeTargetLabel}>開始時間</Text>
                 <Text style={[styles.timeTargetValue, timeSelectTarget === 'start' && styles.timeTargetValueActive]}>{tempStart}</Text>
               </TouchableOpacity>
-              <Text style={{fontSize:24, fontWeight:'bold', color:COLORS.textLight}}>〜</Text>
+              <Text style={{fontSize:24, fontWeight:'bold', color:COLORS.textLight, marginHorizontal:8}}>〜</Text>
               <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'end' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('end')}>
-                <Text style={styles.timeTargetLabel}>終了</Text>
+                <Text style={styles.timeTargetLabel}>終了時間</Text>
                 <Text style={[styles.timeTargetValue, timeSelectTarget === 'end' && styles.timeTargetValueActive]}>{tempEnd}</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{maxHeight: 180, marginVertical: 8}} showsVerticalScrollIndicator={false}>
-              <View style={styles.masterTimesGrid}>
-                {masterTimes.map(t => (
-                  <View key={t} style={styles.masterTimeBtnWrap}>
-                    <TouchableOpacity style={styles.masterTimeBtn} onPress={() => handleMasterTimeSelect(t)}>
-                      <Text style={styles.masterTimeText}>{t}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.masterTimeDeleteBtn}
-                      onPress={() => {
-                        const newTimes = masterTimes.filter(x => x !== t);
-                        setMasterTimes(newTimes);
-                        setDoc(doc(db, 'settings', 'masterTimes'), { times: newTimes });
-                      }}
-                    >
-                      <Ionicons name="close-circle" size={16} color="#E53935" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+            {/* 候補ボタン（大きく、見やすく） */}
+            {masterTimes.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.addTimeTitle}>候補から選ぶ</Text>
+                <View style={styles.masterTimesGrid}>
+                  {masterTimes.map(t => (
+                    <View key={t} style={{ position: 'relative' }}>
+                      <TouchableOpacity
+                        style={styles.masterTimeBtn}
+                        onPress={() => handleMasterTimeSelect(t)}
+                        onLongPress={() => {
+                          const newTimes = masterTimes.filter(x => x !== t);
+                          setMasterTimes(newTimes);
+                          setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
+                        }}
+                        delayLongPress={500}
+                      >
+                        <Text style={styles.masterTimeText}>{t}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 8, zIndex: 1 }}
+                        onPress={() => {
+                          const newTimes = masterTimes.filter(x => x !== t);
+                          setMasterTimes(newTimes);
+                          setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
+                        }}
+                      >
+                        <Ionicons name="close-circle" size={16} color="#E53935" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
               </View>
-            </ScrollView>
+            )}
 
-            <View style={styles.addTimeContainer}>
-              <Text style={styles.addTimeTitle}>新しい候補 (開始〜終了) を作成</Text>
-              <View style={styles.pickerColumns}>
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+            {/* ドラムロール時間ピッカー（大きい・タップしやすい） */}
+            <View style={{ marginBottom: 8 }}>
+              <Text style={styles.addTimeTitle}>時間を直接選ぶ</Text>
+              <View style={styles.drumPickerRow}>
+                {/* 開始 時 */}
+                <View style={styles.drumCol}>
+                  <Text style={styles.drumLabel}>開始 時</Text>
+                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                     {HOURS.map(h => (
-                      <TouchableOpacity key={`sh-${h}`} style={[styles.pickerItem, newStartHour === h && styles.pickerItemActive]} onPress={() => setNewStartHour(h)}>
-                        <Text style={[styles.pickerItemText, newStartHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                      <TouchableOpacity key={`sh-${h}`} style={[styles.drumItem, newStartHour === h && styles.drumItemActive]} onPress={() => { setNewStartHour(h); setTempStart(`${String(h).padStart(2,'0')}:${String(newStartMinute).padStart(2,'0')}`); }}>
+                        <Text style={[styles.drumItemText, newStartHour === h && styles.drumItemTextActive]}>{String(h).padStart(2,'0')}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
-                <Text style={styles.pickerColon}>:</Text>
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
+                <Text style={styles.drumColon}>:</Text>
+                {/* 開始 分 */}
+                <View style={styles.drumCol}>
+                  <Text style={styles.drumLabel}>開始 分</Text>
+                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                     {MINUTES.map(m => (
-                      <TouchableOpacity key={`sm-${m}`} style={[styles.pickerItem, newStartMinute === m && styles.pickerItemActive]} onPress={() => setNewStartMinute(m)}>
-                        <Text style={[styles.pickerItemText, newStartMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-                
-                <Text style={styles.pickerColon}>〜</Text>
-                
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
-                    {HOURS.map(h => (
-                      <TouchableOpacity key={`eh-${h}`} style={[styles.pickerItem, newEndHour === h && styles.pickerItemActive]} onPress={() => setNewEndHour(h)}>
-                        <Text style={[styles.pickerItemText, newEndHour === h && styles.pickerItemTextActive]}>{h}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-                <Text style={styles.pickerColon}>:</Text>
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={styles.pickerScroll}>
-                    {MINUTES.map(m => (
-                      <TouchableOpacity key={`em-${m}`} style={[styles.pickerItem, newEndMinute === m && styles.pickerItemActive]} onPress={() => setNewEndMinute(m)}>
-                        <Text style={[styles.pickerItemText, newEndMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                      <TouchableOpacity key={`sm-${m}`} style={[styles.drumItem, newStartMinute === m && styles.drumItemActive]} onPress={() => { setNewStartMinute(m); setTempStart(`${String(newStartHour).padStart(2,'0')}:${String(m).padStart(2,'0')}`); }}>
+                        <Text style={[styles.drumItemText, newStartMinute === m && styles.drumItemTextActive]}>{String(m).padStart(2,'0')}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
 
+                <Text style={styles.drumTilde}>〜</Text>
+
+                {/* 終了 時 */}
+                <View style={styles.drumCol}>
+                  <Text style={styles.drumLabel}>終了 時</Text>
+                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                    {HOURS.map(h => (
+                      <TouchableOpacity key={`eh-${h}`} style={[styles.drumItem, newEndHour === h && styles.drumItemActive]} onPress={() => { setNewEndHour(h); setTempEnd(`${String(h).padStart(2,'0')}:${String(newEndMinute).padStart(2,'0')}`); }}>
+                        <Text style={[styles.drumItemText, newEndHour === h && styles.drumItemTextActive]}>{String(h).padStart(2,'0')}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+                <Text style={styles.drumColon}>:</Text>
+                {/* 終了 分 */}
+                <View style={styles.drumCol}>
+                  <Text style={styles.drumLabel}>終了 分</Text>
+                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                    {MINUTES.map(m => (
+                      <TouchableOpacity key={`em-${m}`} style={[styles.drumItem, newEndMinute === m && styles.drumItemActive]} onPress={() => { setNewEndMinute(m); setTempEnd(`${String(newEndHour).padStart(2,'0')}:${String(m).padStart(2,'0')}`); }}>
+                        <Text style={[styles.drumItemText, newEndMinute === m && styles.drumItemTextActive]}>{String(m).padStart(2,'0')}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* 候補として保存ボタン */}
                 <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddMasterTime}>
-                  <Text style={{color: COLORS.white, fontWeight: 'bold'}}>追加</Text>
+                  <Ionicons name="bookmark" size={14} color={COLORS.white} />
+                  <Text style={{color: COLORS.white, fontWeight: 'bold', fontSize: 11, marginTop: 2}}>保存</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <View style={{flexDirection:'row', gap: 12, marginTop: 16}}>
-              <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#CCC'}]} onPress={()=>setTimePickerVisible(false)}><Text>キャンセル</Text></TouchableOpacity>
+            <View style={{flexDirection:'row', gap: 12, marginTop: 8}}>
+              <TouchableOpacity style={[styles.modalBtn, {backgroundColor: '#CCC'}]} onPress={()=>setTimePickerVisible(false)}><Text style={{fontWeight:'bold'}}>キャンセル</Text></TouchableOpacity>
               <TouchableOpacity style={[styles.modalBtn, {backgroundColor: COLORS.primary}]} onPress={saveTimeEdit}><Text style={{color: COLORS.white, fontWeight:'bold'}}>変更を確定</Text></TouchableOpacity>
             </View>
           </View>
@@ -1137,19 +1160,42 @@ const styles = StyleSheet.create({
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  pickerContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20 },
-  pickerTitle: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 16 },
+  pickerContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20, maxHeight: '92%' },
+  pickerTitle: { fontSize: 17, fontWeight: 'bold', textAlign: 'center', marginBottom: 14, color: COLORS.text },
   
-  timeTargetRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 12 },
-  timeTargetBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, borderWidth: 2, borderColor: 'transparent', borderRadius: 12, backgroundColor: '#F5F5F5', marginHorizontal: 4 },
+  timeTargetRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 14 },
+  timeTargetBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderWidth: 2, borderColor: 'transparent', borderRadius: 12, backgroundColor: '#F5F5F5', marginHorizontal: 4 },
   timeTargetBtnActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary + '10' },
-  timeTargetLabel: { fontSize: 10, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 2 },
-  timeTargetValue: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  timeTargetLabel: { fontSize: 11, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 2 },
+  timeTargetValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
   timeTargetValueActive: { color: COLORS.primary },
   
-  masterTimesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  masterTimesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-start', marginTop: 6 },
   masterTimeBtnWrap: { position: 'relative', flexDirection: 'row', alignItems: 'center' },
   masterTimeDeleteBtn: { marginLeft: -8, marginTop: -16, zIndex: 1 },
+  masterTimeBtn: { backgroundColor: '#F0F8FF', borderWidth: 1.5, borderColor: COLORS.primary + '40', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center' },
+  masterTimeText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary },
+  drumPickerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  drumCol: { flex: 1, alignItems: 'center' },
+  drumLabel: { fontSize: 10, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
+  drumScroll: { height: 160, width: '100%', backgroundColor: '#FAFAFA', borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
+  drumItem: { paddingVertical: 12, alignItems: 'center', borderRadius: 6, marginHorizontal: 2, marginVertical: 1 },
+  drumItemActive: { backgroundColor: COLORS.primary },
+  drumItemText: { fontSize: 18, fontWeight: 'bold', color: COLORS.textLight },
+  drumItemTextActive: { color: COLORS.white, fontSize: 20 },
+  drumColon: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, paddingBottom: 70, marginHorizontal: 1 },
+  drumTilde: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight, paddingBottom: 70, marginHorizontal: 2 },
+  addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
+  addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
+  pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 100 },
+  pickerColumnWrapper: { flex: 1, height: '100%', maxWidth: 45, backgroundColor: COLORS.white, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border },
+  pickerScroll: { flex: 1 },
+  pickerItem: { paddingVertical: 8, alignItems: 'center' },
+  pickerItemActive: { backgroundColor: COLORS.primary + '20' },
+  pickerItemText: { fontSize: 14, color: COLORS.textLight },
+  pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 16 },
+  pickerColon: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginHorizontal: 2 },
+  addOptionSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 14, borderRadius: 6, marginLeft: 6, marginBottom: 0 },
   settingSectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#444', marginBottom: 10 },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F5F5F5', borderRadius: 10 },
   settingLabel: { fontSize: 14, fontWeight: 'bold', color: '#333', width: 44 },
@@ -1164,21 +1210,6 @@ const styles = StyleSheet.create({
   settingStaffName: { fontSize: 13, fontWeight: 'bold', color: '#333', width: 50 },
   settingTimeLabel: { fontSize: 10, color: '#888' },
   settingTimeInput: { borderWidth: 1, borderColor: '#CCC', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontSize: 12, width: 56, textAlign: 'center', color: '#333' },
-  masterTimeBtn: { width: '48%', backgroundColor: '#FFFDF5', borderWidth: 1, borderColor: '#F3E5AB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  masterTimeText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
-  
-  addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
-  addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
-  pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 100 },
-  pickerColumnWrapper: { flex: 1, height: '100%', maxWidth: 45, backgroundColor: COLORS.white, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border },
-  pickerScroll: { flex: 1 },
-  pickerItem: { paddingVertical: 8, alignItems: 'center' },
-  pickerItemActive: { backgroundColor: COLORS.primary + '20' },
-  pickerItemText: { fontSize: 14, color: COLORS.textLight },
-  pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 16 },
-  pickerColon: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginHorizontal: 2 },
-  addOptionSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 14, borderRadius: 6, marginLeft: 8 },
-  
   modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
 
   // ★ 1画面完全フィット(土日細い版・時間表示改行対応)のスタイル

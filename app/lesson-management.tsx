@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Modal, Platform, SafeAreaView, ScrollView,
@@ -87,6 +87,17 @@ export default function LessonManagementScreen() {
 
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [activeDayTab, setActiveDayTab] = useState('全て');
+
+  // 編集モーダル用
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editModalLesson, setEditModalLesson] = useState<Lesson | null>(null);
+  const [editModalName, setEditModalName] = useState('');
+  const [editModalDay, setEditModalDay] = useState('月');
+  const [editModalTime, setEditModalTime] = useState('15:00');
+  const [editModalIsPaid, setEditModalIsPaid] = useState(false);
+  const [editModalTimePickerVisible, setEditModalTimePickerVisible] = useState(false);
+  const [editTempHour, setEditTempHour] = useState(15);
+  const [editTempMinute, setEditTempMinute] = useState(0);
 
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [tempHour, setTempHour] = useState(15);
@@ -177,15 +188,16 @@ export default function LessonManagementScreen() {
     }
   };
 
-  // lessonsが更新されたら全グループを開く
+  // 一覧はデフォルト閉じた状態
+  // （expandedGroupsの初期値が空のSetのため何もしない）
+
+  // lessonsロード後、習い事名グループ（nameKey）のみを展開。
+  // 時間サブグループ（subKey）は閉じたまま → 画像の状態がデフォルト
   useEffect(() => {
     if (lessons.length === 0) return;
     const keys = new Set<string>();
     lessons.forEach(l => {
-      const nameKey = `name_${l.lessonName}`;
-      const subKey = `${nameKey}_${l.lessonTime}||${l.dayOfWeek||''}`;
-      keys.add(nameKey);
-      keys.add(subKey);
+      keys.add(`name_${l.lessonName}`);
     });
     setExpandedGroups(keys);
   }, [lessons]);
@@ -271,6 +283,36 @@ export default function LessonManagementScreen() {
       await fetchData();
       setViewMode('list');
     }
+  };
+
+  const handleUpdate = async () => {
+    if (!editModalLesson?.id) return;
+    if (!editModalName.trim()) { customAlert('エラー', '習い事名を入力してください'); return; }
+    try {
+      await updateDoc(doc(db, 'lessons', editModalLesson.id), {
+        lessonName: editModalName.trim(),
+        lessonTime: editModalTime,
+        dayOfWeek: editModalDay,
+        isPaid: editModalIsPaid,
+      });
+      customAlert('更新完了', '習い事を更新しました');
+      setEditModalVisible(false);
+      fetchData();
+    } catch (e) {
+      customAlert('エラー', '更新に失敗しました');
+    }
+  };
+
+  const openEditModal = (lesson: Lesson) => {
+    setEditModalLesson(lesson);
+    setEditModalName(lesson.lessonName);
+    setEditModalDay(lesson.dayOfWeek || '月');
+    setEditModalTime(lesson.lessonTime);
+    setEditModalIsPaid(!!lesson.isPaid);
+    const [h, m] = lesson.lessonTime.split(':').map(Number);
+    setEditTempHour(isNaN(h) ? 15 : h);
+    setEditTempMinute(isNaN(m) ? 0 : m);
+    setEditModalVisible(true);
   };
 
   const handleDelete = (lessonId: string) => {
@@ -465,14 +507,12 @@ export default function LessonManagementScreen() {
                                 <Ionicons name={isSubOpen ? 'chevron-up' : 'chevron-down'} size={15} color={COLORS.textLight} style={{ marginLeft:4 }} />
                               </TouchableOpacity>
 
-                              {/* 利用者カード */}
+                              {/* 利用者カード（2列グリッド） */}
                               {isSubOpen && (
                                 <View style={styles.groupChildList}>
+                                  <View style={styles.childGrid}>
                                   {timeGroup.map(lesson => (
                                     <View key={lesson.id} style={styles.groupChildRow}>
-                                      <View style={styles.groupChildAvatar}>
-                                        <Text style={styles.groupChildAvatarText}>{lesson.childName.charAt(0)}</Text>
-                                      </View>
                                       <View style={{ flex:1 }}>
                                         <Text style={styles.groupChildName}>{lesson.childName}</Text>
                                         <View style={{ flexDirection:'row', gap:4, marginTop:2 }}>
@@ -489,27 +529,20 @@ export default function LessonManagementScreen() {
                                         </View>
                                       </View>
                                       <TouchableOpacity
-                                        style={[styles.groupAddBtn, { marginRight:6 }]}
-                                        onPress={() => {
-                                          setEditingLesson(lesson);
-                                          setLessonName(lesson.lessonName);
-                                          setSelectedTime(lesson.lessonTime);
-                                          setSelectedDayOfWeek(lesson.dayOfWeek || '月');
-                                          setIsPaid(!!lesson.isPaid);
-                                          setSelectedKidIds([lesson.childId]);
-                                          setViewMode('edit');
-                                        }}
+                                        style={[styles.groupAddBtn, { marginRight:4 }]}
+                                        onPress={() => openEditModal(lesson)}
                                       >
-                                        <Ionicons name="pencil-outline" size={16} color={COLORS.primary} />
+                                        <Ionicons name="pencil-outline" size={15} color={COLORS.primary} />
                                       </TouchableOpacity>
                                       <TouchableOpacity
                                         style={styles.groupChildDeleteBtn}
                                         onPress={() => handleDelete(lesson.id || '')}
                                       >
-                                        <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                                        <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
                                       </TouchableOpacity>
                                     </View>
                                   ))}
+                                  </View>
                                 </View>
                               )}
                             </View>
@@ -698,33 +731,95 @@ export default function LessonManagementScreen() {
         </ScrollView>
       )}
 
-      {/* schedule.tsx と同じ時間ピッカーモーダル */}
-      <Modal visible={timePickerVisible} transparent animationType="slide">
+      {/* ── 個別編集モーダル ── */}
+      <Modal visible={editModalVisible} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, { padding: 24 }]}>
+            <Text style={[styles.pickerTitle, { marginBottom: 16 }]}>{editModalLesson?.childName} の習い事を編集</Text>
+
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>習い事名</Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 14 }]}
+              value={editModalName}
+              onChangeText={setEditModalName}
+              placeholder="習い事名"
+              placeholderTextColor="#BBBBBB"
+            />
+
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>曜日</Text>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              {['月', '火', '水', '木', '金'].map(day => (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayBtn, editModalDay === day && styles.dayBtnActive]}
+                  onPress={() => setEditModalDay(day)}
+                >
+                  <Text style={[styles.dayBtnText, editModalDay === day && styles.dayBtnTextActive]}>{day}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>開始時間</Text>
+            <TouchableOpacity style={[styles.timeSelectBtn, { marginBottom: 14 }]} onPress={() => {
+              setEditTempHour(parseInt(editModalTime.split(':')[0]));
+              setEditTempMinute(parseInt(editModalTime.split(':')[1]));
+              setEditModalTimePickerVisible(true);
+            }}>
+              <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+              <Text style={[styles.timeSelectText, { fontSize: 22 }]}>{editModalTime}</Text>
+              <Text style={styles.timeSelectHint}>タップして変更</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.paidToggle, editModalIsPaid && styles.paidToggleActive, { marginBottom: 20 }]}
+              onPress={() => setEditModalIsPaid(!editModalIsPaid)}
+            >
+              <Ionicons name={editModalIsPaid ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={editModalIsPaid ? '#fff' : COLORS.textLight} />
+              <Text style={[styles.paidToggleText, editModalIsPaid && { color: '#fff' }]}>有料送迎（500円/回）</Text>
+            </TouchableOpacity>
+
+            <View style={styles.pickerFooter}>
+              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setEditModalVisible(false)}>
+                <Text style={styles.pickerCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pickerConfirmBtn} onPress={handleUpdate}>
+                <Text style={styles.pickerConfirmText}>更新する</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 編集モーダル内の時間ピッカー */}
+      <Modal visible={editModalTimePickerVisible} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns}>
               <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                 {HOURS.map(h => (
-                  <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
-                    <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                  <TouchableOpacity key={`eh-${h}`} style={[styles.pickerItem, editTempHour === h && styles.pickerItemActive]} onPress={() => setEditTempHour(h)}>
+                    <Text style={[styles.pickerItemText, editTempHour === h && styles.pickerItemTextActive]}>{h}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
               <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
                 {MINUTES.map(m => (
-                  <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
-                    <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                  <TouchableOpacity key={`em-${m}`} style={[styles.pickerItem, editTempMinute === m && styles.pickerItemActive]} onPress={() => setEditTempMinute(m)}>
+                    <Text style={[styles.pickerItemText, editTempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
             <View style={styles.pickerFooter}>
-              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setTimePickerVisible(false)}>
+              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setEditModalTimePickerVisible(false)}>
                 <Text style={styles.pickerCancelText}>キャンセル</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.pickerConfirmBtn} onPress={confirmTime}>
+              <TouchableOpacity style={styles.pickerConfirmBtn} onPress={() => {
+                setEditModalTime(`${String(editTempHour).padStart(2,'0')}:${String(editTempMinute).padStart(2,'0')}`);
+                setEditModalTimePickerVisible(false);
+              }}>
                 <Text style={styles.pickerConfirmText}>決定</Text>
               </TouchableOpacity>
             </View>
@@ -757,9 +852,8 @@ const styles = StyleSheet.create({
   paidBadgeText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },
   groupAddBtn: { padding: 6, backgroundColor: '#EEF5FF', borderRadius: 10 },
   groupChildList: { borderTopWidth: 1, borderColor: COLORS.border, padding: 10, gap: 6 },
-  groupChildRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#FAFAFA', borderRadius: 12 },
-  groupChildAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  groupChildAvatarText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  childGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  groupChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#FAFAFA', borderRadius: 12, width: '48%' },
   groupChildName: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   groupChildSchool: { fontSize: 11, color: COLORS.textLight, marginTop: 1 },
   groupChildDeleteBtn: { padding: 4 },

@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { db } from '../firebase';
 
 const COLORS = {
   primary: '#5B9BD5', white: '#FFFFFF', text: '#333333',
@@ -33,6 +35,9 @@ export default function TransportModal({
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [showLastWeek, setShowLastWeek] = useState(false);
+  const [lastWeekModalVisible, setLastWeekModalVisible] = useState(false);
+  const [lastWeekEntries, setLastWeekEntries] = useState<StaffEntry[]>([]);
+  const [lastWeekLoading, setLastWeekLoading] = useState(false);
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
 
@@ -111,6 +116,26 @@ export default function TransportModal({
   const save = async (entries: StaffEntry[]) => {
     setStaffEntries(entries);
     await onAssign(dateStr, 'entries', JSON.stringify({ entries }));
+  };
+
+  // 先週の同日データをFirestoreから取得してポップアップ表示
+  const openLastWeekModal = async () => {
+    setLastWeekLoading(true);
+    setLastWeekModalVisible(true);
+    try {
+      const lwDateStr = `${lastWeekDate.getFullYear()}-${String(lastWeekDate.getMonth()+1).padStart(2,'0')}-${String(lastWeekDate.getDate()).padStart(2,'0')}`;
+      const snap = await getDoc(doc(db, 'pickup_assignments', lwDateStr));
+      if (snap.exists() && snap.data()?.entries) {
+        const parsed = JSON.parse(snap.data().entries);
+        setLastWeekEntries(parsed.entries || []);
+      } else {
+        setLastWeekEntries([]);
+      }
+    } catch (e) {
+      setLastWeekEntries([]);
+    } finally {
+      setLastWeekLoading(false);
+    }
   };
 
   // 担当済みブロックkeyのセット
@@ -259,6 +284,7 @@ export default function TransportModal({
   };
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
@@ -278,7 +304,7 @@ export default function TransportModal({
                   <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: '#9C27B0' }]} onPress={() => setShowTimeline(true)}>
                     <Text style={[styles.lastWeekBtnText, { color: '#9C27B0' }]}>全体確認</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={() => setShowLastWeek(v => !v)}>
+                  <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
                     <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
                   </TouchableOpacity>
                 </>
@@ -289,11 +315,6 @@ export default function TransportModal({
             </View>
           </View>
 
-          {!showTimeline && showLastWeek && (
-            <View style={styles.lastWeekBanner}>
-              <Text style={styles.lastWeekBannerText}>※ {lastWeekDate.getMonth()+1}/{lastWeekDate.getDate()} の担当を参照中</Text>
-            </View>
-          )}
 
           {/* ビューの切り替え */}
           {showTimeline ? (
@@ -490,6 +511,59 @@ export default function TransportModal({
         })()}
       </View>
     </Modal>
+
+    {/* 先週参照ポップアップ */}
+    <Modal visible={lastWeekModalVisible} transparent animationType="fade">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+        <View style={{ width: '100%', maxHeight: '80%', backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden' }}>
+          {/* ヘッダー */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#EDE7F6', borderBottomWidth: 1, borderColor: '#D1C4E9' }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#4A148C' }}>
+              {lastWeekDate.getMonth()+1}/{lastWeekDate.getDate()}（{DOW_JP[lastWeekDate.getDay()]}）の送迎担当
+            </Text>
+            <TouchableOpacity onPress={() => setLastWeekModalVisible(false)}>
+              <Ionicons name="close-circle" size={28} color="#9C27B0" />
+            </TouchableOpacity>
+          </View>
+
+          {lastWeekLoading ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Text style={{ color: '#888', fontSize: 14 }}>読み込み中...</Text>
+            </View>
+          ) : lastWeekEntries.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Ionicons name="calendar-outline" size={40} color="#ccc" />
+              <Text style={{ color: '#888', fontSize: 14, marginTop: 12 }}>先週のデータはありません</Text>
+            </View>
+          ) : (
+            <ScrollView style={{ padding: 16 }}>
+              {lastWeekEntries.map((entry, idx) => (
+                <View key={entry.staffName} style={{ marginBottom: 14, padding: 12, backgroundColor: '#F3E5F5', borderRadius: 12, borderLeftWidth: 4, borderLeftColor: STAFF_COLORS[idx % STAFF_COLORS.length] }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#4A148C', marginBottom: 8 }}>{entry.staffName}</Text>
+                  {entry.trips.map((trip, tIdx) => (
+                    trip.blockKeys.length > 0 ? (
+                      <View key={tIdx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#7B1FA2', fontWeight: 'bold', width: 40 }}>{TRIP_LABELS[tIdx] || `${tIdx+1}回`}</Text>
+                        <View style={{ flex: 1 }}>
+                          {trip.blockKeys.map((bk: string) => (
+                            <Text key={bk} style={{ fontSize: 13, color: '#555' }}>• {bk.replace(/_/g, ' ')}</Text>
+                          ))}
+                        </View>
+                      </View>
+                    ) : null
+                  ))}
+                  {entry.trips.every(t => t.blockKeys.length === 0) && (
+                    <Text style={{ fontSize: 12, color: '#999', fontStyle: 'italic' }}>担当なし</Text>
+                  )}
+                </View>
+              ))}
+              <View style={{ height: 20 }} />
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 

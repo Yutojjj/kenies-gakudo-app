@@ -158,6 +158,16 @@ export default function MenuScreen() {
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
   const [newNotice, setNewNotice] = useState('');
+  // ⑩ 週間メモ用
+  const [weekMemoVisible, setWeekMemoVisible] = useState(false);
+  const [weekMemoDay, setWeekMemoDay] = useState<string | null>(null);
+  const [weekMemos, setWeekMemos] = useState<Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]>>({});
+  // お知らせ予約投稿用
+  const [scheduleNoticeVisible, setScheduleNoticeVisible] = useState(false);
+  const [scheduleNoticeCalDate, setScheduleNoticeCalDate] = useState<string>('');
+  const [scheduleNoticeContent, setScheduleNoticeContent] = useState('');
+  const [scheduleNoticeCalViewDate, setScheduleNoticeCalViewDate] = useState(new Date());
+  const [scheduleNoticeStep, setScheduleNoticeStep] = useState<'calendar' | 'input'>('calendar');
   const [gradeUpModalVisible, setGradeUpModalVisible] = useState(false);
   const [gradeUpPreview, setGradeUpPreview] = useState<{id:string; name:string; oldGrade:string; newGrade:string; role:string}[]>([]);
   const [gradeUpLoading, setGradeUpLoading] = useState(false);
@@ -257,7 +267,7 @@ export default function MenuScreen() {
       snap.forEach(d => {
         const data = d.data();
         if (d.id.endsWith(`_${dateStr}`) && data.memo) {
-          memos.push({ kidName: data.kidName || '', memo: data.memo });
+          memos.push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo });
         }
       });
       setTodayMemos(memos);
@@ -270,6 +280,46 @@ export default function MenuScreen() {
     );
 
     return () => { unsubMemos(); unsubNotices(); };
+  }, []);
+
+  // ⑩ 今日〜6日後の週間メモをロード
+  useEffect(() => {
+    const today = new Date();
+    const dateStrs: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dateStrs.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+    }
+    const unsub = onSnapshot(collection(db, 'schedules'), snap => {
+      const byDate: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
+      dateStrs.forEach(ds => { byDate[ds] = []; });
+      snap.forEach(d => {
+        const data = d.data();
+        if (!data.memo) return;
+        const matched = dateStrs.find(ds => d.id.endsWith(`_${ds}`));
+        if (matched) {
+          byDate[matched].push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo, isAdmin: false });
+        }
+      });
+      // 管理者メモ（admin_notices）も合わせて取得済みのadminNoticesを使う
+      setWeekMemos(byDate);
+    });
+    // 管理者お知らせも週間対応
+    const unsubNoticesWeek = onSnapshot(collection(db, 'admin_notices'), snap => {
+      setWeekMemos(prev => {
+        const next = { ...prev };
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (!data.date || !data.content) return;
+          if (next[data.date]) {
+            // 既にあれば更新しない（schedules unsubが先に走るため再セット）
+          }
+        });
+        return next;
+      });
+    });
+    return () => { unsub(); unsubNoticesWeek(); };
   }, []);
 
   useEffect(() => {
@@ -504,20 +554,17 @@ export default function MenuScreen() {
 
         {/* ── 今日の送迎先（スタッフ用） ── */}
         {(role === 'staff' || role === 'admin') && Object.keys(todayPickup).length > 0 && (
-          <View style={styles.pickupSection}>
+          <View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#FF8F00' }]}>
             <View style={styles.pickupSectionHeader}>
-              <Text style={styles.pickupSectionTitle}>🚗 今日の送迎担当</Text>
-              <TouchableOpacity
-                style={styles.pickupToggleBtn}
-                onPress={() => setShowAllPickup(v => !v)}
-              >
-                <Text style={styles.pickupToggleBtnText}>
-                  {showAllPickup ? '自分のみ' : '全員表示'}
-                </Text>
+              <View>
+                <Text style={[styles.pickupSectionTitle, { fontSize: 16 }]}>今日の送迎担当</Text>
+                <Text style={{ fontSize: 11, color: '#BCAAA4', marginTop: 1 }}>{new Date().getMonth()+1}月{new Date().getDate()}日</Text>
+              </View>
+              <TouchableOpacity style={[styles.pickupToggleBtn, { paddingHorizontal: 14, paddingVertical: 8 }]} onPress={() => setShowAllPickup(v => !v)}>
+                <Text style={styles.pickupToggleBtnText}>{showAllPickup ? '自分のみ' : '全員表示'}</Text>
               </TouchableOpacity>
             </View>
             {(() => {
-              // 新形式（entries JSON）をパース
               let parsedEntries: any[] = [];
               try {
                 if (todayPickup.entries) {
@@ -525,53 +572,33 @@ export default function MenuScreen() {
                   parsedEntries = parsed.entries || [];
                 }
               } catch {}
-              
               const filteredEntries = showAllPickup ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === name);
-
               if (filteredEntries.length === 0) {
-                 return <Text style={{ color: '#888', textAlign: 'center', marginTop: 10, marginBottom: 10 }}>担当の送迎はありません</Text>;
+                return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>担当の送迎はありません</Text></View>;
               }
-
-              return filteredEntries.map((entry, sIdx) => {
+              return filteredEntries.map((entry: any, sIdx: number) => {
                 const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
-                
-                // トリップが1つもなく、blockKeysも空なら表示しないようにフィルタリングする
                 const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
                 if (activeTrips.length === 0) return null;
-
                 return (
-                  <View key={entry.staffName || sIdx} style={[styles.staffSection, { borderLeftColor: color }]}>
+                  <View key={entry.staffName || sIdx} style={[styles.staffSection, { borderLeftColor: color, backgroundColor: color + '18', borderRadius: 10, marginBottom: 6 }]}>
                     <View style={styles.staffNameRow}>
                       <View style={[styles.staffDot, { backgroundColor: color }]} />
-                      <Text style={styles.staffName}>{entry.staffName}</Text>
+                      <Text style={[styles.staffName, { fontSize: 14 }]}>{entry.staffName}</Text>
                     </View>
-
                     <View style={styles.tripsRow}>
-                      {activeTrips.map((trip: any, tIdx: number) => {
-                        return (
-                          <View
-                            key={tIdx}
-                            style={[
-                              styles.tripSlot,
-                              { borderColor: color, backgroundColor: color + '11' }
-                            ]}
-                          >
-                            <Text style={styles.tripLabelText}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
-                            <View style={{ flex: 1 }}>
-                              {trip.blockKeys.map((bk: string, bkIdx: number) => {
-                                const parts = bk.split('_');
-                                const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
-                                const bkColor = STAFF_COLORS[bkIdx % STAFF_COLORS.length]; 
-                                return (
-                                  <Text key={bk} style={[styles.slotFilledText, { color: bkColor }]} numberOfLines={1}>
-                                    {label}
-                                  </Text>
-                                );
-                              })}
-                            </View>
+                      {activeTrips.map((trip: any, tIdx: number) => (
+                        <View key={tIdx} style={[styles.tripSlot, { borderColor: color, backgroundColor: '#fff', borderRadius: 8 }]}>
+                          <Text style={[styles.tripLabelText, { color, fontWeight: 'bold' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
+                          <View style={{ flex: 1 }}>
+                            {trip.blockKeys.map((bk: string, bkIdx: number) => {
+                              const parts = bk.split('_');
+                              const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
+                              return <Text key={bk} style={[styles.slotFilledText, { color: STAFF_COLORS[bkIdx % STAFF_COLORS.length] }]} numberOfLines={1}>{label}</Text>;
+                            })}
                           </View>
-                        );
-                      })}
+                        </View>
+                      ))}
                     </View>
                   </View>
                 );
@@ -580,25 +607,48 @@ export default function MenuScreen() {
           </View>
         )}
 
+        {/* ── ⑩ 連絡事項インライン表示（送迎担当の下） ── */}
+        {(role === 'staff' || role === 'admin') && (todayMemos.length > 0 || adminNotices.length > 0) && (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#5B9BD5', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>今日の連絡</Text>
+              <TouchableOpacity style={{ backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }} onPress={() => setWeekMemoVisible(true)}>
+                <Text style={{ color: '#1565C0', fontSize: 11, fontWeight: 'bold' }}>今週を見る</Text>
+              </TouchableOpacity>
+            </View>
+            {adminNotices.map((n, i) => (
+              <View key={n.id} style={{ flexDirection: 'row', marginBottom: 6 }}>
+                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#FFF3E0', marginRight: 8, alignSelf: 'flex-start' }}>
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#E65100' }}>{(n as any).posterName || '稲熊'}</Text>
+                </View>
+                <Text style={{ fontSize: 13, color: '#424242', flex: 1, lineHeight: 18 }}>{n.content}</Text>
+              </View>
+            ))}
+            {todayMemos.map((m, i) => (
+              <View key={i} style={{ flexDirection: 'row', marginBottom: 6 }}>
+                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#E3F2FD', marginRight: 8, alignSelf: 'flex-start' }}>
+                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1565C0' }}>{m.kidName}</Text>
+                </View>
+                <Text style={{ fontSize: 13, color: '#424242', flex: 1, lineHeight: 18 }}>{m.memo}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ── セクションラベル ── */}
         <View style={styles.sectionLabelWrap}>
           <Text style={styles.sectionLabel}>MENU</Text>
           {(role === 'staff' || role === 'admin') && (
-            <TouchableOpacity
-              style={styles.noticeBtn}
-              onPress={() => setNoticeVisible(true)}
-            >
-              <Text style={styles.noticeBtnText}>連絡事項</Text>
+            <TouchableOpacity style={styles.noticeBtn} onPress={() => setNoticeVisible(true)}>
+              <Text style={styles.noticeBtnText}>メモを追加する</Text>
               {(todayMemos.length + adminNotices.length) > 0 && (
-                <View style={styles.noticeBadge}>
-                  <Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text>
-                </View>
+                <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
               )}
             </TouchableOpacity>
           )}
         </View>
 
-        {/* ── メニューグリッド ── */}
+                {/* ── メニューグリッド ── */}
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
@@ -721,7 +771,7 @@ export default function MenuScreen() {
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
           <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
-              <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>🎓 学年一括更新（進級）</Text>
+              <Text style={{ fontSize:17, fontWeight:'bold', color:'#33691E' }}>🎓 学年一括更新（進級）</Text>
               <TouchableOpacity onPress={() => setGradeUpModalVisible(false)}>
                 <Ionicons name="close" size={26} color="#333" />
               </TouchableOpacity>
@@ -799,6 +849,130 @@ export default function MenuScreen() {
         </View>
       </Modal>
 
+      {/* ── ⑩ 週間メモポップアップ ── */}
+      <Modal visible={weekMemoVisible} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.6)', justifyContent:'center', alignItems:'center', padding:16 }}>
+          <View style={{ width:'100%', maxHeight:'85%', backgroundColor:'#FFFDF7', borderRadius:24, overflow:'hidden', shadowColor:'#000', shadowOpacity:0.3, shadowRadius:16, elevation:12 }}>
+            {/* ヘッダー */}
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:20, paddingVertical:16, backgroundColor:'#FFF3E0', borderBottomWidth:1, borderColor:'#FFE0B2' }}>
+              <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+                <View style={{ width:36, height:36, borderRadius:18, backgroundColor:'#FF8F00', alignItems:'center', justifyContent:'center' }}>
+                  <Ionicons name="calendar" size={20} color="#fff" />
+                </View>
+                <View>
+                  <Text style={{ fontSize:16, fontWeight:'bold', color:'#E65100' }}>今週の連絡事項</Text>
+                  <Text style={{ fontSize:11, color:'#BF360C' }}>明日から6日分</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={{ width:32, height:32, borderRadius:16, backgroundColor:'#FFCCBC', alignItems:'center', justifyContent:'center' }}
+                onPress={() => { setWeekMemoVisible(false); setWeekMemoDay(null); }}>
+                <Ionicons name="close" size={18} color="#BF360C" />
+              </TouchableOpacity>
+            </View>
+
+            {weekMemoDay === null ? (
+              <View style={{ padding:16 }}>
+                <Text style={{ fontSize:12, color:'#BCAAA4', marginBottom:14, textAlign:'center', letterSpacing:0.5 }}>日付カードをタップしてメモを確認</Text>
+                <View style={{ flexDirection:'row', flexWrap:'wrap', gap:10 }}>
+                  {(() => {
+                    const today = new Date();
+                    const DOW = ['日','月','火','水','木','金','土'];
+                    const DOW_COLORS: Record<number, {bg: string, text: string, border: string}> = {
+                      0: { bg:'#FFEBEE', text:'#C62828', border:'#EF9A9A' },
+                      6: { bg:'#E3F2FD', text:'#1565C0', border:'#90CAF9' },
+                    };
+                    return Array.from({length:6}, (_,i) => {
+                      const d = new Date(today);
+                      d.setDate(today.getDate() + i + 1);
+                      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                      const count = (weekMemos[ds] || []).length;
+                      const dow = d.getDay();
+                      const dowColor = DOW_COLORS[dow] || { bg: count > 0 ? '#FFF8E1' : '#F5F5F5', text: count > 0 ? '#E65100' : '#666', border: count > 0 ? '#FFCC02' : '#E0E0E0' };
+                      return (
+                        <TouchableOpacity
+                          key={ds}
+                          activeOpacity={0.75}
+                          style={{
+                            width:'30%', paddingVertical:16,
+                            backgroundColor: dowColor.bg,
+                            borderRadius:16, borderWidth:2,
+                            borderColor: dowColor.border,
+                            alignItems:'center', justifyContent:'center',
+                            position:'relative',
+                            shadowColor:'#000', shadowOpacity:0.06, shadowRadius:4, elevation:2,
+                          }}
+                          onPress={() => setWeekMemoDay(ds)}
+                        >
+                          <Text style={{ fontSize:13, color: dowColor.text, fontWeight:'600', marginBottom:2 }}>
+                            {d.getMonth()+1}/{d.getDate()}
+                          </Text>
+                          <Text style={{ fontSize:22, fontWeight:'bold', color: dowColor.text }}>
+                            {DOW[dow]}
+                          </Text>
+                          {count > 0 ? (
+                            <View style={{ marginTop:6, backgroundColor:'#FF8F00', borderRadius:10, paddingHorizontal:8, paddingVertical:2 }}>
+                              <Text style={{ color:'#fff', fontSize:11, fontWeight:'bold' }}>{count}件</Text>
+                            </View>
+                          ) : (
+                            <Text style={{ marginTop:6, fontSize:10, color:'#BDBDBD' }}>なし</Text>
+                          )}
+                          {count > 0 && (
+                            <View style={{ position:'absolute', top:8, right:8, width:10, height:10, borderRadius:5, backgroundColor:'#FF8F00' }} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    });
+                  })()}
+                </View>
+              </View>
+            ) : (
+              <ScrollView style={{ padding:16 }}>
+                <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', marginBottom:16, gap:4 }} onPress={() => setWeekMemoDay(null)}>
+                  <Ionicons name="chevron-back" size={16} color="#FF8F00" />
+                  <Text style={{ color:'#FF8F00', fontWeight:'bold', fontSize:13 }}>カレンダーに戻る</Text>
+                </TouchableOpacity>
+                {(() => {
+                  const d = new Date(weekMemoDay);
+                  const DOW = ['日','月','火','水','木','金','土'];
+                  return (
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:16 }}>
+                      <View style={{ width:44, height:44, borderRadius:22, backgroundColor:'#FF8F00', alignItems:'center', justifyContent:'center' }}>
+                        <Text style={{ color:'#fff', fontWeight:'bold', fontSize:16 }}>{DOW[d.getDay()]}</Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize:18, fontWeight:'bold', color:'#E65100' }}>{d.getMonth()+1}月{d.getDate()}日</Text>
+                        <Text style={{ fontSize:12, color:'#BCAAA4' }}>{(weekMemos[weekMemoDay] || []).length}件のメモ</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+                {(weekMemos[weekMemoDay] || []).length === 0 ? (
+                  <View style={{ alignItems:'center', paddingVertical:32 }}>
+                    <Ionicons name="document-outline" size={40} color="#E0E0E0" />
+                    <Text style={{ color:'#BDBDBD', marginTop:8, fontSize:13 }}>この日のメモはありません</Text>
+                  </View>
+                ) : (
+                  (weekMemos[weekMemoDay] || []).map((m, i) => (
+                    <View key={i} style={{ backgroundColor:'#fff', borderRadius:14, padding:14, marginBottom:10, borderLeftWidth:4, borderLeftColor: m.isAdmin ? '#FF8F00' : '#5B9BD5', shadowColor:'#000', shadowOpacity:0.05, shadowRadius:4, elevation:2 }}>
+                      <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:6 }}>
+                        <View style={{ paddingHorizontal:8, paddingVertical:2, borderRadius:8, backgroundColor: m.isAdmin ? '#FFF3E0' : '#E3F2FD' }}>
+                          <Text style={{ fontSize:11, fontWeight:'bold', color: m.isAdmin ? '#E65100' : '#1565C0' }}>
+                            {m.isAdmin ? '稲熊' : m.kidName}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize:14, color:'#424242', lineHeight:20 }}>{m.memo}</Text>
+                    </View>
+                  ))
+                )}
+                <View style={{ height:30 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* ── 連絡事項モーダル ── */}
       <Modal visible={noticeVisible} animationType="slide" transparent>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
@@ -811,69 +985,164 @@ export default function MenuScreen() {
             </View>
             <ScrollView style={{ padding:16 }}>
               {/* 管理者お知らせ */}
-              {adminNotices.length > 0 && (
-                <View style={{ marginBottom:16 }}>
-                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📢 管理者からのお知らせ</Text>
-                  {adminNotices.map(n => (
-                    <View key={n.id} style={{ backgroundColor:'#FFF8E1', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#FFB300' }}>
-                      <Text style={{ fontSize:14, color:'#333' }}>{n.content}</Text>
-                      {role === 'admin' && (
-                        <TouchableOpacity style={{ alignSelf:'flex-end', marginTop:4 }} onPress={async () => {
-                          await deleteDoc(doc(db, 'admin_notices', n.id));
-                        }}>
-                          <Ionicons name="trash-outline" size={16} color="#E53935" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))}
+              {adminNotices.length > 0 && adminNotices.map(n => (
+                <View key={n.id} style={{ backgroundColor:'#FFF8E1', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#FFB300' }}>
+                  <Text style={{ fontSize:11, fontWeight:'bold', color:'#E65100', marginBottom:4 }}>{(n as any).posterName || '稲熊'}</Text>
+                  <Text style={{ fontSize:14, color:'#333' }}>{n.content}</Text>
+                  {role === 'admin' && (
+                    <TouchableOpacity style={{ alignSelf:'flex-end', marginTop:4 }} onPress={async () => {
+                      await deleteDoc(doc(db, 'admin_notices', n.id));
+                    }}>
+                      <Ionicons name="trash-outline" size={16} color="#E53935" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              )}
+              ))}
               {/* 今日のメモ */}
-              {todayMemos.length > 0 && (
-                <View style={{ marginBottom:16 }}>
-                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📝 今日のメモ（スケジュール）</Text>
-                  {todayMemos.map((m, i) => (
-                    <View key={i} style={{ backgroundColor:'#F3F9FF', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#5B9BD5' }}>
-                      <Text style={{ fontSize:12, fontWeight:'bold', color:'#5B9BD5', marginBottom:4 }}>{m.kidName}</Text>
-                      <Text style={{ fontSize:14, color:'#333' }}>{m.memo}</Text>
-                    </View>
-                  ))}
+              {todayMemos.length > 0 && todayMemos.map((m, i) => (
+                <View key={i} style={{ backgroundColor:'#F3F9FF', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#5B9BD5' }}>
+                  <Text style={{ fontSize:12, fontWeight:'bold', color:'#5B9BD5', marginBottom:4 }}>{m.kidName}</Text>
+                  <Text style={{ fontSize:14, color:'#333' }}>{m.memo}</Text>
                 </View>
-              )}
+              ))}
               {adminNotices.length === 0 && todayMemos.length === 0 && (
-                <Text style={{ textAlign:'center', color:'#aaa', marginTop:20 }}>今日の連絡事項はありません</Text>
+                <Text style={{ textAlign:'center', color:'#aaa', marginTop:20, marginBottom:20 }}>今日の連絡事項はありません</Text>
               )}
-              {/* 管理者：お知らせ投稿 */}
-              {role === 'admin' && (
-                <View style={{ marginTop:16, borderTopWidth:1, borderColor:'#eee', paddingTop:16 }}>
-                  <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>📢 お知らせを投稿</Text>
-                  <TextInput
-                    style={{ borderWidth:1, borderColor:'#ddd', borderRadius:12, padding:12, fontSize:14, minHeight:80, textAlignVertical:'top', color:'#333' }}
-                    placeholder="全スタッフに知らせたい内容を入力..."
-                    placeholderTextColor="#bbb"
-                    multiline
-                    value={newNotice}
-                    onChangeText={setNewNotice}
-                  />
-                  <TouchableOpacity
-                    style={{ marginTop:8, backgroundColor:'#5B9BD5', borderRadius:12, padding:12, alignItems:'center' }}
-                    onPress={async () => {
-                      if (!newNotice.trim()) return;
-                      const today = new Date();
-                      const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-                      await addDoc(collection(db, 'admin_notices'), { content: newNotice.trim(), date: dateStr, createdAt: new Date() });
-                      setNewNotice('');
-                    }}
-                  >
-                    <Text style={{ color:'#fff', fontWeight:'bold', fontSize:14 }}>投稿する</Text>
-                  </TouchableOpacity>
-                </View>
+              {/* お知らせを入力するボタン（管理者・スタッフのみ） */}
+              {(role === 'admin' || role === 'staff') && (
+                <TouchableOpacity
+                  style={{ marginTop:16, backgroundColor:'#7CB342', borderRadius:14, padding:16, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:8 }}
+                  onPress={() => {
+                    setScheduleNoticeContent('');
+                    setScheduleNoticeStep('calendar');
+                    setScheduleNoticeCalViewDate(new Date());
+                    setScheduleNoticeVisible(true);
+                  }}
+                >
+                  <Ionicons name="calendar-outline" size={20} color="#fff" />
+                  <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>お知らせを入力する</Text>
+                </TouchableOpacity>
               )}
               <View style={{ height:40 }} />
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      {/* ── お知らせ予約投稿モーダル ── */}
+      <Modal visible={scheduleNoticeVisible} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center', padding:16 }}>
+          <View style={{ width:'100%', maxHeight:'85%', backgroundColor:'#fff', borderRadius:20, overflow:'hidden' }}>
+            {/* ヘッダー */}
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, backgroundColor:'#F1F8E9', borderBottomWidth:1, borderColor:'#DCEDC8' }}>
+              <Text style={{ fontSize:15, fontWeight:'bold', color:'#5D4037' }}>
+                {scheduleNoticeStep === 'calendar' ? '📅 表示する日付を選択' : `📝 ${scheduleNoticeCalDate} のお知らせ内容`}
+              </Text>
+              <TouchableOpacity onPress={() => setScheduleNoticeVisible(false)}>
+                <Ionicons name="close-circle" size={28} color="#795548" />
+              </TouchableOpacity>
+            </View>
+
+            {scheduleNoticeStep === 'calendar' ? (
+              // ── カレンダー選択 ──
+              <View style={{ padding:16 }}>
+                <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                  <TouchableOpacity onPress={() => setScheduleNoticeCalViewDate(new Date(scheduleNoticeCalViewDate.getFullYear(), scheduleNoticeCalViewDate.getMonth()-1, 1))}>
+                    <Ionicons name="chevron-back" size={24} color="#5D4037" />
+                  </TouchableOpacity>
+                  <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>
+                    {scheduleNoticeCalViewDate.getFullYear()}年 {scheduleNoticeCalViewDate.getMonth()+1}月
+                  </Text>
+                  <TouchableOpacity onPress={() => setScheduleNoticeCalViewDate(new Date(scheduleNoticeCalViewDate.getFullYear(), scheduleNoticeCalViewDate.getMonth()+1, 1))}>
+                    <Ionicons name="chevron-forward" size={24} color="#5D4037" />
+                  </TouchableOpacity>
+                </View>
+                {/* 曜日ヘッダー */}
+                <View style={{ flexDirection:'row', marginBottom:6 }}>
+                  {['日','月','火','水','木','金','土'].map((w,i) => (
+                    <Text key={i} style={{ width:'14.2%', textAlign:'center', fontWeight:'bold', fontSize:12, color: i===0?'#E53935':i===6?'#1565C0':'#555' }}>{w}</Text>
+                  ))}
+                </View>
+                {/* 日付グリッド */}
+                <View style={{ flexDirection:'row', flexWrap:'wrap' }}>
+                  {(() => {
+                    const y = scheduleNoticeCalViewDate.getFullYear();
+                    const m = scheduleNoticeCalViewDate.getMonth();
+                    const firstDay = new Date(y, m, 1).getDay();
+                    const daysInMonth = new Date(y, m+1, 0).getDate();
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                    const cells: (number|null)[] = [];
+                    for (let i=0; i<firstDay; i++) cells.push(null);
+                    for (let i=1; i<=daysInMonth; i++) cells.push(i);
+                    return cells.map((day, idx) => {
+                      const ds = day ? `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` : '';
+                      const isPast = ds && ds < todayStr;
+                      const isSelected = ds === scheduleNoticeCalDate;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={{ width:'14.2%', aspectRatio:1, justifyContent:'center', alignItems:'center', borderRadius:8,
+                            backgroundColor: isSelected ? '#7CB342' : '#fff',
+                            opacity: isPast ? 0.3 : 1 }}
+                          disabled={!day || !!isPast}
+                          onPress={() => { setScheduleNoticeCalDate(ds); setScheduleNoticeStep('input'); }}
+                        >
+                          {day && <Text style={{ fontWeight:'bold', fontSize:14, color: isSelected ? '#fff' : idx%7===0 ? '#E53935' : idx%7===6 ? '#1565C0' : '#333' }}>{day}</Text>}
+                        </TouchableOpacity>
+                      );
+                    });
+                  })()}
+                </View>
+              </View>
+            ) : (
+              // ── 内容入力 ──
+              <ScrollView style={{ padding:16 }}>
+                <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', marginBottom:12 }} onPress={() => setScheduleNoticeStep('calendar')}>
+                  <Ionicons name="chevron-back" size={16} color="#7CB342" />
+                  <Text style={{ color:'#7CB342', fontSize:13, fontWeight:'bold' }}>日付を選び直す</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize:12, color:'#888', marginBottom:4 }}>
+                  投稿者：<Text style={{ fontWeight:'bold', color: role==='admin' ? '#E65100' : '#5B9BD5' }}>{role==='admin' ? '稲熊' : name}</Text>
+                  {'  '}表示日：<Text style={{ fontWeight:'bold', color:'#7CB342' }}>{scheduleNoticeCalDate}</Text>
+                </Text>
+                <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>お知らせ内容</Text>
+                <TextInput
+                  style={{ borderWidth:1, borderColor:'#D7CCC8', borderRadius:12, padding:12, fontSize:14, minHeight:100, textAlignVertical:'top', color:'#333', backgroundColor:'#FAFAFA' }}
+                  placeholder="この日に表示するお知らせを入力..."
+                  placeholderTextColor="#bbb"
+                  multiline
+                  value={scheduleNoticeContent}
+                  onChangeText={setScheduleNoticeContent}
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={{ marginTop:12, backgroundColor: scheduleNoticeContent.trim() ? '#7CB342' : '#CCC', borderRadius:12, padding:14, alignItems:'center' }}
+                  disabled={!scheduleNoticeContent.trim()}
+                  onPress={async () => {
+                    if (!scheduleNoticeContent.trim() || !scheduleNoticeCalDate) return;
+                    const posterName = role === 'admin' ? '稲熊' : name;
+                    await addDoc(collection(db, 'admin_notices'), {
+                      content: scheduleNoticeContent.trim(),
+                      date: scheduleNoticeCalDate,
+                      posterName,
+                      createdAt: new Date(),
+                    });
+                    setScheduleNoticeContent('');
+                    setScheduleNoticeCalDate('');
+                    setScheduleNoticeVisible(false);
+                    setNewNotice('');
+                  }}
+                >
+                  <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>📅 {scheduleNoticeCalDate} に保存する</Text>
+                </TouchableOpacity>
+                <View style={{ height:30 }} />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
 
       {/* ── 設定ドロワー ── */}
       {settingsVisible && (
@@ -1183,8 +1452,8 @@ const styles = StyleSheet.create({
   paidBannerCount: { fontSize: 18, fontWeight: 'bold', color: '#333', marginTop: 2 },
   paidBannerBtn: { backgroundColor: '#FF7043', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   paidBannerBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  noticeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#5B9BD5', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, gap: 6 },
-  noticeBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  noticeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#7CB342', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 20, gap: 6, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 },
+  noticeBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   noticeBadge: { backgroundColor: '#E53935', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   noticeBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   sectionLabel: {

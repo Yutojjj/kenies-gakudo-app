@@ -129,6 +129,232 @@ async function pushNotify(
   } catch (e) { }
 }
 
+
+// 利用者一覧セクション（絞り込み付き・グループ追加ポップアップ付き）
+function UserListSection({ accounts, masterSchools, searchQuery, openChat, openCreateGroupModal, setSelectedUserIds, conversations, onAddToGroup }: {
+  accounts: any[]; masterSchools: string[]; searchQuery: string;
+  openChat: (c: any) => void; openCreateGroupModal: () => void; setSelectedUserIds: any;
+  conversations: any[]; onAddToGroup: (groupId: string, accId: string) => void;
+}) {
+  const [filterSchool, setFilterSchool] = React.useState('');
+  const [filterDow, setFilterDow] = React.useState('');
+  const [localSearch, setLocalSearch] = React.useState('');
+  const [groupPickTarget, setGroupPickTarget] = React.useState<any | null>(null);
+  const DOW = ['月','火','水','木','金'];
+  const groups = conversations.filter((c: any) => c.type === 'group');
+  const users = accounts.filter(a => {
+    if (a.role !== 'user') return false;
+    if (localSearch) {
+      const q = localSearch.toLowerCase();
+      if (!a.name?.toLowerCase().includes(q) && !a.nicknameKana?.toLowerCase().includes(q)) return false;
+    }
+    if (filterSchool && a.school !== filterSchool) return false;
+    if (filterDow && !(a.days?.[filterDow])) return false;
+    return true;
+  }).sort((a: any, b: any) => {
+    const ga = parseInt(a.grade?.match(/\d/)?.[0] || '99');
+    const gb = parseInt(b.grade?.match(/\d/)?.[0] || '99');
+    return ga - gb;
+  });
+
+  const btnStyle = (active: boolean, activeColor: string): any => ({
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
+    backgroundColor: active ? activeColor : '#F5F5F5',
+    borderWidth: 1.5, borderColor: active ? activeColor : '#DDD',
+  });
+  const btnTextStyle = (active: boolean): any => ({
+    fontSize: 13, fontWeight: 'bold', color: active ? '#fff' : '#555',
+  });
+
+  return (
+    <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#FFF8E1', borderRadius: 10, borderWidth: 1, borderColor: '#FFE082', padding: 10 }}>
+      {/* 学校フィルター */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={btnStyle(!filterSchool, '#E65100')} onPress={() => setFilterSchool('')}>
+            <Text style={btnTextStyle(!filterSchool)}>全校</Text>
+          </TouchableOpacity>
+          {masterSchools.map(s => (
+            <TouchableOpacity key={s} style={btnStyle(filterSchool === s, '#E65100')} onPress={() => setFilterSchool(filterSchool === s ? '' : s)}>
+              <Text style={btnTextStyle(filterSchool === s)}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+      {/* 曜日フィルター */}
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <TouchableOpacity style={btnStyle(!filterDow, '#FF8F00')} onPress={() => setFilterDow('')}>
+          <Text style={btnTextStyle(!filterDow)}>全曜日</Text>
+        </TouchableOpacity>
+        {DOW.map(d => (
+          <TouchableOpacity key={d} style={btnStyle(filterDow === d, '#FF8F00')} onPress={() => setFilterDow(filterDow === d ? '' : d)}>
+            <Text style={btnTextStyle(filterDow === d)}>{d}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {/* 利用者内検索バー（名前・ニックネーム） */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 10, marginBottom: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1.5, borderColor: '#FFD54F' }}>
+        <Ionicons name="search" size={16} color="#888" style={{ marginRight: 8 }} />
+        <TextInput style={{ flex: 1, fontSize: 13 }} placeholder="名前・ニックネームで絞り込み" placeholderTextColor="#BBB"
+          onChangeText={text => setLocalSearch(text)} value={localSearch} />
+        {localSearch.length > 0 && (
+          <TouchableOpacity onPress={() => setLocalSearch('')}>
+            <Ionicons name="close-circle" size={16} color="#aaa" />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* 利用者カード */}
+      {users.length === 0 ? (
+        <Text style={{ textAlign: 'center', color: '#aaa', padding: 16 }}>該当する利用者はいません</Text>
+      ) : users.map(acc => (
+        <View key={acc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#FFE082' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>{acc.name}</Text>
+            <Text style={{ fontSize: 11, color: '#888' }}>{acc.grade}　{acc.school}</Text>
+            {acc.days && (
+              <Text style={{ fontSize: 11, color: '#5B9BD5', marginTop: 2 }}>
+                {DOW.filter(d => acc.days[d]).join('・') || '曜日未設定'}
+              </Text>
+            )}
+          </View>
+          {/* トークボタン */}
+          <TouchableOpacity style={{ padding: 10, backgroundColor: '#E3F2FD', borderRadius: 10, marginRight: 8 }}
+            onPress={() => openChat({ id: `direct_${acc.id}`, type: 'direct', name: acc.name })}>
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#1565C0" />
+          </TouchableOpacity>
+          {/* グループ追加ボタン */}
+          <TouchableOpacity style={{ padding: 10, backgroundColor: '#E8F5E9', borderRadius: 10 }}
+            onPress={() => setGroupPickTarget(acc)}>
+            <Ionicons name="person-add-outline" size={20} color="#2E7D32" />
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {/* グループ選択ポップアップ */}
+      <Modal visible={!!groupPickTarget} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', alignItems:'center', padding:20 }}>
+          <View style={{ width:'100%', maxHeight:'70%', backgroundColor:'#fff', borderRadius:16, overflow:'hidden' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, backgroundColor:'#E8F5E9', borderBottomWidth:1, borderColor:'#A5D6A7' }}>
+              <Text style={{ fontWeight:'bold', fontSize:15, color:'#2E7D32' }}>
+                {groupPickTarget?.name} をグループに追加
+              </Text>
+              <TouchableOpacity onPress={() => setGroupPickTarget(null)}>
+                <Ionicons name="close-circle" size={26} color="#555" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding:12 }}>
+              {groups.length === 0 ? (
+                <View style={{ padding:20, alignItems:'center' }}>
+                  <Text style={{ color:'#aaa', fontSize:13 }}>グループがありません</Text>
+                  <TouchableOpacity style={{ marginTop:12, backgroundColor:'#2E7D32', borderRadius:10, padding:12, alignItems:'center' }}
+                    onPress={() => { setGroupPickTarget(null); openCreateGroupModal(); }}>
+                    <Text style={{ color:'#fff', fontWeight:'bold' }}>新規グループを作成</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {groups.map((grp: any) => (
+                    <TouchableOpacity key={grp.id}
+                      style={{ flexDirection:'row', alignItems:'center', padding:14, borderRadius:12, backgroundColor:'#F9FBE7', marginBottom:8, borderWidth:1, borderColor:'#DCEDC8' }}
+                      onPress={() => { onAddToGroup(grp.id, groupPickTarget.id); setGroupPickTarget(null); }}>
+                      <Ionicons name="people" size={22} color="#2E7D32" style={{ marginRight:10 }} />
+                      <Text style={{ flex:1, fontWeight:'bold', fontSize:14, color:'#333' }}>{grp.name || 'グループ'}</Text>
+                      <Ionicons name="add-circle-outline" size={22} color="#2E7D32" />
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', padding:12, borderRadius:10, borderWidth:1, borderColor:'#A5D6A7', gap:6 }}
+                    onPress={() => { setGroupPickTarget(null); setSelectedUserIds((p: string[]) => [...p, groupPickTarget.id]); openCreateGroupModal(); }}>
+                    <Ionicons name="add-circle-outline" size={18} color="#2E7D32" />
+                    <Text style={{ color:'#2E7D32', fontWeight:'bold', fontSize:13 }}>新規グループを作成して追加</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              <View style={{ height:20 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// スタッフ一覧セクション（グループ追加ポップアップ付き）
+function StaffListSection({ accounts, searchQuery, conversations, openChat, openCreateGroupModal, setSelectedUserIds, onAddToGroup }: {
+  accounts: any[]; searchQuery: string; conversations: any[];
+  openChat: (c: any) => void; openCreateGroupModal: () => void; setSelectedUserIds: any;
+  onAddToGroup: (groupId: string, accId: string) => void;
+}) {
+  const [groupPickTarget, setGroupPickTarget] = React.useState<any | null>(null);
+  const groups = conversations.filter((c: any) => c.type === 'group');
+  const staffList = accounts.filter(a => a.role === 'staff' && (!searchQuery || a.name?.includes(searchQuery)));
+
+  return (
+    <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#E8F0FE', borderRadius: 10, borderWidth: 1, borderColor: '#BBDEFB', overflow: 'hidden' }}>
+      {staffList.map(acc => (
+        <View key={acc.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderColor: '#EEE' }}>
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#90CAF9', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+            <Ionicons name="person" size={16} color="#1565C0" />
+          </View>
+          <Text style={{ flex: 1, fontWeight: 'bold', fontSize: 14, color: '#333' }}>{acc.name}</Text>
+          <TouchableOpacity style={{ padding: 10, backgroundColor: '#BBDEFB', borderRadius: 10, marginRight: 8 }}
+            onPress={() => openChat({ id: `direct_${acc.id}`, type: 'direct', name: acc.name })}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#1565C0" />
+          </TouchableOpacity>
+          <TouchableOpacity style={{ padding: 10, backgroundColor: '#C8E6C9', borderRadius: 10 }}
+            onPress={() => setGroupPickTarget(acc)}>
+            <Ionicons name="person-add-outline" size={18} color="#2E7D32" />
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {/* グループ選択ポップアップ */}
+      <Modal visible={!!groupPickTarget} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', alignItems:'center', padding:20 }}>
+          <View style={{ width:'100%', maxHeight:'70%', backgroundColor:'#fff', borderRadius:16, overflow:'hidden' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, backgroundColor:'#E8F5E9', borderBottomWidth:1, borderColor:'#A5D6A7' }}>
+              <Text style={{ fontWeight:'bold', fontSize:15, color:'#2E7D32' }}>
+                {groupPickTarget?.name} をグループに追加
+              </Text>
+              <TouchableOpacity onPress={() => setGroupPickTarget(null)}>
+                <Ionicons name="close-circle" size={26} color="#555" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding:12 }}>
+              {groups.length === 0 ? (
+                <View style={{ padding:20, alignItems:'center' }}>
+                  <Text style={{ color:'#aaa', fontSize:13 }}>グループがありません</Text>
+                  <TouchableOpacity style={{ marginTop:12, backgroundColor:'#2E7D32', borderRadius:10, padding:12, alignItems:'center' }}
+                    onPress={() => { setGroupPickTarget(null); openCreateGroupModal(); }}>
+                    <Text style={{ color:'#fff', fontWeight:'bold' }}>新規グループを作成</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {groups.map((grp: any) => (
+                    <TouchableOpacity key={grp.id}
+                      style={{ flexDirection:'row', alignItems:'center', padding:14, borderRadius:12, backgroundColor:'#F9FBE7', marginBottom:8, borderWidth:1, borderColor:'#DCEDC8' }}
+                      onPress={() => { onAddToGroup(grp.id, groupPickTarget.id); setGroupPickTarget(null); }}>
+                      <Ionicons name="people" size={22} color="#2E7D32" style={{ marginRight:10 }} />
+                      <Text style={{ flex:1, fontWeight:'bold', fontSize:14, color:'#333' }}>{grp.name || 'グループ'}</Text>
+                      <Ionicons name="add-circle-outline" size={22} color="#2E7D32" />
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', padding:12, borderRadius:10, borderWidth:1, borderColor:'#A5D6A7', gap:6 }}
+                    onPress={() => { setGroupPickTarget(null); setSelectedUserIds((p: string[]) => [...p, groupPickTarget.id]); openCreateGroupModal(); }}>
+                    <Ionicons name="add-circle-outline" size={18} color="#2E7D32" />
+                    <Text style={{ color:'#2E7D32', fontWeight:'bold', fontSize:13 }}>新規グループを作成して追加</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              <View style={{ height:20 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 export default function MessagesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string; conversationType?: string }>();
@@ -136,6 +362,10 @@ export default function MessagesScreen() {
 
   const [resolvedUser, setResolvedUser] = useState<(UserInfo & { accountId: string }) | null>(null);
   const [view, setView] = useState<'list' | 'chat'>('list');
+  const [msgTab, setMsgTab] = useState<'home' | 'talk'>('home'); // ⑬ 管理者用タブ
+  const [homeSchool, setHomeSchool] = useState<string | null>(null); // ⑬ ホームタブの学校フィルター
+  const [homeMasterSchools, setHomeMasterSchools] = useState<string[]>([]);
+  const [homeAllAccounts, setHomeAllAccounts] = useState<any[]>([]);
   const [conversations, setConversations] = useState<ConvDoc[]>([]);
   const [activeConv, setActiveConv] = useState<ConvDoc | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -152,6 +382,8 @@ export default function MessagesScreen() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [groupFilterRole, setGroupFilterRole] = useState<'all' | 'user' | 'staff'>('all');
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
+  const [groupFilterSchool, setGroupFilterSchool] = useState('');
+  const [groupFilterDow, setGroupFilterDow] = useState('');
   const [allowMemberChat, setAllowMemberChat] = useState(true);
   const [allowMemberCall, setAllowMemberCall] = useState(true);
 
@@ -179,6 +411,17 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (resolvedUser) setupFCMToken(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
+
+  // ⑬ 管理者ホームタブ用データロード
+  useEffect(() => {
+    if (!resolvedUser || resolvedUser.role !== 'admin') return;
+    getDocs(collection(db, 'accounts')).then(snap => {
+      setHomeAllAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    getDoc(doc(db, 'settings', 'master_data')).then(snap => {
+      if (snap.exists() && snap.data().schools) setHomeMasterSchools(snap.data().schools);
+    });
+  }, [resolvedUser?.role]);
 
   useEffect(() => {
     if (!resolvedUser) return;
@@ -428,9 +671,14 @@ export default function MessagesScreen() {
   const openCreateGroupModal = async () => {
     try {
       const snap = await getDocs(collection(db, 'accounts'));
-      const accs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // nameが空のもの（兄弟データなど）を除外
+      const accs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((a: any) => !!a.name && (a.role === 'user' || a.role === 'staff' || a.role === 'admin'));
       setAvailableAccounts(accs);
       setGroupFilterRole('all');
+      setGroupFilterSchool('');
+      setGroupFilterDow('');
       setGroupSearchQuery('');
       setNewGroupName('');
       setSelectedUserIds([]);
@@ -527,6 +775,8 @@ export default function MessagesScreen() {
 
   const filteredGroupAccounts = availableAccounts.filter(acc => {
     if (groupFilterRole !== 'all' && acc.role !== groupFilterRole) return false;
+    if (groupFilterSchool && acc.school !== groupFilterSchool) return false;
+    if (groupFilterDow && !(acc.days?.[groupFilterDow])) return false;
     if (groupSearchQuery) {
       const q = groupSearchQuery.toLowerCase();
       const matchName = acc.name?.toLowerCase().includes(q);
@@ -603,7 +853,116 @@ export default function MessagesScreen() {
           )}
         </View>
 
-        <ScrollView style={{ flex: 1 }}>
+        {/* ⑬ 管理者のみホーム/トークタブ */}
+        {isAdmin && (
+          <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee' }}>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: msgTab === 'home' ? COLORS.primary : 'transparent' }}
+              onPress={() => setMsgTab('home')}
+            >
+              <Text style={{ fontWeight: 'bold', color: msgTab === 'home' ? COLORS.primary : '#888' }}>ホーム</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: msgTab === 'talk' ? COLORS.primary : 'transparent' }}
+              onPress={() => setMsgTab('talk')}
+            >
+              <Text style={{ fontWeight: 'bold', color: msgTab === 'talk' ? COLORS.primary : '#888' }}>トーク</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ⑬ ホームタブ */}
+        {isAdmin && msgTab === 'home' ? (
+          <ScrollView style={{ flex: 1 }}>
+            {/* グループ一覧（アコーディオン） */}
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, marginHorizontal: 12, marginBottom: 4, padding: 14, borderWidth: 1, borderColor: '#A5D6A7' }}
+              onPress={() => setHomeSchool(homeSchool === '__groups__' ? null : '__groups__')}
+            >
+              <Ionicons name="people-circle" size={28} color="#2E7D32" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#2E7D32' }}>グループ一覧</Text>
+                <Text style={{ fontSize: 12, color: '#558B2F' }}>{conversations.filter(c => c.type === 'group').length}グループ</Text>
+              </View>
+              <Ionicons name={homeSchool === '__groups__' ? 'chevron-up' : 'chevron-down'} size={20} color="#2E7D32" />
+            </TouchableOpacity>
+            {homeSchool === '__groups__' && (
+              <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#F9FBE7', borderRadius: 10, borderWidth: 1, borderColor: '#DCEDC8', overflow: 'hidden' }}>
+                {conversations.filter(c => c.type === 'group' && (!groupSearchQuery || c.name?.includes(groupSearchQuery))).map(grp => (
+                  <TouchableOpacity key={grp.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderColor: '#EEE' }} onPress={() => openChat(grp)}>
+                    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#A5D6A7', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+                      <Ionicons name="people" size={16} color="#2E7D32" />
+                    </View>
+                    <Text style={{ flex: 1, fontWeight: 'bold', fontSize: 14, color: '#333' }}>{grp.name || 'グループ'}</Text>
+                    <TouchableOpacity onPress={() => openManageMembersModal(grp)} style={{ padding: 6 }}>
+                      <Ionicons name="settings-outline" size={16} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', padding: 12, justifyContent: 'center', gap: 6 }} onPress={openCreateGroupModal}>
+                  <Ionicons name="add-circle-outline" size={18} color="#2E7D32" />
+                  <Text style={{ color: '#2E7D32', fontWeight: 'bold', fontSize: 13 }}>新規グループを作成</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* スタッフ一覧（アコーディオン） */}
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', borderRadius: 12, marginHorizontal: 12, marginBottom: 4, padding: 14, borderWidth: 1, borderColor: '#90CAF9' }}
+              onPress={() => setHomeSchool(homeSchool === '__staff__' ? null : '__staff__')}
+            >
+              <Ionicons name="briefcase-outline" size={28} color="#1565C0" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1565C0' }}>スタッフ一覧</Text>
+                <Text style={{ fontSize: 12, color: '#1976D2' }}>{homeAllAccounts.filter(a => a.role === 'staff').length}名</Text>
+              </View>
+              <Ionicons name={homeSchool === '__staff__' ? 'chevron-up' : 'chevron-down'} size={20} color="#1565C0" />
+            </TouchableOpacity>
+            {homeSchool === '__staff__' && (
+              <StaffListSection
+                accounts={homeAllAccounts}
+                searchQuery={groupSearchQuery}
+                conversations={conversations}
+                openChat={openChat}
+                openCreateGroupModal={openCreateGroupModal}
+                setSelectedUserIds={setSelectedUserIds}
+                onAddToGroup={async (groupId: string, accId: string) => {
+                  await setDoc(doc(db, 'conversations', groupId), { participants: arrayUnion(accId) }, { merge: true });
+                }}
+              />
+            )}
+
+            {/* 利用者一覧（アコーディオン＋絞り込み） */}
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', borderRadius: 12, marginHorizontal: 12, marginBottom: 4, marginTop: 4, padding: 14, borderWidth: 1, borderColor: '#FFCC80' }}
+              onPress={() => setHomeSchool(homeSchool === '__users__' ? null : '__users__')}
+            >
+              <Ionicons name="school-outline" size={28} color="#E65100" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#E65100' }}>利用者一覧</Text>
+                <Text style={{ fontSize: 12, color: '#BF360C' }}>{homeAllAccounts.filter(a => a.role === 'user').length}名</Text>
+              </View>
+              <Ionicons name={homeSchool === '__users__' ? 'chevron-up' : 'chevron-down'} size={20} color="#E65100" />
+            </TouchableOpacity>
+            {homeSchool === '__users__' && (
+              <UserListSection
+                accounts={homeAllAccounts}
+                masterSchools={homeMasterSchools}
+                searchQuery={groupSearchQuery}
+                openChat={openChat}
+                openCreateGroupModal={openCreateGroupModal}
+                setSelectedUserIds={setSelectedUserIds}
+                conversations={conversations}
+                onAddToGroup={async (groupId: string, accId: string) => {
+                  await setDoc(doc(db, 'conversations', groupId), { participants: arrayUnion(accId) }, { merge: true });
+                }}
+              />
+            )}
+
+            <View style={{ height: 60 }} />
+          </ScrollView>
+        ) : (
+          <ScrollView style={{ flex: 1 }}>
           {conversations.length === 0 && (
             <View style={styles.centerBox}>
               <Ionicons name="chatbubbles-outline" size={60} color={COLORS.border} />
@@ -645,7 +1004,8 @@ export default function MessagesScreen() {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+          </ScrollView>
+        )} {/* ⑬ isAdmin && msgTab === 'home' の三項演算子終了 */}
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}
         <Modal visible={createGroupModalVisible} transparent={true} animationType="slide">
@@ -717,7 +1077,65 @@ export default function MessagesScreen() {
                   ))}
                 </View>
 
+                {/* 学校フィルター（利用者絞り込み時） */}
+                {(groupFilterRole === 'all' || groupFilterRole === 'user') && homeMasterSchools.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', gap: 6, paddingBottom: 4 }}>
+                      <TouchableOpacity
+                        style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: !groupFilterSchool ? COLORS.primary : '#F5F5F5', borderWidth: 1, borderColor: !groupFilterSchool ? COLORS.primary : '#DDD' }}
+                        onPress={() => setGroupFilterSchool('')}>
+                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: !groupFilterSchool ? '#fff' : '#555' }}>全校</Text>
+                      </TouchableOpacity>
+                      {homeMasterSchools.map(s => (
+                        <TouchableOpacity key={s}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: groupFilterSchool === s ? COLORS.primary : '#F5F5F5', borderWidth: 1, borderColor: groupFilterSchool === s ? COLORS.primary : '#DDD' }}
+                          onPress={() => setGroupFilterSchool(groupFilterSchool === s ? '' : s)}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: groupFilterSchool === s ? '#fff' : '#555' }}>{s}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+
+                {/* 曜日フィルター（利用者絞り込み時） */}
+                {(groupFilterRole === 'all' || groupFilterRole === 'user') && (
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {['全曜日','月','火','水','木','金'].map(d => {
+                      const active = d === '全曜日' ? !groupFilterDow : groupFilterDow === d;
+                      return (
+                        <TouchableOpacity key={d}
+                          style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: active ? '#FF8F00' : '#F5F5F5', borderWidth: 1, borderColor: active ? '#FF8F00' : '#DDD' }}
+                          onPress={() => setGroupFilterDow(d === '全曜日' ? '' : groupFilterDow === d ? '' : d)}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: active ? '#fff' : '#555' }}>{d}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <View style={{ marginBottom: 20 }}>
+                  {/* 全選択/全解除ボタン */}
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 }}
+                    onPress={() => {
+                      const allIds = filteredGroupAccounts.map((a: any) => a.id);
+                      const allSelected = allIds.every((id: string) => selectedUserIds.includes(id));
+                      if (allSelected) {
+                        setSelectedUserIds(selectedUserIds.filter((id: string) => !allIds.includes(id)));
+                      } else {
+                        const merged = [...new Set([...selectedUserIds, ...allIds])];
+                        setSelectedUserIds(merged);
+                      }
+                    }}
+                  >
+                    <Ionicons
+                      name={filteredGroupAccounts.every((a: any) => selectedUserIds.includes(a.id)) ? 'checkbox' : 'square-outline'}
+                      size={20} color={COLORS.primary} style={{ marginRight: 6 }}
+                    />
+                    <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.primary }}>
+                      {filteredGroupAccounts.every((a: any) => selectedUserIds.includes(a.id)) ? '全解除' : `全選択（${filteredGroupAccounts.length}名）`}
+                    </Text>
+                  </TouchableOpacity>
                   {filteredGroupAccounts.map(item => (
                     <TouchableOpacity 
                       key={item.id}

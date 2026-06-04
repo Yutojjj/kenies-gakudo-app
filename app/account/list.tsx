@@ -216,6 +216,21 @@ export default function AccountManagementScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ⑫ 学校名クイックフィルター（4個/行） */}
+      {filterRole !== 'staff' && masterSchools.length > 0 && (
+        <View style={styles.schoolQuickFilter}>
+          {masterSchools.map(school => (
+            <TouchableOpacity
+              key={school}
+              style={[styles.schoolQuickBtn, selectedSchools.includes(school) && styles.schoolQuickBtnActive]}
+              onPress={() => toggleFilterArray(selectedSchools, school, setSelectedSchools)}
+            >
+              <Text style={[styles.schoolQuickText, selectedSchools.includes(school) && styles.schoolQuickTextActive]} numberOfLines={1}>{school}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <FlatList
           data={filteredAccounts}
           keyExtractor={item => item.id}
@@ -468,6 +483,11 @@ const styles = StyleSheet.create({
   filterBadge: { position: 'absolute', top: -6, right: -6, backgroundColor: COLORS.danger, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   filterBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold' },
 
+  schoolQuickFilter: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, paddingVertical: 8, gap: 6, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
+  schoolQuickBtn: { width: '23%', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, alignItems: 'center' },
+  schoolQuickBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  schoolQuickText: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
+  schoolQuickTextActive: { color: COLORS.white },
   listContainer: { padding: 16, paddingBottom: 100 },
   accountCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 12, padding: 20, marginBottom: 12, shadowColor: COLORS.primary, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, borderWidth: 1 },
   cardStaff: { backgroundColor: '#FAFAFA', borderColor: '#EAEAEA' }, 

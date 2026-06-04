@@ -667,13 +667,20 @@ export default function AlbumScreen() {
         <View style={{ flex: 1 }}>
           {activeTab !== 'イベント' && (
             <View style={styles.monthSelector}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.monthScroll}>
-                {MONTHS.map(m => (
+              <View style={styles.monthGrid}>
+                {[1,2,3,4,5,6].map(m => (
                   <TouchableOpacity key={m} style={[styles.monthBtn, viewMonth === m && styles.monthBtnActive]} onPress={() => setViewMonth(m)}>
                     <Text style={[styles.monthText, viewMonth === m && styles.monthTextActive]}>{m}月</Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
+              </View>
+              <View style={styles.monthGrid}>
+                {[7,8,9,10,11,12].map(m => (
+                  <TouchableOpacity key={m} style={[styles.monthBtn, viewMonth === m && styles.monthBtnActive]} onPress={() => setViewMonth(m)}>
+                    <Text style={[styles.monthText, viewMonth === m && styles.monthTextActive]}>{m}月</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
 
@@ -1090,11 +1097,12 @@ const styles = StyleSheet.create({
   addOptionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
   iconCircle: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 20 },
   addOptionTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
-  monthSelector: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  monthSelector: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 8, paddingHorizontal: 8 },
+  monthGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   monthScroll: { },
-  monthBtn: { paddingHorizontal: 22, paddingVertical: 14, backgroundColor: COLORS.white, borderRightWidth: 1, borderColor: COLORS.border },
+  monthBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', marginHorizontal: 2, borderRadius: 8, backgroundColor: '#F5F5F5' },
   monthBtnActive: { backgroundColor: COLORS.primary },
-  monthText: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight },
+  monthText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
   monthTextActive: { color: COLORS.white },
   tabContainer: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   tabScroll: { },

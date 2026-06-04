@@ -331,7 +331,7 @@ export default function ScheduleScreen() {
     setScheduleData({ ...updated });
 
     try {
-      const saveData: any = { parentId: parentDocId, childId: child.id, dateStr, updatedAt: new Date() };
+      const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
       if (data.memo !== undefined) saveData.memo = data.memo;
@@ -460,7 +460,11 @@ export default function ScheduleScreen() {
     const d = new Date(dateStr);
     const dow = ['日','月','火','水','木','金','土'][d.getDay()];
     const childId = child?.id;
-    const regularLessons = childId
+
+    // ▼ 修正: その日に登園しない（pickupTime が null かつ手動override もない）場合は
+    //   定期習い事も表示しない。手動overrideで pickup を明示設定した日は表示する。
+    const willAttend = finalPickup !== null && finalPickup !== undefined;
+    const regularLessons = (childId && willAttend)
       ? scheduleLessons
           .filter(l => l.childId === childId && l.dayOfWeek === dow)
           .map(l => ({ id: l.id, name: l.lessonName, time: l.lessonTime }))
@@ -632,7 +636,11 @@ export default function ScheduleScreen() {
                     </View>
                   )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
-                  {cellData.memo && <View style={styles.memoBadge}><Text style={styles.memoIndicatorText}>✏</Text></View>}
+                  {cellData.memo && (
+                    <View style={styles.memoBadge}>
+                      <Text style={styles.memoIndicatorText} numberOfLines={2}>📝 {cellData.memo}</Text>
+                    </View>
+                  )}
                   
                   {cellData.lessons && cellData.lessons.length > 0 && cellData.lessons.map((lesson, idx) => (
                       <View key={`les-${idx}`} style={styles.lessonBadge}>
@@ -1468,14 +1476,16 @@ const styles = StyleSheet.create({
   memoBadge: {
     backgroundColor: '#FFF3CD',
     borderRadius: 4,
-    padding: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     marginBottom: 2,
-    alignItems: 'center',
+    borderLeftWidth: 2,
+    borderLeftColor: '#CC7700',
   },
   memoIndicatorText: {
-    fontSize: 9,
-    color: '#CC7700',
+    fontSize: 8,
+    color: '#8B5E00',
     fontWeight: 'bold',
-    textAlign: 'center',
+    lineHeight: 11,
   },
 });

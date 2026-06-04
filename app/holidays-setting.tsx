@@ -19,22 +19,30 @@ export default function HolidaysSettingScreen() {
 
   const PALETTE = [
     { label: '桃', value: '#FFD6D6' },
+    { label: '赤', value: '#FF8A80' },
     { label: '橙', value: '#FFE5CC' },
+    { label: '深橙', value: '#FFAB76' },
     { label: '黄', value: '#FFFACC' },
     { label: '黄緑', value: '#D6FFDA' },
+    { label: '緑', value: '#A5D6A7' },
     { label: '水', value: '#CCF0FF' },
     { label: '青', value: '#D6E4FF' },
+    { label: '紺', value: '#90CAF9' },
     { label: '紫', value: '#EDD6FF' },
+    { label: '薄紫', value: '#CE93D8' },
+    { label: '茶', value: '#FFCCBC' },
     { label: '灰', value: '#E8E8E8' },
+    { label: '濃灰', value: '#B0BEC5' },
+    { label: '白', value: '#FFFFFF' },
   ];
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null=新規, string=編集
   const [selectedColor, setSelectedColor] = useState('#CCF0FF');
   const [periodName, setPeriodName] = useState('');
   const [startDateObj, setStartDateObj] = useState(new Date());
   const [endDateObj, setEndDateObj] = useState(new Date());
 
-  // カレンダー用
   const [calTarget, setCalTarget] = useState<'start' | 'end'>('start');
   const [calVisible, setCalVisible] = useState(false);
   const [calViewDate, setCalViewDate] = useState(new Date());
@@ -82,18 +90,30 @@ export default function HolidaysSettingScreen() {
       Alert.alert('エラー', '名称を入力してください。');
       return;
     }
-    const newPeriod: HolidayPeriod = {
-      id: Date.now().toString(),
-      name: periodName,
-      start: toDateStr(startDateObj),
-      end: toDateStr(endDateObj),
-      color: selectedColor,
-    };
-    const newPeriods = [...periods, newPeriod].sort((a, b) => a.start.localeCompare(b.start));
+    let newPeriods: HolidayPeriod[];
+    if (editingId) {
+      // 編集モード
+      newPeriods = periods.map(p =>
+        p.id === editingId
+          ? { ...p, name: periodName, start: toDateStr(startDateObj), end: toDateStr(endDateObj), color: selectedColor }
+          : p
+      ).sort((a, b) => a.start.localeCompare(b.start));
+    } else {
+      // 新規追加
+      const newPeriod: HolidayPeriod = {
+        id: Date.now().toString(),
+        name: periodName,
+        start: toDateStr(startDateObj),
+        end: toDateStr(endDateObj),
+        color: selectedColor,
+      };
+      newPeriods = [...periods, newPeriod].sort((a, b) => a.start.localeCompare(b.start));
+    }
     try {
       await setDoc(doc(db, 'settings', 'holidays_data'), { periods: newPeriods }, { merge: true });
       setModalVisible(false);
       setPeriodName('');
+      setEditingId(null);
     } catch (e) {
       Alert.alert('エラー', '保存に失敗しました');
     }
@@ -120,6 +140,16 @@ export default function HolidaysSettingScreen() {
     setEndDateObj(today);
     setPeriodName('');
     setSelectedColor('#CCF0FF');
+    setEditingId(null);
+    setModalVisible(true);
+  };
+
+  const openEditModal = (p: HolidayPeriod) => {
+    setStartDateObj(new Date(p.start));
+    setEndDateObj(new Date(p.end));
+    setPeriodName(p.name);
+    setSelectedColor(p.color || '#CCF0FF');
+    setEditingId(p.id);
     setModalVisible(true);
   };
 
@@ -144,8 +174,11 @@ export default function HolidaysSettingScreen() {
               <Text style={styles.cardTitle}>{p.name}</Text>
               <Text style={styles.cardDate}>{p.start} 〜 {p.end}</Text>
             </View>
+            <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(p)}>
+              <Ionicons name="pencil" size={18} color={COLORS.primary} />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
-              <Ionicons name="trash" size={20} color={COLORS.danger} />
+              <Ionicons name="trash" size={18} color={COLORS.danger} />
             </TouchableOpacity>
           </View>
         ))}
@@ -159,57 +192,57 @@ export default function HolidaysSettingScreen() {
         <Ionicons name="add" size={32} color={COLORS.white} />
       </TouchableOpacity>
 
-      {/* ── 追加モーダル ── */}
+      {/* ── 追加/編集モーダル ── */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>特別期間の追加</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={28} color={COLORS.textLight} />
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingId ? '特別期間の編集' : '特別期間の追加'}</Text>
+                <TouchableOpacity onPress={() => { setModalVisible(false); setEditingId(null); }}>
+                  <Ionicons name="close" size={28} color={COLORS.textLight} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.label}>名称 (例: 夏休み, 祝日)</Text>
+              <TextInput style={styles.input} value={periodName} onChangeText={setPeriodName} placeholder="期間の名称" placeholderTextColor="#BBBBBB" />
+
+              <Text style={styles.label}>開始日</Text>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('start')}>
+                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.datePickerText}>{toDateStr(startDateObj)}</Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
+              </TouchableOpacity>
+
+              <Text style={styles.label}>終了日</Text>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('end')}>
+                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.datePickerText}>{toDateStr(endDateObj)}</Text>
+                <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 20 }}>
+                ※1日だけの場合は、開始と終了を同じ日付にしてください。
+              </Text>
+
+              <Text style={styles.label}>カレンダーの背景色</Text>
+              <View style={styles.paletteRow}>
+                {PALETTE.map(c => (
+                  <TouchableOpacity
+                    key={c.value}
+                    style={[styles.paletteCell, { backgroundColor: c.value }, selectedColor === c.value && styles.paletteCellActive]}
+                    onPress={() => setSelectedColor(c.value)}
+                  >
+                    {selectedColor === c.value && <Ionicons name="checkmark" size={14} color="#333" />}
+                    <Text style={styles.paletteCellLabel}>{c.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>{editingId ? '変更を保存' : '登録する'}</Text>
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.label}>名称 (例: 夏休み, 祝日)</Text>
-            <TextInput style={styles.input} value={periodName} onChangeText={setPeriodName} placeholder="期間の名称" placeholderTextColor="#BBBBBB" />
-
-            <Text style={styles.label}>開始日</Text>
-            <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('start')}>
-              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.datePickerText}>{toDateStr(startDateObj)}</Text>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-            </TouchableOpacity>
-
-            <Text style={styles.label}>終了日</Text>
-            <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('end')}>
-              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.datePickerText}>{toDateStr(endDateObj)}</Text>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-            </TouchableOpacity>
-            <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 20 }}>
-              ※1日だけの場合は、開始と終了を同じ日付にしてください。
-            </Text>
-
-            <Text style={styles.label}>カレンダーの背景色</Text>
-            <View style={styles.paletteRow}>
-              {PALETTE.map(c => (
-                <TouchableOpacity
-                  key={c.value}
-                  style={[styles.paletteCell, { backgroundColor: c.value }, selectedColor === c.value && styles.paletteCellActive]}
-                  onPress={() => setSelectedColor(c.value)}
-                >
-                  {selectedColor === c.value && <Ionicons name="checkmark" size={16} color="#333" />}
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={[styles.colorPreview, { backgroundColor: selectedColor }]}>
-              <Text style={styles.colorPreviewText}>プレビュー：{selectedColor}</Text>
-            </View>
-
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>登録する</Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -276,20 +309,19 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   scrollArea: { padding: 16 },
   instructionText: { fontSize: 14, color: COLORS.textLight, marginBottom: 16, lineHeight: 20 },
-  card: { flexDirection: 'row', backgroundColor: COLORS.white, padding: 16, borderRadius: 12, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  colorDot: { width: 20, height: 20, borderRadius: 10, marginRight: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-  paletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  paletteCell: { width: 44, height: 44, borderRadius: 10, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
+  card: { flexDirection: 'row', backgroundColor: COLORS.white, padding: 14, borderRadius: 12, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  colorDot: { width: 18, height: 18, borderRadius: 9, marginRight: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  paletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  paletteCell: { width: 48, height: 40, borderRadius: 10, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   paletteCellActive: { borderColor: '#333', borderWidth: 2 },
-  colorPreview: { borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-  colorPreviewText: { fontSize: 12, color: '#555', fontWeight: 'bold' },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
-  cardDate: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
+  paletteCellLabel: { fontSize: 9, color: '#555', marginTop: 2 },
+  cardTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text, marginBottom: 2 },
+  cardDate: { fontSize: 13, color: COLORS.primary, fontWeight: 'bold' },
+  editBtn: { padding: 8, backgroundColor: '#EEF5FF', borderRadius: 8, borderWidth: 1, borderColor: '#CCE0FF', marginRight: 6 },
   deleteBtn: { padding: 8, backgroundColor: '#FFF0F0', borderRadius: 8, borderWidth: 1, borderColor: '#FFE0E0' },
   noDataText: { textAlign: 'center', color: COLORS.textLight, marginTop: 40 },
   fab: { position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: COLORS.white, padding: 24, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
@@ -297,9 +329,8 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 14, fontSize: 16, marginBottom: 16, backgroundColor: '#FAFAFA' },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 14, marginBottom: 16, backgroundColor: '#F0F8FF' },
   datePickerText: { flex: 1, fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
-  saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 8 },
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
-
   calOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   calContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 8 },
