@@ -672,7 +672,7 @@ export default function AttendanceScreen() {
           const isActive = activeSchool === school;
           const bgColor = BG_COLORS[index % BG_COLORS.length];
           return (
-            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor, paddingVertical: 10, minHeight: 0 }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
+            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
               <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
             </TouchableOpacity>
           );
@@ -980,8 +980,8 @@ const styles = StyleSheet.create({
 
   centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   instruction: { padding: 16, color: COLORS.textLight, fontWeight: 'bold', textAlign: 'center', marginTop: 8 },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 20 },
-  schoolCardList: { width: '23%', aspectRatio: 0.9, margin: '1%', borderRadius: 12, padding: 8, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 12 },
+  schoolCardList: { width: '46%', margin: '2%', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
   schoolCardActive: { borderColor: COLORS.primary },
   schoolCardName: { fontSize: 11, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   listSection: { backgroundColor: COLORS.white, borderTopWidth: 1, borderColor: COLORS.border, padding: 16, minHeight: 400 },
