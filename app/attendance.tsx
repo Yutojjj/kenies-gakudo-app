@@ -625,23 +625,30 @@ export default function AttendanceScreen() {
   const renderSchoolUsersView = () => {
     const DOW = ['月','火','水','木','金'];
     const allUsers = Object.values(groupedUsersBySchool).flat();
+    const hasFilter = !!(userListSearch || userListFilterDow || activeSchool);
+
+    // 絞り込み結果を計算
     const filtered = allUsers.filter((u: any) => {
       if (userListSearch) {
         const q = userListSearch.toLowerCase();
         if (!u.name?.toLowerCase().includes(q) && !u.nicknameKana?.toLowerCase().includes(q)) return false;
       }
       if (userListFilterDow && !u.days?.[userListFilterDow]) return false;
+      if (activeSchool && u.school !== activeSchool) return false;
       return true;
     });
+
     const filteredBySchool: Record<string, any[]> = {};
     filtered.forEach((u: any) => {
       const s = u.school || '未設定';
       if (!filteredBySchool[s]) filteredBySchool[s] = [];
       filteredBySchool[s].push(u);
     });
+
     return (
     <ScrollView style={styles.mainScroll}>
-      <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:'#F5F5F5', borderRadius:10, margin:12, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#EEE' }}>
+      {/* 検索バー */}
+      <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:'#F5F5F5', borderRadius:10, margin:12, marginBottom:8, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#EEE' }}>
         <Ionicons name="search" size={18} color={COLORS.textLight} style={{ marginRight:8 }} />
         <TextInput style={{ flex:1, fontSize:14 }} placeholder="名前・ニックネームで検索" placeholderTextColor="#BBB"
           value={userListSearch} onChangeText={setUserListSearch} />
@@ -651,53 +658,62 @@ export default function AttendanceScreen() {
           </TouchableOpacity>
         )}
       </View>
-      <View style={{ flexDirection:'row', gap:8, paddingHorizontal:12, marginBottom:12, flexWrap:'wrap' }}>
-        <TouchableOpacity style={{ paddingHorizontal:14, paddingVertical:7, borderRadius:10, backgroundColor:!userListFilterDow ? COLORS.primary : '#F5F5F5', borderWidth:1, borderColor:!userListFilterDow ? COLORS.primary : '#DDD' }} onPress={() => setUserListFilterDow('')}>
-          <Text style={{ fontSize:13, fontWeight:'bold', color:!userListFilterDow ? '#fff':'#555' }}>全曜日</Text>
-        </TouchableOpacity>
+      {/* 曜日フィルター */}
+      <View style={{ flexDirection:'row', gap:8, paddingHorizontal:12, marginBottom:10, flexWrap:'wrap' }}>
         {DOW.map(d => (
           <TouchableOpacity key={d} style={{ paddingHorizontal:14, paddingVertical:7, borderRadius:10, backgroundColor:userListFilterDow===d ? COLORS.primary : '#F5F5F5', borderWidth:1, borderColor:userListFilterDow===d ? COLORS.primary : '#DDD' }} onPress={() => setUserListFilterDow(userListFilterDow===d ? '' : d)}>
             <Text style={{ fontSize:13, fontWeight:'bold', color:userListFilterDow===d ? '#fff':'#555' }}>{d}</Text>
           </TouchableOpacity>
         ))}
       </View>
+      {/* 学校カード（アイコンなし・低め） */}
       <View style={styles.gridContainer}>
         {sortedSchoolNames.map((school, index) => {
           const isActive = activeSchool === school;
           const bgColor = BG_COLORS[index % BG_COLORS.length];
           return (
-            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
-              <Ionicons name="school" size={32} color={COLORS.primary} style={{ opacity: 0.8, marginBottom: 8 }} />
-              <Text style={styles.schoolCardName} numberOfLines={2}>{school}</Text>
+            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor, paddingVertical: 10, minHeight: 0 }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
+              <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      {activeSchool && (
+
+      {/* フィルター未設定時は何も表示しない */}
+      {!hasFilter ? (
+        <View style={{ alignItems:'center', marginTop:32 }}>
+          <Ionicons name="search-outline" size={40} color="#DDD" />
+          <Text style={{ color:'#BBB', marginTop:8, fontSize:13 }}>名前・曜日・学校で絞り込んでください</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={{ alignItems:'center', marginTop:32 }}>
+          <Text style={{ color:'#BBB', fontSize:13 }}>該当する利用者はいません</Text>
+        </View>
+      ) : (
         <View style={styles.listSection}>
-          <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
-          <ScrollView>
-            {sortKidsByGrade(filteredBySchool[activeSchool] || groupedUsersBySchool[activeSchool] || []).map((user: any, idx: number) => {
-              const arr = filteredBySchool[activeSchool] || groupedUsersBySchool[activeSchool] || [];
-              return (
-              <View key={user.id} style={[styles.userListItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
-                  <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                    {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
-                  </View>
-                  <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-                </TouchableOpacity>
-                {isAdmin && user.parentDocId && (
-                  <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+          {activeSchool && <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>}
+          {Object.entries(filteredBySchool).map(([school, users]) => (
+            <View key={school}>
+              {!activeSchool && <Text style={[styles.listSectionTitle, { fontSize:12 }]}>{school}</Text>}
+              {sortKidsByGrade(users).map((user: any, idx: number) => (
+                <View key={user.id} style={[styles.userListItem, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
+                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                    <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                      {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
+                    </View>
+                    <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
                   </TouchableOpacity>
-                )}
-              </View>
-              );
-            })}
-          </ScrollView>
+                  {isAdmin && user.parentDocId && (
+                    <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
+                      <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          ))}
         </View>
       )}
     </ScrollView>
