@@ -59,6 +59,9 @@ export default function ScheduleScreen() {
 
   const [scheduleData, setScheduleData] = useState<Record<string, DailyData>>({});
   const scheduleDataRef = useRef<Record<string, DailyData>>({});
+  // 直近にローカルで保存した内容を一時保持。onSnapshotがサーバーの古い値で
+  // 上書きして「入力したのに消える」のを防ぐ（保存がサーバーに反映されるまでの保護）
+  const recentWritesRef = useRef<Record<string, { data: DailyData; at: number }>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
   
@@ -186,28 +189,32 @@ export default function ScheduleScreen() {
           const targetIndex = loadedChildren.findIndex(c => c.name === targetName);
           if (targetIndex !== -1) setActiveChildIdx(targetIndex);
 
-          // ★修正: 他の日の操作データが消えないように、docChangesを用いた差分更新に変更
           onSnapshot(query(collection(db, 'schedules'), where('parentId', '==', foundParentId)), (sSnap) => {
-            setScheduleData(prev => {
-              const currentData = { ...prev };
-              sSnap.docChanges().forEach((change) => {
-                const item = change.doc.data();
-                const key = `${item.childId}_${item.dateStr}`;
-                if (change.type === 'removed') {
-                  delete currentData[key];
-                } else {
-                  let lessons: LessonTemplate[] = [];
-                  if (item.lessons) {
-                      lessons = item.lessons;
-                  } else if (item.lesson) {
-                      lessons = [item.lesson];
-                  }
-                  currentData[key] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
-                }
-              });
-              scheduleDataRef.current = currentData;
-              return currentData;
+            const sData: Record<string, DailyData> = {};
+            sSnap.forEach(d => {
+              const item = d.data();
+              let lessons: LessonTemplate[] = [];
+              if (item.lessons) {
+                  lessons = item.lessons;
+              } else if (item.lesson) {
+                  lessons = [item.lesson];
+              }
+              sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
             });
+
+            // 直近5秒以内にローカル保存した内容は、サーバー反映待ちの可能性があるため
+            // サーバー値が異なっていてもローカルの値を維持する（入力直後に消える事故を防ぐ）
+            const now = Date.now();
+            Object.entries(recentWritesRef.current).forEach(([key, rec]) => {
+              if (now - rec.at < 5000) {
+                sData[key] = { ...sData[key], ...rec.data };
+              } else {
+                delete recentWritesRef.current[key]; // 古い保護は解除
+              }
+            });
+
+            scheduleDataRef.current = sData;
+            setScheduleData(sData);
           });
           
           onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
@@ -333,12 +340,13 @@ export default function ScheduleScreen() {
     const docId = `${child.id}_${dateStr}`;
     const current = scheduleDataRef.current[docId] || {};
 
-    // ★修正: 楽観的更新時に関数型アップデートを使用し、裏側での状態競合を防ぐ
-    setScheduleData(prev => {
-      const updated = { ...prev, [docId]: { ...(prev[docId] || {}), ...data } };
-      scheduleDataRef.current = updated;
-      return updated;
-    });
+    // refとstateを同時更新（onSnapshotとの競合防止）
+    const mergedForDoc = { ...(scheduleDataRef.current[docId] || {}), ...data };
+    const updated = { ...scheduleDataRef.current, [docId]: mergedForDoc };
+    scheduleDataRef.current = updated;
+    setScheduleData({ ...updated });
+    // 直近保存として記録（onSnapshotの巻き戻り防止）
+    recentWritesRef.current[docId] = { data: mergedForDoc as DailyData, at: Date.now() };
 
     try {
       const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };
