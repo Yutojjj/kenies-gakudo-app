@@ -392,7 +392,9 @@ export default function ShiftScreen() {
                   
                   <View style={styles.cellContent}>
                     {!cellStamp && !isWeekend && !publicHolidays[item.dateStr] && item.dateStr && (
-                      <Text style={{ fontSize: 9, color: '#A5D6A7', fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>○</Text>
+                      <View style={[styles.stampBadge, styles.stampBadgeCircle]}>
+                        <Text style={[styles.stampText, { color: '#2E7D32' }]}>○</Text>
+                      </View>
                     )}
                     {cellStamp && (
                       <View style={[
@@ -595,6 +597,7 @@ const styles = StyleSheet.create({
   calDayText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 4, textAlign: 'center' },
   cellContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   stampBadge: { paddingHorizontal: 4, paddingVertical: 4, borderRadius: 6, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  stampBadgeCircle: { backgroundColor: '#E8F5E9' },
   stampBadgeAll: { backgroundColor: '#FFE4E1' }, 
   stampBadgeAM: { backgroundColor: '#E0FFFF' },  
   stampBadgePM: { backgroundColor: '#FFFACD' },  
