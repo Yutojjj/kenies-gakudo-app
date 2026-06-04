@@ -289,7 +289,7 @@ export default function ShiftCreateScreen() {
 
   const saveDayShift = async () => {
     try {
-      await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() });
+      await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() }, { merge: true });
       setModalVisible(false);
     } catch (e) {
       Alert.alert('エラー', '保存に失敗しました');
@@ -679,7 +679,7 @@ export default function ShiftCreateScreen() {
                 assignedNames.push(setting.name);
               }
               if (newEntries.length === already.length) continue;
-              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() });
+              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() }, { merge: true });
               updatedCount++;
             }
             if (Platform.OS === 'web') window.alert(`完了: ${updatedCount}日分を自動入力しました`);
