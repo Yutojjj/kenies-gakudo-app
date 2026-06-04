@@ -151,8 +151,7 @@ export default function ShiftScreen() {
         });
         unsubscribes.push(unsubAssigned);
 
-      } catch (error) {
-        // ⑨ イベントデータをロード
+        // ⑨ イベントデータをロード（正常処理内）
         try {
           const eventsSnap = await getDocs(collection(db, 'events'));
           const eventsMap: Record<string, string> = {};
@@ -161,8 +160,9 @@ export default function ShiftScreen() {
             if (data.title) eventsMap[d.id] = data.title;
           });
           setEventsData(eventsMap);
-        } catch(e) {}
+        } catch(e) { console.warn('eventsロード失敗', e); }
 
+      } catch (error) {
         console.error("データ取得エラー", error);
       }
     };
