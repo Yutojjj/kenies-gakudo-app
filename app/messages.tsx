@@ -853,8 +853,8 @@ export default function MessagesScreen() {
           )}
         </View>
 
-        {/* ⑬ 管理者のみホーム/トークタブ */}
-        {isAdmin && (
+        {/* ⑫⑬ 管理者・スタッフのホーム/トークタブ */}
+        {(isAdmin || resolvedUser?.role === 'staff') && (
           <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#eee' }}>
             <TouchableOpacity
               style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: msgTab === 'home' ? COLORS.primary : 'transparent' }}
@@ -871,9 +871,28 @@ export default function MessagesScreen() {
           </View>
         )}
 
-        {/* ⑬ ホームタブ */}
-        {isAdmin && msgTab === 'home' ? (
+        {/* ⑫⑬ ホームタブ */}
+        {(isAdmin || resolvedUser?.role === 'staff') && msgTab === 'home' ? (
           <ScrollView style={{ flex: 1 }}>
+            {/* スタッフ専用: スタッフ一覧のみ（利用者とのトークは不可） */}
+            {!isAdmin && (
+              <>
+                <Text style={{ fontSize: 12, color: '#888', padding: 12, paddingBottom: 4 }}>スタッフ同士・スタッフ↔管理者のトークができます</Text>
+                <StaffListSection
+                  accounts={homeAllAccounts.filter((a: any) => a.role === 'staff' || a.role === 'admin')}
+                  searchQuery=""
+                  conversations={conversations}
+                  openChat={openChat}
+                  openCreateGroupModal={openCreateGroupModal}
+                  setSelectedUserIds={setSelectedUserIds}
+                  onAddToGroup={async (groupId: string, accId: string) => {
+                    await setDoc(doc(db, 'conversations', groupId), { participants: arrayUnion(accId) }, { merge: true });
+                  }}
+                />
+              </>
+            )}
+            {/* 管理者専用: グループ一覧・スタッフ・利用者 */}
+            {isAdmin && (<>
             {/* グループ一覧（アコーディオン） */}
             <TouchableOpacity
               style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, marginHorizontal: 12, marginBottom: 4, padding: 14, borderWidth: 1, borderColor: '#A5D6A7' }}
@@ -960,6 +979,7 @@ export default function MessagesScreen() {
             )}
 
             <View style={{ height: 60 }} />
+            </>)}
           </ScrollView>
         ) : (
           <ScrollView style={{ flex: 1 }}>
@@ -969,7 +989,15 @@ export default function MessagesScreen() {
               <Text style={styles.emptyText}>まだ会話がありません</Text>
             </View>
           )}
-          {conversations.map(item => {
+          {conversations.filter(item => {
+            // スタッフは利用者(role=user)とのdirectトークを表示しない
+            if (resolvedUser?.role === 'staff' && item.type === 'direct') {
+              const otherAccountId = item.id.replace('direct_', '');
+              const otherAccount = homeAllAccounts.find((a: any) => a.id === otherAccountId);
+              if (otherAccount?.role === 'user') return false;
+            }
+            return true;
+          }).map(item => {
             const isGroupItem = item.type === 'group';
             const unread = hasUnread(item);
             return (

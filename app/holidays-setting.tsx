@@ -233,7 +233,6 @@ export default function HolidaysSettingScreen() {
                     onPress={() => setSelectedColor(c.value)}
                   >
                     {selectedColor === c.value && <Ionicons name="checkmark" size={14} color="#333" />}
-                    <Text style={styles.paletteCellLabel}>{c.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -314,7 +313,6 @@ const styles = StyleSheet.create({
   paletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   paletteCell: { width: 48, height: 40, borderRadius: 10, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   paletteCellActive: { borderColor: '#333', borderWidth: 2 },
-  paletteCellLabel: { fontSize: 9, color: '#555', marginTop: 2 },
   cardTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text, marginBottom: 2 },
   cardDate: { fontSize: 13, color: COLORS.primary, fontWeight: 'bold' },
   editBtn: { padding: 8, backgroundColor: '#EEF5FF', borderRadius: 8, borderWidth: 1, borderColor: '#CCE0FF', marginRight: 6 },

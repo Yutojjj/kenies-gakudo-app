@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert, Image, Modal, Platform, SafeAreaView,
-    ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
+  Alert, Image, Modal, Platform, SafeAreaView,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import SignaturePad from '../components/SignaturePad';
 import { COLORS } from '../constants/theme';
@@ -38,6 +38,33 @@ export default function PaidTransportScreen() {
   const [editCount, setEditCount] = useState('');
   const [signTarget, setSignTarget] = useState<Record_ | null>(null);
   const [previewSign, setPreviewSign] = useState<string | null>(null);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [userList, setUserList] = useState<{id:string;name:string}[]>([]);
+  const [newUserName, setNewUserName] = useState('');
+  const [newCount, setNewCount] = useState('');
+
+  const openCreateModal = async () => {
+    const snap = await getDocs(query(collection(db, 'accounts'), where('role', '==', 'user')));
+    const list = snap.docs.map(d => ({ id: d.id, name: (d.data().name || '').trim() })).filter(u => u.name);
+    setUserList(list);
+    setNewUserName('');
+    setNewCount('');
+    setCreateModalVisible(true);
+  };
+
+  const handleCreate = async () => {
+    const count = parseInt(newCount);
+    if (!newUserName || isNaN(count) || count < 0) {
+      Alert.alert('エラー', '利用者と回数を正しく入力してください');
+      return;
+    }
+    const docId = `${newUserName}_${selectedMonth}`;
+    await setDoc(doc(db, 'paid_transport_records', docId), {
+      userName: newUserName, month: selectedMonth,
+      count, amount: count * 500,
+    }, { merge: true });
+    setCreateModalVisible(false);
+  };
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -100,9 +127,13 @@ export default function PaidTransportScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
         {records.length === 0 ? (
-          <Text style={{ textAlign: 'center', color: COLORS.textLight, marginTop: 40 }}>
-            この月の記録はありません
-          </Text>
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Text style={{ color: COLORS.textLight, marginBottom: 16 }}>この月の記録はありません</Text>
+            <TouchableOpacity style={{ backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }} onPress={openCreateModal}>
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>利用者を登録する</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           records.map(r => (
             <View key={r.id} style={styles.card}>
@@ -199,6 +230,39 @@ export default function PaidTransportScreen() {
       </ScrollView>
 
       {/* 回数編集モーダル */}
+
+      {/* 新規登録モーダル */}
+      <Modal visible={createModalVisible} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', alignItems:'center', padding:20 }}>
+          <View style={{ width:'100%', backgroundColor:'#fff', borderRadius:16, padding:20 }}>
+            <Text style={{ fontSize:16, fontWeight:'bold', marginBottom:16 }}>有料送迎 新規登録</Text>
+            <Text style={{ fontSize:13, color:'#555', marginBottom:6 }}>利用者を選択</Text>
+            <ScrollView style={{ maxHeight:200, borderWidth:1, borderColor:'#EEE', borderRadius:8, marginBottom:12 }}>
+              {userList.map(u => (
+                <TouchableOpacity key={u.id} style={{ padding:12, borderBottomWidth:1, borderColor:'#EEE', backgroundColor: newUserName===u.name ? COLORS.primary+'22' : '#fff' }}
+                  onPress={() => setNewUserName(u.name)}>
+                  <Text style={{ fontWeight: newUserName===u.name ? 'bold' : 'normal', color: newUserName===u.name ? COLORS.primary : '#333' }}>{u.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Text style={{ fontSize:13, color:'#555', marginBottom:6 }}>利用回数</Text>
+            <TextInput style={{ borderWidth:1, borderColor:'#DDD', borderRadius:8, padding:12, fontSize:16, marginBottom:8 }}
+              keyboardType="numeric" placeholder="例: 3" value={newCount} onChangeText={setNewCount} />
+            <Text style={{ fontSize:13, color:'#FF7043', marginBottom:16 }}>
+              {parseInt(newCount)||0}回 × 500円 = {((parseInt(newCount)||0)*500).toLocaleString()}円
+            </Text>
+            <View style={{ flexDirection:'row', gap:8 }}>
+              <TouchableOpacity style={{ flex:1, padding:14, borderRadius:10, backgroundColor:'#EEE', alignItems:'center' }} onPress={() => setCreateModalVisible(false)}>
+                <Text style={{ fontWeight:'bold' }}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex:1, padding:14, borderRadius:10, backgroundColor: COLORS.primary, alignItems:'center' }} onPress={handleCreate}>
+                <Text style={{ color:'#fff', fontWeight:'bold' }}>登録する</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={!!editTarget} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>

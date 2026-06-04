@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from "firebase/app";
-import { Firestore, getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache } from "firebase/firestore";
+import { Firestore, getFirestore, initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { Platform } from "react-native";
 
@@ -22,9 +22,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 let db: Firestore;
 try {
   if (Platform.OS === "web") {
-    // Web: 永続キャッシュのみ（long polling 不要）
+    // Web: メモリキャッシュ（永続キャッシュは古いデータをサーバーに書き戻す事故を防ぐため使用しない）
     db = initializeFirestore(app, {
-      localCache: persistentLocalCache(),
+      localCache: memoryLocalCache(),
     });
   } else {
     // iOS/Android: React Native は WebSocket が不安定なため

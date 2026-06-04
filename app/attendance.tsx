@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -65,6 +65,13 @@ export default function AttendanceScreen() {
   const router = useRouter();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
+  const [userListSearch, setUserListSearch] = useState('');
+  const [userListFilterDow, setUserListFilterDow] = useState('');
+  const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
+  const [allStaffList, setAllStaffList] = useState<string[]>([]);
+  const [transportWeekOffset, setTransportWeekOffset] = useState(0);
+  const [selectedTransportDate, setSelectedTransportDate] = useState<string | null>(null);
+  const [transportModalVisible, setTransportModalVisible] = useState(false);
   const [showKidNames, setShowKidNames] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -84,11 +91,6 @@ export default function AttendanceScreen() {
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
   const [lessonsData, setLessonsData] = useState<any[]>([]);
-  const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
-  const [allStaffList, setAllStaffList] = useState<string[]>([]);
-  const [transportWeekOffset, setTransportWeekOffset] = useState(0);
-  const [selectedTransportDate, setSelectedTransportDate] = useState<string | null>(null);
-  const [transportModalVisible, setTransportModalVisible] = useState(false);
   const [holidays, setHolidays] = useState<any[]>([]); 
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
@@ -602,51 +604,6 @@ export default function AttendanceScreen() {
     </>
   );
 
-  const renderSchoolUsersView = () => (
-    <ScrollView style={styles.mainScroll}>
-      <Text style={styles.instruction}>確認したい学校をタップしてください</Text>
-      <View style={styles.gridContainer}>
-        {sortedSchoolNames.map((school, index) => {
-          const isActive = activeSchool === school;
-          const bgColor = BG_COLORS[index % BG_COLORS.length];
-          return (
-            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
-              <Ionicons name="school" size={32} color={COLORS.primary} style={{ opacity: 0.8, marginBottom: 8 }} />
-              <Text style={styles.schoolCardName} numberOfLines={2}>{school}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      {activeSchool && (
-        <View style={styles.listSection}>
-          <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
-          <ScrollView>
-            {sortKidsByGrade(groupedUsersBySchool[activeSchool]).map((user, idx) => (
-              <View key={user.id} style={[styles.userListItem, idx === groupedUsersBySchool[activeSchool].length - 1 && { borderBottomWidth: 0 }]}>
-                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
-                  <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                  </View>
-                  <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-                </TouchableOpacity>
-                {isAdmin && user.parentDocId && (
-                  <TouchableOpacity
-                    style={styles.msgIconBtn}
-                    onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}
-                  >
-                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </ScrollView>
-  );
-
-  // 送迎一覧
   const transportDates = (() => {
     const dates = [];
     const today = new Date();
@@ -665,7 +622,89 @@ export default function AttendanceScreen() {
     await setDoc(docRef, { ...current, [blockKey]: staffName }, { merge: true });
   };
 
-  const renderTransportView = () => {
+  const renderSchoolUsersView = () => {
+    const DOW = ['月','火','水','木','金'];
+    const allUsers = Object.values(groupedUsersBySchool).flat();
+    const filtered = allUsers.filter((u: any) => {
+      if (userListSearch) {
+        const q = userListSearch.toLowerCase();
+        if (!u.name?.toLowerCase().includes(q) && !u.nicknameKana?.toLowerCase().includes(q)) return false;
+      }
+      if (userListFilterDow && !u.days?.[userListFilterDow]) return false;
+      return true;
+    });
+    const filteredBySchool: Record<string, any[]> = {};
+    filtered.forEach((u: any) => {
+      const s = u.school || '未設定';
+      if (!filteredBySchool[s]) filteredBySchool[s] = [];
+      filteredBySchool[s].push(u);
+    });
+    return (
+    <ScrollView style={styles.mainScroll}>
+      <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:'#F5F5F5', borderRadius:10, margin:12, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#EEE' }}>
+        <Ionicons name="search" size={18} color={COLORS.textLight} style={{ marginRight:8 }} />
+        <TextInput style={{ flex:1, fontSize:14 }} placeholder="名前・ニックネームで検索" placeholderTextColor="#BBB"
+          value={userListSearch} onChangeText={setUserListSearch} />
+        {userListSearch.length > 0 && (
+          <TouchableOpacity onPress={() => setUserListSearch('')}>
+            <Ionicons name="close-circle" size={18} color="#aaa" />
+          </TouchableOpacity>
+        )}
+      </View>
+      <View style={{ flexDirection:'row', gap:8, paddingHorizontal:12, marginBottom:12, flexWrap:'wrap' }}>
+        <TouchableOpacity style={{ paddingHorizontal:14, paddingVertical:7, borderRadius:10, backgroundColor:!userListFilterDow ? COLORS.primary : '#F5F5F5', borderWidth:1, borderColor:!userListFilterDow ? COLORS.primary : '#DDD' }} onPress={() => setUserListFilterDow('')}>
+          <Text style={{ fontSize:13, fontWeight:'bold', color:!userListFilterDow ? '#fff':'#555' }}>全曜日</Text>
+        </TouchableOpacity>
+        {DOW.map(d => (
+          <TouchableOpacity key={d} style={{ paddingHorizontal:14, paddingVertical:7, borderRadius:10, backgroundColor:userListFilterDow===d ? COLORS.primary : '#F5F5F5', borderWidth:1, borderColor:userListFilterDow===d ? COLORS.primary : '#DDD' }} onPress={() => setUserListFilterDow(userListFilterDow===d ? '' : d)}>
+            <Text style={{ fontSize:13, fontWeight:'bold', color:userListFilterDow===d ? '#fff':'#555' }}>{d}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.gridContainer}>
+        {sortedSchoolNames.map((school, index) => {
+          const isActive = activeSchool === school;
+          const bgColor = BG_COLORS[index % BG_COLORS.length];
+          return (
+            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
+              <Ionicons name="school" size={32} color={COLORS.primary} style={{ opacity: 0.8, marginBottom: 8 }} />
+              <Text style={styles.schoolCardName} numberOfLines={2}>{school}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {activeSchool && (
+        <View style={styles.listSection}>
+          <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>
+          <ScrollView>
+            {sortKidsByGrade(filteredBySchool[activeSchool] || groupedUsersBySchool[activeSchool] || []).map((user: any, idx: number) => {
+              const arr = filteredBySchool[activeSchool] || groupedUsersBySchool[activeSchool] || [];
+              return (
+              <View key={user.id} style={[styles.userListItem, idx === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                  <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                    {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
+                  </View>
+                  <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+                </TouchableOpacity>
+                {isAdmin && user.parentDocId && (
+                  <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+    </ScrollView>
+    );
+  };
+
+    const renderTransportView = () => {
     return (
       <View style={{ flex: 1 }}>
         <View style={styles.weekNav}>
@@ -757,7 +796,7 @@ export default function AttendanceScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '学校別利用者' : '送迎一覧'}
+          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '利用者一覧' : '送迎一覧'}
         </Text>
       </View>
 
@@ -766,7 +805,7 @@ export default function AttendanceScreen() {
           <Text style={[styles.tabNavText, currentView === 'attendance' && styles.tabNavTextActive]}>出欠一覧</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabNavBtn, currentView === 'schoolUsers' && styles.tabNavBtnActive]} onPress={() => setCurrentView('schoolUsers')}>
-          <Text style={[styles.tabNavText, currentView === 'schoolUsers' && styles.tabNavTextActive]}>学校別利用者</Text>
+          <Text style={[styles.tabNavText, currentView === 'schoolUsers' && styles.tabNavTextActive]}>利用者一覧</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabNavBtn, currentView === 'transport' && styles.tabNavBtnActive]} onPress={() => setCurrentView('transport')}>
           <Text style={[styles.tabNavText, currentView === 'transport' && styles.tabNavTextActive]}>送迎一覧</Text>

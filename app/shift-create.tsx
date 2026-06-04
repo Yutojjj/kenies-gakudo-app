@@ -49,6 +49,8 @@ export default function ShiftCreateScreen() {
   const [selectedDateStr, setSelectedDateStr] = useState('');
   const [availableStaff, setAvailableStaff] = useState<Staff[]>([]);
   const [unavailableStaff, setUnavailableStaff] = useState<{name: string, type: string}[]>([]);
+  const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
+  const [workHoursVisible, setWorkHoursVisible] = useState(false);
   const [currentDayAssigned, setCurrentDayAssigned] = useState<AssignedStaff[]>([]);
 
   const [timePickerVisible, setTimePickerVisible] = useState(false);
@@ -82,12 +84,12 @@ export default function ShiftCreateScreen() {
       try {
         const masterRef = doc(db, 'settings', 'master_data');
         const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists() && masterSnap.data().times) {
-          setMasterTimes(masterSnap.data().times);
+        if (masterSnap.exists() && masterSnap.data().workTimes) {
+          setMasterTimes(masterSnap.data().workTimes);
         } else {
           const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
           setMasterTimes(defaultTimes);
-          await setDoc(masterRef, { times: defaultTimes }, { merge: true });
+          await setDoc(masterRef, { workTimes: defaultTimes }, { merge: true });
         }
       } catch (e) {
         console.warn('master_data 取得失敗。デフォルト値を使用します', e);
@@ -125,54 +127,34 @@ export default function ShiftCreateScreen() {
         console.warn('スタッフ取得失敗', e);
       }
 
-      // ▼ リアルタイムリスナーをまとめて設定（★修正: 他データ書き込み時のリセット消失を防ぐため差分更新を使用）▼
+      // ▼ リアルタイムリスナーをまとめて設定 ▼
       const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
-        setRequests(prev => {
-          const reqData = { ...prev };
-          s.docChanges().forEach(change => {
-            const data = change.doc.data();
-            const key = `${data.staffName}_${data.dateStr}`;
-            if (change.type === 'removed') {
-              delete reqData[key];
-            } else {
-              reqData[key] = data.type;
-            }
-          });
-          return reqData;
+        const reqData: Record<string, string> = {};
+        s.forEach(d => {
+          const data = d.data();
+          if (!data.staffName || !data.dateStr || !data.type) return;
+          reqData[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
         });
+        setRequests(reqData);
       }, (e) => console.warn('shifts リスナーエラー', e));
 
       const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
-        setAssignedShifts(prev => {
-          const asData = { ...prev };
-          s.docChanges().forEach(change => {
-            if (change.type === 'removed') {
-              delete asData[change.doc.id];
-            } else {
-              asData[change.doc.id] = change.doc.data().staff || [];
-            }
-          });
-          return asData;
-        });
+        const asData: Record<string, AssignedStaff[]> = {};
+        s.forEach(d => { asData[d.id] = d.data().staff || []; });
+        setAssignedShifts(asData);
       }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
       const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
-        setEventsData(prev => {
-          const eData = { ...prev };
-          snap.docChanges().forEach(change => {
-            if (change.type === 'removed') {
-              delete eData[change.doc.id];
-            } else {
-              eData[change.doc.id] = change.doc.data().title;
-            }
-          });
-          return eData;
-        });
+        const eData: Record<string, string> = {};
+        snap.forEach(d => { eData[d.id] = d.data().title; });
+        setEventsData(eData);
       }, (e) => console.warn('events リスナーエラー', e));
 
       onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
         if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
       });
+
+      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
       return () => { reqUnsub(); asUnsub(); evUnsub(); };
     };
@@ -210,7 +192,7 @@ export default function ShiftCreateScreen() {
     const unavail: {name: string, type: string}[] = [];
     
     allStaff.forEach(staff => {
-      const type = requests[`${staff.name}_${dateStr}`];
+      const type = requests[`${(staff.name||'').trim()}_${dateStr}`];
       if (type === '✕' || type === '午前✕' || type === '午後✕') {
         unavail.push({ name: staff.name, type });
       } else {
@@ -246,6 +228,28 @@ export default function ShiftCreateScreen() {
     setCurrentDayAssigned(currentDayAssigned.filter(s => s.name !== staffName));
   };
 
+
+  // スタッフ別合計勤務時間を計算
+  const calcWorkSummary = () => {
+    const summary: {name:string; totalMin:number; days:number}[] = [];
+    allStaff.forEach(staff => {
+      let totalMin = 0;
+      let days = 0;
+      Object.entries(assignedShifts).forEach(([dateStr, entries]) => {
+        const entry = entries.find((e: any) => e.name === staff.name);
+        if (!entry) return;
+        const [sh, sm] = entry.start.split(':').map(Number);
+        const [eh, em] = entry.end.split(':').map(Number);
+        const mins = (eh * 60 + em) - (sh * 60 + sm);
+        if (mins > 0) { totalMin += mins; days++; }
+      });
+      summary.push({ name: staff.name, totalMin, days });
+    });
+    return summary.sort((a,b) => b.totalMin - a.totalMin);
+  };
+
+  const toHM = (mins: number) => `${Math.floor(mins/60)}h${mins%60 > 0 ? String(mins%60).padStart(2,'0')+'m' : ''}`;
+
   const openTimeEditor = (staffName: string, start: string, end: string) => {
     setEditingStaffName(staffName);
     setTempStart(start);
@@ -273,7 +277,7 @@ export default function ShiftCreateScreen() {
     }
     const newTimes = [...masterTimes, newSet].sort();
     setMasterTimes(newTimes);
-    await setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
+    await setDoc(doc(db, 'settings', 'master_data'), { workTimes: newTimes }, { merge: true });
   };
 
   const saveTimeEdit = () => {
@@ -346,7 +350,7 @@ export default function ShiftCreateScreen() {
             if (isSun || isPH) return `<td class="c-shift c-col-sun"></td>`;
             if (isSat) return `<td class="c-shift c-col-sat"></td>`;
             const assigned = assignedShifts[cell.dateStr]?.find((s:any) => s.name === staff.name);
-            const req = requests[`${staff.name}_${cell.dateStr}`];
+            const req = requests[`${(staff.name||'').trim()}_${cell.dateStr}`];
             if (assigned) {
               return `<td class="c-shift c-assigned">${assigned.start}-${assigned.end}</td>`;
             } else {
@@ -456,6 +460,24 @@ export default function ShiftCreateScreen() {
     }
   };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
@@ -479,8 +501,38 @@ export default function ShiftCreateScreen() {
             <Ionicons name="document-text" size={20} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>PDF出力</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.pdfBtn, { backgroundColor: '#5D4037' }]} onPress={() => setWorkSummaryVisible(true)}>
+            <Ionicons name="time-outline" size={20} color={COLORS.white} />
+            <Text style={styles.pdfBtnText}>勤務時間</Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* ⑥ 勤務時間サマリーポップアップ */}
+      <Modal visible={workSummaryVisible} transparent animationType="fade">
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', alignItems:'center', padding:20 }}>
+          <View style={{ width:'100%', maxHeight:'80%', backgroundColor:'#fff', borderRadius:16, overflow:'hidden' }}>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, backgroundColor:'#EFEBE9', borderBottomWidth:1, borderColor:'#D7CCC8' }}>
+              <Text style={{ fontSize:16, fontWeight:'bold', color:'#5D4037' }}>スタッフ別 合計勤務時間</Text>
+              <TouchableOpacity onPress={() => setWorkSummaryVisible(false)}>
+                <Ionicons name="close-circle" size={28} color="#795548" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding:16 }}>
+              {calcWorkSummary().map((s, i) => (
+                <View key={s.name} style={{ flexDirection:'row', alignItems:'center', paddingVertical:12, borderBottomWidth:1, borderColor:'#EEE' }}>
+                  <Text style={{ width:30, fontSize:13, color:'#aaa', fontWeight:'bold' }}>{i+1}</Text>
+                  <Text style={{ flex:1, fontSize:15, fontWeight:'bold', color:'#333' }}>{s.name}</Text>
+                  <Text style={{ fontSize:13, color:'#666' }}>{s.days}日</Text>
+                  <Text style={{ fontSize:16, fontWeight:'bold', color:'#5D4037', marginLeft:12, minWidth:70, textAlign:'right' }}>{toHM(s.totalMin)}</Text>
+                </View>
+              ))}
+              {calcWorkSummary().length === 0 && <Text style={{ textAlign:'center', color:'#aaa', padding:20 }}>まだシフトが確定していません</Text>}
+              <View style={{ height:20 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.monthSelector}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -508,7 +560,8 @@ export default function ShiftCreateScreen() {
             
             let unavailableCount = 0;
             allStaff.forEach(staff => {
-              const req = requests[`${staff.name}_${item.dateStr}`];
+              const key = `${(staff.name || '').trim()}_${item.dateStr}`;
+              const req = requests[key];
               if (req === '✕' || req === '午前✕' || req === '午後✕') unavailableCount++;
             });
             const availableCount = allStaff.length - unavailableCount;
@@ -617,7 +670,7 @@ export default function ShiftCreateScreen() {
                 .sort((a, b) => a.priority - b.priority);
               for (const setting of sortedSettings) {
                 if (assignedNames.includes(setting.name)) continue;
-                const req = requests[`${setting.name}_${dateStr}`];
+                const req = requests[`${(setting.name||'').trim()}_${dateStr}`];
                 if (req === '✕' || req === '午前✕' || req === '午後✕') continue;
                 const isInaguma = setting.name === '稲熊';
                 const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
@@ -727,7 +780,7 @@ export default function ShiftCreateScreen() {
                           
                           if (day) {
                             const assigned = assignedShifts[day.dateStr]?.find(s => s.name === staff.name);
-                            const req = requests[`${staff.name}_${day.dateStr}`];
+                            const req = requests[`${(staff.name||'').trim()}_${day.dateStr}`];
                             
                             if (assigned) {
                               // ★ 縦に伸びすぎないように「開:〇〇 \n 終:〇〇」の2行にまとめる
@@ -773,8 +826,24 @@ export default function ShiftCreateScreen() {
             </View>
 
             <ScrollView style={{ flex: 1, padding: 20 }}>
+
+              {/* ⑬ 決定したシフト（最上位に表示） */}
+              <Text style={[styles.sectionTitle, { borderColor: COLORS.accent, marginBottom: 8 }]}>決定したシフト</Text>
+              {currentDayAssigned.length === 0 && <Text style={{ color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 }}>追加されていません</Text>}
+              {currentDayAssigned.map((s, i) => (
+                <TouchableOpacity key={i} style={styles.assignedCard} onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.75}>
+                  <View>
+                    <Text style={styles.assignedName}>{s.name}</Text>
+                    <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
+                    <Text style={{ fontSize: 10, color: COLORS.textLight, marginTop: 2 }}>タップで時間変更</Text>
+                  </View>
+                  <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
+                    <Ionicons name="trash" size={16} color={COLORS.danger} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
               
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 20 }}>
                 <Text style={[styles.sectionTitle, { color: COLORS.primary, marginBottom: 0, borderBottomWidth: 0 }]}>出勤可能なスタッフ</Text>
                 <TouchableOpacity
                   style={styles.autoFillBtn}
@@ -819,24 +888,6 @@ export default function ShiftCreateScreen() {
                 );
               })}
 
-              <Text style={[styles.sectionTitle, { marginTop: 30, borderColor: COLORS.accent }]}>決定したシフト</Text>
-              {currentDayAssigned.length === 0 && <Text style={{ color: COLORS.textLight, fontStyle: 'italic' }}>追加されていません</Text>}
-              {currentDayAssigned.map((s, i) => (
-                <View key={i} style={styles.assignedCard}>
-                  <View>
-                    <Text style={styles.assignedName}>{s.name}</Text>
-                    <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity style={styles.editTimeBtn} onPress={() => openTimeEditor(s.name, s.start, s.end)}>
-                      <Ionicons name="time" size={16} color={COLORS.primary} /><Text style={styles.editTimeBtnText}>時間変更</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
-                      <Ionicons name="trash" size={16} color={COLORS.danger} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
               <View style={{height: 40}} />
             </ScrollView>
 
@@ -869,7 +920,7 @@ export default function ShiftCreateScreen() {
             {/* 候補ボタン（大きく、見やすく） */}
             {masterTimes.length > 0 && (
               <View style={{ marginBottom: 12 }}>
-                <Text style={styles.addTimeTitle}>候補から選ぶ</Text>
+                <Text style={styles.addTimeTitle}>候補から選ぶ（長押しで削除）</Text>
                 <View style={styles.masterTimesGrid}>
                   {masterTimes.map(t => (
                     <View key={t} style={{ position: 'relative' }}>
@@ -879,7 +930,7 @@ export default function ShiftCreateScreen() {
                         onLongPress={() => {
                           const newTimes = masterTimes.filter(x => x !== t);
                           setMasterTimes(newTimes);
-                          setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
+                          setDoc(doc(db, 'settings', 'master_data'), { workTimes: newTimes }, { merge: true });
                         }}
                         delayLongPress={500}
                       >
@@ -890,7 +941,7 @@ export default function ShiftCreateScreen() {
                         onPress={() => {
                           const newTimes = masterTimes.filter(x => x !== t);
                           setMasterTimes(newTimes);
-                          setDoc(doc(db, 'settings', 'master_data'), { times: newTimes }, { merge: true });
+                          setDoc(doc(db, 'settings', 'master_data'), { workTimes: newTimes }, { merge: true });
                         }}
                       >
                         <Ionicons name="close-circle" size={16} color="#E53935" />
@@ -1247,4 +1298,4 @@ const styles = StyleSheet.create({
   fabImg: { width: '100%', height: '100%' },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   autoFillBtnText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
-});
+})

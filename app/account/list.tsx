@@ -17,6 +17,7 @@ export default function AccountManagementScreen() {
   // 基本フィルター
   const [filterRole, setFilterRole] = useState<'all' | 'user' | 'staff'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [schoolFilterOpen, setSchoolFilterOpen] = useState(false);
   
   // 詳細絞り込み用ステート
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -216,18 +217,34 @@ export default function AccountManagementScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ⑫ 学校名クイックフィルター（4個/行） */}
-      {filterRole !== 'staff' && masterSchools.length > 0 && (
-        <View style={styles.schoolQuickFilter}>
-          {masterSchools.map(school => (
-            <TouchableOpacity
-              key={school}
-              style={[styles.schoolQuickBtn, selectedSchools.includes(school) && styles.schoolQuickBtnActive]}
-              onPress={() => toggleFilterArray(selectedSchools, school, setSelectedSchools)}
-            >
-              <Text style={[styles.schoolQuickText, selectedSchools.includes(school) && styles.schoolQuickTextActive]} numberOfLines={1}>{school}</Text>
-            </TouchableOpacity>
-          ))}
+      {/* ⑪ 学校名クイックフィルター（利用者タブ時のみ・折りたたみ可能） */}
+      {filterRole !== 'staff' && masterSchools.length > 0 && filterRole === 'user' && (
+        <View style={{ backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border }}>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 6 }}
+            onPress={() => setSchoolFilterOpen(v => !v)}
+          >
+            <Ionicons name={schoolFilterOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textLight} />
+            <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight }}>学校で絞り込む</Text>
+            {selectedSchools.length > 0 && (
+              <View style={{ backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>{selectedSchools.length}校選択中</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {schoolFilterOpen && (
+            <View style={styles.schoolQuickFilter}>
+              {masterSchools.map(school => (
+                <TouchableOpacity
+                  key={school}
+                  style={[styles.schoolQuickBtn, selectedSchools.includes(school) && styles.schoolQuickBtnActive]}
+                  onPress={() => toggleFilterArray(selectedSchools, school, setSelectedSchools)}
+                >
+                  <Text style={[styles.schoolQuickText, selectedSchools.includes(school) && styles.schoolQuickTextActive]} numberOfLines={1}>{school}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       )}
 

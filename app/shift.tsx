@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -45,22 +45,13 @@ export default function ShiftScreen() {
   const savingRef = useRef(false);
   const [activeStamp, setActiveStamp] = useState<ShiftType>('✕');
   const [stampModalVisible, setStampModalVisible] = useState(false);
-  // ⑥ シフト入力期間設定
-  const [inputPeriodModalVisible, setInputPeriodModalVisible] = useState(false);
-  const [inputPeriod, setInputPeriod] = useState<{ targetMonth: string; startDate: string; endDate: string } | null>(null);
-  const [periodTargetMonth, setPeriodTargetMonth] = useState('');
-  const [periodStartDate, setPeriodStartDate] = useState('');
-  const [periodEndDate, setPeriodEndDate] = useState('');
-  const [periodCalTarget, setPeriodCalTarget] = useState<'start' | 'end'>('start');
-  const [periodCalVisible, setPeriodCalVisible] = useState(false);
-  const [periodCalViewDate, setPeriodCalViewDate] = useState(new Date());
-  const [periodMonthCalVisible, setPeriodMonthCalVisible] = useState(false);
-  const [periodMonthCalViewDate, setPeriodMonthCalViewDate] = useState(new Date());
+
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [allRequests, setAllRequests] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
+  const [eventsData, setEventsData] = useState<Record<string, string>>({}); // ⑨ イベント
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
@@ -161,19 +152,22 @@ export default function ShiftScreen() {
         unsubscribes.push(unsubAssigned);
 
       } catch (error) {
+        // ⑨ イベントデータをロード
+        try {
+          const eventsSnap = await getDocs(collection(db, 'events'));
+          const eventsMap: Record<string, string> = {};
+          eventsSnap.forEach(d => {
+            const data = d.data();
+            if (data.title) eventsMap[d.id] = data.title;
+          });
+          setEventsData(eventsMap);
+        } catch(e) {}
+
         console.error("データ取得エラー", error);
       }
     };
 
     fetchAllData();
-
-    // 入力期間設定をロード
-    getDoc(doc(db, 'settings', 'shift_input_period')).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        setInputPeriod({ targetMonth: d.targetMonth, startDate: d.startDate, endDate: d.endDate });
-      }
-    });
 
     return () => {
       unsubscribes.forEach(unsub => unsub());
@@ -207,10 +201,6 @@ export default function ShiftScreen() {
     return weeks;
   };
 
-  const changeMonth = (offset: number) => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
-  };
-
   // 未保存変更を物理ストレージへ保存（★付与(✕)のみ。削除指示(null)は永続化しない）
   const persistPending = (changes: Record<string, ShiftType | null>) => {
     const onlyAdds: Record<string, ShiftType> = {};
@@ -222,6 +212,10 @@ export default function ShiftScreen() {
     } else {
       AsyncStorage.setItem(`unsavedShifts_${staffName}`, JSON.stringify(onlyAdds)).catch(() => {});
     }
+  };
+
+  const changeMonth = (offset: number) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
   };
 
   const handleDayPress = (dateStr: string) => {
@@ -241,7 +235,7 @@ export default function ShiftScreen() {
     // pendingChangesは「サーバー状態との差分」として記録する
     setPendingChanges((prev: Record<string, ShiftType | null>) => {
       const next = { ...prev };
-      const serverVal = serverDataRef.current[dateStr]; // サーバーにある値（なければundefined）
+      const serverVal = serverDataRef.current[dateStr];
 
       if (newValue === null && !serverVal) {
         // サーバーにも無く、消す操作 → 差分不要
@@ -250,12 +244,12 @@ export default function ShiftScreen() {
         // サーバーと同じ状態に戻った → 差分不要
         delete next[dateStr];
       } else {
-        // サーバーと異なる → 差分として記録（newValueがnullなら削除指示）
+        // サーバーと異なる → 差分として記録
         next[dateStr] = newValue;
       }
 
       pendingChangesRef.current = next;
-      // タップした瞬間に物理ストレージへ記録（付与のみ・削除指示は残さない）
+      // 付与(✕)のみ永続化（削除指示nullは残さない）
       persistPending(next);
       return next;
     });
@@ -268,7 +262,6 @@ export default function ShiftScreen() {
     }
     setSaving(true);
     savingRef.current = true;
-    // 名前は前後の空白を除去して常に一致させる（端末差・入力差対策）
     const resolvedName = (staffName || '不明なスタッフ').trim();
     // 保存対象のスナップショットを取る（保存中に変更されても固定）
     const changesToSave = { ...pendingChangesRef.current };
@@ -278,7 +271,6 @@ export default function ShiftScreen() {
         const docId = `${resolvedName}_${dateStr}`;
         const docRef = doc(db, 'shifts', docId);
         if (value === null) {
-          // 削除：存在しなくてもエラーにならない
           await deleteDoc(docRef).catch(() => {});
           delete serverDataRef.current[dateStr];
         } else {
@@ -291,12 +283,11 @@ export default function ShiftScreen() {
       const remaining: Record<string, ShiftType | null> = {};
       Object.entries(pendingChangesRef.current).forEach(([d, v]) => {
         if (!(d in changesToSave) || changesToSave[d] !== v) {
-          remaining[d] = v; // 保存中に新たに変更された分
+          remaining[d] = v;
         }
       });
       pendingChangesRef.current = remaining;
       setPendingChanges(remaining);
-
       persistPending(remaining);
 
       // 表示データをサーバー生データ＋残りの未保存変更で再構築
@@ -322,47 +313,6 @@ export default function ShiftScreen() {
     setStampModalVisible(false);
   };
 
-  // ⑥ 入力期間関連
-  const toDateStr2 = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const toMonthStr = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-
-  const openInputPeriodModal = () => {
-    const now = new Date();
-    setPeriodTargetMonth(inputPeriod?.targetMonth || toMonthStr(new Date(now.getFullYear(), now.getMonth()+1, 1)));
-    setPeriodStartDate(inputPeriod?.startDate || toDateStr2(now));
-    setPeriodEndDate(inputPeriod?.endDate || toDateStr2(new Date(now.getFullYear(), now.getMonth()+1, 0)));
-    setPeriodMonthCalViewDate(now);
-    setInputPeriodModalVisible(true);
-  };
-
-  const savePeriodSetting = async () => {
-    const data = { targetMonth: periodTargetMonth, startDate: periodStartDate, endDate: periodEndDate };
-    await setDoc(doc(db, 'settings', 'shift_input_period'), data);
-    setInputPeriod(data);
-    setInputPeriodModalVisible(false);
-    Alert.alert('保存完了', `${periodTargetMonth}のシフト入力期間を設定しました`);
-  };
-
-  const genCalDays = (viewDate: Date) => {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-    const days: (number|null)[] = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(i);
-    return days;
-  };
-
-  // 入力期間中かどうかチェック（スタッフ用：today が期間内なら通常通り入力可）
-  const isWithinInputPeriod = (() => {
-    if (!inputPeriod) return true;
-    const today = toDateStr2(new Date());
-    return today >= inputPeriod.startDate && today <= inputPeriod.endDate;
-  })();
-
   const days = generateCalendarDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
@@ -377,42 +327,22 @@ export default function ShiftScreen() {
           </TouchableOpacity>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#5D4037' }}>シフト提出</Text>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {Object.keys(pendingChanges).length > 0 && (
-            <TouchableOpacity
-              style={{ backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }}
-              onPress={saveShifts}
-              disabled={saving}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-                {saving ? '保存中...' : `保存(${Object.keys(pendingChanges).length}件)`}
-              </Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
-            <Ionicons name="grid-outline" size={18} color={COLORS.white} />
-            <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
-          </TouchableOpacity>
+        {Object.keys(pendingChanges).length > 0 && (
           <TouchableOpacity
-            style={{ backgroundColor: '#78909C', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center' }}
-            onPress={openInputPeriodModal}
+            style={{ backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginLeft: 8 }}
+            onPress={saveShifts}
+            disabled={saving}
           >
-            <Ionicons name="calendar-outline" size={16} color="#fff" />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12, marginLeft: 4 }}>入力期間</Text>
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+              {saving ? '保存中...' : `保存(${Object.keys(pendingChanges).length}件)`}
+            </Text>
           </TouchableOpacity>
-        </View>
+        )}
+        <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
+          <Ionicons name="grid-outline" size={18} color={COLORS.white} />
+          <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
+        </TouchableOpacity>
       </View>
-
-      {/* 入力期間バナー */}
-      {inputPeriod && (
-        <View style={{ backgroundColor: isWithinInputPeriod ? '#E8F5E9' : '#FFF3E0', paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: isWithinInputPeriod ? '#A5D6A7' : '#FFCC80' }}>
-          <Ionicons name="time-outline" size={16} color={isWithinInputPeriod ? '#2E7D32' : '#E65100'} style={{ marginRight: 8 }} />
-          <Text style={{ fontSize: 13, fontWeight: 'bold', color: isWithinInputPeriod ? '#2E7D32' : '#E65100', flex: 1 }}>
-            {inputPeriod.targetMonth} 分のシフト入力期間: {inputPeriod.startDate} 〜 {inputPeriod.endDate}
-            {isWithinInputPeriod ? '（入力受付中）' : '（期間外）'}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.stampBanner}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -470,6 +400,11 @@ export default function ShiftScreen() {
                       ]}>
                         <Text style={styles.stampText}>{cellStamp}</Text>
                       </View>
+                    )}
+                    {eventsData[item.dateStr] && (
+                      <Text style={{ fontSize: 7, color: '#7B1FA2', fontWeight: 'bold', textAlign: 'center', marginTop: 2 }} numberOfLines={1}>
+                        {eventsData[item.dateStr]}
+                      </Text>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -626,130 +561,6 @@ export default function ShiftScreen() {
               {activeStamp === '午後✕' && <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />}
             </TouchableOpacity>
 
-          </View>
-        </View>
-      </Modal>
-
-      {/* ⑥ 入力期間設定モーダル */}
-      <Modal visible={inputPeriodModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>シフト入力期間設定</Text>
-              <TouchableOpacity onPress={() => setInputPeriodModalVisible(false)}>
-                <Ionicons name="close" size={28} color={COLORS.textLight} />
-              </TouchableOpacity>
-            </View>
-
-            {/* 対象月 */}
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#555', marginBottom: 8 }}>対象月（入力してもらうシフトの月）</Text>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 14, marginBottom: 16, backgroundColor: '#F0F8FF' }}
-              onPress={() => setPeriodMonthCalVisible(true)}
-            >
-              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={{ flex: 1, fontSize: 20, fontWeight: 'bold', color: COLORS.primary }}>{periodTargetMonth}</Text>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-            </TouchableOpacity>
-
-            {/* 入力開始日 */}
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#555', marginBottom: 8 }}>入力開始日</Text>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 14, marginBottom: 16, backgroundColor: '#F0F8FF' }}
-              onPress={() => { setPeriodCalTarget('start'); setPeriodCalViewDate(new Date(periodStartDate)); setPeriodCalVisible(true); }}
-            >
-              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={{ flex: 1, fontSize: 18, fontWeight: 'bold', color: COLORS.primary }}>{periodStartDate}</Text>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-            </TouchableOpacity>
-
-            {/* 入力終了日 */}
-            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#555', marginBottom: 8 }}>入力終了日</Text>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 14, marginBottom: 24, backgroundColor: '#F0F8FF' }}
-              onPress={() => { setPeriodCalTarget('end'); setPeriodCalViewDate(new Date(periodEndDate)); setPeriodCalVisible(true); }}
-            >
-              <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-              <Text style={{ flex: 1, fontSize: 18, fontWeight: 'bold', color: COLORS.primary }}>{periodEndDate}</Text>
-              <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center' }}
-              onPress={savePeriodSetting}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>保存する</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 入力期間 日付カレンダー */}
-      <Modal visible={periodCalVisible} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ width: '100%', backgroundColor: '#fff', borderRadius: 16, padding: 24 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <TouchableOpacity onPress={() => setPeriodCalViewDate(new Date(periodCalViewDate.getFullYear(), periodCalViewDate.getMonth()-1, 1))}>
-                <Ionicons name="chevron-back" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{periodCalViewDate.getFullYear()}年 {periodCalViewDate.getMonth()+1}月</Text>
-              <TouchableOpacity onPress={() => setPeriodCalViewDate(new Date(periodCalViewDate.getFullYear(), periodCalViewDate.getMonth()+1, 1))}>
-                <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-              {['日','月','火','水','木','金','土'].map((w,i) => (
-                <Text key={i} style={{ width: '14.2%', textAlign: 'center', fontWeight: 'bold', color: i===0?'red':i===6?'blue':COLORS.textLight }}>{w}</Text>
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {genCalDays(periodCalViewDate).map((day, idx) => {
-                const dateStr = day ? `${periodCalViewDate.getFullYear()}-${String(periodCalViewDate.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` : '';
-                const isSelected = dateStr === (periodCalTarget === 'start' ? periodStartDate : periodEndDate);
-                return (
-                  <TouchableOpacity key={idx} style={{ width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: COLORS.border, backgroundColor: isSelected ? COLORS.primary : '#fff' }} disabled={!day}
-                    onPress={() => {
-                      if (!day) return;
-                      if (periodCalTarget === 'start') setPeriodStartDate(dateStr);
-                      else setPeriodEndDate(dateStr);
-                      setPeriodCalVisible(false);
-                    }}
-                  >
-                    {day && <Text style={{ fontWeight: 'bold', color: isSelected ? '#fff' : COLORS.text }}>{day}</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* 対象月選択カレンダー（年月のみ） */}
-      <Modal visible={periodMonthCalVisible} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ width: '100%', backgroundColor: '#fff', borderRadius: 16, padding: 24 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <TouchableOpacity onPress={() => setPeriodMonthCalViewDate(new Date(periodMonthCalViewDate.getFullYear()-1, periodMonthCalViewDate.getMonth(), 1))}>
-                <Ionicons name="chevron-back" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 18, fontWeight: 'bold' }}>{periodMonthCalViewDate.getFullYear()}年</Text>
-              <TouchableOpacity onPress={() => setPeriodMonthCalViewDate(new Date(periodMonthCalViewDate.getFullYear()+1, periodMonthCalViewDate.getMonth(), 1))}>
-                <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
-              {Array.from({length: 12}, (_,i) => i+1).map(m => {
-                const mStr = `${periodMonthCalViewDate.getFullYear()}-${String(m).padStart(2,'0')}`;
-                const isSelected = mStr === periodTargetMonth;
-                return (
-                  <TouchableOpacity key={m} style={{ width: '22%', paddingVertical: 14, borderRadius: 10, backgroundColor: isSelected ? COLORS.primary : '#F5F5F5', alignItems: 'center' }}
-                    onPress={() => { setPeriodTargetMonth(mStr); setPeriodMonthCalVisible(false); }}
-                  >
-                    <Text style={{ fontWeight: 'bold', color: isSelected ? '#fff' : COLORS.text }}>{m}月</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </View>
         </View>
       </Modal>

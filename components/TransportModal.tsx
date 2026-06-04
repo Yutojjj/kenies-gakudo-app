@@ -366,6 +366,7 @@ export default function TransportModal({
                                       </Text>
                                     ) : null;
                                   })}
+                                  <Text style={{ fontSize: 9, color: '#aaa', marginTop: 2 }}>＋追加可</Text>
                                 </View>
                               ) : (
                                 <Text style={[styles.slotEmptyText, selectedBlock && styles.slotSelectableText]}>

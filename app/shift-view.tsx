@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   cellStaffNameMe: { color: '#E65100' },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   cellStaffTimeMe: { color: '#E65100', fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 28, left: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fab: { position: 'absolute', bottom: 28, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.secondary },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
 });
