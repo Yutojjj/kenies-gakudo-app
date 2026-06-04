@@ -32,11 +32,13 @@ export default function ShiftCreateScreen() {
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'dow'|'staff'>('dow');
+  const [settingsTab, setSettingsTab] = useState<'dow'|'staff'|'order'>('dow');
+  const [pdfOrder, setPdfOrder] = useState<string[]>([]);
   // 自動入力設定（Firestoreに保存）
   const [autoFillSettings, setAutoFillSettings] = useState<{
     staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
     dayMaxCount: { '月':number; '火':number; '水':number; '木':number; '金':number };
+    pdfOrder?: string[];
   }>({
     staffSettings: [],
     dayMaxCount: { '月':3, '火':3, '水':3, '木':3, '金':3 },
@@ -118,9 +120,12 @@ export default function ShiftCreateScreen() {
               enabled: true,
             };
           });
+          const savedPdfOrder = saved.pdfOrder || [];
+          if (savedPdfOrder.length > 0) setPdfOrder(savedPdfOrder);
           setAutoFillSettings({
             staffSettings: merged,
             dayMaxCount: saved.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
+            pdfOrder: savedPdfOrder,
           });
         });
       } catch (e) {
@@ -341,7 +346,11 @@ export default function ShiftCreateScreen() {
         </tr>`;
 
         // スタッフ行
-        const staffHtml = allStaff.map(staff => {
+        const orderedStaff: typeof allStaff = autoFillSettings.pdfOrder && autoFillSettings.pdfOrder.length > 0
+          ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
+             ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
+          : allStaff;
+        const staffHtml = orderedStaff.map(staff => {
           const cells = wk.map(cell => {
             if (!cell) return `<td class="c-shift c-shift-empty"></td>`;
             const isSun = cell.dow===0, isSat = cell.dow===6;
@@ -767,7 +776,10 @@ export default function ShiftCreateScreen() {
                       })}
                     </View>
 
-                    {allStaff.map(staff => (
+                    {(autoFillSettings.pdfOrder && autoFillSettings.pdfOrder.length > 0
+              ? [...autoFillSettings.pdfOrder.map((n: string) => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
+                 ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
+              : allStaff).map(staff => (
                       <View key={staff.id} style={styles.ssRow}>
                         <View style={[styles.ssNameCell, { width: '16%' }]}>
                           <Text style={styles.ssNameText} numberOfLines={1} adjustsFontSizeToFit>{staff.name}</Text>
@@ -1046,6 +1058,15 @@ export default function ShiftCreateScreen() {
               >
                 <Text style={{ fontWeight:'bold', color: settingsTab==='staff' ? '#5B9BD5' : '#888' }}>スタッフ別設定</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex:1, paddingVertical:12, alignItems:'center', borderBottomWidth:2, borderBottomColor: settingsTab==='order' ? '#5B9BD5' : 'transparent' }}
+                onPress={() => {
+                  if (pdfOrder.length === 0) setPdfOrder(allStaff.map(s => s.name));
+                  setSettingsTab('order');
+                }}
+              >
+                <Text style={{ fontWeight:'bold', color: settingsTab==='order' ? '#5B9BD5' : '#888' }}>表示順設定</Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView style={{ padding:16 }}>
@@ -1150,6 +1171,45 @@ export default function ShiftCreateScreen() {
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>設定を保存する</Text>
+              </TouchableOpacity>
+              </>}
+
+              {settingsTab === 'order' && <>
+              <Text style={styles.settingSectionTitle}>PDF・シフト表 表示順</Text>
+              <Text style={{ fontSize:11, color:'#888', marginBottom:12 }}>↑↓でPDF出力時のスタッフ行の並び順を変更</Text>
+              {pdfOrder.map((name, idx) => (
+                <View key={name} style={{ flexDirection:'row', alignItems:'center', backgroundColor:'#F8F8F8', borderRadius:10, padding:12, marginBottom:6, borderWidth:1, borderColor:'#EEE' }}>
+                  <View style={{ flexDirection:'column', gap:2, marginRight:10 }}>
+                    <TouchableOpacity
+                      style={[styles.settingArrowBtn, idx === 0 && { opacity:0.3 }]}
+                      disabled={idx === 0}
+                      onPress={() => {
+                        const arr = [...pdfOrder];
+                        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+                        setPdfOrder(arr);
+                      }}
+                    ><Ionicons name="chevron-up" size={14} color="#555" /></TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.settingArrowBtn, idx === pdfOrder.length-1 && { opacity:0.3 }]}
+                      disabled={idx === pdfOrder.length-1}
+                      onPress={() => {
+                        const arr = [...pdfOrder];
+                        [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+                        setPdfOrder(arr);
+                      }}
+                    ><Ionicons name="chevron-down" size={14} color="#555" /></TouchableOpacity>
+                  </View>
+                  <Text style={{ fontSize:14, fontWeight:'bold', color:'#333', flex:1 }}>{idx+1}. {name}</Text>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8 }}
+                onPress={() => {
+                  saveAutoFillSettings({ ...autoFillSettings, pdfOrder });
+                  Alert.alert('保存完了', '表示順を保存しました');
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>表示順を保存する</Text>
               </TouchableOpacity>
               </>}
               <View style={{ height:40 }} />
