@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
-type ShiftType = '✕' | '午前✕' | '午後✕';
+type ShiftType = '✕' | '午前✕' | '午後✕' | '○';
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
@@ -69,7 +69,7 @@ export default function ShiftScreen() {
           const parsed = JSON.parse(localUnsaved);
           const onlyAdds: Record<string, ShiftType | null> = {};
           Object.entries(parsed).forEach(([d, v]) => {
-            if (v !== null && v !== undefined) onlyAdds[d] = v as ShiftType;
+            if (v !== null && v !== undefined && v !== '○') onlyAdds[d] = v as ShiftType;
           });
           pendingChangesRef.current = onlyAdds;
           setPendingChanges(onlyAdds);
@@ -89,7 +89,7 @@ export default function ShiftScreen() {
           const data: Record<string, ShiftType> = {};
           snapshot.forEach((docSnap) => {
             const item = docSnap.data();
-            if (item.dateStr && item.type) data[item.dateStr] = item.type;
+            if (item.dateStr && item.type && item.type !== '○') data[item.dateStr] = item.type;
           });
           serverDataRef.current = data;
 
@@ -205,7 +205,7 @@ export default function ShiftScreen() {
   const persistPending = (changes: Record<string, ShiftType | null>) => {
     const onlyAdds: Record<string, ShiftType> = {};
     Object.entries(changes).forEach(([d, v]) => {
-      if (v !== null && v !== undefined) onlyAdds[d] = v as ShiftType;
+      if (v !== null && v !== undefined && v !== '○') onlyAdds[d] = v as ShiftType;
     });
     if (Object.keys(onlyAdds).length === 0) {
       AsyncStorage.removeItem(`unsavedShifts_${staffName}`).catch(() => {});
@@ -220,11 +220,11 @@ export default function ShiftScreen() {
 
   const handleDayPress = (dateStr: string) => {
     const currentStamp = shiftDataRef.current[dateStr];
-    const newValue = currentStamp === activeStamp ? null : activeStamp;
+    const newValue = currentStamp === activeStamp ? '○' as ShiftType : activeStamp as ShiftType;
 
     // 表示用データを即時更新（楽観的更新）
     const newShiftData = { ...shiftDataRef.current };
-    if (newValue === null) {
+    if (newValue === null || newValue === '○') {
       delete newShiftData[dateStr];
     } else {
       newShiftData[dateStr] = newValue as ShiftType;
@@ -237,14 +237,13 @@ export default function ShiftScreen() {
       const next = { ...prev };
       const serverVal = serverDataRef.current[dateStr];
 
-      if (newValue === null && !serverVal) {
-        // サーバーにも無く、消す操作 → 差分不要
+      const effNew = (newValue === '○') ? null : newValue;
+      const effServer = (serverVal === '○') ? null : serverVal;
+      if (effNew === null && !effServer) {
         delete next[dateStr];
-      } else if (newValue === serverVal) {
-        // サーバーと同じ状態に戻った → 差分不要
+      } else if (effNew === effServer) {
         delete next[dateStr];
       } else {
-        // サーバーと異なる → 差分として記録
         next[dateStr] = newValue;
       }
 
@@ -271,8 +270,8 @@ export default function ShiftScreen() {
         const docId = `${resolvedName}_${dateStr}`;
         const docRef = doc(db, 'shifts', docId);
         if (value === null) {
-          await deleteDoc(docRef).catch(() => {});
-          delete serverDataRef.current[dateStr];
+          await setDoc(docRef, { staffName: resolvedName, dateStr, type: '○', updatedAt: new Date() }, { merge: true });
+          serverDataRef.current[dateStr] = '○' as ShiftType;
         } else {
           await setDoc(docRef, { staffName: resolvedName, dateStr, type: value, updatedAt: new Date() }, { merge: true });
           serverDataRef.current[dateStr] = value as ShiftType;
@@ -293,7 +292,7 @@ export default function ShiftScreen() {
       // 表示データをサーバー生データ＋残りの未保存変更で再構築
       const rebuilt = { ...serverDataRef.current };
       Object.entries(remaining).forEach(([d, v]) => {
-        if (v === null) delete rebuilt[d];
+        if (v === null || v === '○') delete rebuilt[d];
         else rebuilt[d] = v as ShiftType;
       });
       shiftDataRef.current = rebuilt;
@@ -392,6 +391,9 @@ export default function ShiftScreen() {
                   <Text style={[styles.calDayText, isWeekend && { color: '#999' }]}>{item.day}</Text>
                   
                   <View style={styles.cellContent}>
+                    {!cellStamp && !isWeekend && !publicHolidays[item.dateStr] && item.dateStr && (
+                      <Text style={{ fontSize: 9, color: '#A5D6A7', fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>○</Text>
+                    )}
                     {cellStamp && (
                       <View style={[
                         styles.stampBadge, 
