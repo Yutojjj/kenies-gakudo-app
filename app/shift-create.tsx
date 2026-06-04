@@ -1121,7 +1121,6 @@ export default function ShiftCreateScreen() {
                           const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, start:v} : x);
                           setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
                         }}
-                        onBlur={() => saveAutoFillSettings(autoFillSettings)}
                         placeholder="14:00"
                         placeholderTextColor="#bbb"
                         keyboardType="numbers-and-punctuation"
@@ -1134,7 +1133,6 @@ export default function ShiftCreateScreen() {
                           const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, end:v} : x);
                           setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
                         }}
-                        onBlur={() => saveAutoFillSettings(autoFillSettings)}
                         placeholder="18:30"
                         placeholderTextColor="#bbb"
                         keyboardType="numbers-and-punctuation"
@@ -1143,6 +1141,16 @@ export default function ShiftCreateScreen() {
                   </View>
                 </View>
               ))}
+              {/* 保存ボタン */}
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8, marginBottom: 4 }}
+                onPress={() => {
+                  saveAutoFillSettings(autoFillSettings);
+                  Alert.alert('保存完了', 'スタッフ設定を保存しました');
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>設定を保存する</Text>
+              </TouchableOpacity>
               </>}
               <View style={{ height:40 }} />
             </ScrollView>
