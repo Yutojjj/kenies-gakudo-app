@@ -70,12 +70,18 @@ export default function ShiftScreen() {
 
     const fetchAllData = async () => {
       try {
-        // ★ 絶対に消えないための処理1：通信開始前に、スマホ本体から未保存データを「確実に読み込み終わる」まで待機する
+        // 未保存の「付与(✕)」のみ復元する。
+        // ★削除指示(null)は復元しない★ — 過去に取り残されたnullが後日の保存で
+        //   保存済みの×を巻き添え削除する事故を構造的に防ぐため。
         const localUnsaved = await AsyncStorage.getItem(`unsavedShifts_${staffName}`);
         if (localUnsaved) {
           const parsed = JSON.parse(localUnsaved);
-          pendingChangesRef.current = parsed;
-          setPendingChanges(parsed);
+          const onlyAdds: Record<string, ShiftType | null> = {};
+          Object.entries(parsed).forEach(([d, v]) => {
+            if (v !== null && v !== undefined) onlyAdds[d] = v as ShiftType;
+          });
+          pendingChangesRef.current = onlyAdds;
+          setPendingChanges(onlyAdds);
         }
 
         fetch('https://holidays-jp.github.io/api/v1/date.json')
@@ -96,10 +102,33 @@ export default function ShiftScreen() {
           });
           serverDataRef.current = data;
 
+          // ★ 重要：保持している未保存差分(pendingChanges)を、最新サーバー状態と照合して
+          //   「もう意味のない差分」を破棄する。これにより、過去に取り残された古い削除指示(null)が
+          //   時間差で発火して保存済みの×を消す事故を防ぐ。
+          const cleaned: Record<string, ShiftType | null> = {};
+          let changed = false;
+          Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
+            const serverVal = data[dateStr];
+            if (val === null) {
+              // 「消す」差分：サーバーに値が無ければ、消す対象がもう無いので破棄
+              if (serverVal === undefined) { changed = true; return; }
+              cleaned[dateStr] = null;
+            } else {
+              // 「付ける」差分：サーバーが既に同じ値なら破棄
+              if (serverVal === val) { changed = true; return; }
+              cleaned[dateStr] = val;
+            }
+          });
+          if (changed) {
+            pendingChangesRef.current = cleaned;
+            setPendingChanges(cleaned);
+            persistPending(cleaned);
+          }
+
           // 保存処理の最中はサーバーからの中間状態で上書きしない（保存完了後に再計算される）
           if (savingRef.current) return;
 
-          // サーバー生データに、未保存の変更(pendingChanges)を重ねて表示用データを作る
+          // サーバー生データに、有効な未保存変更を重ねて表示用データを作る
           const merged = { ...data };
           Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
             if (val === null) delete merged[dateStr];
@@ -182,6 +211,19 @@ export default function ShiftScreen() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
   };
 
+  // 未保存変更を物理ストレージへ保存（★付与(✕)のみ。削除指示(null)は永続化しない）
+  const persistPending = (changes: Record<string, ShiftType | null>) => {
+    const onlyAdds: Record<string, ShiftType> = {};
+    Object.entries(changes).forEach(([d, v]) => {
+      if (v !== null && v !== undefined) onlyAdds[d] = v as ShiftType;
+    });
+    if (Object.keys(onlyAdds).length === 0) {
+      AsyncStorage.removeItem(`unsavedShifts_${staffName}`).catch(() => {});
+    } else {
+      AsyncStorage.setItem(`unsavedShifts_${staffName}`, JSON.stringify(onlyAdds)).catch(() => {});
+    }
+  };
+
   const handleDayPress = (dateStr: string) => {
     const currentStamp = shiftDataRef.current[dateStr];
     const newValue = currentStamp === activeStamp ? null : activeStamp;
@@ -213,12 +255,8 @@ export default function ShiftScreen() {
       }
 
       pendingChangesRef.current = next;
-      // タップした瞬間に物理ストレージへ記録（アプリが落ちても消えない）
-      if (Object.keys(next).length === 0) {
-        AsyncStorage.removeItem(`unsavedShifts_${staffName}`).catch(() => {});
-      } else {
-        AsyncStorage.setItem(`unsavedShifts_${staffName}`, JSON.stringify(next)).catch(() => {});
-      }
+      // タップした瞬間に物理ストレージへ記録（付与のみ・削除指示は残さない）
+      persistPending(next);
       return next;
     });
   };
@@ -259,11 +297,7 @@ export default function ShiftScreen() {
       pendingChangesRef.current = remaining;
       setPendingChanges(remaining);
 
-      if (Object.keys(remaining).length === 0) {
-        await AsyncStorage.removeItem(`unsavedShifts_${resolvedName}`);
-      } else {
-        await AsyncStorage.setItem(`unsavedShifts_${resolvedName}`, JSON.stringify(remaining)).catch(() => {});
-      }
+      persistPending(remaining);
 
       // 表示データをサーバー生データ＋残りの未保存変更で再構築
       const rebuilt = { ...serverDataRef.current };
