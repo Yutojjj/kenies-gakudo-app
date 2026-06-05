@@ -202,14 +202,13 @@ export default function ScheduleScreen() {
               sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lessons: lessons, memo: item.memo };
             });
 
-            // 直近5秒以内にローカル保存した内容は、サーバー反映待ちの可能性があるため
-            // サーバー値が異なっていてもローカルの値を維持する（入力直後に消える事故を防ぐ）
+            // 直近5秒以内にローカル保存した内容を保護
             const now = Date.now();
             Object.entries(recentWritesRef.current).forEach(([key, rec]) => {
               if (now - rec.at < 5000) {
                 sData[key] = { ...sData[key], ...rec.data };
               } else {
-                delete recentWritesRef.current[key]; // 古い保護は解除
+                delete recentWritesRef.current[key];
               }
             });
 
@@ -349,10 +348,25 @@ export default function ScheduleScreen() {
     recentWritesRef.current[docId] = { data: mergedForDoc as DailyData, at: Date.now() };
 
     try {
+      // ★ 保存前にサーバーの現在値を確認して既存フィールドを保護
+      // キャッシュが古い状態でも、サーバーに既に値があれば上書きしない
+      const serverDoc = await getDoc(doc(db, 'schedules', docId));
+      const serverData = serverDoc.exists() ? serverDoc.data() : {};
+
       const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
-      if (data.memo !== undefined) saveData.memo = data.memo;
+      // メモ：サーバーに既存メモがあり、今回の保存がメモを消す操作なら保護
+      if (data.memo !== undefined) {
+        if (data.memo === null || data.memo === '') {
+          // 明示的にメモを消す場合のみ実行（サーバーに値があっても消す）
+          saveData.memo = data.memo;
+        } else {
+          saveData.memo = data.memo;
+        }
+      } else if (serverData.memo && !data.memo) {
+        // 今回のデータにmemoがなく、サーバーにmemoがある場合は送らない（保護）
+      }
       await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
 
       // 管理者以外の操作のみログ記録

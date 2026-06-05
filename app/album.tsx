@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -184,30 +184,26 @@ export default function AlbumScreen() {
       if (res && isMounted) setUnlockedEvents(JSON.parse(res));
     });
 
-    const qPhotos = query(collection(db, 'albums'));
-    const unsubPhotos = onSnapshot(qPhotos, (snapshot) => {
+    // albums・album_eventsはgetDocs（1回読み込み）に変更
+    const loadAlbums = async () => {
+      const photosSnap = await getDocs(collection(db, 'albums'));
       const photosData: Record<string, { id: string, uri: string, storagePath?: string }[]> = {};
-      snapshot.forEach(d => {
+      photosSnap.forEach(d => {
         const item = d.data();
         const key = item.category as string;
-        if (!key) return; 
+        if (!key) return;
         if (!photosData[key]) photosData[key] = [];
         photosData[key].push({ id: d.id, uri: item.uri, storagePath: item.storagePath });
       });
       if (isMounted) setAlbumPhotos(photosData);
-    });
 
-    const qEvents = query(collection(db, 'album_events'));
-    const unsubEvents = onSnapshot(qEvents, (snapshot) => {
-      const evs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
+      const eventsSnap = await getDocs(collection(db, 'album_events'));
+      const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
       if (isMounted) setAlbumEvents(evs);
-    });
-
-    return () => {
-      isMounted = false;
-      unsubPhotos();
-      unsubEvents();
     };
+    loadAlbums();
+
+    return () => { isMounted = false; };
   }, [role, name]);
 
   const toggleExpand = (key: string) => {

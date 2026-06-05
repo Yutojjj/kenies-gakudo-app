@@ -133,15 +133,27 @@ export default function ShiftCreateScreen() {
       }
 
       // ▼ リアルタイムリスナーをまとめて設定 ▼
-      const reqUnsub = onSnapshot(collection(db, 'shifts'), (s) => {
-        const reqData: Record<string, string> = {};
-        s.forEach(d => {
+      // shifts はgetDocs（1回読み込み）に変更
+      const shiftsSnap = await getDocs(collection(db, 'shifts'));
+      const reqData: Record<string, string> = {};
+      shiftsSnap.forEach(d => {
+        const data = d.data();
+        if (!data.staffName || !data.dateStr || !data.type) return;
+        reqData[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
+      });
+      setRequests(reqData);
+
+      // シフト画面を再読み込みするボタン用の関数を定義
+      const reloadShifts = async () => {
+        const snap = await getDocs(collection(db, 'shifts'));
+        const rd: Record<string, string> = {};
+        snap.forEach(d => {
           const data = d.data();
           if (!data.staffName || !data.dateStr || !data.type) return;
-          reqData[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
+          rd[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
         });
-        setRequests(reqData);
-      }, (e) => console.warn('shifts リスナーエラー', e));
+        setRequests(rd);
+      };
 
       const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
         const asData: Record<string, AssignedStaff[]> = {};
@@ -161,7 +173,7 @@ export default function ShiftCreateScreen() {
 
       // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
 
-      return () => { reqUnsub(); asUnsub(); evUnsub(); };
+      return () => { asUnsub(); evUnsub(); };
     };
     fetchData();
   }, []);

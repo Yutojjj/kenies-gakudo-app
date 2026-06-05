@@ -83,66 +83,58 @@ export default function ShiftScreen() {
         const resolvedName = staffName;
         const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', resolvedName));
         
-        // ★ 復元が完了した後にデータベースの監視をスタートするため、上書き事故が起きない
-        const unsubMy = onSnapshot(qMyShifts, { includeMetadataChanges: false }, (snapshot) => {
-          // サーバーの最新状態を生データとして保持
-          const data: Record<string, ShiftType> = {};
-          snapshot.forEach((docSnap) => {
-            const item = docSnap.data();
-            if (item.dateStr && item.type && item.type !== '○') data[item.dateStr] = item.type;
-          });
-          serverDataRef.current = data;
-
-          // ★ 重要：保持している未保存差分(pendingChanges)を、最新サーバー状態と照合して
-          //   「もう意味のない差分」を破棄する。これにより、過去に取り残された古い削除指示(null)が
-          //   時間差で発火して保存済みの×を消す事故を防ぐ。
-          const cleaned: Record<string, ShiftType | null> = {};
-          let changed = false;
-          Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
-            const serverVal = data[dateStr];
-            if (val === null) {
-              // 「消す」差分：サーバーに値が無ければ、消す対象がもう無いので破棄
-              if (serverVal === undefined) { changed = true; return; }
-              cleaned[dateStr] = null;
-            } else {
-              // 「付ける」差分：サーバーが既に同じ値なら破棄
-              if (serverVal === val) { changed = true; return; }
-              cleaned[dateStr] = val;
-            }
-          });
-          if (changed) {
-            pendingChangesRef.current = cleaned;
-            setPendingChanges(cleaned);
-            persistPending(cleaned);
-          }
-
-          // 保存処理の最中はサーバーからの中間状態で上書きしない（保存完了後に再計算される）
-          if (savingRef.current) return;
-
-          // サーバー生データに、有効な未保存変更を重ねて表示用データを作る
-          const merged = { ...data };
-          Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
-            if (val === null) delete merged[dateStr];
-            else merged[dateStr] = val as ShiftType;
-          });
-          shiftDataRef.current = merged;
-          setShiftData(merged);
+        // ★ shiftsはgetDocs（1回読み込み）に変更
+        //   onSnapshotのリアルタイム同期がキャッシュの古い状態で上書きするバグを防ぐ
+        const snapshot = await getDocs(qMyShifts);
+        const data: Record<string, ShiftType> = {};
+        snapshot.forEach((docSnap) => {
+          const item = docSnap.data();
+          if (item.dateStr && item.type && item.type !== '○') data[item.dateStr] = item.type;
         });
-        unsubscribes.push(unsubMy);
+        serverDataRef.current = data;
+
+        // 復元したpendingChangesをサーバー状態と照合して矛盾を除去
+        const cleaned: Record<string, ShiftType | null> = {};
+        let changed = false;
+        Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
+          const serverVal = data[dateStr];
+          if (val === null) {
+            if (serverVal === undefined) { changed = true; return; }
+            cleaned[dateStr] = null;
+          } else {
+            if (serverVal === val) { changed = true; return; }
+            cleaned[dateStr] = val;
+          }
+        });
+        if (changed) {
+          pendingChangesRef.current = cleaned;
+          setPendingChanges(cleaned);
+          persistPending(cleaned);
+        }
+
+        // サーバー生データに未保存変更を重ねて表示
+        const merged = { ...data };
+        Object.entries(pendingChangesRef.current).forEach(([dateStr, val]) => {
+          if (val === null) delete merged[dateStr];
+          else merged[dateStr] = val as ShiftType;
+        });
+        shiftDataRef.current = merged;
+        setShiftData(merged);
 
         const qStaff = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(qStaff);
         setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
 
-        const unsubAllReq = onSnapshot(collection(db, 'shifts'), (s) => {
-          const reqData: Record<string, string> = {};
-          s.forEach(d => {
-            const data = d.data();
-            reqData[`${data.staffName}_${data.dateStr}`] = data.type;
-          });
-          setAllRequests(reqData);
+        // shiftsの全件読み込み（onSnapshot→getDocs）
+        const allShiftsSnap = await getDocs(collection(db, 'shifts'));
+        const reqData: Record<string, string> = {};
+        allShiftsSnap.forEach(d => {
+          const data = d.data();
+          if (data.staffName && data.dateStr && data.type) {
+            reqData[`${(data.staffName||'').trim()}_${data.dateStr}`] = data.type;
+          }
         });
-        unsubscribes.push(unsubAllReq);
+        setAllRequests(reqData);
 
         const unsubAssigned = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
           const asData: Record<string, AssignedStaff[]> = {};

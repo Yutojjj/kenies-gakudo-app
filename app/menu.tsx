@@ -261,8 +261,8 @@ export default function MenuScreen() {
     const today = new Date();
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
-    // scheduleOverridesからメモを取得
-    const unsubMemos = onSnapshot(collection(db, 'schedules'), snap => {
+    // scheduleOverridesからメモを取得（getDocs・1回読み込み）
+    getDocs(collection(db, 'schedules')).then(snap => {
       const memos: {kidName: string; memo: string}[] = [];
       snap.forEach(d => {
         const data = d.data();
@@ -279,7 +279,7 @@ export default function MenuScreen() {
       snap => setAdminNotices(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))
     );
 
-    return () => { unsubMemos(); unsubNotices(); };
+    return () => { unsubNotices(); };
   }, []);
 
   // ⑩ 今日〜6日後の週間メモをロード
@@ -291,7 +291,8 @@ export default function MenuScreen() {
       d.setDate(today.getDate() + i);
       dateStrs.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     }
-    const unsub = onSnapshot(collection(db, 'schedules'), snap => {
+    // 週間メモもgetDocs（1回読み込み）に変更
+    getDocs(collection(db, 'schedules')).then(snap => {
       const byDate: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
       dateStrs.forEach(ds => { byDate[ds] = []; });
       snap.forEach(d => {
@@ -302,7 +303,6 @@ export default function MenuScreen() {
           byDate[matched].push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo, isAdmin: false });
         }
       });
-      // 管理者メモ（admin_notices）も合わせて取得済みのadminNoticesを使う
       setWeekMemos(byDate);
     });
     // 管理者お知らせも週間対応
@@ -319,7 +319,7 @@ export default function MenuScreen() {
         return next;
       });
     });
-    return () => { unsub(); unsubNoticesWeek(); };
+    return () => { unsubNoticesWeek(); };
   }, []);
 
   useEffect(() => {
@@ -1068,30 +1068,6 @@ export default function MenuScreen() {
                   {(() => {
                     const y = scheduleNoticeCalViewDate.getFullYear();
                     const m = scheduleNoticeCalViewDate.getMonth();
-                    const firstDay = new Date(y, m, 1).getDay();
-                    const daysInMonth = new Date(y, m+1, 0).getDate();
-                    const today = new Date();
-                    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-                    const cells: (number|null)[] = [];
-                    for (let i=0; i<firstDay; i++) cells.push(null);
-                    for (let i=1; i<=daysInMonth; i++) cells.push(i);
-                    return cells.map((day, idx) => {
-                      const ds = day ? `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` : '';
-                      const isPast = ds && ds < todayStr;
-                      const isSelected = ds === scheduleNoticeCalDate;
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          style={{ width:'14.2%', aspectRatio:1, justifyContent:'center', alignItems:'center', borderRadius:8,
-                            backgroundColor: isSelected ? '#7CB342' : '#fff',
-                            opacity: isPast ? 0.3 : 1 }}
-                          disabled={!day || !!isPast}
-                          onPress={() => { setScheduleNoticeCalDate(ds); setScheduleNoticeStep('input'); }}
-                        >
-                          {day && <Text style={{ fontWeight:'bold', fontSize:14, color: isSelected ? '#fff' : idx%7===0 ? '#E53935' : idx%7===6 ? '#1565C0' : '#333' }}>{day}</Text>}
-                        </TouchableOpacity>
-                      );
-                    });
                   })()}
                 </View>
               </View>
