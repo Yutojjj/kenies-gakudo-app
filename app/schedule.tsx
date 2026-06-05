@@ -37,7 +37,7 @@ type ChildInfo = {
   days?: Record<string, boolean>; 
 };
 type LessonTemplate = { id: string; name: string; time: string; };
-type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?: string; };
+type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?: string; }; // memoはschedule_memosコレクションで管理
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -95,6 +95,8 @@ export default function ScheduleScreen() {
   const [returnToEdit, setReturnToEdit] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<{ name: string; accountId?: string; role: string } | null>(null);
   const [editingMemo, setEditingMemo] = useState('');
+  const [memoData, setMemoData] = useState<Record<string, string>>({}); // key: childId_dateStr
+  const memoDataRef = React.useRef<Record<string, string>>({});
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -356,16 +358,22 @@ export default function ScheduleScreen() {
       const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };
       if (data.pickupTime !== undefined) saveData.pickupTime = data.pickupTime;
       if (data.lessons !== undefined) saveData.lessons = data.lessons;
-      // メモ：サーバーに既存メモがあり、今回の保存がメモを消す操作なら保護
+      // memoはschedule_memosコレクションに別途保存
       if (data.memo !== undefined) {
-        if (data.memo === null || data.memo === '') {
-          // 明示的にメモを消す場合のみ実行（サーバーに値があっても消す）
-          saveData.memo = data.memo;
-        } else {
-          saveData.memo = data.memo;
-        }
-      } else if (serverData.memo && !data.memo) {
-        // 今回のデータにmemoがなく、サーバーにmemoがある場合は送らない（保護）
+        const memoDocId = `${child.id}_${dateStr}`;
+        const memoRef = doc(db, 'schedule_memos', memoDocId);
+        await setDoc(memoRef, {
+          parentId: parentDocId,
+          childId: child.id,
+          childName: child.name,
+          dateStr,
+          memo: data.memo || '',
+          updatedAt: new Date(),
+        }, { merge: true });
+        // ローカルのmemoDataも更新
+        const newMemos = { ...memoDataRef.current, [memoDocId]: data.memo || '' };
+        memoDataRef.current = newMemos;
+        setMemoData(newMemos);
       }
       await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
 
@@ -508,7 +516,7 @@ export default function ScheduleScreen() {
       ...regularLessons.filter(r => !overrideLessons.find((o: any) => o.name === r.name)),
     ];
 
-    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: allLessons, memo: userOverride.memo };
+    return { pickupTime: finalPickup === null ? undefined : finalPickup, lessons: allLessons, memo: memoDataRef.current[key] || userOverride.memo };
   };
 
   const changeMonth = (offset: number) => {
@@ -531,7 +539,7 @@ export default function ScheduleScreen() {
     } else {
       setSelectedDateStr(dateStr);
       const key = getScheduleKey(dateStr);
-      setEditingMemo(scheduleDataRef.current[key]?.memo || '');
+      setEditingMemo(memoDataRef.current[key] || scheduleDataRef.current[key]?.memo || '');
       if (eventsData[dateStr]) {
           setEventModalVisible(true);
       } else {
@@ -668,9 +676,9 @@ export default function ScheduleScreen() {
                     </View>
                   )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
-                  {cellData.memo && (
+                  {(cellData.memo || memoData[getScheduleKey(item.dateStr)]) && (
                     <View style={styles.memoBadge}>
-                      <Text style={styles.memoIndicatorText} numberOfLines={2}>📝 {cellData.memo}</Text>
+                      <Text style={styles.memoIndicatorText} numberOfLines={2}>📝 {cellData.memo || memoData[getScheduleKey(item.dateStr)]}</Text>
                     </View>
                   )}
                   

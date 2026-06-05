@@ -52,13 +52,14 @@ const FIXED_SCHOOL_ORDER = [
   '福春小'
 ];
 
-const getGradeValue = (grade: string) => {
+const getGradeValue = (grade: string | undefined | null) => {
+  if (!grade) return 99;
   const match = grade.match(/\d/);
   return match ? parseInt(match[0], 10) : 99;
 };
 
-const sortKidsByGrade = (kidsArray: Kid[]) => {
-  return kidsArray.sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade));
+const sortKidsByGrade = (kidsArray: any[]) => {
+  return [...kidsArray].sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade));
 };
 
 export default function AttendanceScreen() {
