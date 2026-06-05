@@ -1,7 +1,6 @@
 import { getApps, initializeApp } from "firebase/app";
-import { Firestore, getFirestore, initializeFirestore, memoryLocalCache } from "firebase/firestore";
+import { Firestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { Platform } from "react-native";
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -12,32 +11,10 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-// ▼ 原因特定のため、.envが正しく読み込めているか確認するログを追加 ▼
-console.log("🔥 Project ID:", process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID);
-
-// Hot Reload 時の二重初期化を防ぐ
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// initializeFirestore は同じアプリで2回呼ぶとエラーになるため try/catch で吸収する
-let db: Firestore;
-try {
-  if (Platform.OS === "web") {
-    // Web: メモリキャッシュ（永続キャッシュは古いデータをサーバーに書き戻す事故を防ぐため使用しない）
-    db = initializeFirestore(app, {
-      localCache: memoryLocalCache(),
-    });
-  } else {
-    // iOS/Android: React Native は WebSocket が不安定なため
-    // experimentalForceLongPolling が必須。persistentLocalCache との併用は不可。
-    db = initializeFirestore(app, {
-      localCache: memoryLocalCache(),
-      experimentalForceLongPolling: true,
-    });
-  }
-} catch {
-  // すでに初期化済みの場合は既存インスタンスを取得
-  db = getFirestore(app);
-}
+// キャッシュなし・シンプルなFirestore（ローカルキャッシュによる意図しない書き戻しを防ぐ）
+const db: Firestore = getFirestore(app);
 
 const storage = getStorage(app);
 
