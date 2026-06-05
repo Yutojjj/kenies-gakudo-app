@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from "firebase/app";
-import { Firestore, getFirestore } from "firebase/firestore";
+import { Firestore, getFirestore, initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { Platform } from "react-native";
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -13,8 +14,21 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// キャッシュなし・シンプルなFirestore（ローカルキャッシュによる意図しない書き戻しを防ぐ）
-const db: Firestore = getFirestore(app);
+let db: Firestore;
+try {
+  if (Platform.OS === "web") {
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+    });
+  } else {
+    db = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      experimentalForceLongPolling: true,
+    });
+  }
+} catch {
+  db = getFirestore(app);
+}
 
 const storage = getStorage(app);
 
