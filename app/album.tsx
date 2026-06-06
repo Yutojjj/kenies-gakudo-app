@@ -143,7 +143,7 @@ export default function AlbumScreen() {
       try {
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const snap = await getDocs(collection(db, 'albums'));
+        const snap = await getDocs(collection(db, 'albums2'));
         for (const d of snap.docs) {
           const data = d.data();
           const createdAt = data.createdAt?.toDate?.();
@@ -154,7 +154,7 @@ export default function AlbumScreen() {
                 await deleteObject(ref(storage, data.storagePath));
               } catch (_) {}
             }
-            await deleteDoc(doc(db, 'albums', d.id));
+            await deleteDoc(doc(db, 'albums2', d.id));
           }
         }
       } catch (e) {
@@ -185,7 +185,7 @@ export default function AlbumScreen() {
     });
 
     // onSnapshotでリアルタイム同期（getDocs→消えるバグを修正）
-    const unsubPhotos = onSnapshot(collection(db, 'albums'), (photosSnap) => {
+    const unsubPhotos = onSnapshot(collection(db, 'albums2'), (photosSnap) => {
       if (!isMounted) return;
       const photosData: Record<string, { id: string, uri: string, storagePath?: string }[]> = {};
       photosSnap.forEach(d => {
@@ -198,7 +198,7 @@ export default function AlbumScreen() {
       setAlbumPhotos(photosData);
     }, (e) => console.warn('albums読み込みエラー:', e));
 
-    const unsubEvents = onSnapshot(collection(db, 'album_events'), (eventsSnap) => {
+    const unsubEvents = onSnapshot(collection(db, 'album_events2'), (eventsSnap) => {
       if (!isMounted) return;
       const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
       setAlbumEvents(evs);
@@ -234,7 +234,7 @@ export default function AlbumScreen() {
           const storageRef = ref(storage, storagePath);
           await uploadBytes(storageRef, blob);
           const downloadUrl = await getDownloadURL(storageRef);
-          await addDoc(collection(db, 'albums'), {
+          await addDoc(collection(db, 'albums2'), {
             uri: downloadUrl,
             storagePath: storagePath,
             uploader: name || '不明',
@@ -275,11 +275,11 @@ export default function AlbumScreen() {
       for (const itemRef of listResult.items) {
         const url = await getDownloadURL(itemRef);
         // 既にFirestoreに存在するか確認
-        const existing = await getDocs(query(collection(db, 'albums'), where('storagePath', '==', `albums/${itemRef.name}`)));
+        const existing = await getDocs(query(collection(db, 'albums2'), where('storagePath', '==', `albums/${itemRef.name}`)));
         if (existing.empty) {
           // ファイル名からカテゴリを推測（デフォルトは日付から）
           const category = 'restored';
-          await addDoc(collection(db, 'albums'), {
+          await addDoc(collection(db, 'albums2'), {
             uri: url,
             storagePath: `albums/${itemRef.name}`,
             uploader: '復元',
@@ -343,7 +343,7 @@ export default function AlbumScreen() {
       const storageRef = ref(storage, storagePath);
       await uploadBytes(storageRef, blob);
       const downloadUrl = await getDownloadURL(storageRef);
-      await addDoc(collection(db, 'albums'), {
+      await addDoc(collection(db, 'albums2'), {
         uri: downloadUrl, storagePath,
         uploader: name || '不明', category, createdAt: serverTimestamp()
       });
@@ -366,7 +366,7 @@ export default function AlbumScreen() {
     try {
       const uploaded = await uploadPhotosToCategory(eventCategory);
       if (uploaded > 0) {
-        await addDoc(collection(db, 'album_events'), {
+        await addDoc(collection(db, 'album_events2'), {
           name: `${eventNameInput.trim()}_${dateStr}`,
           code: eventCode, category: eventCategory, createdAt: serverTimestamp()
         });
@@ -559,7 +559,7 @@ export default function AlbumScreen() {
     if (Platform.OS === 'web') {
       if (window.confirm(`「${sectionLabel}」のアルバムを全て削除しますか？`)) {
         executeBulkDelete(photos.map(p => p.id));
-        if (eventId) deleteDoc(doc(db, 'album_events', eventId));
+        if (eventId) deleteDoc(doc(db, 'album_events2', eventId));
       }
       return;
     }
@@ -567,7 +567,7 @@ export default function AlbumScreen() {
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: async () => {
         await executeBulkDelete(photos.map(p => p.id));
-        if (eventId) await deleteDoc(doc(db, 'album_events', eventId));
+        if (eventId) await deleteDoc(doc(db, 'album_events2', eventId));
       }}
     ]);
   };
@@ -583,7 +583,7 @@ export default function AlbumScreen() {
             const storageRef = ref(storage, photo.storagePath);
             await deleteObject(storageRef).catch(() => {});
           }
-          await deleteDoc(doc(db, 'albums', photo.id));
+          await deleteDoc(doc(db, 'albums2', photo.id));
         }
       }
       setIsSelectMode(false);

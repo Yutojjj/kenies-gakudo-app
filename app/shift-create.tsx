@@ -134,7 +134,7 @@ export default function ShiftCreateScreen() {
 
       // ▼ リアルタイムリスナーをまとめて設定 ▼
       // shifts はgetDocs（1回読み込み）に変更
-      const shiftsSnap = await getDocs(collection(db, 'shifts'));
+      const shiftsSnap = await getDocs(collection(db, 'shifts2'));
       const reqData: Record<string, string> = {};
       shiftsSnap.forEach(d => {
         const data = d.data();
@@ -145,7 +145,7 @@ export default function ShiftCreateScreen() {
 
       // シフト画面を再読み込みするボタン用の関数を定義
       const reloadShifts = async () => {
-        const snap = await getDocs(collection(db, 'shifts'));
+        const snap = await getDocs(collection(db, 'shifts2'));
         const rd: Record<string, string> = {};
         snap.forEach(d => {
           const data = d.data();

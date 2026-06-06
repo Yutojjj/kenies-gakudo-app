@@ -191,7 +191,7 @@ export default function ScheduleScreen() {
           const targetIndex = loadedChildren.findIndex(c => c.name === targetName);
           if (targetIndex !== -1) setActiveChildIdx(targetIndex);
 
-          onSnapshot(query(collection(db, 'schedules'), where('parentId', '==', foundParentId)), (sSnap) => {
+          onSnapshot(query(collection(db, 'schedules2'), where('parentId', '==', foundParentId)), (sSnap) => {
             const sData: Record<string, DailyData> = {};
             sSnap.forEach(d => {
               const item = d.data();
@@ -374,7 +374,7 @@ export default function ScheduleScreen() {
     try {
       // ★ 保存前にサーバーの現在値を確認して既存フィールドを保護
       // キャッシュが古い状態でも、サーバーに既に値があれば上書きしない
-      const serverDoc = await getDoc(doc(db, 'schedules', docId));
+      const serverDoc = await getDoc(doc(db, 'schedules2', docId));
       const serverData = serverDoc.exists() ? serverDoc.data() : {};
 
       const saveData: any = { parentId: parentDocId, childId: child.id, childName: child.name, kidName: child.name, dateStr, updatedAt: new Date() };
@@ -397,7 +397,7 @@ export default function ScheduleScreen() {
         memoDataRef.current = newMemos;
         setMemoData(newMemos);
       }
-      await setDoc(doc(db, 'schedules', docId), saveData, { merge: true });
+      await setDoc(doc(db, 'schedules2', docId), saveData, { merge: true });
 
       // 管理者以外の操作のみログ記録
       if (loggedInUser && loggedInUser.role !== 'admin') {

@@ -191,7 +191,7 @@ export default function AttendanceScreen() {
         });
         setKids(allKids);
 
-        onSnapshot(collection(db, 'schedules'), (snap) => {
+        onSnapshot(collection(db, 'schedules2'), (snap) => {
           const sData: Record<string, any> = {};
           snap.forEach(d => {
             const item = d.data();

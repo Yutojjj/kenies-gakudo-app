@@ -262,7 +262,7 @@ export default function MenuScreen() {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
     // schedulesとschedule_memos両方からメモを取得
-    const fromSchedules = getDocs(collection(db, 'schedules')).then(snap => {
+    const fromSchedules = getDocs(collection(db, 'schedules2')).then(snap => {
       const memos: {kidName: string; memo: string}[] = [];
       snap.forEach(d => {
         const data = d.data();
@@ -305,7 +305,7 @@ export default function MenuScreen() {
       dateStrs.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     }
     // 週間メモをschedulesとschedule_memos両方から取得
-    const weekFromSchedules = getDocs(collection(db, 'schedules')).then(snap => {
+    const weekFromSchedules = getDocs(collection(db, 'schedules2')).then(snap => {
       const byDate: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
       dateStrs.forEach(ds => { byDate[ds] = []; });
       snap.forEach(d => {

@@ -85,7 +85,7 @@ export default function ShiftScreen() {
           .catch(e => console.warn('祝日API取得失敗', e));
 
         const resolvedName = staffName;
-        const qMyShifts = query(collection(db, 'shifts'), where('staffName', '==', resolvedName));
+        const qMyShifts = query(collection(db, 'shifts2'), where('staffName', '==', resolvedName));
         
         // ★ shiftsはgetDocs（1回読み込み）に変更
         //   onSnapshotのリアルタイム同期がキャッシュの古い状態で上書きするバグを防ぐ
@@ -131,7 +131,7 @@ export default function ShiftScreen() {
         setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
 
         // shiftsの全件読み込み（onSnapshot→getDocs）
-        const allShiftsSnap = await getDocs(collection(db, 'shifts'));
+        const allShiftsSnap = await getDocs(collection(db, 'shifts2'));
         const reqData: Record<string, string> = {};
         allShiftsSnap.forEach(d => {
           const data = d.data();
@@ -267,7 +267,7 @@ export default function ShiftScreen() {
     try {
       for (const [dateStr, value] of Object.entries(changesToSave)) {
         const docId = `${resolvedName}_${dateStr}`;
-        const docRef = doc(db, 'shifts', docId);
+        const docRef = doc(db, 'shifts2', docId);
         if (value === null) {
           await setDoc(docRef, { staffName: resolvedName, dateStr, type: '○', updatedAt: new Date() }, { merge: true });
           serverDataRef.current[dateStr] = '○' as ShiftType;
