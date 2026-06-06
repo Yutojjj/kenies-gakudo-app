@@ -731,7 +731,7 @@ export default function AlbumScreen() {
                           )
                         ) : (
                           <>
-                            {role !== 'user' && activeTab === 'イベント' && (
+                            {role !== 'user' && (
                               <TouchableOpacity style={styles.sectionActionBtn} onPress={() => pickImages(item.label, item.key)}>
                                 <Ionicons name="add-circle" size={24} color={COLORS.primary} />
                               </TouchableOpacity>
@@ -995,8 +995,6 @@ export default function AlbumScreen() {
                 viewabilityConfig={viewabilityConfig}
                 onScrollToIndexFailed={onScrollToIndexFailed}
                 removeClippedSubviews={false}
-                snapToInterval={windowWidth}
-                snapToAlignment="center"
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
                 onMomentumScrollEnd={(e) => {
