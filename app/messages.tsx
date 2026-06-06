@@ -290,6 +290,23 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
 
   return (
     <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#E8F0FE', borderRadius: 10, borderWidth: 1, borderColor: '#BBDEFB', overflow: 'hidden' }}>
+      {/* 稲熊（管理者）カード - 常に最上部に表示 */}
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1.5, borderColor: '#AEE4F5', backgroundColor: '#F0F9FF' }}
+        onPress={() => openChat({ id: 'direct_admin', type: 'direct', name: '稲熊' })}
+      >
+        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#AEE4F5', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+          <Ionicons name="star" size={16} color="#5D4037" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>稲熊</Text>
+          <Text style={{ fontSize: 11, color: '#888' }}>管理者</Text>
+        </View>
+        <View style={{ padding: 10, backgroundColor: '#AEE4F5', borderRadius: 10 }}>
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5D4037" />
+        </View>
+      </TouchableOpacity>
+
       {staffList.map(acc => (
         <View key={acc.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderColor: '#EEE' }}>
           <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#90CAF9', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
@@ -390,6 +407,9 @@ export default function MessagesScreen() {
   const [manageMembersModalVisible, setManageMembersModalVisible] = useState(false);
   const [managingConv, setManagingConv] = useState<ConvDoc | null>(null);
   const [managingParticipants, setManagingParticipants] = useState<string[]>([]);
+  const [memberMgmtSearch, setMemberMgmtSearch] = useState('');
+  const [memberMgmtSchool, setMemberMgmtSchool] = useState('');
+  const [memberMgmtGrade, setMemberMgmtGrade] = useState('');
 
   const scrollRef = useRef<ScrollView>(null);
   const unsubListRef = useRef<(() => void) | null>(null);
@@ -795,9 +815,9 @@ export default function MessagesScreen() {
   const isDirect = activeConv?.type === 'direct';
   const isGroup = activeConv?.type === 'group';
   
-  // 修正：ダイレクトメッセージなら常にOK、グループなら設定に従う。管理者は常にOK
-  const canChat = true; // 利用者・スタッフ全員チャット可能
-  const canCall = (isDirect || (isGroup && (isAdmin || activeConv?.settings?.allowCall !== false)));
+  // 管理者は常にOK。DMは常にOK。グループは設定に従う
+  const canChat = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowChat !== false);
+  const canCall = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowCall !== false);
 
   if (loading) {
     return (
@@ -1076,7 +1096,7 @@ export default function MessagesScreen() {
                       name={allowMemberCall ? "checkbox" : "square-outline"} 
                       size={24} color={allowMemberCall ? COLORS.primary : '#ccc'} 
                     />
-                    <Text style={styles.settingText}>メンバーのビデオ通話を許可</Text>
+                    <Text style={styles.settingText}>メンバーの通話を許可（音声・ビデオ共通）</Text>
                   </TouchableOpacity>
                 </View>
                 
@@ -1226,8 +1246,57 @@ export default function MessagesScreen() {
                 )}
 
                 <Text style={[styles.modalSubLabel, { marginTop: 24 }]}>メンバーを追加</Text>
+
+                {/* 検索バー */}
+                <View style={[styles.searchBarGroup, { marginBottom: 8 }]}>
+                  <Ionicons name="search" size={16} color="#aaa" style={{ marginRight: 6 }} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 14, color: '#333' }}
+                    placeholder="名前・ニックネームで検索"
+                    placeholderTextColor="#bbb"
+                    value={memberMgmtSearch}
+                    onChangeText={setMemberMgmtSearch}
+                  />
+                  {memberMgmtSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setMemberMgmtSearch('')}>
+                      <Ionicons name="close-circle" size={16} color="#bbb" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* 学校・学年フィルター */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {['', ...Array.from(new Set(availableAccounts.filter((a: any) => a.role !== 'admin').map((a: any) => a.school).filter(Boolean)))].map((s: string) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5, borderColor: memberMgmtSchool === s ? COLORS.primary : '#DDD', backgroundColor: memberMgmtSchool === s ? COLORS.primary + '22' : '#fff', marginRight: 6 }}
+                        onPress={() => setMemberMgmtSchool(s)}
+                      >
+                        <Text style={{ fontSize: 12, color: memberMgmtSchool === s ? COLORS.primary : '#666', fontWeight: 'bold' }}>{s || '全学校'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {['', ...Array.from(new Set(availableAccounts.filter((a: any) => a.role !== 'admin').map((a: any) => a.grade).filter(Boolean)))].map((g: string) => (
+                      <TouchableOpacity
+                        key={`g_${g}`}
+                        style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5, borderColor: memberMgmtGrade === g ? '#5B9BD5' : '#DDD', backgroundColor: memberMgmtGrade === g ? '#5B9BD522' : '#fff', marginRight: 6 }}
+                        onPress={() => setMemberMgmtGrade(g)}
+                      >
+                        <Text style={{ fontSize: 12, color: memberMgmtGrade === g ? '#5B9BD5' : '#666', fontWeight: 'bold' }}>{g || '全学年'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
                 {availableAccounts
-                  .filter((a: any) => a.role !== 'admin' && !managingParticipants.includes(a.id))
+                  .filter((a: any) => {
+                    if (a.role === 'admin') return false;
+                    if (managingParticipants.includes(a.id)) return false;
+                    if (memberMgmtSearch && !a.name?.includes(memberMgmtSearch) && !a.nicknameKana?.includes(memberMgmtSearch)) return false;
+                    if (memberMgmtSchool && a.school !== memberMgmtSchool) return false;
+                    if (memberMgmtGrade && a.grade !== memberMgmtGrade) return false;
+                    return true;
+                  })
                   .map((account: any) => (
                     <TouchableOpacity
                       key={account.id}
@@ -1237,7 +1306,12 @@ export default function MessagesScreen() {
                       <View style={[styles.smallBadge, account.role === 'staff' ? styles.smallBadgeStaff : styles.smallBadgeUser]}>
                         <Text style={styles.smallBadgeText}>{account.role === 'staff' ? 'スタッフ' : '利用者'}</Text>
                       </View>
-                      <Text style={{ flex: 1, fontSize: 16, color: COLORS.text, marginLeft: 8 }}>{account.name}</Text>
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <Text style={{ fontSize: 15, color: COLORS.text }}>{account.name}</Text>
+                        {(account.school || account.grade) && (
+                          <Text style={{ fontSize: 11, color: '#aaa' }}>{account.school}　{account.grade}</Text>
+                        )}
+                      </View>
                       <Ionicons name="add-circle-outline" size={26} color={COLORS.primary} />
                     </TouchableOpacity>
                   ))}

@@ -97,6 +97,8 @@ export default function ScheduleScreen() {
   const [editingMemo, setEditingMemo] = useState('');
   const [memoData, setMemoData] = useState<Record<string, string>>({}); // key: childId_dateStr
   const memoDataRef = React.useRef<Record<string, string>>({});
+  const [memoSaved, setMemoSaved] = useState(false);
+  const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -463,7 +465,7 @@ export default function ScheduleScreen() {
              const { deleteDoc } = require('firebase/firestore');
              await deleteDoc(doc(db, 'event_participants', docId));
          }
-         setEventModalVisible(false);
+         setEventSectionCollapsed(true);
          customAlert('完了', isAttending ? '参加を申し込みました' : '参加をキャンセルしました');
      } catch(e) {
          customAlert('エラー', '操作に失敗しました');
@@ -562,11 +564,9 @@ export default function ScheduleScreen() {
       setSelectedDateStr(dateStr);
       const key = getScheduleKey(dateStr);
       setEditingMemo(memoDataRef.current[key] || scheduleDataRef.current[key]?.memo || '');
-      if (eventsData[dateStr]) {
-          setEventModalVisible(true);
-      } else {
-          setEditModalVisible(true);
-      }
+      setMemoSaved(false);
+      setEventSectionCollapsed(false);
+      setEditModalVisible(true);
     }
   };
 
@@ -801,6 +801,69 @@ export default function ScheduleScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+                {/* ── イベントセクション（その日にイベントがある場合のみ表示） ── */}
+                {eventsData[selectedDateStr] && (
+                  <View style={[styles.editSection, { backgroundColor: '#FFFDE7', borderRadius: 12, borderWidth: 1, borderColor: '#FFD54F', marginBottom: 8 }]}>
+                    {!eventSectionCollapsed ? (
+                      <>
+                        <View style={styles.editSectionHeader}>
+                          <Ionicons name="star" size={20} color="#DAA520" />
+                          <Text style={[styles.editSectionTitle, { color: '#B8860B' }]}>イベント</Text>
+                          <View style={{ flex: 1 }} />
+                        </View>
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#5D4037', marginBottom: 6 }}>
+                          {eventsData[selectedDateStr].title}
+                        </Text>
+                        {eventsData[selectedDateStr].description && (
+                          <Text style={{ fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 12 }}>
+                            {eventsData[selectedDateStr].description}
+                          </Text>
+                        )}
+                        {/* 参加ステータス */}
+                        {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? (
+                          <View style={{ gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', padding: 10, borderRadius: 8 }}>
+                              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#4CAF50', marginLeft: 6 }}>参加申し込み済み</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#FFEBEE', padding: 10, borderRadius: 8, alignItems: 'center' }}
+                              onPress={() => toggleEventParticipation(selectedDateStr, false)}
+                            >
+                              <Text style={{ color: COLORS.danger, fontWeight: 'bold', fontSize: 13 }}>参加をキャンセルする</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={{ backgroundColor: COLORS.primary, padding: 12, borderRadius: 10, alignItems: 'center' }}
+                            onPress={() => toggleEventParticipation(selectedDateStr, true)}
+                          >
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>このイベントに参加する</Text>
+                          </TouchableOpacity>
+                        )}
+                        {/* 折りたたみボタン */}
+                        <TouchableOpacity
+                          style={{ alignItems: 'center', marginTop: 10, paddingVertical: 4 }}
+                          onPress={() => setEventSectionCollapsed(true)}
+                        >
+                          <Text style={{ color: '#aaa', fontSize: 12 }}>▲ 閉じる</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', padding: 4, gap: 8 }}
+                        onPress={() => setEventSectionCollapsed(false)}
+                      >
+                        <Ionicons name="star" size={16} color="#DAA520" />
+                        <Text style={{ fontSize: 13, color: '#B8860B', fontWeight: 'bold', flex: 1 }}>
+                          {eventsData[selectedDateStr].title}
+                        </Text>
+                        <Text style={{ color: '#aaa', fontSize: 12 }}>▼</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
                 <View style={styles.editSection}>
                   <View style={styles.editSectionHeader}>
                     <Ionicons name="home-outline" size={20} color={COLORS.primary} />
@@ -880,15 +943,18 @@ export default function ScheduleScreen() {
                     style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 15, minHeight: 80, backgroundColor: COLORS.surface, textAlignVertical: 'top' }}
                     placeholder="この日のメモを入力..." placeholderTextColor="#BBBBBB"
                     value={editingMemo}
-                    onChangeText={setEditingMemo}
+                    onChangeText={(t) => { setEditingMemo(t); setMemoSaved(false); }}
                     multiline
                   />
                   <TouchableOpacity
-                    style={[styles.saveBtn, { marginTop: 8 }]}
-                    onPress={() => saveToFirestore(selectedDateStr, { memo: editingMemo })}
+                    style={[styles.saveBtn, { marginTop: 8, backgroundColor: memoSaved ? '#4CAF50' : undefined }]}
+                    onPress={() => {
+                      saveToFirestore(selectedDateStr, { memo: editingMemo });
+                      setMemoSaved(true);
+                    }}
                   >
-                    <Ionicons name="checkmark" size={18} color={COLORS.white} style={{ marginRight: 6 }} />
-                    <Text style={styles.saveBtnText}>メモを保存</Text>
+                    <Ionicons name={memoSaved ? "checkmark-circle" : "checkmark"} size={18} color={COLORS.white} style={{ marginRight: 6 }} />
+                    <Text style={styles.saveBtnText}>{memoSaved ? '保存済み ✓' : 'メモを保存'}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={{height: 20}} />

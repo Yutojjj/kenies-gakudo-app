@@ -195,7 +195,7 @@ export default function SchoolTimesScreen() {
       {isStampingMode && (
         <View style={styles.stampingBanner}>
           <Text style={styles.stampingText}>
-            <Ionicons name="color-wand" size={16} /> 選択中: {stampingTime === '' ? '「未設定(クリア)」' : `「${stampingTime}」`}
+            一括入力中: {stampingTime === '' ? '「未設定(クリア)」' : `「${stampingTime}」`}
           </Text>
           <TouchableOpacity style={styles.stampingEndBtn} onPress={() => setIsStampingMode(false)}>
             <Text style={styles.stampingEndText}>連投終了</Text>
@@ -259,7 +259,8 @@ export default function SchoolTimesScreen() {
 
       {!isStampingMode && activeSchool !== '' && (
         <TouchableOpacity style={styles.fab} onPress={openTimePickerForStamping}>
-          <Ionicons name="color-wand" size={32} color={COLORS.white} />
+          <Ionicons name="pencil" size={18} color={COLORS.white} />
+          <Text style={{ color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginTop: 2 }}>一括入力</Text>
         </TouchableOpacity>
       )}
 
@@ -385,8 +386,11 @@ const styles = StyleSheet.create({
   stampingEndText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
   
   fab: { 
-    position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, 
-    alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 
+    position: 'absolute', right: 20, bottom: 40, backgroundColor: COLORS.primary, 
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 28, 
+    alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+    shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5,
+    minWidth: 72,
   },
 
   scrollArea: { flex: 1, padding: 16 },
