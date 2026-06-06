@@ -2,18 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-    addDoc, collection, deleteDoc, doc, getDoc,
-    getDocs, onSnapshot, query, setDoc, where
+  addDoc, collection, deleteDoc, doc, getDoc,
+  getDocs, onSnapshot, query, setDoc, where
 } from 'firebase/firestore';
 import {
-    deleteObject, getDownloadURL,
-    ref as storageRef, uploadBytes
+  deleteObject, getDownloadURL,
+  ref as storageRef, uploadBytes
 } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Image, Modal, Platform,
-    SafeAreaView, ScrollView, StyleSheet, Text,
-    TextInput, TouchableOpacity, View
+  ActivityIndicator, Image, Modal, Platform,
+  SafeAreaView, ScrollView, StyleSheet, Text,
+  TextInput, TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
@@ -638,7 +638,28 @@ export default function YearEventsScreen() {
         onLayout={e => { vacMonthRefs.current[`${vac}_${month}`] = e.nativeEvent.layout.y; }}
         style={[styles.vacSection, { borderColor: vc.border }]}
       >
-        <Text style={[styles.vacMonthLabel, { color: vc.text }]}>{month}月</Text>
+        {/* 月ヘッダー + 詳細ボタン */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <Text style={[styles.vacMonthLabel, { color: vc.text, marginBottom: 0, flex: 1 }]}>{month}月</Text>
+          {monthFlyers.map(flyer => (
+            <View key={flyer.id} style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              <TouchableOpacity style={[styles.flyerDetailBtn, { backgroundColor: vc.border }]} onPress={() => setFlyerPreview(flyer)}>
+                <Ionicons name="document-text-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={styles.flyerDetailBtnText}>詳細</Text>
+              </TouchableOpacity>
+              {isAdmin && (
+                <>
+                  <TouchableOpacity style={[styles.flyerDeleteBtn, { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 6 }]} onPress={() => replaceFlyer(flyer)}>
+                    <Ionicons name="camera-outline" size={15} color="#1565C0" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.flyerDeleteBtn, { padding: 6 }]} onPress={() => deleteFlyer(flyer)}>
+                    <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          ))}
+        </View>
 
         {/* 長期休み期間のイベント（年行事と同じカード形式・2列） */}
         {vacEvents.length > 0 && (
@@ -653,28 +674,6 @@ export default function YearEventsScreen() {
             </View>
           </View>
         )}
-
-        {/* チラシ */}
-        {monthFlyers.map(flyer => (
-          <View key={flyer.id} style={styles.flyerRow}>
-            <TouchableOpacity style={{ flex: 1 }} onPress={() => setFlyerPreview(flyer)}>
-              <Image source={{ uri: flyer.uri }} style={styles.flyerThumb} resizeMode="cover" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.flyerDetailBtn} onPress={() => setFlyerPreview(flyer)}>
-              <Text style={styles.flyerDetailBtnText}>詳細</Text>
-            </TouchableOpacity>
-            {isAdmin && (
-              <>
-                <TouchableOpacity style={[styles.flyerDeleteBtn, { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 8, marginRight: 4 }]} onPress={() => replaceFlyer(flyer)}>
-                  <Ionicons name="camera-outline" size={16} color="#1565C0" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.flyerDeleteBtn} onPress={() => deleteFlyer(flyer)}>
-                  <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        ))}
 
         {vacEvents.length === 0 && monthFlyers.length === 0 && (
           <Text style={styles.noEventText}>イベント・チラシなし</Text>
@@ -1030,7 +1029,7 @@ const styles = StyleSheet.create({
   // イベントチップ
   eventChip: { borderRadius: 10, overflow: 'hidden', marginBottom: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
   eventChipHeader: { padding: 8 },
-  eventCoverImgFull: { width: '100%', height: 80 },
+  eventCoverImgFull: { width: '100%', height: 130 },
   eventCoverPlaceholderFull: { width: '100%', height: 70, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   eventCoverImg: { width: 60, height: 60 },
   eventCoverPlaceholder: { width: 60, height: 60, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
@@ -1063,7 +1062,7 @@ const styles = StyleSheet.create({
   // チラシ
   flyerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   flyerThumb: { width: 80, height: 56, borderRadius: 6, backgroundColor: '#F5F5F5' },
-  flyerDetailBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  flyerDetailBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   flyerDetailBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   flyerDeleteBtn: { padding: 8 },
   uploadFlyerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 10, justifyContent: 'center', marginTop: 4 },
