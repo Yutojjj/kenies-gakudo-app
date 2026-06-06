@@ -33,8 +33,10 @@ export default function ShiftScreen() {
   }, [nameParam]);
 
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
-  
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
   const [shiftData, setShiftData] = useState<Record<string, ShiftType>>({});
   const shiftDataRef = useRef<Record<string, ShiftType>>({});
   // サーバー（Firestore）の生データを常に保持。マージの土台にする
@@ -55,11 +57,13 @@ export default function ShiftScreen() {
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
-    if (!staffName) return; 
+    if (!staffName) return;
 
     let unsubscribes: (() => void)[] = [];
 
     const fetchAllData = async () => {
+      setLoading(true);
+      setFetchError(false);
       try {
         // 未保存の「付与(✕)」のみ復元する。
         // ★削除指示(null)は復元しない★ — 過去に取り残されたnullが後日の保存で
@@ -120,6 +124,7 @@ export default function ShiftScreen() {
         });
         shiftDataRef.current = merged;
         setShiftData(merged);
+        setLoading(false);
 
         const qStaff = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(qStaff);
@@ -156,6 +161,8 @@ export default function ShiftScreen() {
 
       } catch (error) {
         console.error("データ取得エラー", error);
+        setFetchError(true);
+        setLoading(false);
       }
     };
 
@@ -164,7 +171,7 @@ export default function ShiftScreen() {
     return () => {
       unsubscribes.forEach(unsub => unsub());
     };
-  }, [staffName]);
+  }, [staffName, retryCount]);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -359,7 +366,30 @@ export default function ShiftScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.calendarContainer}>
+        {loading && (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <Ionicons name="sync-outline" size={40} color={COLORS.textLight} />
+            <Text style={{ color: COLORS.textLight, marginTop: 12, fontSize: 15 }}>シフトを読み込み中...</Text>
+          </View>
+        )}
+
+        {fetchError && !loading && (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <Ionicons name="cloud-offline-outline" size={48} color="#E57373" />
+            <Text style={{ color: '#E57373', fontWeight: 'bold', fontSize: 16, marginTop: 12 }}>読み込みに失敗しました</Text>
+            <Text style={{ color: COLORS.textLight, fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 32 }}>
+              電波の良い場所で再度お試しください{'\n'}（シフトデータは消えていません）
+            </Text>
+            <TouchableOpacity
+              onPress={() => setRetryCount(c => c + 1)}
+              style={{ marginTop: 20, backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 10 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>再読み込み</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!loading && !fetchError && <View style={styles.calendarContainer}>
           <View style={styles.calHeaderRow}>
             {weeks.map((w, i) => (
               <Text key={i} style={[styles.calWeekText, i === 0 && {color: '#E74C3C'}, i === 6 && {color: '#3498DB'}]}>{w}</Text>
@@ -407,7 +437,7 @@ export default function ShiftScreen() {
               );
             })}
           </View>
-        </View>
+        </View>}
 
       </ScrollView>
 

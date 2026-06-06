@@ -214,9 +214,31 @@ export default function ScheduleScreen() {
               }
             });
 
+            // schedule_memosのデータもマージ（memoDataRefが優先）
+            Object.entries(memoDataRef.current).forEach(([key, memo]) => {
+              if (sData[key]) sData[key] = { ...sData[key], memo };
+              else sData[key] = { memo };
+            });
+
             scheduleDataRef.current = sData;
             setScheduleData(sData);
           });
+
+          // schedule_memosを読み込む（メモはschedule_memosコレクションで管理されており、schedulesには保存されない）
+          try {
+            const memosSnap = await getDocs(query(collection(db, 'schedule_memos'), where('parentId', '==', foundParentId)));
+            const loadedMemos: Record<string, string> = {};
+            memosSnap.forEach(d => {
+              const item = d.data();
+              if (item.childId && item.dateStr && item.memo !== undefined) {
+                loadedMemos[`${item.childId}_${item.dateStr}`] = item.memo;
+              }
+            });
+            memoDataRef.current = loadedMemos;
+            setMemoData(loadedMemos);
+          } catch (e) {
+            console.warn('schedule_memos 読み込み失敗', e);
+          }
           
           onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
              if(accSnap.exists()) {

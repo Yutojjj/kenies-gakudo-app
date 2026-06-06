@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -184,9 +184,9 @@ export default function AlbumScreen() {
       if (res && isMounted) setUnlockedEvents(JSON.parse(res));
     });
 
-    // albums・album_eventsはgetDocs（1回読み込み）に変更
-    const loadAlbums = async () => {
-      const photosSnap = await getDocs(collection(db, 'albums'));
+    // onSnapshotでリアルタイム同期（getDocs→消えるバグを修正）
+    const unsubPhotos = onSnapshot(collection(db, 'albums'), (photosSnap) => {
+      if (!isMounted) return;
       const photosData: Record<string, { id: string, uri: string, storagePath?: string }[]> = {};
       photosSnap.forEach(d => {
         const item = d.data();
@@ -195,15 +195,16 @@ export default function AlbumScreen() {
         if (!photosData[key]) photosData[key] = [];
         photosData[key].push({ id: d.id, uri: item.uri, storagePath: item.storagePath });
       });
-      if (isMounted) setAlbumPhotos(photosData);
+      setAlbumPhotos(photosData);
+    }, (e) => console.warn('albums読み込みエラー:', e));
 
-      const eventsSnap = await getDocs(collection(db, 'album_events'));
+    const unsubEvents = onSnapshot(collection(db, 'album_events'), (eventsSnap) => {
+      if (!isMounted) return;
       const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
-      if (isMounted) setAlbumEvents(evs);
-    };
-    loadAlbums();
+      setAlbumEvents(evs);
+    }, (e) => console.warn('album_events読み込みエラー:', e));
 
-    return () => { isMounted = false; };
+    return () => { isMounted = false; unsubPhotos(); unsubEvents(); };
   }, [role, name]);
 
   const toggleExpand = (key: string) => {
