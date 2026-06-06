@@ -61,6 +61,7 @@ interface PastPhoto {
   eventId: string;
   uri: string;
   storagePath: string;
+  fiscalYear?: number; // アップロード時の年度（前年度として保存）
 }
 
 // ─── 学期定義 ──────────────────────────────────────────────────
@@ -221,6 +222,20 @@ const re = StyleSheet.create({
 });
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+// 4月始まりの年度を返す（例：2026年1月→2025年度、2026年4月→2026年度）
+const getFiscalYear = (date: Date): number => {
+  const m = date.getMonth() + 1; // 1-12
+  return m >= 4 ? date.getFullYear() : date.getFullYear() - 1;
+};
+
+const getCurrentFiscalYear = () => getFiscalYear(new Date());
+
+// 年度の開始日・終了日
+const getFiscalYearRange = (fy: number) => ({
+  start: `${fy}-04-01`,
+  end: `${fy + 1}-03-31`,
+});
+
 const formatDateWithDay = (dateStr: string) => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -342,6 +357,13 @@ export default function YearEventsScreen() {
     return events[ym] || [];
   };
 
+  const currentFY = getCurrentFiscalYear();
+  const { start: fyStart, end: fyEnd } = getFiscalYearRange(currentFY);
+
+  // 現在年度内かチェック
+  const isCurrentFiscalYear = (dateStr: string): boolean =>
+    dateStr >= fyStart && dateStr <= fyEnd;
+
   // イベントが長期休み期間に含まれるか
   const isInAnyHoliday = (dateStr: string): boolean => {
     return holidayPeriods.some(p => dateStr >= p.start && dateStr <= p.end);
@@ -387,7 +409,7 @@ export default function YearEventsScreen() {
     return Array.from(months).sort((a, b) => a - b);
   };
 
-  const currentYear = new Date().getFullYear();
+  // currentFY / fyStart / fyEnd は上で定義済み
 
   const openDetail = (ev: any) => {
     setDetailEvent(ev);
@@ -495,7 +517,9 @@ export default function YearEventsScreen() {
         await uploadBytes(sref, blob);
         const url = await getDownloadURL(sref);
         await addDoc(collection(db, 'event_past_photos'), {
-          eventId: detailEvent.id, uri: url, storagePath: filename, createdAt: new Date()
+          eventId: detailEvent.id, uri: url, storagePath: filename,
+          fiscalYear: currentFY - 1,  // 前年度として記録
+          createdAt: new Date()
         });
         count++;
       } catch (e: any) {
@@ -572,8 +596,10 @@ export default function YearEventsScreen() {
         {pairs.map((pair, pi) => (
           <View key={pi} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
             {pair.map(m => {
-              const evs = eventsForMonth(currentYear, m)
-                .filter(ev => (isAdmin || !ev.hidden) && !isInAnyHoliday(ev.dateStr));
+              // 年度内のその月のデータ取得（1〜3月は翌年、4〜12月は年度開始年）
+              const dataYear = m >= 4 ? currentFY : currentFY + 1;
+              const evs = eventsForMonth(dataYear, m)
+                .filter(ev => (isAdmin || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
               return (
                 <View key={m} style={[styles.monthCard, { flex: 1, borderColor: termColor.border, backgroundColor: termColor.light }]}>
                   <Text style={[styles.monthCardLabel, { color: termColor.text }]}>{m}月</Text>
@@ -632,7 +658,7 @@ export default function YearEventsScreen() {
     const vc = VAC_COLORS[vac];
     const monthFlyers = flyers.filter(f => f.vacation === vac && f.month === month);
     const vacLabel = vc.label;
-    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => isAdmin || !ev.hidden);
+    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => (isAdmin || !ev.hidden) && isCurrentFiscalYear(ev.dateStr));
     return (
       <View
         onLayout={e => { vacMonthRefs.current[`${vac}_${month}`] = e.nativeEvent.layout.y; }}
@@ -690,7 +716,12 @@ export default function YearEventsScreen() {
   };
 
   // ─── 詳細画面（インライン・アンマウントなし） ─────────────
-  const detailPhotos = detailEvent ? (pastPhotos[detailEvent.id] || []) : [];
+  const detailPhotos = detailEvent
+    ? (pastPhotos[detailEvent.id] || []).filter(p =>
+        // fiscalYearが未設定の古いデータはそのまま表示、設定済みは前年度のみ
+        p.fiscalYear === undefined || p.fiscalYear === currentFY - 1
+      )
+    : [];
   const detailDet = detailEvent ? details[detailEvent.id] : undefined;
   const DetailModal = (
     <Modal visible={detailOpen} animationType="none">
