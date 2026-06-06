@@ -152,6 +152,7 @@ export default function MenuScreen() {
   const [authChecked, setAuthChecked] = useState(false);
   const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
   const [paidTransportCount, setPaidTransportCount] = useState(0);
+  const [isPaidTransportMember, setIsPaidTransportMember] = useState(false);
   const [signModalVisible, setSignModalVisible] = useState(false);
   const [showAllPickup, setShowAllPickup] = useState(false);
   const [noticeVisible, setNoticeVisible] = useState(false);
@@ -253,6 +254,11 @@ export default function MenuScreen() {
       where('month', '==', ym)
     )).then(snap => {
       setPaidTransportCount(snap.docs.reduce((sum, d) => sum + (d.data().count || 0), 0));
+    });
+    // 有料送迎メンバーかチェック
+    getDocs(collection(db, 'paid_transport_members')).then(snap => {
+      const isMember = snap.docs.some(d => d.data().name === name);
+      setIsPaidTransportMember(isMember);
     });
   }, [role, name]);
 
@@ -684,18 +690,18 @@ export default function MenuScreen() {
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
-              {paidTransportCount > 0 && (
+              {isPaidTransportMember && (
                 <TouchableOpacity
-                  style={styles.paidBanner}
-                  onPress={() => setSignModalVisible(true)}
+                  style={[styles.paidBanner, { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' }]}
+                  onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
                   activeOpacity={0.85}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.paidBannerTitle}>🚗 今月の有料送迎</Text>
-                    <Text style={styles.paidBannerCount}>{paidTransportCount}回 ＝ {paidTransportCount * 500}円</Text>
+                    <Text style={[styles.paidBannerTitle, { color: '#2E7D32' }]}>🚗 送迎費承諾</Text>
+                    <Text style={[styles.paidBannerCount, { color: '#388E3C' }]}>確認・サインはこちら</Text>
                   </View>
-                  <View style={styles.paidBannerBtn}>
-                    <Text style={styles.paidBannerBtnText}>サインで確認</Text>
+                  <View style={[styles.paidBannerBtn, { backgroundColor: '#4CAF50' }]}>
+                    <Text style={styles.paidBannerBtnText}>確認する</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -1218,7 +1224,7 @@ export default function MenuScreen() {
                     <Text style={styles.drawerIcon}>↩️</Text>
                     <Text style={styles.drawerItemText}>学年を一括で下げる（戻す）</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/paid-transport' as any); }}>
+                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any); }}>
                     <Text style={styles.drawerIcon}>🚗</Text>
                     <Text style={styles.drawerItemText}>有料送迎 管理</Text>
                   </TouchableOpacity>
