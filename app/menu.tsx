@@ -261,8 +261,8 @@ export default function MenuScreen() {
     const today = new Date();
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
-    // scheduleOverridesからメモを取得（getDocs・1回読み込み）
-    getDocs(collection(db, 'schedules')).then(snap => {
+    // schedulesとschedule_memos両方からメモを取得
+    const fromSchedules = getDocs(collection(db, 'schedules')).then(snap => {
       const memos: {kidName: string; memo: string}[] = [];
       snap.forEach(d => {
         const data = d.data();
@@ -270,7 +270,20 @@ export default function MenuScreen() {
           memos.push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo });
         }
       });
-      setTodayMemos(memos);
+      return memos;
+    });
+    const fromScheduleMemos = getDocs(query(collection(db, 'schedule_memos'), where('dateStr', '==', dateStr))).then(snap => {
+      const memos: {kidName: string; memo: string}[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.memo) memos.push({ kidName: data.childName || data.kidName || '', memo: data.memo });
+      });
+      return memos;
+    });
+    Promise.all([fromSchedules, fromScheduleMemos]).then(([s, sm]) => {
+      const combined = [...s];
+      sm.forEach(m => { if (!combined.find(e => e.kidName === m.kidName && e.memo === m.memo)) combined.push(m); });
+      setTodayMemos(combined);
     });
 
     // 管理者お知らせ
@@ -291,19 +304,38 @@ export default function MenuScreen() {
       d.setDate(today.getDate() + i);
       dateStrs.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
     }
-    // 週間メモもgetDocs（1回読み込み）に変更
-    getDocs(collection(db, 'schedules')).then(snap => {
+    // 週間メモをschedulesとschedule_memos両方から取得
+    const weekFromSchedules = getDocs(collection(db, 'schedules')).then(snap => {
       const byDate: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
       dateStrs.forEach(ds => { byDate[ds] = []; });
       snap.forEach(d => {
         const data = d.data();
         if (!data.memo) return;
         const matched = dateStrs.find(ds => d.id.endsWith(`_${ds}`));
-        if (matched) {
-          byDate[matched].push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo, isAdmin: false });
+        if (matched) byDate[matched].push({ kidName: data.kidName || data.childName || data.name || '', memo: data.memo, isAdmin: false });
+      });
+      return byDate;
+    });
+    const weekFromScheduleMemos = getDocs(query(collection(db, 'schedule_memos'), where('dateStr', 'in', dateStrs))).then(snap => {
+      const byDate: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
+      dateStrs.forEach(ds => { byDate[ds] = []; });
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.memo && data.dateStr && byDate[data.dateStr] !== undefined) {
+          byDate[data.dateStr].push({ kidName: data.childName || data.kidName || '', memo: data.memo, isAdmin: false });
         }
       });
-      setWeekMemos(byDate);
+      return byDate;
+    });
+    Promise.all([weekFromSchedules, weekFromScheduleMemos]).then(([ws, wsm]) => {
+      const merged = { ...ws };
+      dateStrs.forEach(ds => {
+        (wsm[ds] || []).forEach(m => {
+          if (!merged[ds]) merged[ds] = [];
+          if (!merged[ds].find(e => e.kidName === m.kidName && e.memo === m.memo)) merged[ds].push(m);
+        });
+      });
+      setWeekMemos(merged);
     });
     // 管理者お知らせも週間対応
     const unsubNoticesWeek = onSnapshot(collection(db, 'admin_notices'), snap => {
@@ -1064,10 +1096,37 @@ export default function MenuScreen() {
                   ))}
                 </View>
                 {/* 日付グリッド */}
-                <View style={{ flexDirection:'row', flexWrap:'wrap' }}>
+                <View>
                   {(() => {
                     const y = scheduleNoticeCalViewDate.getFullYear();
                     const m = scheduleNoticeCalViewDate.getMonth();
+                    const firstDow = new Date(y, m, 1).getDay();
+                    const daysInMonth = new Date(y, m + 1, 0).getDate();
+                    const cells: (number | null)[] = Array(firstDow).fill(null);
+                    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                    while (cells.length % 7 !== 0) cells.push(null);
+                    const weeks: (number | null)[][] = [];
+                    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+                    return weeks.map((week, wi) => (
+                      <View key={wi} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                        {week.map((day, di) => {
+                          if (!day) return <View key={di} style={{ width: '14.2%', height: 36 }} />;
+                          const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const isSelected = dateStr === scheduleNoticeCalDate;
+                          return (
+                            <TouchableOpacity
+                              key={di}
+                              style={{ width: '14.2%', height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#7CB342' : 'transparent', borderRadius: 18 }}
+                              onPress={() => { setScheduleNoticeCalDate(dateStr); setScheduleNoticeStep('input'); }}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#fff' : di === 0 ? '#E53935' : di === 6 ? '#1565C0' : '#333' }}>
+                                {day}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ));
                   })()}
                 </View>
               </View>

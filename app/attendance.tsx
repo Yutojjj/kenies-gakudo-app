@@ -89,6 +89,7 @@ export default function AttendanceScreen() {
   const [timeModalData, setTimeModalData] = useState<{ date: string, title: string, subtitle: string, kids: Kid[] } | null>(null);
 
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
+  const [scheduleMemoData, setScheduleMemoData] = useState<Record<string, string>>({});
   const [schoolTimesData, setSchoolTimesData] = useState<Record<string, any>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, any[]>>({});
   const [lessonsData, setLessonsData] = useState<any[]>([]);
@@ -199,6 +200,17 @@ export default function AttendanceScreen() {
           setScheduleOverrides(sData);
         });
 
+        onSnapshot(collection(db, 'schedule_memos'), (snap) => {
+          const mData: Record<string, string> = {};
+          snap.forEach(d => {
+            const item = d.data();
+            if (item.childId && item.dateStr && item.memo) {
+              mData[`${item.childId}_${item.dateStr}`] = item.memo;
+            }
+          });
+          setScheduleMemoData(mData);
+        });
+
         onSnapshot(collection(db, 'school_times'), (snap) => {
           const times: Record<string, any> = {};
           snap.forEach(d => { times[d.id] = d.data(); });
@@ -268,7 +280,7 @@ export default function AttendanceScreen() {
     const dayOfWeekStr = DAY_NAMES[d.getDay()];
     
     const override = scheduleOverrides[`${kid.id}_${dateStr}`];
-    const memo = override?.memo || null;
+    const memo = scheduleMemoData[`${kid.id}_${dateStr}`] || override?.memo || null;
     if (override && override.pickupTime !== undefined) {
       return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true, memo };
     }
@@ -476,7 +488,7 @@ export default function AttendanceScreen() {
                                       <Text style={styles.timeCountBadge}>{kids.length}名</Text>
                                     </View>
                                     <View style={styles.kidNamesContainer}>
-                                      {kids.map(k => (
+                                      {sortKidsByGrade(kids).map(k => (
                                         <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '📝' : ''}{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
                                       ))}
                                     </View>
