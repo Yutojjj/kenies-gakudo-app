@@ -103,6 +103,37 @@ export default function LessonManagementScreen() {
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
 
+  // ピッカーScrollViewのref（選択値を中央にスクロールするため）
+  const ITEM_HEIGHT = 44;
+  const editHourScrollRef = React.useRef<any>(null);
+  const editMinScrollRef  = React.useRef<any>(null);
+  const hourScrollRef     = React.useRef<any>(null);
+  const minScrollRef      = React.useRef<any>(null);
+
+  // 編集モーダルピッカーが開いたら選択値を中央に
+  React.useEffect(() => {
+    if (!editModalTimePickerVisible) return;
+    const timer = setTimeout(() => {
+      const hi = HOURS.indexOf(editTempHour);
+      const mi = MINUTES.indexOf(editTempMinute);
+      if (hi >= 0) editHourScrollRef.current?.scrollTo({ y: 53 + hi * ITEM_HEIGHT, animated: false });
+      if (mi >= 0) editMinScrollRef.current?.scrollTo({ y: 53 + mi * ITEM_HEIGHT, animated: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [editModalTimePickerVisible]);
+
+  // 新規追加ピッカーが開いたら選択値を中央に
+  React.useEffect(() => {
+    if (!timePickerVisible) return;
+    const timer = setTimeout(() => {
+      const hi = HOURS.indexOf(tempHour);
+      const mi = MINUTES.indexOf(tempMinute);
+      if (hi >= 0) hourScrollRef.current?.scrollTo({ y: 53 + hi * ITEM_HEIGHT, animated: false });
+      if (mi >= 0) minScrollRef.current?.scrollTo({ y: 53 + mi * ITEM_HEIGHT, animated: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [timePickerVisible]);
+
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
@@ -796,20 +827,24 @@ export default function LessonManagementScreen() {
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns}>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView ref={editHourScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                <View style={{ height: 53 }} />
                 {HOURS.map(h => (
                   <TouchableOpacity key={`eh-${h}`} style={[styles.pickerItem, editTempHour === h && styles.pickerItemActive]} onPress={() => setEditTempHour(h)}>
                     <Text style={[styles.pickerItemText, editTempHour === h && styles.pickerItemTextActive]}>{h}</Text>
                   </TouchableOpacity>
                 ))}
+                <View style={{ height: 53 }} />
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView ref={editMinScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                <View style={{ height: 53 }} />
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`em-${m}`} style={[styles.pickerItem, editTempMinute === m && styles.pickerItemActive]} onPress={() => setEditTempMinute(m)}>
                     <Text style={[styles.pickerItemText, editTempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                   </TouchableOpacity>
                 ))}
+                <View style={{ height: 53 }} />
               </ScrollView>
             </View>
             <View style={styles.pickerFooter}>
@@ -820,6 +855,44 @@ export default function LessonManagementScreen() {
                 setEditModalTime(`${String(editTempHour).padStart(2,'0')}:${String(editTempMinute).padStart(2,'0')}`);
                 setEditModalTimePickerVisible(false);
               }}>
+                <Text style={styles.pickerConfirmText}>決定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ④ 新規追加用 時刻ピッカー */}
+      <Modal visible={timePickerVisible} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContent}>
+            <Text style={styles.pickerTitle}>開始時間を選択</Text>
+            <View style={styles.pickerColumns}>
+              <ScrollView ref={hourScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                <View style={{ height: 53 }} />
+                {HOURS.map(h => (
+                  <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
+                    <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+                <View style={{ height: 53 }} />
+              </ScrollView>
+              <Text style={styles.pickerColon}>:</Text>
+              <ScrollView ref={minScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                <View style={{ height: 53 }} />
+                {MINUTES.map(m => (
+                  <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
+                    <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                  </TouchableOpacity>
+                ))}
+                <View style={{ height: 53 }} />
+              </ScrollView>
+            </View>
+            <View style={styles.pickerFooter}>
+              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setTimePickerVisible(false)}>
+                <Text style={styles.pickerCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.pickerConfirmBtn} onPress={confirmTime}>
                 <Text style={styles.pickerConfirmText}>決定</Text>
               </TouchableOpacity>
             </View>

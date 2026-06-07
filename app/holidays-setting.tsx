@@ -168,7 +168,7 @@ export default function HolidaysSettingScreen() {
         </Text>
 
         {periods.map(p => (
-          <View key={p.id} style={[styles.card, { borderLeftWidth: 6, borderLeftColor: p.color || '#CCF0FF' }]}>
+          <TouchableOpacity key={p.id} style={[styles.card, { borderLeftWidth: 6, borderLeftColor: p.color || '#CCF0FF' }]} onPress={() => openEditModal(p)} activeOpacity={0.75}>
             <View style={[styles.colorDot, { backgroundColor: p.color || '#CCF0FF' }]} />
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>{p.name}</Text>
@@ -177,10 +177,10 @@ export default function HolidaysSettingScreen() {
             <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(p)}>
               <Ionicons name="pencil" size={18} color={COLORS.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
+            <TouchableOpacity style={styles.deleteBtn} onPress={(e) => { e.stopPropagation?.(); handleDelete(p.id); }}>
               <Ionicons name="trash" size={18} color={COLORS.danger} />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         ))}
 
         {periods.length === 0 && (

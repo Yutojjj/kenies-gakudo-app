@@ -5,7 +5,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Dimensions, Image, ImageSourcePropType, Modal,
+  ActivityIndicator, Alert, Animated, Dimensions, Image,
+  ImageSourcePropType, Linking, Modal,
   Platform, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
@@ -22,6 +23,7 @@ const ANIMALS = {
   koala:   require('../assets/animals/koala.png'),
   rabbit:  require('../assets/animals/rabbit.png'),
 };
+const KANYES_LOGO = require('../assets/kanyes-logo.png');
 
 // ── メニューアイコン画像（assets/menu/に配置済みのファイルを使用）──
 const MENU_ICONS = {
@@ -171,6 +173,7 @@ export default function MenuScreen() {
   const [scheduleNoticeCalViewDate, setScheduleNoticeCalViewDate] = useState(new Date());
   const [scheduleNoticeStep, setScheduleNoticeStep] = useState<'calendar' | 'input'>('calendar');
   const [gradeUpModalVisible, setGradeUpModalVisible] = useState(false);
+  const [gradeChoiceModalVisible, setGradeChoiceModalVisible] = useState(false);
   const [gradeUpPreview, setGradeUpPreview] = useState<{id:string; name:string; oldGrade:string; newGrade:string; role:string}[]>([]);
   const [gradeUpLoading, setGradeUpLoading] = useState(false);
   const [gradeUpDirection, setGradeUpDirection] = useState<'up'|'down'>('up');
@@ -426,7 +429,6 @@ export default function MenuScreen() {
   };
 
   const openPasswordModal = async () => {
-    if (role === 'admin') { customAlert('エラー', '管理者のパスワードはこの画面からは変更できません。'); return; }
     if (!userDocIdRef.current && name) {
       setFetchingDocId(true);
       try {
@@ -564,30 +566,45 @@ export default function MenuScreen() {
         }}>
           <View style={styles.headerBg}>
             {/* 雲の装飾 */}
-            <View style={[styles.cloud, { top: 14, left: 16, width: 72, height: 22 }]} />
-            <View style={[styles.cloud, { top: 30, left: 78, width: 52, height: 16, opacity: 0.5 }]} />
-            <View style={[styles.cloud, { top: 18, right: 60, width: 48, height: 16, opacity: 0.6 }]} />
-            <View style={[styles.cloud, { top: 34, right: 10, width: 36, height: 12, opacity: 0.45 }]} />
-
+            <View style={[styles.cloud, { top: 10, left: 10, width: 70, height: 20 }]} />
+            <View style={[styles.cloud, { top: 26, left: 70, width: 50, height: 14, opacity: 0.5 }]} />
+            <View style={[styles.cloud, { top: 12, right: 130, width: 44, height: 14, opacity: 0.6 }]} />
+            <View style={[styles.cloud, { top: 50, left: 20, width: 36, height: 10, opacity: 0.35 }]} />
+            <View style={[styles.cloud, { bottom: 16, right: 20, width: 52, height: 14, opacity: 0.4 }]} />
             {/* ☰ ボタン：最前面に固定 */}
             <TouchableOpacity onPress={openSettings} style={styles.menuBtn}>
               <Text style={{ fontSize: 20 }}>☰</Text>
             </TouchableOpacity>
 
+            {/* ロゴを中央に */}
+            <Image
+              source={KANYES_LOGO}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+
             <View style={styles.headerContent}>
-              <Text style={styles.headerTitle}>ケーニーズ学童保育</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4 }}>
-                <Text style={styles.headerGreeting}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[styles.headerGreeting, { color: '#fff', fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 3 }]}>
                   こんにちは！{name || 'ゲスト'}さん
                 </Text>
-                <Animated.Text style={[{ fontSize: 16 }, waveStyle]}>👋</Animated.Text>
               </View>
             </View>
 
+            {/* ホームページリンク（左下） */}
+            <TouchableOpacity
+              style={{ position: 'absolute', bottom: 14, left: 16, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}
+              onPress={() => Linking.openURL('https://kanyes-club.com/')}
+            >
+              <Ionicons name="globe-outline" size={14} color="#fff" />
+              <Text style={{ fontSize: 11, color: '#fff', fontWeight: 'bold' }}>公式サイトへ</Text>
+              <Ionicons name="open-outline" size={11} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+
             {/* クマの装飾 */}
-            <Animated.View style={[styles.bearDecoration, floatStyle]}>
+            <View style={styles.bearDecoration}>
               <Image source={ANIMALS.bear} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            </Animated.View>
+            </View>
           </View>
         </Animated.View>
 
@@ -625,7 +642,7 @@ export default function MenuScreen() {
                       <View style={[styles.staffDot, { backgroundColor: color }]} />
                       <Text style={[styles.staffName, { fontSize: 14 }]}>{entry.staffName}</Text>
                     </View>
-                    <View style={styles.tripsRow}>
+                    <View style={[styles.tripsRow, { flexWrap: 'wrap' }]}>
                       {activeTrips.map((trip: any, tIdx: number) => (
                         <View key={tIdx} style={[styles.tripSlot, { borderColor: color, backgroundColor: '#fff', borderRadius: 8 }]}>
                           <Text style={[styles.tripLabelText, { color, fontWeight: 'bold' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
@@ -676,10 +693,14 @@ export default function MenuScreen() {
 
         {/* ── セクションラベル ── */}
         <View style={styles.sectionLabelWrap}>
-          <Text style={styles.sectionLabel}>MENU</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
+            <Text style={styles.sectionLabel}>MENU</Text>
+          </View>
           {(role === 'staff' || role === 'admin') && (
             <TouchableOpacity style={styles.noticeBtn} onPress={() => setNoticeVisible(true)}>
-              <Text style={styles.noticeBtnText}>メモを追加する</Text>
+              <Ionicons name="pencil-outline" size={14} color="#fff" />
+              <Text style={styles.noticeBtnText}>メモを追加</Text>
               {(todayMemos.length + adminNotices.length) > 0 && (
                 <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
               )}
@@ -814,7 +835,7 @@ export default function MenuScreen() {
               )}
               <View style={styles.gridRow}>
                 <MenuCard
-                  image={MENU_ICONS.yearEvents} title="イベント詳細" subtitle="年行事・長期休み" bgColor="#FF9F43"
+                  image={MENU_ICONS.yearEvents} title="イベント詳細" subtitle="年行事・長期休み" bgColor="#A8D8C8"
                   onPress={() => router.push({ pathname: '/year-events', params: { role: role || '' } } as any)}
                   animValue={cardAnims[7]}
                 />
@@ -828,6 +849,35 @@ export default function MenuScreen() {
       </ScrollView>
 
       {/* ── 学年一括更新モーダル ── */}
+      {/* 学年変更：上げる/下げる選択モーダル */}
+      <Modal visible={gradeChoiceModalVisible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360 }}>
+            <Text style={{ fontSize: 17, fontWeight: 'bold', textAlign: 'center', color: '#333', marginBottom: 8 }}>学年一括変更</Text>
+            <Text style={{ fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 24 }}>操作を選んでください</Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#4CAF50', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 }}
+              onPress={() => { setGradeChoiceModalVisible(false); prepareGradeUp('up'); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>進級（学年を1つ上げる）</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 }}>小6は「卒業」になります</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ backgroundColor: '#FF9800', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 }}
+              onPress={() => { setGradeChoiceModalVisible(false); prepareGradeUp('down'); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>学年を1つ下げる（戻す）</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ backgroundColor: '#EEE', padding: 14, borderRadius: 12, alignItems: 'center' }}
+              onPress={() => setGradeChoiceModalVisible(false)}
+            >
+              <Text style={{ color: '#555', fontWeight: 'bold' }}>キャンセル</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={gradeUpModalVisible} animationType="slide" transparent>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
           <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
@@ -1208,73 +1258,53 @@ export default function MenuScreen() {
       </Modal>
 
 
-      {/* ── 設定ドロワー ── */}
+      {/* ── 設定ドロワー（右からスライド） ── */}
       {settingsVisible && (
         <View style={styles.drawerOverlay}>
           <TouchableOpacity style={styles.drawerCloseArea} onPress={closeSettings} />
           <Animated.View style={[styles.drawerContent, { transform: [{ translateX: slideAnim }] }]}>
-            <View style={styles.drawerHeader}>
-              <Text style={styles.drawerTitle}>⚙️ 設定メニュー</Text>
-              <TouchableOpacity onPress={closeSettings}>
-                <Text style={{ fontSize: 24, color: '#5D4037' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.drawerScroll}>
+            {/* 閉じるボタン */}
+            <TouchableOpacity onPress={closeSettings} style={styles.drawerCloseBtn}>
+              <Text style={{ fontSize: 22, color: '#fff' }}>✕</Text>
+            </TouchableOpacity>
+
+            <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 60, paddingBottom: 60 }}>
               {role === 'admin' && (
                 <>
-                  <Text style={styles.drawerSectionTitle}>【管理者専用】</Text>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/school-times'); }}>
-                    <Text style={styles.drawerIcon}>⏰</Text>
-                    <Text style={styles.drawerItemText}>学校別下校時刻</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/holidays-setting'); }}>
-                    <Text style={styles.drawerIcon}>📅</Text>
-                    <Text style={styles.drawerItemText}>長期休み設定</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/lesson-management' as any); }}>
-                    <Text style={styles.drawerIcon}>📚</Text>
-                    <Text style={styles.drawerItemText}>習い事一覧</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/regular-users' as any); }}>
-                    <Text style={styles.drawerIcon}>📋</Text>
-                    <Text style={styles.drawerItemText}>定期利用者一覧</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); prepareGradeUp('up'); }}>
-                    <Text style={styles.drawerIcon}>🎓</Text>
-                    <Text style={styles.drawerItemText}>学年を一括で上げる（進級）</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); prepareGradeUp('down'); }}>
-                    <Text style={styles.drawerIcon}>↩️</Text>
-                    <Text style={styles.drawerItemText}>学年を一括で下げる（戻す）</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any); }}>
-                    <Text style={styles.drawerIcon}>🚗</Text>
-                    <Text style={styles.drawerItemText}>有料送迎 管理</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); setPeriodModal(true); }}>
-                    <Text style={styles.drawerIcon}>📆</Text>
-                    <Text style={styles.drawerItemText}>シフト入力期間の設定</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.drawerItem} onPress={() => { closeSettings(); router.push('/staff-hours' as any); }}>
-                    <Text style={styles.drawerIcon}>⏱️</Text>
-                    <Text style={styles.drawerItemText}>スタッフ別合計勤務時間</Text>
-                  </TouchableOpacity>
-                  <View style={{ height: 1, backgroundColor: '#E8DDD0', marginVertical: 16 }} />
+                  {[
+                    { label: '学校別下校時刻', onPress: () => { closeSettings(); router.push('/school-times'); } },
+                    { label: '長期休み設定', onPress: () => { closeSettings(); router.push('/holidays-setting'); } },
+                    { label: '習い事一覧', onPress: () => { closeSettings(); router.push('/lesson-management' as any); } },
+                    { label: '定期利用者一覧', onPress: () => { closeSettings(); router.push('/regular-users' as any); } },
+                    { label: '学年一括変更', onPress: () => { closeSettings(); setGradeChoiceModalVisible(true); } },
+                    { label: '有料送迎 管理', onPress: () => { closeSettings(); router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any); } },
+                    { label: 'シフト入力期間', onPress: () => { closeSettings(); setPeriodModal(true); } },
+                    { label: '合計勤務時間', onPress: () => { closeSettings(); router.push('/staff-hours' as any); } },
+                    { label: 'パスワード変更', onPress: () => { closeSettings(); openPasswordModal(); } },
+                  ].map((item, i) => (
+                    <View key={i} style={styles.drawerItem}>
+                      <TouchableOpacity onPress={item.onPress} style={{ alignItems: 'center', width: '100%' }}>
+                        <Text style={styles.drawerItemText}>{item.label}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.drawerDivider} />
+                    </View>
+                  ))}
                 </>
               )}
               {role !== 'admin' && (
-                <TouchableOpacity style={styles.drawerItem} onPress={openPasswordModal}>
-                  {fetchingDocId
-                    ? <ActivityIndicator size="small" color="#D4AF37" style={{ marginRight: 16 }} />
-                    : <Text style={styles.drawerIcon}>🔒</Text>
-                  }
-                  <Text style={styles.drawerItemText}>パスワード変更</Text>
-                </TouchableOpacity>
+                <View style={styles.drawerItem}>
+                  <TouchableOpacity onPress={openPasswordModal} style={{ alignItems: 'center', width: '100%' }}>
+                    <Text style={styles.drawerItemText}>パスワード変更</Text>
+                  </TouchableOpacity>
+                  <View style={styles.drawerDivider} />
+                </View>
               )}
-              <TouchableOpacity style={[styles.drawerItem, { borderBottomWidth: 0, marginTop: 20 }]} onPress={handleLogout}>
-                <Text style={styles.drawerIcon}>🚪</Text>
-                <Text style={[styles.drawerItemText, { color: '#E74C3C', fontWeight: 'bold' }]}>ログアウト</Text>
-              </TouchableOpacity>
+              <View style={[styles.drawerItem, { marginTop: 16 }]}>
+                <TouchableOpacity onPress={handleLogout} style={{ alignItems: 'center', width: '100%' }}>
+                  <Text style={[styles.drawerItemText, { color: '#FFB3B3' }]}>ログアウト</Text>
+                </TouchableOpacity>
+                <View style={styles.drawerDivider} />
+              </View>
             </ScrollView>
           </Animated.View>
         </View>
@@ -1427,7 +1457,7 @@ const styles = StyleSheet.create({
 
   // ── ヘッダー ──
   headerBg: {
-    backgroundColor: '#AEE4F5',
+    backgroundColor: '#00C0C7',
     paddingTop: 20,
     paddingBottom: 52,
     paddingHorizontal: 20,
@@ -1435,6 +1465,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 32,
     position: 'relative',
     overflow: 'hidden',
+    minHeight: 140,
   },
   cloud: {
     position: 'absolute',
@@ -1455,8 +1486,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingRight: 48,
   },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#5D4037' },
-  headerGreeting: { fontSize: 14, color: '#5D4037', fontWeight: '600' },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+  headerGreeting: { fontSize: 14, color: '#fff', fontWeight: '600' },
   bearDecoration: {
     position: 'absolute',
     width: 88,
@@ -1488,14 +1519,13 @@ const styles = StyleSheet.create({
   staffName: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
   tripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tripSlot: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'flex-start',
-    gap: 6,
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    minWidth: 100,
+    width: '47%',
     borderStyle: 'solid'
   },
   tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1 },
@@ -1510,25 +1540,22 @@ const styles = StyleSheet.create({
   pickupStaffText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
 
   // ── セクションラベル ──
-  sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   paidBanner: { marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFF3E0', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#FF7043' },
   paidBannerTitle: { fontSize: 13, fontWeight: 'bold', color: '#FF7043' },
   paidBannerCount: { fontSize: 18, fontWeight: 'bold', color: '#333', marginTop: 2 },
   paidBannerBtn: { backgroundColor: '#FF7043', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   paidBannerBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  noticeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#7CB342', paddingHorizontal: 18, paddingVertical: 11, borderRadius: 20, gap: 6, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4, elevation: 3 },
+  noticeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#00C0C7', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, gap: 5, shadowColor: '#00C0C7', shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
   noticeBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   noticeBadge: { backgroundColor: '#E53935', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   noticeBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   sectionLabel: {
-    fontSize: 38,
+    fontSize: 26,
     fontWeight: '900',
-    color: '#5D4037',
-    letterSpacing: 12,
+    color: '#333',
+    letterSpacing: 8,
     fontStyle: 'italic',
-    textShadowColor: 'rgba(93,64,55,0.18)',
-    textShadowOffset: { width: 2, height: 3 },
-    textShadowRadius: 6,
   },
 
   // ── グリッド ──
@@ -1572,26 +1599,28 @@ const styles = StyleSheet.create({
   // ── ドロワー ──
   drawerOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(45,42,34,0.5)', zIndex: 100, flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 100, flexDirection: 'row',
   },
   drawerCloseArea: { flex: 1 },
   drawerContent: {
-    width: width * 0.75, backgroundColor: '#FFF8F0', height: '100%',
-    shadowColor: '#000', shadowOpacity: 0.2, elevation: 20,
+    width: width * 0.55, backgroundColor: '#00C0C7', height: '100%',
+    shadowColor: '#000', shadowOpacity: 0.3, elevation: 20,
   },
   drawerHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderColor: '#E8DDD0', paddingTop: 60,
+    paddingHorizontal: 16, paddingVertical: 12, paddingTop: 52,
+    borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
-  drawerTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037' },
-  drawerScroll: { padding: 20 },
-  drawerSectionTitle: { fontSize: 11, fontWeight: 'bold', color: '#D4AF37', marginBottom: 12, letterSpacing: 1 },
-  drawerItem: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1, borderColor: '#E8DDD0',
+  drawerCloseBtn: {
+    position: 'absolute', top: 16, right: 16, zIndex: 10, paddingTop: 20, padding: 8,
   },
-  drawerIcon: { fontSize: 20, marginRight: 16 },
-  drawerItemText: { fontSize: 14, color: '#5D4037' },
+  drawerTitle: { fontSize: 15, fontWeight: 'bold', color: '#fff' },
+  drawerScroll: { paddingHorizontal: 20 },
+  drawerSectionTitle: { fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 10, textAlign: 'center' },
+  drawerItem: { alignItems: 'center', paddingVertical: 2 },
+  drawerDivider: { width: 30, height: 1.5, backgroundColor: 'rgba(255,255,255,0.5)', marginTop: 6, marginBottom: 6, alignSelf: 'center' },
+  drawerIcon: { fontSize: 0, width: 0 },
+  drawerItemText: { fontSize: 16, color: '#fff', fontWeight: '400', textAlign: 'center', letterSpacing: 0.5, fontStyle: 'normal', paddingVertical: 8 },
 
   // ── モーダル ──
   modalOverlay: { flex: 1, backgroundColor: 'rgba(45,42,34,0.55)', justifyContent: 'center', padding: 20 },

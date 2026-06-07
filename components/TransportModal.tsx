@@ -398,6 +398,7 @@ export default function TransportModal({
               <View style={styles.rightPanel}>
                 <Text style={styles.rightTitle}>送迎先</Text>
                 <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                   {blocks.map((block, bIdx) => {
                     const bColor = STAFF_COLORS[bIdx % STAFF_COLORS.length];
                     const isAssigned = assignedBlockKeys.has(block.key);
@@ -426,6 +427,7 @@ export default function TransportModal({
                       </TouchableOpacity>
                     );
                   })}
+                  </View>
                   {[...assignedBlockKeys].length === blocks.length && blocks.length > 0 && (
                     <View style={{ alignItems: 'center', marginTop: 8 }}>
                       <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
@@ -582,9 +584,9 @@ const styles = StyleSheet.create({
   lastWeekBannerText: { fontSize: 11, color: '#856404', fontWeight: 'bold' },
 
   body: { flex: 1, flexDirection: 'row' },
-  rightPanel: { width: 110, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 8 },
-  rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#555', textAlign: 'center', marginBottom: 8 },
-  blockChip: { borderRadius: 12, padding: 8, marginBottom: 8, borderWidth: 2, alignItems: 'center' },
+  rightPanel: { width: 160, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 6 },
+  rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#555', textAlign: 'center', marginBottom: 6 },
+  blockChip: { borderRadius: 12, padding: 6, marginBottom: 6, borderWidth: 2, alignItems: 'center', width: '47%' },
   blockChipText: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   countBadge: { marginTop: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
   countText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },

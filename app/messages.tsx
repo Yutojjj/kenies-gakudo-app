@@ -90,11 +90,22 @@ async function setupFCMToken(accountId: string) {
 }
 
 function deriveParticipants(convId: string): string[] {
+  if (convId.startsWith('staff_dm_')) {
+    // staff_dm_{id1}_{id2} 形式
+    const parts = convId.replace('staff_dm_', '').split('__');
+    return parts.length === 2 ? parts : [];
+  }
   if (convId.startsWith('direct_')) {
     const userId = convId.replace('direct_', '');
     return [ADMIN_ID, userId];
   }
   return [];
+}
+
+// スタッフ同士のDM用conversationId生成（order保証）
+function getStaffDmId(id1: string, id2: string): string {
+  const sorted = [id1, id2].sort();
+  return `staff_dm_${sorted[0]}__${sorted[1]}`;
 }
 
 async function pushNotify(
@@ -314,7 +325,10 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
           </View>
           <Text style={{ flex: 1, fontWeight: 'bold', fontSize: 14, color: '#333' }}>{acc.name}</Text>
           <TouchableOpacity style={{ padding: 10, backgroundColor: '#BBDEFB', borderRadius: 10, marginRight: 8 }}
-            onPress={() => openChat({ id: `direct_${acc.id}`, type: 'direct', name: acc.name })}>
+            onPress={() => {
+              const myId = accounts.find((a: any) => a.role === 'staff' && a.name !== acc.name)?.id || '';
+              openChat({ id: getStaffDmId(acc.id, myId || acc.id), type: 'direct', name: acc.name });
+            }}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color="#1565C0" />
           </TouchableOpacity>
           <TouchableOpacity style={{ padding: 10, backgroundColor: '#C8E6C9', borderRadius: 10 }}

@@ -18,6 +18,25 @@ import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
 const DAYS = ['月', '火', '水', '木', '金'];
+
+// 時間文字列ごとに一意の色を返す（同じ時間は常に同じ色）
+const TIME_COLORS = [
+  '#1565C0', // 濃紺
+  '#C62828', // 深赤
+  '#2E7D32', // 深緑
+  '#6A1B9A', // 深紫
+  '#E65100', // 深オレンジ
+  '#00695C', // 深ティール
+  '#4527A0', // インディゴ
+  '#AD1457', // 深ピンク
+];
+
+function getTimeColor(time: string): string {
+  if (!time) return '#1A237E';
+  let hash = 0;
+  for (let i = 0; i < time.length; i++) hash = time.charCodeAt(i) + ((hash << 5) - hash);
+  return TIME_COLORS[Math.abs(hash) % TIME_COLORS.length];
+}
 const HOURS = Array.from({ length: 11 }, (_, i) => i + 10); // 10時〜20時
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10...55分
 
@@ -40,6 +59,21 @@ export default function SchoolTimesScreen() {
   const [addTimeVisible, setAddTimeVisible] = useState(false);
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
+
+  const ST_ITEM_HEIGHT = 44;
+  const stHourScrollRef = React.useRef<any>(null);
+  const stMinScrollRef  = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    if (!pickerVisible) return;
+    const timer = setTimeout(() => {
+      const hi = HOURS.indexOf(tempHour);
+      const mi = MINUTES.indexOf(tempMinute);
+      if (hi >= 0) stHourScrollRef.current?.scrollTo({ y: 53 + hi * ST_ITEM_HEIGHT, animated: false });
+      if (mi >= 0) stMinScrollRef.current?.scrollTo({ y: 53 + mi * ST_ITEM_HEIGHT, animated: false });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [pickerVisible]);
 
   // 保存完了トースト
   const [saveToast, setSaveToast] = useState(false);
@@ -223,7 +257,7 @@ export default function SchoolTimesScreen() {
                       <TouchableOpacity 
                         style={[
                           styles.timeCellBtn, 
-                          val ? styles.timeCellBtnActive : null,
+                          val ? [styles.timeCellBtnActive, { backgroundColor: getTimeColor(val) + '18', borderColor: getTimeColor(val) + '60' }] : null,
                           isStampingMode && styles.timeCellBtnStamping
                         ]} 
                         onPress={() => {
@@ -238,7 +272,7 @@ export default function SchoolTimesScreen() {
                           }
                         }}
                       >
-                        <Text style={val ? styles.timeText : styles.timeTextEmpty}>
+                        <Text style={val ? [styles.timeText, { color: getTimeColor(val) }] : styles.timeTextEmpty}>
                           {val || '設定'}
                         </Text>
                       </TouchableOpacity>
@@ -335,22 +369,26 @@ export default function SchoolTimesScreen() {
             <View style={styles.addTimeContainer}>
               <View style={styles.pickerColumns}>
                 <View style={styles.pickerColumnWrapper}>
-                  <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                  <ScrollView ref={stHourScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    <View style={{ height: 53 }} />
                     {HOURS.map(h => (
                       <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
                         <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
                       </TouchableOpacity>
                     ))}
+                    <View style={{ height: 53 }} />
                   </ScrollView>
                 </View>
                 <Text style={styles.pickerColon}>:</Text>
                 <View style={styles.pickerColumnWrapper}>
-                  <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                  <ScrollView ref={stMinScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    <View style={{ height: 53 }} />
                     {MINUTES.map(m => (
                       <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
                         <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                       </TouchableOpacity>
                     ))}
+                    <View style={{ height: 53 }} />
                   </ScrollView>
                 </View>
               </View>
@@ -405,7 +443,7 @@ const styles = StyleSheet.create({
   timeCellBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, backgroundColor: '#FAFAFA', borderRadius: 6, borderWidth: 1, borderColor: 'transparent' },
   timeCellBtnActive: { backgroundColor: COLORS.primary + '10', borderColor: COLORS.primary + '40' },
   timeCellBtnStamping: { backgroundColor: '#F0F8FF' },
-  timeText: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary },
+  timeText: { fontSize: 13, fontWeight: 'bold', color: '#1A237E' },
   timeTextEmpty: { fontSize: 12, color: COLORS.textLight, fontStyle: 'italic' },
   saveBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 16, alignItems: 'center', justifyContent: 'center', margin: 16, borderRadius: 8 },
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },

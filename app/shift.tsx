@@ -342,17 +342,23 @@ export default function ShiftScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.stampBanner}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons name="create-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-          <Text style={styles.bannerText}>現在選択中：</Text>
-        </View>
-        <View style={[
-          styles.activeStampBadge,
-          activeStamp === '✕' ? styles.stampBadgeAll : activeStamp === '午前✕' ? styles.stampBadgeAM : styles.stampBadgePM
-        ]}>
-          <Text style={styles.activeStampText}>{activeStamp}</Text>
-        </View>
+      {/* 種類選択ボタン（インライン3つ） */}
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F8F8F8', borderBottomWidth: 1, borderColor: '#E0E0E0' }}>
+        <Text style={{ fontSize: 12, color: '#888', alignSelf: 'center', marginRight: 4 }}>希望休の種類：</Text>
+        {(['✕', '午前✕', '午後✕'] as ShiftType[]).map(type => (
+          <TouchableOpacity
+            key={type}
+            style={{
+              flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center',
+              backgroundColor: activeStamp === type ? (type === '✕' ? '#EF5350' : type === '午前✕' ? '#29B6F6' : '#FFA726') : '#fff',
+              borderWidth: 1.5,
+              borderColor: activeStamp === type ? 'transparent' : (type === '✕' ? '#EF5350' : type === '午前✕' ? '#29B6F6' : '#FFA726'),
+            }}
+            onPress={() => setActiveStamp(type)}
+          >
+            <Text style={{ fontWeight: 'bold', fontSize: 13, color: activeStamp === type ? '#fff' : '#555' }}>{type}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <ScrollView style={styles.scrollArea}>
@@ -441,10 +447,19 @@ export default function ShiftScreen() {
 
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={() => setStampModalVisible(true)}>
-        <Ionicons name="options-outline" size={24} color={COLORS.white} />
-        <Text style={styles.fabText}>種類変更</Text>
-      </TouchableOpacity>
+      {/* 大きい保存ボタン */}
+      {Object.keys(pendingChanges).length > 0 && (
+        <TouchableOpacity
+          style={{ backgroundColor: '#4CAF50', margin: 14, borderRadius: 14, paddingVertical: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, shadowColor: '#4CAF50', shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 }}
+          onPress={saveShifts}
+          disabled={saving}
+        >
+          <Ionicons name="cloud-upload-outline" size={22} color="#fff" />
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 17 }}>
+            {saving ? '保存中...' : `保存する（${Object.keys(pendingChanges).length}件の変更）`}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.ssModalContainer}>

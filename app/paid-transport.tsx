@@ -239,15 +239,58 @@ export default function PaidTransportScreen() {
   };
 
   // ─── 金額計算 ─────────────────────────────────────────────────
-  const calcEstimatedAmount = (record: MonthlyRecord | null): number => {
-    if (!record) return 0;
-    return Object.values(record.days || {})
-      .filter(d => d.status === 'circle')
-      .reduce((sum, d) => sum + d.count * PRICE_PER, 0);
+  const DOW_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+
+  // その月の有料送迎の予定日数を習い事の曜日から計算
+  const countPaidLessonDaysInMonth = (member: Member, year: number, month: number): number => {
+    const memberLessons = lessons.filter(l => l.childId === member.childId && l.isPaid === true);
+    if (memberLessons.length === 0) return 0;
+    const paidDows = new Set(memberLessons.map((l: any) => l.dayOfWeek));
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (paidDows.has(DOW_NAMES[dow])) count++;
+    }
+    return count;
+  };
+
+  const calcEstimatedAmount = (record: MonthlyRecord | null, member?: Member): number => {
+    const days = record?.days || {};
+    let total = 0;
+    const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+
+    // メンバーの有料送迎曜日を取得
+    const memberLessons = member
+      ? lessons.filter(l => l.childId === member.childId && l.isPaid === true)
+      : [];
+    const paidDows = new Set(memberLessons.map((l: any) => l.dayOfWeek));
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${selYear}-${String(selMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dow = new Date(selYear, selMonth - 1, d).getDay();
+      const dowName = DOW_NAMES[dow];
+      const entry = days[dateStr];
+
+      if (entry?.status === 'circle') {
+        // ○確定済み → 設定回数 × 500
+        total += (entry.count || 1) * PRICE_PER;
+      } else if (entry?.status === 'cross') {
+        // ✕ → 0円
+      } else if (paidDows.has(dowName)) {
+        // 未設定で有料送迎曜日 → 1回分を見込みに含める
+        total += PRICE_PER;
+      }
+    }
+    return total;
   };
 
   const calcConfirmedAmount = (record: MonthlyRecord | null): number => {
-    return calcEstimatedAmount(record);
+    // 確定金額は○のみ
+    if (!record) return 0;
+    return Object.values(record.days || {})
+      .filter(d => d.status === 'circle')
+      .reduce((sum, d) => sum + (d.count || 1) * PRICE_PER, 0);
   };
 
   // ─── その月の未入力チェック ───────────────────────────────────
@@ -310,7 +353,7 @@ export default function PaidTransportScreen() {
   // ─── 管理者メンバーカード ─────────────────────────────────────
   const AdminMemberCard = ({ member }: { member: Member }) => {
     const record = getRecord(member.id);
-    const estimated = calcEstimatedAmount(record);
+    const estimated = calcEstimatedAmount(record, member);
     const confirmed = calcConfirmedAmount(record);
     const unfilled = hasUnfilledDays(member);
 
@@ -371,7 +414,7 @@ export default function PaidTransportScreen() {
   // ─── 利用者カード ─────────────────────────────────────────────
   const UserMemberCard = ({ member }: { member: Member }) => {
     const record = getRecord(member.id);
-    const estimated = calcEstimatedAmount(record);
+    const estimated = calcEstimatedAmount(record, member);
     return (
       <TouchableOpacity style={styles.memberCard} onPress={() => openCalendar(member)} activeOpacity={0.85}>
         <View style={styles.memberCardTop}>
@@ -403,6 +446,8 @@ export default function PaidTransportScreen() {
     if (!calendarMember) return null;
     const member = calendarMember;
     const record = getRecord(member.id);
+    const isAdminLocal = isAdmin;
+    const isUserLocal = isUser;
     const [days, setDays] = useState<Record<string, DayEntry>>(record?.days || {});
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [dayPickerVisible, setDayPickerVisible] = useState(false);
@@ -412,10 +457,22 @@ export default function PaidTransportScreen() {
     const daysInMonth = getDaysInMonth(selYear, selMonth);
     const firstDayOfWeek = new Date(selYear, selMonth - 1, 1).getDay(); // 0=日
 
-    const totalEstimated = Object.values(days)
+    // 見込み：○確定 + 未設定の有料送迎曜日
+    const memberLessonsForCal = lessons.filter(l => l.childId === member.childId && l.isPaid === true);
+    const paidDowsForCal = new Set(memberLessonsForCal.map((l: any) => l.dayOfWeek));
+    const DOW_N = ['日','月','火','水','木','金','土'];
+    let totalEstimated = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${selYear}-${String(selMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dow = new Date(selYear, selMonth - 1, d).getDay();
+      const entry = days[dateStr];
+      if (entry?.status === 'circle') totalEstimated += (entry.count || 1) * PRICE_PER;
+      else if (entry?.status !== 'cross' && paidDowsForCal.has(DOW_N[dow])) totalEstimated += PRICE_PER;
+    }
+    // 確定金額：○のみ
+    const totalConfirmed = Object.values(days)
       .filter(d => d.status === 'circle')
-      .reduce((s, d) => s + d.count * PRICE_PER, 0);
-    const totalConfirmed = totalEstimated; // 同じ計算
+      .reduce((s, d) => s + (d.count || 1) * PRICE_PER, 0);
 
     // 今日以降で未入力かチェック
     const isUnfilled = (dateStr: string) => {
@@ -491,14 +548,24 @@ export default function PaidTransportScreen() {
               isToday && styles.calCellToday,
             ]}
             onPress={() => {
-              if (isAdmin && !isConfirmedAndLocked) {
+              if (isAdminLocal && !isConfirmedAndLocked) {
                 setSelectedDate(dateStr);
                 setDayPickerVisible(true);
               }
             }}
-            activeOpacity={isAdmin && !isConfirmedAndLocked ? 0.7 : 1}
+            activeOpacity={isAdminLocal && !isConfirmedAndLocked ? 0.7 : 1}
           >
             <Text style={[styles.calDateNum, isWeekend && { color: dow === 0 ? '#E53935' : '#1565C0' }]}>{d}</Text>
+            {/* 習い事情報は常に表示 */}
+            {hasPaidLesson && (
+              <View style={{ marginTop: 1 }}>
+                {paidLessons.slice(0, 1).map((l: any, li: number) => (
+                  <Text key={li} style={{ fontSize: 8, color: '#1565C0', fontWeight: 'bold', textAlign: 'center', lineHeight: 10 }} numberOfLines={2}>
+                    {l.lessonName || '送迎'}{'\n'}{l.lessonTime || ''}
+                  </Text>
+                ))}
+              </View>
+            )}
             {entry?.status === 'circle' && (
               <>
                 <Text style={styles.calCircle}>○</Text>
@@ -506,9 +573,6 @@ export default function PaidTransportScreen() {
               </>
             )}
             {entry?.status === 'cross' && <Text style={styles.calCross}>✕</Text>}
-            {hasPaidLesson && !entry && (
-              <View style={styles.lessonDot} />
-            )}
           </TouchableOpacity>
         );
       }
@@ -567,13 +631,13 @@ export default function PaidTransportScreen() {
             </ScrollView>
 
             {/* 管理者：確定ボタン */}
-            {isAdmin && !record?.isConfirmed && (
+            {isAdminLocal && !record?.isConfirmed && (
               <TouchableOpacity style={styles.confirmBtn} onPress={() => setConfirmVisible(true)}>
                 <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
                 <Text style={styles.confirmBtnText}>確定する</Text>
               </TouchableOpacity>
             )}
-            {isAdmin && record?.isConfirmed && (
+            {isAdminLocal && record?.isConfirmed && (
               <View style={styles.confirmedBar}>
                 <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
                 <Text style={{ color: '#4CAF50', fontWeight: 'bold', marginLeft: 6 }}>確定済み</Text>
@@ -581,13 +645,13 @@ export default function PaidTransportScreen() {
             )}
 
             {/* 利用者：承諾ボタン */}
-            {isUser && record?.isConfirmed && !record?.isAccepted && (
+            {isUserLocal && record?.isConfirmed && !record?.isAccepted && (
               <TouchableOpacity style={styles.acceptBtn} onPress={() => setSignModal(true)}>
                 <Ionicons name="create-outline" size={20} color="#fff" />
                 <Text style={styles.confirmBtnText}>承諾してサインする</Text>
               </TouchableOpacity>
             )}
-            {isUser && record?.isAccepted && (
+            {isUserLocal && record?.isAccepted && (
               <View style={styles.confirmedBar}>
                 <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
                 <Text style={{ color: '#4CAF50', fontWeight: 'bold', marginLeft: 6 }}>承諾済み</Text>
@@ -841,9 +905,10 @@ export default function PaidTransportScreen() {
       </Modal>
     </SafeAreaView>
   );
-}
 
 // ─── スタイル ─────────────────────────────────────────────────────
+
+}
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
