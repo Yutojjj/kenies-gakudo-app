@@ -13,6 +13,7 @@ import {
 import SignaturePad from '../components/SignaturePad';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 // ─── ユーティリティ ───────────────────────────────────────────────────
 const customAlert = (title: string, message?: string) => {
@@ -79,6 +80,9 @@ const today = new Date();
 
 // ─── メイン画面 ──────────────────────────────────────────────────────
 export default function PaidTransportScreen() {
+  const { verified } = useRequireRole(['admin', 'user', 'staff']);
+  if (!verified) return null;
+
   const router = useRouter();
   const { role: roleParam, name: nameParam } = useLocalSearchParams<{ role?: string; name?: string }>();
   const isAdmin = roleParam === 'admin';

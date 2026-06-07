@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -69,6 +70,9 @@ const getGradeNum = (grade: string) => {
 };
 
 export default function LessonManagementScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
 
   const [kids, setKids] = useState<Kid[]>([]);

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 // ─── ユーティリティ ────────────────────────────────────────────
 const customAlert = (title: string, msg?: string) => {
@@ -247,6 +248,9 @@ const EMPTY_RICH: RichDoc = [[{ text: '' }]];
 
 // ─── メイン画面 ───────────────────────────────────────────────
 export default function YearEventsScreen() {
+  const { verified } = useRequireRole(['admin', 'user', 'staff']);
+  if (!verified) return null;
+
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role?: string; name?: string }>();
   const isAdmin = role === 'admin';

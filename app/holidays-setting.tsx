@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 type HolidayPeriod = { id: string, name: string, start: string, end: string, color?: string };
 
@@ -14,6 +15,9 @@ const toDateStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export default function HolidaysSettingScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const [periods, setPeriods] = useState<HolidayPeriod[]>([]);
 

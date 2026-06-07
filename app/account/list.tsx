@@ -6,8 +6,12 @@ import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet,
 import { COLORS } from '../../constants/theme';
 import { useCall } from '../../contexts/CallContext';
 import { db } from '../../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 export default function AccountManagementScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const { startCall } = useCall(); 
   

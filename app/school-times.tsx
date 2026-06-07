@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 const DAYS = ['月', '火', '水', '木', '金'];
 
@@ -41,6 +42,9 @@ const HOURS = Array.from({ length: 11 }, (_, i) => i + 10); // 10時〜20時
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10...55分
 
 export default function SchoolTimesScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   

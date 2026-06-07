@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 type Kid = {
   id: string; name: string; nicknameKana: string;
@@ -30,6 +31,9 @@ const GRADE_ORDER: Record<string, number> = {
 const gradeVal = (g: string) => GRADE_ORDER[g] ?? 99;
 
 export default function RegularUsersScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const [kids, setKids] = useState<Kid[]>([]);
   const [filterDow, setFilterDow] = useState<string>('全て');
