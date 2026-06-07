@@ -290,14 +290,14 @@ function UserListSection({ accounts, masterSchools, searchQuery, openChat, openC
 }
 
 // スタッフ一覧セクション（グループ追加ポップアップ付き）
-function StaffListSection({ accounts, searchQuery, conversations, openChat, openCreateGroupModal, setSelectedUserIds, onAddToGroup }: {
+function StaffListSection({ accounts, searchQuery, conversations, openChat, openCreateGroupModal, setSelectedUserIds, onAddToGroup, myAccountId = '' }: {
   accounts: any[]; searchQuery: string; conversations: any[];
   openChat: (c: any) => void; openCreateGroupModal: () => void; setSelectedUserIds: any;
-  onAddToGroup: (groupId: string, accId: string) => void;
+  onAddToGroup: (groupId: string, accId: string) => void; myAccountId?: string;
 }) {
   const [groupPickTarget, setGroupPickTarget] = React.useState<any | null>(null);
   const groups = conversations.filter((c: any) => c.type === 'group');
-  const staffList = accounts.filter(a => a.role === 'staff' && (!searchQuery || a.name?.includes(searchQuery)));
+  const staffList = accounts.filter(a => a.role === 'staff' && a.id !== myAccountId && (!searchQuery || a.name?.includes(searchQuery)));
 
   return (
     <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#E8F0FE', borderRadius: 10, borderWidth: 1, borderColor: '#BBDEFB', overflow: 'hidden' }}>
@@ -326,8 +326,8 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
           <Text style={{ flex: 1, fontWeight: 'bold', fontSize: 14, color: '#333' }}>{acc.name}</Text>
           <TouchableOpacity style={{ padding: 10, backgroundColor: '#BBDEFB', borderRadius: 10, marginRight: 8 }}
             onPress={() => {
-              const myId = accounts.find((a: any) => a.role === 'staff' && a.name !== acc.name)?.id || '';
-              openChat({ id: getStaffDmId(acc.id, myId || acc.id), type: 'direct', name: acc.name });
+              const dmId = getStaffDmId(acc.id, myAccountId || acc.id);
+              openChat({ id: dmId, type: 'direct', name: acc.name });
             }}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color="#1565C0" />
           </TouchableOpacity>
@@ -446,15 +446,18 @@ export default function MessagesScreen() {
     if (resolvedUser) setupFCMToken(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
 
-  // ⑬ 管理者ホームタブ用データロード
+  // ⑬ ホームタブ用データロード（管理者・スタッフ共通）
   useEffect(() => {
-    if (!resolvedUser || resolvedUser.role !== 'admin') return;
+    if (!resolvedUser) return;
+    if (resolvedUser.role !== 'admin' && resolvedUser.role !== 'staff') return;
     getDocs(collection(db, 'accounts')).then(snap => {
       setHomeAllAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    getDoc(doc(db, 'settings', 'master_data')).then(snap => {
-      if (snap.exists() && snap.data().schools) setHomeMasterSchools(snap.data().schools);
-    });
+    if (resolvedUser.role === 'admin') {
+      getDoc(doc(db, 'settings', 'master_data')).then(snap => {
+        if (snap.exists() && snap.data().schools) setHomeMasterSchools(snap.data().schools);
+      });
+    }
   }, [resolvedUser?.role]);
 
   useEffect(() => {
@@ -919,6 +922,7 @@ export default function MessagesScreen() {
                   openChat={openChat}
                   openCreateGroupModal={openCreateGroupModal}
                   setSelectedUserIds={setSelectedUserIds}
+                  myAccountId={resolvedUser?.accountId || ''}
                   onAddToGroup={async (groupId: string, accId: string) => {
                     await setDoc(doc(db, 'conversations', groupId), { participants: arrayUnion(accId) }, { merge: true });
                   }}
