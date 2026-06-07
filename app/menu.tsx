@@ -565,12 +565,6 @@ export default function MenuScreen() {
           transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
         }}>
           <View style={styles.headerBg}>
-            {/* 雲の装飾 */}
-            <View style={[styles.cloud, { top: 10, left: 10, width: 70, height: 20 }]} />
-            <View style={[styles.cloud, { top: 26, left: 70, width: 50, height: 14, opacity: 0.5 }]} />
-            <View style={[styles.cloud, { top: 12, right: 130, width: 44, height: 14, opacity: 0.6 }]} />
-            <View style={[styles.cloud, { top: 50, left: 20, width: 36, height: 10, opacity: 0.35 }]} />
-            <View style={[styles.cloud, { bottom: 16, right: 20, width: 52, height: 14, opacity: 0.4 }]} />
             {/* ☰ ボタン：最前面に固定 */}
             <TouchableOpacity onPress={openSettings} style={styles.menuBtn}>
               <Text style={{ fontSize: 20 }}>☰</Text>
