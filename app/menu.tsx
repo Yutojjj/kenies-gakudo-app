@@ -195,6 +195,7 @@ export default function MenuScreen() {
   const [newPassword, setNewPassword] = useState('');
 
   const [unreadCount, setUnreadCount] = useState(0);
+  const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
@@ -224,6 +225,15 @@ export default function MenuScreen() {
     };
     checkAuth();
   }, []);
+
+  // アンケート公開件数を購読（管理者は全件、それ以外は公開中のみ）
+  useEffect(() => {
+    const q = role === 'admin'
+      ? collection(db, 'surveys')
+      : query(collection(db, 'surveys'), where('isPublished', '==', true));
+    const unsub = onSnapshot(q, snap => setSurveyCount(snap.docs.length));
+    return () => unsub();
+  }, [role]);
 
   // 未読メッセージ数を購読
   useEffect(() => {
@@ -571,6 +581,11 @@ export default function MenuScreen() {
             {/* ☰ ボタン：最前面に固定 */}
             <TouchableOpacity onPress={openSettings} style={styles.menuBtn}>
               <Text style={{ fontSize: 20 }}>☰</Text>
+              {surveyCount > 0 && (
+                <View style={styles.menuBtnBadge}>
+                  <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>{surveyCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             {/* ロゴを中央に */}
@@ -1300,6 +1315,7 @@ export default function MenuScreen() {
                     { label: 'シフト入力期間', onPress: () => { closeSettings(); setPeriodModal(true); } },
                     { label: '合計勤務時間', onPress: () => { closeSettings(); router.push('/staff-hours' as any); } },
                     { label: 'パスワード変更', onPress: () => { closeSettings(); openPasswordModal(); } },
+                    { label: `📋 アンケート${surveyCount > 0 ? `（${surveyCount}件）` : ''}`, onPress: () => { closeSettings(); router.push('/survey' as any); } },
                   ].map((item, i) => (
                     <View key={i} style={styles.drawerItem}>
                       <TouchableOpacity onPress={item.onPress} style={{ alignItems: 'center', width: '100%' }}>
@@ -1500,6 +1516,12 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.7)',
     justifyContent: 'center', alignItems: 'center',
+  },
+  menuBtnBadge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: '#E53935', borderRadius: 8,
+    minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 3,
   },
   headerContent: {
     marginTop: 10,
