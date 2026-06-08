@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import SignaturePad from '../components/SignaturePad';
 import { db, storage } from '../firebase';
-
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
