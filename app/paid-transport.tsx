@@ -7,7 +7,7 @@ import {
 import {
   getDownloadURL, ref as storageRef, uploadString
 } from 'firebase/storage';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Image, Modal, Platform, SafeAreaView,
   ScrollView, StyleSheet, Text, TextInput,
@@ -83,8 +83,7 @@ const today = new Date();
 
 // ─── メイン画面 ──────────────────────────────────────────────────────
 export default function PaidTransportScreen() {
-  const { verified } = useRequireRole(['admin', 'user', 'staff']);
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole(['admin', 'user', 'staff']);
 
   const router = useRouter();
   const { role: roleParam, name: nameParam } = useLocalSearchParams<{ role?: string; name?: string }>();
@@ -817,6 +816,7 @@ export default function PaidTransportScreen() {
     );
   }
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}

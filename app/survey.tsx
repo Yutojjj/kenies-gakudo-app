@@ -1,15 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
-    addDoc, collection, deleteDoc, doc,
-    onSnapshot, orderBy, query,
-    serverTimestamp,
-    setDoc
+  addDoc, collection, deleteDoc, doc,
+  onSnapshot, orderBy, query, setDoc, serverTimestamp
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert, Modal, Platform, SafeAreaView, ScrollView,
-    StyleSheet, Text, TextInput, TouchableOpacity, View
+  Alert, Modal, Platform, SafeAreaView, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -36,8 +34,7 @@ interface SurveyResponse {
 }
 
 export default function SurveyScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -138,6 +135,7 @@ export default function SurveyScreen() {
     ? responses.filter(r => r.surveyId === detailSurvey.id)
     : [];
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}

@@ -38,8 +38,7 @@ const formatHours = (minutes: number): string => {
 };
 
 export default function StaffHoursScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[0]);
@@ -94,6 +93,7 @@ export default function StaffHoursScreen() {
 
   const totalAllMinutes = summaries.reduce((sum, s) => sum + s.totalMinutes, 0);
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

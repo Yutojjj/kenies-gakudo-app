@@ -9,8 +9,7 @@ import { db } from '../../firebase';
 import { useRequireRole } from '../../hooks/useRequireRole';
 
 export default function AccountManagementScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const { startCall } = useCall(); 
@@ -179,6 +178,7 @@ export default function AccountManagementScreen() {
 
   const activeFilterCount = selectedSchools.length + selectedGrades.length + selectedUsageTypes.length;
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       {/* ── 色合いを豊かにしたヘッダー ── */}

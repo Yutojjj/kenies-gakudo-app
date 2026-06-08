@@ -1,5 +1,6 @@
 // fixed: 2026-06-03 23:55:50 - picker modal separated
 import { Ionicons } from '@expo/vector-icons';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { useRouter } from 'expo-router';
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -16,7 +17,6 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
-import { useRequireRole } from '../hooks/useRequireRole';
 
 const DAYS = ['月', '火', '水', '木', '金'];
 
@@ -42,8 +42,7 @@ const HOURS = Array.from({ length: 11 }, (_, i) => i + 10); // 10時〜20時
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0, 5, 10...55分
 
 export default function SchoolTimesScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -208,6 +207,7 @@ export default function SchoolTimesScreen() {
   };
 
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

@@ -46,8 +46,7 @@ type Participant = { id: string; childName: string; status: string; };
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function EventManagementScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: string }>();
@@ -177,6 +176,7 @@ export default function EventManagementScreen() {
   const externalParts = currentEvent?.externalParticipants || [];
   const totalCount = attendingInternals.length + externalParts.length;
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

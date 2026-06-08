@@ -29,8 +29,7 @@ const fmtTime = (ts: Timestamp | null) => {
 };
 
 export default function ScheduleChangesScreen() {
-  const { verified } = useRequireRole(['admin', 'staff', 'user']);
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole(['admin', 'staff', 'user']);
 
   const router = useRouter();
   const [logs, setLogs] = useState<ChangeLog[]>([]);
@@ -73,6 +72,7 @@ export default function ScheduleChangesScreen() {
   }, {});
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

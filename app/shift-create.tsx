@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
@@ -7,7 +8,6 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
-import { useRequireRole } from '../hooks/useRequireRole';
 
 const SHIFT_IMAGES = {
   autoFill: require('../assets/menu/shift_auto.png'),
@@ -21,8 +21,7 @@ const HOURS = Array.from({ length: 15 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 
 export default function ShiftCreateScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -512,6 +511,7 @@ export default function ShiftCreateScreen() {
     await setDoc(doc(db, 'settings', 'autoFillSettings'), settings);
   };
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

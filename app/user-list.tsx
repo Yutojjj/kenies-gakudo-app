@@ -11,8 +11,7 @@ import { useRequireRole } from '../hooks/useRequireRole';
 const BG_COLORS = ['#FFE4E1', '#E0FFFF', '#E6E6FA', '#FFFACD', '#F0FFF0', '#F5FFFA', '#FFE4B5', '#F0F8FF'];
 
 export default function UserListScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [groupedUsers, setGroupedUsers] = useState<Record<string, any[]>>({});
@@ -48,6 +47,7 @@ export default function UserListScreen() {
   }, []);
 
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

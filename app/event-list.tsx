@@ -37,8 +37,7 @@ const getLocalDateString = (date: Date) => {
 };
 
 export default function EventListScreen() {
-  const { verified } = useRequireRole(['admin', 'staff', 'user']);
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole(['admin', 'staff', 'user']);
 
   const router = useRouter();
   const { name } = useLocalSearchParams<{ name: string }>();
@@ -145,6 +144,7 @@ export default function EventListScreen() {
     );
   }
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

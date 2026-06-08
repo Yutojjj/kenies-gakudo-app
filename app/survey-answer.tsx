@@ -13,8 +13,7 @@ const customAlert = (t: string, m?: string) => {
 };
 
 export default function SurveyAnswerScreen() {
-  const { verified, userInfo } = useRequireRole(['admin', 'staff', 'user']);
-  if (!verified) return null;
+  const { verified, checking, userInfo } = useRequireRole(['admin', 'staff', 'user']);
 
   const { surveyId } = useLocalSearchParams<{ surveyId: string }>();
   const router = useRouter();
@@ -69,6 +68,7 @@ export default function SurveyAnswerScreen() {
     </SafeAreaView>
   );
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

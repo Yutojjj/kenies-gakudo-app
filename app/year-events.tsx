@@ -145,6 +145,7 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
 
   const span = getSpan();
 
+  if (checking || !verified) return null;
   return (
     <View style={re.wrap}>
       {/* ツールバー */}
@@ -248,8 +249,7 @@ const EMPTY_RICH: RichDoc = [[{ text: '' }]];
 
 // ─── メイン画面 ───────────────────────────────────────────────
 export default function YearEventsScreen() {
-  const { verified } = useRequireRole(['admin', 'user', 'staff']);
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole(['admin', 'user', 'staff']);
 
   const router = useRouter();
   const { role, name } = useLocalSearchParams<{ role?: string; name?: string }>();

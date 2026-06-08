@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -8,7 +9,6 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
-import { useRequireRole } from '../hooks/useRequireRole';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -70,8 +70,7 @@ const getGradeNum = (grade: string) => {
 };
 
 export default function LessonManagementScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
 
@@ -376,6 +375,7 @@ export default function LessonManagementScreen() {
     setFilterGrade('');
   };
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

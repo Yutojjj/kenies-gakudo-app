@@ -38,8 +38,7 @@ const kanaToRomaji = (kana: string): string => {
 const generateRandomDigits = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 export default function AccountFormScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -234,6 +233,7 @@ export default function AccountFormScreen() {
 
   if (initialLoading) return <SafeAreaView style={[styles.container, styles.center]}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

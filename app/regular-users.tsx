@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
-import { useRequireRole } from '../hooks/useRequireRole';
 
 type Kid = {
   id: string; name: string; nicknameKana: string;
@@ -31,8 +31,7 @@ const GRADE_ORDER: Record<string, number> = {
 const gradeVal = (g: string) => GRADE_ORDER[g] ?? 99;
 
 export default function RegularUsersScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [kids, setKids] = useState<Kid[]>([]);
@@ -119,6 +118,7 @@ export default function RegularUsersScreen() {
     }
   };
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>

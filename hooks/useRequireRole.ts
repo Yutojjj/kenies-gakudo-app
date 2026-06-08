@@ -2,14 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-/**
- * 指定ロールでのログインを検証するフック
- * - ログイン情報がない → ログイン画面にリダイレクト
- * - ロールが一致しない → ログイン画面にリダイレクト
- */
 export function useRequireRole(requiredRole: string | string[]) {
   const router = useRouter();
   const [verified, setVerified] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [userInfo, setUserInfo] = useState<{ role: string; name: string } | null>(null);
 
   useEffect(() => {
@@ -27,10 +23,12 @@ export function useRequireRole(requiredRole: string | string[]) {
         setVerified(true);
       } catch {
         router.replace('/');
+      } finally {
+        setChecking(false);
       }
     };
     check();
   }, []);
 
-  return { verified, userInfo };
+  return { verified, checking, userInfo };
 }

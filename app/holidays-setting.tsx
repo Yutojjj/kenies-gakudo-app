@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { useRouter } from 'expo-router';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
-import { useRequireRole } from '../hooks/useRequireRole';
 
 type HolidayPeriod = { id: string, name: string, start: string, end: string, color?: string };
 
@@ -15,8 +15,7 @@ const toDateStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export default function HolidaysSettingScreen() {
-  const { verified } = useRequireRole('admin');
-  if (!verified) return null;
+  const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
   const [periods, setPeriods] = useState<HolidayPeriod[]>([]);
@@ -157,6 +156,7 @@ export default function HolidaysSettingScreen() {
     setModalVisible(true);
   };
 
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
