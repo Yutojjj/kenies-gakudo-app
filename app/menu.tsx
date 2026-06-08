@@ -798,8 +798,8 @@ export default function MenuScreen() {
                   animValue={cardAnims[0]}
                 />
                 <MenuCard
-                  image={MENU_ICONS.eventManagement} title="イベント管理" subtitle="行事の管理" bgColor="#F5C842"
-                  onPress={() => router.push({ pathname: '/event-management', params: { role: role || '' } } as any)}
+                  image={MENU_ICONS.yearEvents} title="イベント管理" subtitle="行事の管理" bgColor="#F5C842"
+                  onPress={() => router.push({ pathname: '/year-events', params: { role: role || '', tab: 'management' } } as any)}
                   animValue={cardAnims[1]}
                 />
               </View>
@@ -857,14 +857,7 @@ export default function MenuScreen() {
                   />
                 </View>
               )}
-              <View style={styles.gridRow}>
-                <MenuCard
-                  image={MENU_ICONS.yearEvents} title="イベント詳細" subtitle="年行事・長期休み" bgColor="#A8D8C8"
-                  onPress={() => router.push({ pathname: '/year-events', params: { role: role || '' } } as any)}
-                  animValue={cardAnims[7]}
-                />
-                <View style={{ flex: 1 }} />
-              </View>
+              
             </>
           )}
         </View>

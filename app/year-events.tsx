@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Image, Modal, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text,
-  TouchableOpacity, View
+  TextInput, TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
@@ -30,7 +30,7 @@ const customConfirm = (title: string, msg: string, onOk: () => void) => {
 };
 
 // ─── 型定義 ────────────────────────────────────────────────────
-type MainTab = 'year' | 'vacation';
+type MainTab = 'year' | 'vacation' | 'management';
 type VacTab = 'summer' | 'winter' | 'spring';
 
 // リッチテキストのノード
@@ -415,7 +415,7 @@ export default function YearEventsScreen() {
   const { verified, checking } = useRequireRole(['admin', 'user', 'staff']);
 
   const router = useRouter();
-  const { role, name } = useLocalSearchParams<{ role?: string; name?: string }>();
+  const { role, name, tab } = useLocalSearchParams<{ role?: string; name?: string; tab?: string }>();
   const isAdmin = role === 'admin';
   const isUser = role === 'user';
 
@@ -423,8 +423,21 @@ export default function YearEventsScreen() {
   const [myParticipations, setMyParticipations] = useState<Record<string, string>>({});
   const [myAccountId, setMyAccountId] = useState<string | null>(null);
 
-  const [mainTab, setMainTab] = useState<MainTab>('year');
+  const [mainTab, setMainTab] = useState<MainTab>((tab as MainTab) || 'year');
   const [vacTab, setVacTab] = useState<VacTab>('summer');
+
+  // ── イベント管理タブ用state ──
+  const [mgmtDate, setMgmtDate] = useState(new Date());
+  const [mgmtEventsMap, setMgmtEventsMap] = useState<Record<string, any>>({});
+  const [mgmtParticipants, setMgmtParticipants] = useState<Record<string, any[]>>({});
+  const [mgmtSelectedDate, setMgmtSelectedDate] = useState('');
+  const [mgmtModalVisible, setMgmtModalVisible] = useState(false);
+  const [mgmtTitle, setMgmtTitle] = useState('');
+  const [mgmtDesc, setMgmtDesc] = useState('');
+  const [mgmtExtName, setMgmtExtName] = useState('');
+  const [mgmtExtSchool, setMgmtExtSchool] = useState('');
+  const [mgmtExtGrade, setMgmtExtGrade] = useState('');
+  const [mgmtPublicHolidays, setMgmtPublicHolidays] = useState<Record<string, string>>({});
 
   // Firestore data
   const [events, setEvents] = useState<Record<string, any[]>>({});   // key: "YYYY-MM"→配列 (events collection)
@@ -533,7 +546,25 @@ export default function YearEventsScreen() {
       if (snap.exists() && snap.data().periods) setHolidayPeriods(snap.data().periods);
     });
 
-    return () => { unsub(); unsub2(); unsub3(); unsub4(); unsubHolidays(); };
+    // イベント管理タブ用データロード
+    fetch('https://holidays-jp.github.io/api/v1/date.json')
+      .then(r => r.json()).then(d => setMgmtPublicHolidays(d)).catch(() => {});
+    const unsubMgmt1 = onSnapshot(collection(db, 'events'), snap => {
+      const map: Record<string, any> = {};
+      snap.forEach(d => { map[d.id] = { id: d.id, ...d.data() }; });
+      setMgmtEventsMap(map);
+    });
+    const unsubMgmt2 = onSnapshot(collection(db, 'event_participants'), snap => {
+      const map: Record<string, any[]> = {};
+      snap.forEach(d => {
+        const item = d.data();
+        if (!map[item.eventId]) map[item.eventId] = [];
+        map[item.eventId].push({ id: d.id, childName: item.childName, status: item.status });
+      });
+      setMgmtParticipants(map);
+    });
+
+    return () => { unsub(); unsub2(); unsub3(); unsub4(); unsubHolidays(); unsubMgmt1(); unsubMgmt2(); };
   }, []);
 
   // ─── ヘルパー ──────────────────────────────────────────────
@@ -658,6 +689,55 @@ export default function YearEventsScreen() {
         });
       });
     }
+  };
+
+  // ── イベント管理タブ用関数 ──
+  const mgmtDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+  const mgmtFirstDay = (y: number, m: number) => new Date(y, m, 1).getDay();
+  const mgmtGenerateDays = () => {
+    const y = mgmtDate.getFullYear(), m = mgmtDate.getMonth();
+    const days = [];
+    for (let i = 0; i < mgmtFirstDay(y, m); i++) days.push(null);
+    for (let i = 1; i <= mgmtDaysInMonth(y, m); i++)
+      days.push({ day: i, dateStr: `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
+    return days;
+  };
+  const mgmtOpenModal = (dateStr: string) => {
+    setMgmtSelectedDate(dateStr);
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === dateStr);
+    setMgmtTitle(ev?.title || '');
+    setMgmtDesc(ev?.description || '');
+    setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
+    setMgmtModalVisible(true);
+  };
+  const mgmtSaveEvent = async () => {
+    if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const docId = ev?.id || `${mgmtSelectedDate}_${Date.now()}`;
+    await setDoc(doc(db, 'events', docId), { id: docId, dateStr: mgmtSelectedDate, title: mgmtTitle, description: mgmtDesc, externalParticipants: ev?.externalParticipants || [] }, { merge: true });
+    setMgmtModalVisible(false);
+  };
+  const mgmtDeleteEvent = async () => {
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    if (!ev) return;
+    customConfirm('削除', 'このイベントを削除しますか？', async () => {
+      await deleteDoc(doc(db, 'events', ev.id));
+      setMgmtModalVisible(false);
+    });
+  };
+  const mgmtAddExternal = async () => {
+    if (!mgmtExtName.trim()) return;
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    if (!ev) { customAlert('エラー', '先にイベントを保存してください'); return; }
+    const ext = [...(ev.externalParticipants || []), { id: `ext_${Date.now()}`, name: mgmtExtName, school: mgmtExtSchool, grade: mgmtExtGrade }];
+    await setDoc(doc(db, 'events', ev.id), { externalParticipants: ext }, { merge: true });
+    setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
+  };
+  const mgmtRemoveExternal = async (extId: string) => {
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    if (!ev) return;
+    const ext = (ev.externalParticipants || []).filter((e: any) => e.id !== extId);
+    await setDoc(doc(db, 'events', ev.id), { externalParticipants: ext }, { merge: true });
   };
 
   const toggleHidden = async (ev: any) => {
@@ -1104,6 +1184,11 @@ export default function YearEventsScreen() {
         <TouchableOpacity style={[styles.mainTab, mainTab === 'vacation' && styles.mainTabActive]} onPress={() => setMainTab('vacation')}>
           <Text style={[styles.mainTabText, mainTab === 'vacation' && styles.mainTabTextActive]}>長期休み</Text>
         </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity style={[styles.mainTab, mainTab === 'management' && styles.mainTabActive]} onPress={() => setMainTab('management')}>
+            <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>イベント管理</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── 年行事タブ ── */}
@@ -1181,6 +1266,118 @@ export default function YearEventsScreen() {
             {(getVacMonths(VAC_COLORS[vacTab].label).length > 0 ? getVacMonths(VAC_COLORS[vacTab].label) : VAC_MONTHS[vacTab]).map(m => <VacMonthSection key={m} vac={vacTab} month={m} />)}
             <View style={{ height: 40 }} />
           </ScrollView>
+        </View>
+      )}
+
+      {/* ── イベント管理タブ ── */}
+      {mainTab === 'management' && isAdmin && (
+        <View style={{ flex: 1 }}>
+          {/* 月ナビ */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
+            <TouchableOpacity onPress={() => setMgmtDate(new Date(mgmtDate.getFullYear(), mgmtDate.getMonth() - 1, 1))} style={{ padding: 6 }}>
+              <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>{mgmtDate.getFullYear()}年 {mgmtDate.getMonth() + 1}月</Text>
+            <TouchableOpacity onPress={() => setMgmtDate(new Date(mgmtDate.getFullYear(), mgmtDate.getMonth() + 1, 1))} style={{ padding: 6 }}>
+              <Ionicons name="chevron-forward" size={22} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView>
+            {/* カレンダーグリッド */}
+            <View style={{ padding: 10 }}>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                {['日','月','火','水','木','金','土'].map((d, i) => (
+                  <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: i === 0 ? '#E53935' : i === 6 ? '#1E88E5' : '#555' }}>{d}</Text>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {mgmtGenerateDays().map((item, idx) => {
+                  if (!item) return <View key={`e${idx}`} style={{ width: '14.28%', aspectRatio: 1, padding: 2 }} />;
+                  const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === item.dateStr);
+                  const dow = new Date(item.dateStr).getDay();
+                  const isHol = !!mgmtPublicHolidays[item.dateStr];
+                  const color = (dow === 0 || isHol) ? '#E53935' : dow === 6 ? '#1E88E5' : '#333';
+                  return (
+                    <TouchableOpacity key={item.dateStr} onPress={() => mgmtOpenModal(item.dateStr)}
+                      style={{ width: '14.28%', aspectRatio: 1, padding: 2 }}>
+                      <View style={[{ flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 3, borderWidth: 1, borderColor: '#EEE', backgroundColor: ev ? '#FFF8E1' : '#fff' }]}>
+                        <Text style={{ fontSize: 12, color, fontWeight: 'bold' }}>{item.day}</Text>
+                        {ev && <Text style={{ fontSize: 8, color: COLORS.primary, textAlign: 'center', marginTop: 1 }} numberOfLines={2}>{ev.title}</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            {/* イベント一覧 */}
+            <View style={{ padding: 10, gap: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#888', marginBottom: 4 }}>この月のイベント</Text>
+              {Object.values(mgmtEventsMap)
+                .filter((e: any) => e.dateStr?.startsWith(`${mgmtDate.getFullYear()}-${String(mgmtDate.getMonth()+1).padStart(2,'0')}`))
+                .sort((a: any, b: any) => a.dateStr.localeCompare(b.dateStr))
+                .map((ev: any) => {
+                  const parts = mgmtParticipants[ev.id] || [];
+                  const attending = parts.filter((p: any) => p.status === '参加').length + (ev.externalParticipants?.length || 0);
+                  return (
+                    <TouchableOpacity key={ev.id} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: COLORS.primary, shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 }}
+                      onPress={() => mgmtOpenModal(ev.dateStr)}>
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#333' }}>{ev.dateStr}　{ev.title}</Text>
+                      <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>参加 {attending}名</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              }
+              {Object.values(mgmtEventsMap).filter((e: any) => e.dateStr?.startsWith(`${mgmtDate.getFullYear()}-${String(mgmtDate.getMonth()+1).padStart(2,'0')}`)).length === 0 && (
+                <Text style={{ color: '#bbb', textAlign: 'center', paddingVertical: 20 }}>この月のイベントはありません</Text>
+              )}
+            </View>
+          </ScrollView>
+
+          {/* イベント編集モーダル */}
+          <Modal visible={mgmtModalVisible} animationType="slide" transparent>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+              <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 12 }}>{mgmtSelectedDate}</Text>
+                <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 8, fontSize: 14 }}
+                  value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
+                <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 80 }}
+                  value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
+                {/* 参加者（外部）追加 */}
+                {Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>外部参加者を追加</Text>
+                    <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                      <TextInput style={{ flex: 2, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtName} onChangeText={setMgmtExtName} placeholder="名前" placeholderTextColor="#C0C0C0" />
+                      <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtSchool} onChangeText={setMgmtExtSchool} placeholder="学校" placeholderTextColor="#C0C0C0" />
+                      <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtGrade} onChangeText={setMgmtExtGrade} placeholder="学年" placeholderTextColor="#C0C0C0" />
+                      <TouchableOpacity onPress={mgmtAddExternal} style={{ backgroundColor: COLORS.primary, borderRadius: 6, padding: 8, justifyContent: 'center' }}>
+                        <Ionicons name="add" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                    {(Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) as any)?.externalParticipants?.map((ext: any) => (
+                      <View key={ext.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 }}>
+                        <Text style={{ flex: 1, fontSize: 12 }}>{ext.name}（{ext.school} {ext.grade}）</Text>
+                        <TouchableOpacity onPress={() => mgmtRemoveExternal(ext.id)}><Ionicons name="close-circle" size={18} color="#E53935" /></TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) && (
+                    <TouchableOpacity style={{ flex: 1, padding: 12, backgroundColor: '#FFEBEE', borderRadius: 10, alignItems: 'center' }} onPress={mgmtDeleteEvent}>
+                      <Text style={{ color: '#E53935', fontWeight: 'bold' }}>削除</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity style={{ flex: 1, padding: 12, backgroundColor: '#F0F0F0', borderRadius: 10, alignItems: 'center' }} onPress={() => setMgmtModalVisible(false)}>
+                    <Text style={{ color: '#555', fontWeight: 'bold' }}>キャンセル</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ flex: 2, padding: 12, backgroundColor: COLORS.primary, borderRadius: 10, alignItems: 'center' }} onPress={mgmtSaveEvent}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>保存</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       )}
 
