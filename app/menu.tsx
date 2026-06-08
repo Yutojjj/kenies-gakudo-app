@@ -1315,7 +1315,7 @@ export default function MenuScreen() {
                     { label: 'シフト入力期間', onPress: () => { closeSettings(); setPeriodModal(true); } },
                     { label: '合計勤務時間', onPress: () => { closeSettings(); router.push('/staff-hours' as any); } },
                     { label: 'パスワード変更', onPress: () => { closeSettings(); openPasswordModal(); } },
-                    { label: `📋 アンケート${surveyCount > 0 ? `（${surveyCount}件）` : ''}`, onPress: () => { closeSettings(); router.push('/survey' as any); } },
+                    { label: `アンケート${surveyCount > 0 ? `（${surveyCount}件）` : ''}`, onPress: () => { closeSettings(); router.push('/survey' as any); } },
                   ].map((item, i) => (
                     <View key={i} style={styles.drawerItem}>
                       <TouchableOpacity onPress={item.onPress} style={{ alignItems: 'center', width: '100%' }}>

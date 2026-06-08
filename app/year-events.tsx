@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Image, Modal, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View
+  TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
@@ -91,121 +91,284 @@ const VAC_COLORS: Record<VacTab, { bg: string; border: string; text: string; lab
 const MONTH_NAMES = ['', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
 // ─── リッチテキストレンダラー ───────────────────────────────────
-const RichText = ({ doc: rdoc }: { doc: RichDoc }) => (
-  <View>
-    {rdoc.map((line, li) => (
-      <Text key={li} style={{ marginBottom: 2 }}>
-        {line.map((span, si) => (
-          <Text key={si} style={{
-            fontWeight: span.bold ? 'bold' : 'normal',
-            fontStyle: span.italic ? 'italic' : 'normal',
-            fontSize: span.fontSize || 14,
-            color: span.color || '#333',
-          }}>{span.text}</Text>
-        ))}
-        {line.length === 0 ? '\n' : ''}
-      </Text>
-    ))}
-  </View>
-);
+// RichDoc→HTML変換（表示用・共有）
+const richDocToHtml = (doc: RichDoc): string =>
+  doc.map(line =>
+    '<div>' + (line.length === 0 || (line.length === 1 && !line[0].text)
+      ? '<br>'
+      : line.map(s => {
+          const st: string[] = [];
+          if (s.bold) st.push('font-weight:bold');
+          if (s.italic) st.push('font-style:italic');
+          if (s.fontSize) st.push(`font-size:${s.fontSize}px`);
+          if (s.color && s.color !== '#333333') st.push(`color:${s.color}`);
+          return st.length
+            ? `<span style="${st.join(';')}">${s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>`
+            : s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        }).join('')
+    ) + '</div>'
+  ).join('') || '';
+
+const RichText = ({ doc: rdoc }: { doc: RichDoc }) => {
+  if (typeof window === 'undefined') return (
+    <View>{rdoc.map((line, li) => <Text key={li}>{line.map(s => s.text).join('')}</Text>)}</View>
+  );
+  return (
+    // @ts-ignore
+    <div dangerouslySetInnerHTML={{ __html: richDocToHtml(rdoc) }}
+      style={{ fontSize: 14, color: '#333', lineHeight: '1.8', wordBreak: 'break-word' } as any} />
+  );
+};
 
 // ─── リッチテキストエディタ ────────────────────────────────────
 const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc) => void }) => {
-  const [selLine, setSelLine] = useState(0);
-  const [selSpan, setSelSpan] = useState(0);
-  const COLORS_LIST = ['#333333', '#E53935', '#1E88E5', '#43A047', '#FB8C00', '#8E24AA'];
-  const SIZES = [12, 14, 16, 18, 20];
+  const COLORS_LIST = ['#333333','#E53935','#E91E63','#9C27B0','#1E88E5','#00BCD4','#43A047','#FF9800','#795548','#607D8B'];
+  const SIZES = [11,12,13,14,15,16,18,20,24,28,32];
+  const EMOJI_LIST = [
+    // 顔・感情
+    '😊','😂','😍','🥰','😎','🤔','😅','😆','🥹','😭','😤','🤯','🥳','😴','🤩','😇','🤗','😏','😒','😬','🤐','😷','🤒','🤕','🥺','😢','😡','🤬','😱','😨',
+    // ジェスチャー・人
+    '👍','👎','👏','🙏','🤝','✌️','🤞','👋','🤚','✋','🖐️','👌','🤌','🤏','👆','👇','👈','👉','🫶','💪','🦾','🙌','👐','🤲',
+    // ハート・記号
+    '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💕','💞','💓','💗','💖','💘','💝','❤️‍🔥','💔','❣️','♥️','🔴','🟠','🟡','🟢','🔵','🟣',
+    // 自然・植物
+    '🌸','🌺','🌻','🌹','🌷','🌼','💐','🍀','🌿','🌱','🌲','🌳','🍁','🍂','🍃','🌾','🎋','🎍','🌵','🌴','🪷','🪻','🫧',
+    // 動物
+    '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🦋','🐛','🐌','🐝','🐞','🦎','🐢','🐠','🐟','🐬','🐳','🐋','🦈','🐙','🦑',
+    // 食べ物
+    '🍎','🍊','🍋','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥝','🍅','🥦','🥕','🌽','🍔','🍟','🍕','🌮','🍜','🍣','🍱','🍩','🎂','🍰','🧁','🍫','🍬','🍭','☕','🧋','🥤','🍺','🥂',
+    // 活動・スポーツ
+    '⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥊','⛷️','🏊','🚴','🤸','🏋️','🤺','🎯','🎳','🎲','🎮','🕹️','🎸','🎹','🎺','🎻','🥁','🎤','🎧','🎬',
+    // 旅行・場所
+    '✈️','🚀','🛸','🚂','🚢','🏖️','🏝️','🗺️','🗼','🏯','🏰','⛪','🕌','🕍','🗽','🌋','🏔️','🏕️','🌅','🌄','🌃','🌆','🌇','🌉','🎠','🎡','🎢','🎪',
+    // 物・道具
+    '💎','💍','👑','🎩','👒','🕶️','💼','👜','🎒','🧳','☂️','🌂','📱','💻','⌨️','🖥️','🖨️','📷','📸','📹','📺','📻','🔋','💡','🔦','🕯️','📚','📖','📝','✏️','🖊️','🖋️','📌','📍','📎','✂️','🔑','🗝️','🔒','🔓','🔨','🪓','⚒️','🛠️','🔧','🔩','💊','💉','🩺','🩹','🧲','🔭','🔬','🧪','🧫','🧬',
+    // お祝い・イベント
+    '🎉','🎊','🎁','🎈','🎀','🎗️','🎟️','🎫','🏆','🥇','🥈','🥉','🎖️','🏅','🎓','📣','📢','🔔','🔕','🎵','🎶','🎼','🎤','🎧','🎷','🎸','🎹','🎺','🎻','🥁','🪘',
+    // 天気・自然現象
+    '☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💨','🌪️','🌫️','🌈','☔','⚡','🔥','💧','🌊','🌙','⭐','🌟','💫','✨','🌠','🌌',
+    // サイン・記号
+    '✅','❌','⚠️','❗','❓','💯','🔥','💥','⭐','🌟','✨','💫','🎯','📌','🔑','💡','📣','🔔','📍','🚩','🏁','🚫','⛔','🔞','📵','🆕','🆙','🆒','🆓','🆖','🉐','🈴','🈵','🈹','🈲',
+  ];
+  const EMOJI_CATEGORIES = [
+    { label: '顔', start: 0, end: 30 },
+    { label: 'ジェスチャー', start: 30, end: 54 },
+    { label: 'ハート', start: 54, end: 80 },
+    { label: '自然', start: 80, end: 103 },
+    { label: '動物', start: 103, end: 142 },
+    { label: '食べ物', start: 142, end: 177 },
+    { label: '活動', start: 177, end: 207 },
+    { label: '旅行', start: 207, end: 236 },
+    { label: '物・道具', start: 236, end: 289 },
+    { label: 'お祝い', start: 289, end: 319 },
+    { label: '天気', start: 319, end: 349 },
+    { label: '記号', start: 349 },
+  ];
+  const [emojiCategory, setEmojiCategory] = React.useState(0);
+  const [showEmoji, setShowEmoji] = React.useState(false);
+  const [previewHtml, setPreviewHtml] = React.useState('');
+  const editorRef = React.useRef<any>(null);
 
-  const ensureDoc = (d: RichDoc): RichDoc => d.length ? d : [[{ text: '' }]];
-  const doc = ensureDoc(value);
+  const docToHtml = (doc: RichDoc): string =>
+    doc.map(line =>
+      '<div>' + (line.length === 0 || (line.length === 1 && !line[0].text)
+        ? '<br>'
+        : line.map(s => {
+            const st: string[] = [];
+            if (s.bold) st.push('font-weight:bold');
+            if (s.italic) st.push('font-style:italic');
+            if (s.fontSize) st.push(`font-size:${s.fontSize}px`);
+            if (s.color) st.push(`color:${s.color}`);
+            return st.length
+              ? `<span style="${st.join(';')}">${s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</span>`
+              : s.text.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+          }).join('')
+      ) + '</div>'
+    ).join('') || '<div><br></div>';
 
-  const getSpan = (): RichSpan => doc[selLine]?.[selSpan] || { text: '' };
+  const htmlToDoc = (html: string): RichDoc => {
+    if (typeof window === 'undefined') return [[{ text: '' }]];
 
-  const updateSpan = (patch: Partial<RichSpan>) => {
-    const newDoc = doc.map((l, li) => l.map((s, si) =>
-      li === selLine && si === selSpan ? { ...s, ...patch } : s
-    ));
+    // RGB→HEX変換
+    const rgbToHex = (rgb: string): string => {
+      const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+      if (!m) return rgb;
+      return '#' + [m[1], m[2], m[3]].map(v => parseInt(v).toString(16).padStart(2, '0')).join('');
+    };
+    const tmp = window.document.createElement('div');
+    tmp.innerHTML = html;
+    const result: RichDoc = [];
+    const divs = tmp.querySelectorAll(':scope > div');
+
+    // スタイルを親から継承しながら再帰的にテキストノードを収集
+    const walkInherited = (node: any, inherited: any, spans: any[]) => {
+      if (node.nodeType === 3) {
+        // テキストノード
+        if (node.textContent) {
+          spans.push({ ...inherited, text: node.textContent });
+        }
+        return;
+      }
+      // 現在のノードのスタイルを取得
+      const current = { ...inherited };
+      const st = node.style || {};
+      if (st.fontWeight === 'bold' || node.nodeName === 'B' || node.nodeName === 'STRONG') current.bold = true;
+      if (st.fontStyle === 'italic' || node.nodeName === 'I' || node.nodeName === 'EM') current.italic = true;
+      if (st.textDecoration?.includes('underline') || node.nodeName === 'U') current.underline = true;
+      if (st.fontSize) current.fontSize = parseInt(st.fontSize);
+      if (st.color) current.color = rgbToHex(st.color);
+      // font タグ（execCommandが生成）
+      if (node.nodeName === 'FONT') {
+        if (node.color) current.color = node.color;
+      }
+      node.childNodes.forEach((c: any) => walkInherited(c, current, spans));
+    };
+
+    const processNode = (lines: RichDoc) => {
+      if (divs.length === 0) {
+        const spans: any[] = [];
+        walkInherited(tmp, {}, spans);
+        lines.push(spans.length ? spans : [{ text: tmp.innerText || '' }]);
+        return;
+      }
+      divs.forEach((div: any) => {
+        const spans: any[] = [];
+        div.childNodes.forEach((c: any) => walkInherited(c, {}, spans));
+        lines.push(spans.length ? spans : [{ text: '' }]);
+      });
+    };
+    processNode(result);
+    return result.length ? result : [[{ text: '' }]];
+  };
+
+  const handleInput = () => {
+    if (!editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    setPreviewHtml(html); // プレビュー即時更新
+    const newDoc = htmlToDoc(html);
     onChange(newDoc);
   };
 
-  const addLine = () => {
-    const newDoc = [...doc, [{ text: '' }]];
-    onChange(newDoc);
-    setSelLine(newDoc.length - 1);
-    setSelSpan(0);
+  const execCmd = (cmd: string, val?: string) => {
+    if (typeof window === 'undefined') return;
+    (window.document as any).execCommand(cmd, false, val || null);
+    editorRef.current?.focus();
+    handleInput();
   };
 
-  const addSpan = () => {
-    const newDoc = doc.map((l, li) =>
-      li === selLine ? [...l, { text: '' }] : l
-    );
-    onChange(newDoc);
-    setSelSpan(doc[selLine].length);
+  const applyFontSize = (size: number) => {
+    if (typeof window === 'undefined') return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const span = window.document.createElement('span');
+    span.style.fontSize = `${size}px`;
+    try { range.surroundContents(span); }
+    catch { const f = range.extractContents(); span.appendChild(f); range.insertNode(span); }
+    editorRef.current?.focus();
+    handleInput();
   };
 
-  const span = getSpan();
+  const insertEmoji = (emoji: string) => {
+    execCmd('insertText', emoji);
+    setShowEmoji(false);
+  };
 
-  if (checking || !verified) return null;
+  const initialized = React.useRef(false);
+  React.useEffect(() => {
+    if (editorRef.current && !initialized.current) {
+      const html = richDocToHtml(value);
+      editorRef.current.innerHTML = html;
+      setPreviewHtml(html);
+      initialized.current = true;
+    }
+  }, []);
+
+  if (typeof window === 'undefined') return (
+    <View style={{ padding: 12, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8 }}>
+      <Text style={{ color: '#aaa' }}>エディタ読み込み中...</Text>
+    </View>
+  );
+
   return (
-    <View style={re.wrap}>
+    <View style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' }}>
       {/* ツールバー */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={re.toolbar}>
-        <TouchableOpacity style={[re.toolBtn, span.bold && re.toolBtnActive]} onPress={() => updateSpan({ bold: !span.bold })}>
-          <Text style={[re.toolText, span.bold && re.toolTextActive]}>B</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[re.toolBtn, span.italic && re.toolBtnActive]} onPress={() => updateSpan({ italic: !span.italic })}>
-          <Text style={[re.toolText, { fontStyle: 'italic' }, span.italic && re.toolTextActive]}>I</Text>
-        </TouchableOpacity>
-        <View style={re.sep} />
-        {SIZES.map(s => (
-          <TouchableOpacity key={s} style={[re.toolBtn, span.fontSize === s && re.toolBtnActive]} onPress={() => updateSpan({ fontSize: s })}>
-            <Text style={[re.toolText, span.fontSize === s && re.toolTextActive]}>{s}</Text>
-          </TouchableOpacity>
-        ))}
-        <View style={re.sep} />
-        {COLORS_LIST.map(c => (
-          <TouchableOpacity key={c} style={[re.colorDot, { backgroundColor: c }, span.color === c && { borderWidth: 2, borderColor: '#333' }]} onPress={() => updateSpan({ color: c })} />
-        ))}
-      </ScrollView>
-
-      {/* 行一覧 */}
-      <ScrollView style={{ maxHeight: 260 }}>
-        {doc.map((line, li) => (
-          <View key={li} style={{ marginBottom: 4 }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 2 }}>
-              {line.map((s, si) => (
-                <TouchableOpacity key={si} onPress={() => { setSelLine(li); setSelSpan(si); }}
-                  style={[re.spanChip, selLine === li && selSpan === si && re.spanChipSel]}>
-                  <Text style={{ fontWeight: s.bold ? 'bold' : 'normal', fontStyle: s.italic ? 'italic' : 'normal', fontSize: Math.min(s.fontSize || 14, 16), color: s.color || '#333' }}>
-                    {s.text || '（空）'}
-                  </Text>
+      <View style={{ backgroundColor: '#F8F8F8', borderBottomWidth: 1, borderColor: '#E0E0E0', padding: 8, gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+          {[['B','bold','bold'],['I','italic','italic'],['U','underline','underline']].map(([label, cmd, style]) => (
+            <TouchableOpacity key={cmd} onPress={() => execCmd(cmd)}
+              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#D0D0D0', backgroundColor: '#fff' }}>
+              <Text style={{ fontWeight: style === 'bold' ? 'bold' : 'normal', fontStyle: style === 'italic' ? 'italic' : 'normal', textDecorationLine: style === 'underline' ? 'underline' : 'none', fontSize: 13 }}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+          <View style={{ width: 1, height: 22, backgroundColor: '#D0D0D0', marginHorizontal: 4 }} />
+          <Text style={{ fontSize: 11, color: '#888' }}>サイズ:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxWidth: 360 }}>
+            <View style={{ flexDirection: 'row', gap: 3 }}>
+              {SIZES.map(s => (
+                <TouchableOpacity key={s} onPress={() => applyFontSize(s)}
+                  style={{ paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#D0D0D0' }}>
+                  <Text style={{ fontSize: 11 }}>{s}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={re.addSpanBtn} onPress={() => { setSelLine(li); addSpan(); }}>
-                <Ionicons name="add" size={14} color={COLORS.primary} />
-              </TouchableOpacity>
             </View>
-            {selLine === li && (
-              <TextInput
-                style={re.lineInput}
-                value={span.text}
-                onChangeText={t => updateSpan({ text: t })}
-                multiline
-                placeholder="テキストを入力..."
-                placeholderTextColor="#bbb"
-              />
-            )}
+          </ScrollView>
+          <TouchableOpacity onPress={() => setShowEmoji(v => !v)}
+            style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#D0D0D0', backgroundColor: '#fff', marginLeft: 4 }}>
+            <Text style={{ fontSize: 14 }}>😊</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Text style={{ fontSize: 11, color: '#888' }}>色:</Text>
+          {COLORS_LIST.map(c => (
+            <TouchableOpacity key={c} onPress={() => execCmd('foreColor', c)}
+              style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: c, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' }} />
+          ))}
+        </View>
+        {showEmoji && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#E0E0E0' }}>
+            {/* カテゴリタブ */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ borderBottomWidth: 1, borderColor: '#E8E8E8' }}>
+              <View style={{ flexDirection: 'row', padding: 4, gap: 4 }}>
+                {EMOJI_CATEGORIES.map((cat, ci) => (
+                  <TouchableOpacity key={ci} onPress={() => setEmojiCategory(ci)}
+                    style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: emojiCategory === ci ? COLORS.primary : '#F0F0F0' }}>
+                    <Text style={{ fontSize: 11, color: emojiCategory === ci ? '#fff' : '#555', fontWeight: 'bold' }}>{cat.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+            {/* 絵文字グリッド */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, padding: 8, maxHeight: 180, overflow: 'scroll' } as any}>
+              {EMOJI_LIST.slice(
+                EMOJI_CATEGORIES[emojiCategory].start,
+                EMOJI_CATEGORIES[emojiCategory].end
+              ).map((e, i) => (
+                <TouchableOpacity key={i} onPress={() => insertEmoji(e)}
+                  style={{ padding: 4, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 22 }}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        ))}
-      </ScrollView>
+        )}
+      </View>
 
-      <TouchableOpacity style={re.addLineBtn} onPress={addLine}>
-        <Ionicons name="return-down-forward" size={14} color={COLORS.primary} />
-        <Text style={{ color: COLORS.primary, fontSize: 12, marginLeft: 4 }}>行を追加</Text>
-      </TouchableOpacity>
+      {/* 編集エリア */}
+      {/* @ts-ignore */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        style={{ padding: 12, minHeight: 200, outline: 'none', fontSize: 14, color: '#333', lineHeight: '1.8', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto', maxHeight: 400 } as any}
+      />
     </View>
   );
 };
+
+
+
 
 const re = StyleSheet.create({
   wrap: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, overflow: 'hidden', backgroundColor: '#FAFAFA' },
@@ -314,7 +477,25 @@ export default function YearEventsScreen() {
     });
     const unsub2 = onSnapshot(collection(db, 'year_event_details'), snap => {
       const map: Record<string, YearEventDetail> = {};
-      snap.forEach(d => { const data = { id: d.id, ...d.data() } as YearEventDetail; map[data.eventId] = data; });
+      snap.forEach(d => {
+        const raw = d.data();
+        // Firestoreから読み込む際にRichDoc形式に変換
+        const toRichDoc = (data: any): RichDoc => {
+          if (!data) return [[{ text: '' }]];
+          if (Array.isArray(data) && data.length > 0 && 'spans' in data[0]) {
+            return data.map((l: any) => l.spans || [{ text: '' }]);
+          }
+          if (Array.isArray(data)) return data as RichDoc;
+          return [[{ text: '' }]];
+        };
+        const detail: YearEventDetail = {
+          id: d.id,
+          eventId: raw.eventId,
+          description: toRichDoc(raw.description),
+          items: toRichDoc(raw.items),
+        };
+        map[detail.eventId] = detail;
+      });
       setDetails(map);
     });
     const unsub3 = onSnapshot(collection(db, 'event_past_photos'), snap => {
@@ -425,19 +606,31 @@ export default function YearEventsScreen() {
     setDetailOpen(true);
   };
 
+  // FirestoreはネストされたArrayを許可しないのでRichDocをオブジェクト配列に変換
+  const richDocToFirestore = (doc: RichDoc) =>
+    doc.map((line, li) => ({ lineIndex: li, spans: line }));
+  const firestoreToRichDoc = (data: any[]): RichDoc =>
+    data.map(l => l.spans || []);
+
   const saveDetail = async (field: 'description' | 'items') => {
     if (!detailEvent) return;
     setSaving(true);
     const det = details[detailEvent.id];
     const docId = det?.id || detailEvent.id;
-    await setDoc(doc(db, 'year_event_details', docId), {
-      eventId: detailEvent.id,
-      description: field === 'description' ? descDraft : (det?.description || EMPTY_RICH),
-      items: field === 'items' ? itemsDraft : (det?.items || EMPTY_RICH),
-    }, { merge: true });
-    setSaving(false);
-    if (field === 'description') setEditDesc(false);
-    else setEditItems(false);
+    try {
+      await setDoc(doc(db, 'year_event_details', docId), {
+        eventId: detailEvent.id,
+        description: richDocToFirestore(field === 'description' ? descDraft : (det?.description || EMPTY_RICH)),
+        items: richDocToFirestore(field === 'items' ? itemsDraft : (det?.items || EMPTY_RICH)),
+      }, { merge: true });
+      if (field === 'description') setEditDesc(false);
+      else setEditItems(false);
+    } catch (e: any) {
+      console.error('saveDetail error:', e);
+      customAlert('保存エラー', e?.message || '保存に失敗しました。Firestore Rulesを確認してください。');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleParticipation = async (eventId: string) => {
@@ -883,6 +1076,7 @@ export default function YearEventsScreen() {
   );
 
   // ─── メインレンダリング ───────────────────────────────────
+  if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}

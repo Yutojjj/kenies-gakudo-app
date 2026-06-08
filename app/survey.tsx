@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import {
   addDoc, collection, deleteDoc, doc,
-  onSnapshot, orderBy, query, setDoc, serverTimestamp
+  onSnapshot, orderBy, query,
+  serverTimestamp,
+  setDoc
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
@@ -221,12 +223,12 @@ export default function SurveyScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>タイトル *</Text>
               <TextInput style={styles.textInput} value={newTitle} onChangeText={setNewTitle}
-                placeholder="例：夏のイベントについて" />
+                placeholder="例：夏のイベントについて" placeholderTextColor="#C0C0C0" />
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>説明（任意）</Text>
               <TextInput style={[styles.textInput, { height: 80 }]} value={newDesc} onChangeText={setNewDesc}
-                placeholder="アンケートの説明を入力" multiline />
+                placeholder="アンケートの説明を入力" placeholderTextColor="#C0C0C0" multiline />
             </View>
 
             <Text style={[styles.inputLabel, { fontSize: 15 }]}>質問</Text>
@@ -258,12 +260,12 @@ export default function SurveyScreen() {
                 </View>
                 <TextInput style={styles.textInput} value={q.text}
                   onChangeText={v => { const n = [...questions]; n[qi] = { ...n[qi], text: v }; setQuestions(n); }}
-                  placeholder="質問文を入力" />
+                  placeholder="質問文を入力" placeholderTextColor="#C0C0C0" />
                 {q.type === 'select' && (
                   <TextInput style={[styles.textInput, { marginTop: 8, height: 80 }]}
                     value={q.options}
                     onChangeText={v => { const n = [...questions]; n[qi] = { ...n[qi], options: v }; setQuestions(n); }}
-                    placeholder="選択肢を改行で区切って入力&#10;例：はい&#10;いいえ&#10;どちらでもない"
+                    placeholder="選択肢を改行で区切って入力&#10;例：はい&#10;いいえ&#10;どちらでもない" placeholderTextColor="#C0C0C0"
                     multiline />
                 )}
               </View>
