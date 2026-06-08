@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadString } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
@@ -11,7 +12,7 @@ import {
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import SignaturePad from '../components/SignaturePad';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
@@ -610,9 +611,19 @@ export default function MenuScreen() {
                 <Text style={[styles.pickupSectionTitle, { fontSize: 16 }]}>今日の送迎担当</Text>
                 <Text style={{ fontSize: 11, color: '#BCAAA4', marginTop: 1 }}>{new Date().getMonth()+1}月{new Date().getDate()}日</Text>
               </View>
-              <TouchableOpacity style={[styles.pickupToggleBtn, { paddingHorizontal: 14, paddingVertical: 8 }]} onPress={() => setShowAllPickup(v => !v)}>
-                <Text style={styles.pickupToggleBtnText}>{showAllPickup ? '自分のみ' : '全員表示'}</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {/* 編集ボタン */}
+                <TouchableOpacity
+                  style={{ backgroundColor: '#FF8F00', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  onPress={() => router.push('/attendance')}
+                >
+                  <Ionicons name="pencil-outline" size={13} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>編集</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.pickupToggleBtn, { paddingHorizontal: 14, paddingVertical: 8 }]} onPress={() => setShowAllPickup(v => !v)}>
+                  <Text style={styles.pickupToggleBtnText}>{showAllPickup ? '自分のみ' : '全員表示'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             {(() => {
               let parsedEntries: any[] = [];
@@ -622,7 +633,9 @@ export default function MenuScreen() {
                   parsedEntries = parsed.entries || [];
                 }
               } catch {}
-              const filteredEntries = showAllPickup ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === name);
+              // 管理者は「稲熊」名義のエントリを表示、スタッフは自分のみ
+              const myDisplayName = role === 'admin' ? '稲熊' : name;
+              const filteredEntries = showAllPickup ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === myDisplayName);
               if (filteredEntries.length === 0) {
                 return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>担当の送迎はありません</Text></View>;
               }
@@ -938,16 +951,26 @@ export default function MenuScreen() {
               onSave={async (signData: string) => {
                 const today = new Date();
                 const ym = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-                await setDoc(doc(db, 'paid_transport_records', `${name}_${ym}`), {
-                  userName: name,
-                  month: ym,
-                  count: paidTransportCount,
-                  amount: paidTransportCount * 500,
-                  signatureData: signData,
-                  signedAt: new Date(),
-                }, { merge: true });
-                setSignModalVisible(false);
-                Alert.alert('完了', 'サインを保存しました');
+                try {
+                  // Base64をStorageにアップロード
+                  const path = `albums/signatures/${name}_${ym}_${Date.now()}.png`;
+                  const sref = storageRef(storage, path);
+                  await uploadString(sref, signData, 'data_url');
+                  const signatureUrl = await getDownloadURL(sref);
+
+                  await setDoc(doc(db, 'paid_transport_records', `${name}_${ym}`), {
+                    userName: name,
+                    month: ym,
+                    count: paidTransportCount,
+                    amount: paidTransportCount * 500,
+                    signatureData: signatureUrl,
+                    signedAt: new Date(),
+                  }, { merge: true });
+                  setSignModalVisible(false);
+                  Alert.alert('完了', 'サインを保存しました');
+                } catch (e: any) {
+                  Alert.alert('エラー', 'サインの保存に失敗しました');
+                }
               }}
             />
           </View>

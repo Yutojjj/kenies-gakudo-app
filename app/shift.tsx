@@ -70,13 +70,15 @@ export default function ShiftScreen() {
         //   保存済みの×を巻き添え削除する事故を構造的に防ぐため。
         const localUnsaved = await AsyncStorage.getItem(`unsavedShifts_${staffName}`);
         if (localUnsaved) {
-          const parsed = JSON.parse(localUnsaved);
-          const onlyAdds: Record<string, ShiftType | null> = {};
-          Object.entries(parsed).forEach(([d, v]) => {
-            if (v !== null && v !== undefined && v !== '○') onlyAdds[d] = v as ShiftType;
-          });
-          pendingChangesRef.current = onlyAdds;
-          setPendingChanges(onlyAdds);
+          try {
+            const parsed = JSON.parse(localUnsaved);
+            const onlyAdds: Record<string, ShiftType | null> = {};
+            Object.entries(parsed).forEach(([d, v]) => {
+              if (v !== null && v !== undefined && v !== '○') onlyAdds[d] = v as ShiftType;
+            });
+            pendingChangesRef.current = onlyAdds;
+            setPendingChanges(onlyAdds);
+          } catch { /* 破損データは無視 */ }
         }
 
         fetch('https://holidays-jp.github.io/api/v1/date.json')

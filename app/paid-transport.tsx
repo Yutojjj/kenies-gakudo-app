@@ -4,6 +4,9 @@ import {
   collection, deleteDoc, doc, getDocs, onSnapshot,
   query, setDoc, where
 } from 'firebase/firestore';
+import {
+  getDownloadURL, ref as storageRef, uploadString
+} from 'firebase/storage';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Image, Modal, Platform, SafeAreaView,
@@ -12,7 +15,7 @@ import {
 } from 'react-native';
 import SignaturePad from '../components/SignaturePad';
 import { COLORS } from '../constants/theme';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
 
 // ─── ユーティリティ ───────────────────────────────────────────────────
@@ -232,14 +235,25 @@ export default function PaidTransportScreen() {
     const record = getRecord(member.id);
     if (!record) return;
     const docId = getOrCreateRecordId(member.id);
-    await setDoc(doc(db, 'paid_transport_monthly', docId), {
-      ...record,
-      isAccepted: true,
-      signatureData: signatureDataUrl,
-      acceptedAt: new Date(),
-    }, { merge: true });
-    setSignModal(false);
-    customAlert('承諾しました', 'サインが保存されました');
+    try {
+      // Base64をStorageにアップロードしてURL取得
+      const path = `albums/signatures/${member.id}_${selYear}_${String(selMonth).padStart(2,'0')}_${Date.now()}.png`;
+      const sref = storageRef(storage, path);
+      // data:image/png;base64,... 形式をアップロード
+      await uploadString(sref, signatureDataUrl, 'data_url');
+      const signatureUrl = await getDownloadURL(sref);
+
+      await setDoc(doc(db, 'paid_transport_monthly', docId), {
+        ...record,
+        isAccepted: true,
+        signatureData: signatureUrl,  // URLを保存（Base64ではなく）
+        acceptedAt: new Date(),
+      }, { merge: true });
+      setSignModal(false);
+      customAlert('承諾しました', 'サインが保存されました');
+    } catch (e: any) {
+      customAlert('エラー', 'サインの保存に失敗しました: ' + (e?.message || ''));
+    }
   };
 
   // ─── 金額計算 ─────────────────────────────────────────────────
