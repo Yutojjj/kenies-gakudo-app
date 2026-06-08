@@ -181,7 +181,7 @@ export default function AlbumScreen() {
     fetchUser();
 
     AsyncStorage.getItem('unlockedEvents').then(res => {
-      if (res && isMounted) setUnlockedEvents(JSON.parse(res));
+      if (res && isMounted) { try { setUnlockedEvents(JSON.parse(res)); } catch {} }
     });
 
     // onSnapshotでリアルタイム同期（getDocs→消えるバグを修正）

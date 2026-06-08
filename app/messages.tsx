@@ -433,7 +433,7 @@ export default function MessagesScreen() {
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(async raw => {
       if (!raw) { setError('ログインが必要です'); setLoading(false); return; }
-      const user: UserInfo = JSON.parse(raw);
+      let user: UserInfo; try { user = JSON.parse(raw); } catch { router.replace('/'); return; }
       const accountId = await resolveAccountId(user);
       setResolvedUser({ ...user, accountId });
     }).catch(() => {

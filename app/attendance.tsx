@@ -101,7 +101,7 @@ export default function AttendanceScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
-      if (raw) setIsAdmin(JSON.parse(raw).role === 'admin');
+      if (raw) { try { setIsAdmin(JSON.parse(raw).role === 'admin'); } catch {} }
     });
   }, []);
 

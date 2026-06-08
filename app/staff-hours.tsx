@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 type ShiftRecord = { dateStr: string; start: string; end: string };
 type StaffSummary = {
@@ -37,6 +38,9 @@ const formatHours = (minutes: number): string => {
 };
 
 export default function StaffHoursScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[0]);
   const [summaries, setSummaries] = useState<StaffSummary[]>([]);

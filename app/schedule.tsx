@@ -102,7 +102,7 @@ export default function ScheduleScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
-      if (raw) setLoggedInUser(JSON.parse(raw));
+      if (raw) { try { setLoggedInUser(JSON.parse(raw)); } catch {} }
     });
   }, []);
 

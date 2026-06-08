@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 // --- Web/Native 共通の安全なアラート関数 ---
 const customAlert = (title: string, message?: string) => {
@@ -36,6 +37,9 @@ const getLocalDateString = (date: Date) => {
 };
 
 export default function EventListScreen() {
+  const { verified } = useRequireRole(['admin', 'staff', 'user']);
+  if (!verified) return null;
+
   const router = useRouter();
   const { name } = useLocalSearchParams<{ name: string }>();
 

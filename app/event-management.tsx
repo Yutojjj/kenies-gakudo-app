@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 // --- Web/Native 共通の安全なアラート関数 ---
 const customAlert = (title: string, message?: string) => {
@@ -45,6 +46,9 @@ type Participant = { id: string; childName: string; status: string; };
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function EventManagementScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: string }>();
   const isAdmin = true; // スタッフも編集可能

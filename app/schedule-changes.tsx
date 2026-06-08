@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 
 type ChangeLog = {
   id: string;
@@ -28,6 +29,9 @@ const fmtTime = (ts: Timestamp | null) => {
 };
 
 export default function ScheduleChangesScreen() {
+  const { verified } = useRequireRole(['admin', 'staff', 'user']);
+  if (!verified) return null;
+
   const router = useRouter();
   const [logs, setLogs] = useState<ChangeLog[]>([]);
   const [loading, setLoading] = useState(true);

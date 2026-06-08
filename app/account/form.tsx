@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, T
 import EditablePickerModal from '../../components/EditablePickerModal';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
+import { useRequireRole } from '../../hooks/useRequireRole';
 
 const WEEK_DAYS = ['月', '火', '水', '木', '金'] as const;
 type DayType = typeof WEEK_DAYS[number];
@@ -37,6 +38,9 @@ const kanaToRomaji = (kana: string): string => {
 const generateRandomDigits = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 export default function AccountFormScreen() {
+  const { verified } = useRequireRole('admin');
+  if (!verified) return null;
+
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isEditMode = !!id;

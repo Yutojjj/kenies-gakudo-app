@@ -25,7 +25,7 @@ export default function ShiftViewScreen() {
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
       if (raw) {
-        const user = JSON.parse(raw);
+        let user: any = {}; try { user = JSON.parse(raw); } catch {}
         setMyName(user.name || '');
         setIsAdmin(user.role === 'admin');
       }

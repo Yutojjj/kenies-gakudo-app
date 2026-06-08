@@ -210,7 +210,8 @@ export default function MenuScreen() {
         router.replace('/');
         return;
       }
-      const user = JSON.parse(raw);
+      let user: any = {};
+      try { user = JSON.parse(raw); } catch { router.replace('/'); return; }
       // URLパラメータのroleがAsyncStorageと一致するか確認
       if (user.role !== roleParam) {
         // 不一致の場合は正しいroleで上書き（URLの改ざん対策）
@@ -230,7 +231,8 @@ export default function MenuScreen() {
     (async () => {
       const raw = await AsyncStorage.getItem('loggedInUser');
       if (!raw) return;
-      const user = JSON.parse(raw);
+      let user: any = {};
+      try { user = JSON.parse(raw); } catch { return; }
       let accountId: string = user.accountId || (user.role === 'admin' ? 'admin' : '');
       // accountId が未保存の場合は Firestore から取得
       if (!accountId && user.name) {
