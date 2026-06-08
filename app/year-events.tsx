@@ -582,7 +582,8 @@ export default function YearEventsScreen() {
   // 長期休みに含まれる月一覧を動的に取得
   const getVacMonths = (vacLabel: string): number[] => {
     const months = new Set<number>();
-    holidayPeriods.filter(p => p.name.includes(vacLabel)).forEach(period => {
+    const periods = holidayPeriods.filter(p => p.name.includes(vacLabel));
+    periods.forEach(period => {
       const start = new Date(period.start);
       const end = new Date(period.end);
       let cur = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -591,7 +592,15 @@ export default function YearEventsScreen() {
         cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
       }
     });
-    return Array.from(months).sort((a, b) => a - b);
+    // 期間の開始月を基準に並べる（開始月から時系列順）
+    const startMonth = periods.length > 0 ? new Date(periods[0].start).getMonth() + 1 : 4;
+    const ordered: number[] = [];
+    let m = startMonth;
+    for (let i = 0; i < 12; i++) {
+      if (months.has(m)) ordered.push(m);
+      m = m === 12 ? 1 : m + 1;
+    }
+    return ordered;
   };
 
   // currentFY / fyStart / fyEnd は上で定義済み

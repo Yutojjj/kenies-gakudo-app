@@ -284,6 +284,11 @@ export default function AttendanceScreen() {
     if (override && override.pickupTime !== undefined) {
       return { pickupTime: override.pickupTime, lesson: override.lesson, isManual: true, memo };
     }
+    // スポット利用でschedules2に登録がある場合は学校時刻を自動セット
+    if (override && kid.usageType !== '定期利用' && !kid.isStaffChild) {
+      const autoTime = schoolTimesData[kid.school]?.[kid.grade]?.[new Date(dateStr).getDay() === 0 ? '日' : ['日','月','火','水','木','金','土'][new Date(dateStr).getDay()]] || null;
+      return { pickupTime: autoTime, lesson: override.lesson, isManual: true, memo };
+    }
 
     let autoPickup = null;
 
@@ -299,6 +304,13 @@ export default function AttendanceScreen() {
           }
         } else if (kid.usageType === '定期利用' && kid.days && kid.days[dayOfWeekStr]) {
           autoPickup = schoolTimesData[kid.school]?.[kid.grade]?.[dayOfWeekStr] || null;
+        } else if (kid.usageType !== '定期利用') {
+          // 定期利用以外（スポット等）はschedules2に登録があれば学校時刻を自動セット
+          const overrideKey = `${kid.id}_${dateStr}`;
+          const hasOverride = scheduleOverrides[overrideKey];
+          if (hasOverride && !hasOverride.pickupTime) {
+            autoPickup = schoolTimesData[kid.school]?.[kid.grade]?.[dayOfWeekStr] || null;
+          }
         }
       }
     }
