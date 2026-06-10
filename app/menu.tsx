@@ -779,20 +779,7 @@ export default function MenuScreen() {
                   <Image source={MENU_ICONS.eventList} style={styles.cardWideImage} resizeMode="contain" />
                 </TouchableOpacity>
               </Animated.View>
-              <TouchableOpacity
-                style={[styles.paidBanner, { backgroundColor: '#FFF3E0', borderColor: '#FF9F43' }]}
-                onPress={() => router.push({ pathname: '/year-events', params: { role: 'user', name: name || '' } } as any)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="calendar-outline" size={20} color="#E65100" style={{ marginRight: 10 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.paidBannerTitle, { color: '#E65100' }]}>📋 イベント詳細</Text>
-                  <Text style={[styles.paidBannerCount, { color: '#BF360C' }]}>年行事・長期休みの詳細を確認</Text>
-                </View>
-                <View style={[styles.paidBannerBtn, { backgroundColor: '#FF9F43' }]}>
-                  <Text style={styles.paidBannerBtnText}>確認する</Text>
-                </View>
-              </TouchableOpacity>
+
               <View style={styles.gridRow}>
                 <MenuCard
                   image={MENU_ICONS.album} title="アルバム" subtitle="" bgColor="#C49FD8"
