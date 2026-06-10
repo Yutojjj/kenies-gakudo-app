@@ -34,7 +34,8 @@ type ChildInfo = {
   school: string; 
   isStaffChild?: boolean; 
   parentName?: string; 
-  days?: Record<string, boolean>; 
+  days?: Record<string, boolean>;
+  pickupTimes?: string[];
 };
 type LessonTemplate = { id: string; name: string; time: string; };
 type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?: string; }; // memoはschedule_memosコレクションで管理
@@ -77,6 +78,11 @@ export default function ScheduleScreen() {
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
 
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
+  const [newPickupTimeInput, setNewPickupTimeInput] = useState('');
+  const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
+  const [addPickupHour, setAddPickupHour] = useState(15);
+  const [addPickupMinute, setAddPickupMinute] = useState(0);
+  const [addPickupPickerVisible, setAddPickupPickerVisible] = useState(false);
   const [templateSelectMode, setTemplateSelectMode] = useState<'stamping' | 'singleDay' | 'edit'>('stamping');
   const [editModalVisible, setEditModalVisible] = useState(false);
   
@@ -172,7 +178,8 @@ export default function ScheduleScreen() {
               grade: foundData.grade || '', 
               school: foundData.school || '', 
               isStaffChild: false,
-              days: foundData.days || {} 
+              days: foundData.days || {},
+              pickupTimes: foundData.pickupTimes || []
             });
             if (foundData.siblings && Array.isArray(foundData.siblings)) {
               foundData.siblings.forEach((sib: any, idx: number) => {
@@ -182,7 +189,8 @@ export default function ScheduleScreen() {
                   grade: sib.grade || '', 
                   school: sib.school || '', 
                   isStaffChild: false,
-                  days: sib.days || {}
+                  days: sib.days || {},
+                  pickupTimes: sib.pickupTimes || []
                 });
               });
             }
@@ -615,6 +623,59 @@ export default function ScheduleScreen() {
     }
   };
 
+  // 候補時間をaccountsドキュメントに保存
+  const savePickupTimeToAccount = async (newTime: string) => {
+    const child = children[activeChildIdx];
+    if (!child || !parentDocId) return;
+    const current = child.pickupTimes || [];
+    if (current.includes(newTime)) return;
+    const updated = [...current, newTime].sort();
+    // childrenのstateを更新
+    setChildren(prev => prev.map((c, i) =>
+      i === activeChildIdx ? { ...c, pickupTimes: updated } : c
+    ));
+    // Firestoreに保存
+    const accountSnap = await import('firebase/firestore').then(m =>
+      m.getDoc(m.doc(import('../firebase').then(f => f.db) as any, 'accounts', parentDocId))
+    ).catch(() => null);
+    // getDocは既にインポート済みなので直接使う
+    const accDoc = await getDoc(doc(db, 'accounts', parentDocId));
+    if (!accDoc.exists()) return;
+    const data = accDoc.data();
+    if (child.id === parentDocId) {
+      // 本人
+      await setDoc(doc(db, 'accounts', parentDocId), { pickupTimes: updated }, { merge: true });
+    } else {
+      // 兄弟 or staffchild
+      const siblings = data.siblings || [];
+      const updatedSiblings = siblings.map((s: any) =>
+        s.id === child.id ? { ...s, pickupTimes: updated } : s
+      );
+      await setDoc(doc(db, 'accounts', parentDocId), { siblings: updatedSiblings }, { merge: true });
+    }
+  };
+
+  const removePickupTimeFromAccount = async (timeToRemove: string) => {
+    const child = children[activeChildIdx];
+    if (!child || !parentDocId) return;
+    const updated = (child.pickupTimes || []).filter(t => t !== timeToRemove);
+    setChildren(prev => prev.map((c, i) =>
+      i === activeChildIdx ? { ...c, pickupTimes: updated } : c
+    ));
+    const accDoc = await getDoc(doc(db, 'accounts', parentDocId));
+    if (!accDoc.exists()) return;
+    const data = accDoc.data();
+    if (child.id === parentDocId) {
+      await setDoc(doc(db, 'accounts', parentDocId), { pickupTimes: updated }, { merge: true });
+    } else {
+      const siblings = data.siblings || [];
+      const updatedSiblings = siblings.map((s: any) =>
+        s.id === child.id ? { ...s, pickupTimes: updated } : s
+      );
+      await setDoc(doc(db, 'accounts', parentDocId), { siblings: updatedSiblings }, { merge: true });
+    }
+  };
+
   const closeTemplateAndMaybeReturnToEdit = () => {
     setTemplateModalVisible(false);
     if (returnToEdit) {
@@ -869,28 +930,65 @@ export default function ScheduleScreen() {
                     <Ionicons name="home-outline" size={20} color={COLORS.primary} />
                     <Text style={styles.editSectionTitle}>利用(お迎え)時間</Text>
                   </View>
-                  <View style={styles.editCard}>
+                  <View style={[styles.editCard, { flexDirection: 'column' }]}>
+                    {/* ① 現在登録されている時間 */}
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8 }}>現在登録されている時間</Text>
                     {getCellData(selectedDateStr).pickupTime ? (
-                      <>
-                        <Text style={styles.editTimeText}>{getCellData(selectedDateStr).pickupTime}</Text>
-                        <View style={styles.editActions}>
-                          <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('pickup', getCellData(selectedDateStr).pickupTime!)}>
-                            <Text style={styles.btnTextPrimary}>変更</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('pickup')}>
-                            <Text style={styles.btnTextDanger}>削除</Text>
-                          </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                        <View style={{ backgroundColor: COLORS.primary + '20', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.primary }}>
+                          <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.primary }}>{getCellData(selectedDateStr).pickupTime}</Text>
                         </View>
-                      </>
-                    ) : (
-                      <>
-                        <Text style={styles.noDataText}>利用予定はありません</Text>
-                        <TouchableOpacity style={styles.addSmallBtn} onPress={() => openTimePicker('pickup', '15:00')}>
-                          <Ionicons name="add" size={16} color={COLORS.white} />
-                          <Text style={styles.addSmallBtnText}>手動で追加</Text>
+                        <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('pickup')}>
+                          <Text style={styles.btnTextDanger}>削除</Text>
                         </TouchableOpacity>
-                      </>
+                      </View>
+                    ) : (
+                      <Text style={[styles.noDataText, { marginBottom: 4 }]}>未設定</Text>
                     )}
+
+                    {/* ② 候補時間のリスト */}
+                    <View style={{ borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 16, marginTop: 16, marginBottom: 0 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8 }}>候補時間のリスト</Text>
+                      {(children[activeChildIdx]?.pickupTimes || []).length === 0 ? (
+                        <Text style={styles.noDataText}>候補時間が登録されていません</Text>
+                      ) : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
+                            const isActive = getCellData(selectedDateStr).pickupTime === t;
+                            return (
+                              <TouchableOpacity
+                                key={t}
+                                style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5,
+                                  borderColor: isActive ? COLORS.primary : COLORS.border,
+                                  backgroundColor: isActive ? COLORS.primary : COLORS.white,
+                                  flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                                onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
+                              >
+                                <Text style={{ fontSize: 15, fontWeight: 'bold', color: isActive ? COLORS.white : COLORS.text }}>{t}</Text>
+                                <TouchableOpacity
+                                  onPress={(e) => { e.stopPropagation?.(); removePickupTimeFromAccount(t); }}
+                                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                                >
+                                  <Ionicons name="close-circle" size={16} color={isActive ? 'rgba(255,255,255,0.8)' : COLORS.textLight} />
+                                </TouchableOpacity>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+
+                    {/* ③ 候補時間の追加 */}
+                    <View style={{ borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 16, marginTop: 16 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 10 }}>候補時間を追加</Text>
+                      <TouchableOpacity
+                        style={[styles.addSmallBtn, { alignSelf: 'flex-start' }]}
+                        onPress={() => { setAddPickupHour(15); setAddPickupMinute(0); setAddPickupPickerVisible(true); }}
+                      >
+                        <Ionicons name="time-outline" size={16} color={COLORS.white} />
+                        <Text style={styles.addSmallBtnText}>時間を入力</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
 
@@ -1018,6 +1116,50 @@ export default function ScheduleScreen() {
                   </View>
               </View>
           </View>
+      </Modal>
+
+      {/* 候補時間追加ピッカー */}
+      <Modal visible={addPickupPickerVisible} transparent animationType="slide">
+        <View style={styles.pickerOverlay}>
+          <View style={styles.pickerContent}>
+            <Text style={styles.pickerTitle}>候補時間を追加</Text>
+            <View style={styles.pickerColumns}>
+              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                {HOURS.map(h => (
+                  <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => setAddPickupHour(h)}>
+                    <Text style={[styles.pickerItemText, addPickupHour === h && styles.pickerItemTextActive]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={styles.pickerColon}>:</Text>
+              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                {MINUTES.map(m => (
+                  <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => setAddPickupMinute(m)}>
+                    <Text style={[styles.pickerItemText, addPickupMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <View style={styles.pickerFooter}>
+              <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setAddPickupPickerVisible(false)}>
+                <Text style={styles.pickerCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pickerConfirmBtn, { opacity: pickupTimeSaving ? 0.5 : 1 }]}
+                disabled={pickupTimeSaving}
+                onPress={async () => {
+                  const t = `${String(addPickupHour).padStart(2, '0')}:${String(addPickupMinute).padStart(2, '0')}`;
+                  setPickupTimeSaving(true);
+                  await savePickupTimeToAccount(t);
+                  setPickupTimeSaving(false);
+                  setAddPickupPickerVisible(false);
+                }}
+              >
+                <Text style={styles.pickerConfirmText}>{pickupTimeSaving ? '追加中...' : '候補に追加'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={timePickerVisible} transparent animationType="slide">

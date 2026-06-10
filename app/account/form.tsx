@@ -63,6 +63,8 @@ export default function AccountFormScreen() {
   const [grade, setGrade] = useState('');
   const [usageType, setUsageType] = useState('定期利用');
   const [days, setDays] = useState<Record<DayType, boolean>>({ 月: false, 火: false, 水: false, 木: false, 金: false });
+  const [pickupTimes, setPickupTimes] = useState<string[]>([]);
+  const [newPickupTime, setNewPickupTime] = useState('');
   const [siblings, setSiblings] = useState<any[]>([]);
 
   useEffect(() => {
@@ -123,6 +125,7 @@ export default function AccountFormScreen() {
             setGrade(data.grade || '');
             setUsageType(data.usageType || '定期利用');
             setDays(data.days || { 月: false, 火: false, 水: false, 木: false, 金: false });
+            setPickupTimes(data.pickupTimes || []);
             
             // ★ ④ 古いデータ（IDなし）にIDを付与して読み込む
             const loadedSiblings = data.siblings || [];
@@ -168,7 +171,7 @@ export default function AccountFormScreen() {
           // ★ ④ 保存時にIDの抜け漏れがないように補完
           staffChildren: skills.child ? staffChildren.map((c, i) => ({...c, id: c.id || `temp_staffchild_${i}`})) : [] 
         } : { 
-          school, grade, usageType, days,
+          school, grade, usageType, days, pickupTimes,
           // ★ ④ 保存時にIDの抜け漏れがないように補完 
           siblings: siblings.map((s, i) => ({...s, id: s.id || `temp_sib_${i}`})) 
         }),
