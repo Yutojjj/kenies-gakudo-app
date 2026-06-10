@@ -438,6 +438,14 @@ export default function YearEventsScreen() {
   const [mgmtExtSchool, setMgmtExtSchool] = useState('');
   const [mgmtExtGrade, setMgmtExtGrade] = useState('');
   const [mgmtPublicHolidays, setMgmtPublicHolidays] = useState<Record<string, string>>({});
+  const [mgmtParticipantTab, setMgmtParticipantTab] = useState<'list' | 'add'>('list');
+  const [mgmtAddSubTab, setMgmtAddSubTab] = useState<'user' | 'external'>('user');
+  const [mgmtAllMembers, setMgmtAllMembers] = useState<{id:string;name:string;nicknameKana?:string;school?:string;grade?:string}[]>([]);
+  const [mgmtAllSchools, setMgmtAllSchools] = useState<string[]>([]);
+  const [mgmtAllGrades, setMgmtAllGrades] = useState<string[]>([]);
+  const [mgmtMemberSearch, setMgmtMemberSearch] = useState('');
+  const [mgmtFilterSchool, setMgmtFilterSchool] = useState('');
+  const [mgmtFilterGrade, setMgmtFilterGrade] = useState('');
 
   // Firestore data
   const [events, setEvents] = useState<Record<string, any[]>>({});   // key: "YYYY-MM"→配列 (events collection)
@@ -549,6 +557,43 @@ export default function YearEventsScreen() {
     // イベント管理タブ用データロード
     fetch('https://holidays-jp.github.io/api/v1/date.json')
       .then(r => r.json()).then(d => setMgmtPublicHolidays(d)).catch(() => {});
+
+    // メンバー一覧取得（参加者追加用）
+    getDocs(collection(db, 'accounts')).then(snap => {
+      const members: {id:string;name:string;nicknameKana?:string;school?:string;grade?:string}[] = [];
+      const schoolSet = new Set<string>();
+      const gradeSet = new Set<string>();
+      snap.forEach(d => {
+        const data = d.data();
+        const push = (m: {id:string;name:string;nicknameKana?:string;school?:string;grade?:string}) => {
+          members.push(m);
+          if (m.school) schoolSet.add(m.school);
+          if (m.grade) gradeSet.add(m.grade);
+        };
+        if (data.role === 'user' && data.name) {
+          push({ id: d.id, name: data.name, nicknameKana: data.nicknameKana, school: data.school, grade: data.grade });
+          (data.siblings || []).forEach((s: any, i: number) => {
+            if (s.name) push({ id: `${d.id}_sib_${i}`, name: s.name, nicknameKana: s.nicknameKana, school: s.school, grade: s.grade });
+          });
+        } else if (data.role === 'staff' && data.hasChild) {
+          (data.staffChildren || []).forEach((c: any, i: number) => {
+            if (c.name) push({ id: `${d.id}_child_${i}`, name: c.name, school: c.school, grade: c.grade });
+          });
+        }
+      });
+      members.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+      const gradeOrder = ['小1','小2','小3','小4','小5','小6'];
+      const sortedGrades = [...gradeSet].sort((a, b) => {
+        const ai = gradeOrder.indexOf(a), bi = gradeOrder.indexOf(b);
+        if (ai === -1 && bi === -1) return a.localeCompare(b, 'ja');
+        if (ai === -1) return 1; if (bi === -1) return -1;
+        return ai - bi;
+      });
+      setMgmtAllMembers(members);
+      setMgmtAllSchools([...schoolSet].sort((a, b) => a.localeCompare(b, 'ja')));
+      setMgmtAllGrades(sortedGrades);
+    });
+
     const unsubMgmt1 = onSnapshot(collection(db, 'events'), snap => {
       const map: Record<string, any> = {};
       snap.forEach(d => { map[d.id] = { id: d.id, ...d.data() }; });
@@ -559,7 +604,7 @@ export default function YearEventsScreen() {
       snap.forEach(d => {
         const item = d.data();
         if (!map[item.eventId]) map[item.eventId] = [];
-        map[item.eventId].push({ id: d.id, childName: item.childName, status: item.status });
+        map[item.eventId].push({ id: d.id, childName: item.childName, childSchool: item.childSchool || '', childGrade: item.childGrade || '', status: item.status });
       });
       setMgmtParticipants(map);
     });
@@ -708,6 +753,9 @@ export default function YearEventsScreen() {
     setMgmtTitle(ev?.title || '');
     setMgmtDesc(ev?.description || '');
     setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
+    setMgmtParticipantTab('list');
+    setMgmtAddSubTab('user');
+    setMgmtMemberSearch(''); setMgmtFilterSchool(''); setMgmtFilterGrade('');
     setMgmtModalVisible(true);
   };
   const mgmtSaveEvent = async () => {
@@ -739,6 +787,27 @@ export default function YearEventsScreen() {
     const ext = (ev.externalParticipants || []).filter((e: any) => e.id !== extId);
     await setDoc(doc(db, 'events', ev.id), { externalParticipants: ext }, { merge: true });
   };
+
+  const mgmtAddMember = async (member: {id:string;name:string;school?:string;grade?:string}) => {
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    if (!ev) return;
+    try {
+      await setDoc(doc(db, 'event_participants', `${ev.id}_${member.id}`), {
+        eventId: ev.id,
+        childId: member.id,
+        childName: member.name,
+        childSchool: member.school || '',
+        childGrade: member.grade || '',
+        status: '参加',
+        updatedAt: new Date(),
+      }, { merge: true });
+    } catch { customAlert('エラー', '追加に失敗しました'); }
+  };
+
+  const mgmtRemoveMember = (docId: string) =>
+    customConfirm('削除確認', 'この参加者を削除しますか？', async () => {
+      await deleteDoc(doc(db, 'event_participants', docId));
+    });
 
   const toggleHidden = async (ev: any) => {
     const newHidden = !ev.hidden;
@@ -1270,7 +1339,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── イベント管理タブ ── */}
-      {mainTab === 'management' && isAdmin && (
+      {mainTab === 'management' && (isAdmin || role === 'staff') && (
         <View style={{ flex: 1 }}>
           {/* 月ナビ */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
@@ -1333,50 +1402,255 @@ export default function YearEventsScreen() {
             </View>
           </ScrollView>
 
-          {/* イベント編集モーダル */}
+          {/* イベント管理モーダル（タブ: イベント編集 / 参加者管理） */}
           <Modal visible={mgmtModalVisible} animationType="slide" transparent>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-              <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 12 }}>{mgmtSelectedDate}</Text>
-                <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 8, fontSize: 14 }}
-                  value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
-                <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 80 }}
-                  value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
-                {/* 参加者（外部）追加 */}
-                {Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) && (
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>外部参加者を追加</Text>
-                    <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
-                      <TextInput style={{ flex: 2, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtName} onChangeText={setMgmtExtName} placeholder="名前" placeholderTextColor="#C0C0C0" />
-                      <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtSchool} onChangeText={setMgmtExtSchool} placeholder="学校" placeholderTextColor="#C0C0C0" />
-                      <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 6, padding: 8, fontSize: 12 }} value={mgmtExtGrade} onChangeText={setMgmtExtGrade} placeholder="学年" placeholderTextColor="#C0C0C0" />
-                      <TouchableOpacity onPress={mgmtAddExternal} style={{ backgroundColor: COLORS.primary, borderRadius: 6, padding: 8, justifyContent: 'center' }}>
-                        <Ionicons name="add" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                    {(Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) as any)?.externalParticipants?.map((ext: any) => (
-                      <View key={ext.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 }}>
-                        <Text style={{ flex: 1, fontSize: 12 }}>{ext.name}（{ext.school} {ext.grade}）</Text>
-                        <TouchableOpacity onPress={() => mgmtRemoveExternal(ext.id)}><Ionicons name="close-circle" size={18} color="#E53935" /></TouchableOpacity>
-                      </View>
-                    ))}
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+              <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '92%' }}>
+
+                {/* ヘッダー */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, borderBottomWidth: 1, borderColor: '#EEE' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#333' }}>
+                      {(() => { const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate); return ev ? (ev as any).title : mgmtSelectedDate; })()}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{mgmtSelectedDate}</Text>
                   </View>
-                )}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) && (
-                    <TouchableOpacity style={{ flex: 1, padding: 12, backgroundColor: '#FFEBEE', borderRadius: 10, alignItems: 'center' }} onPress={mgmtDeleteEvent}>
-                      <Text style={{ color: '#E53935', fontWeight: 'bold' }}>削除</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity style={{ flex: 1, padding: 12, backgroundColor: '#F0F0F0', borderRadius: 10, alignItems: 'center' }} onPress={() => setMgmtModalVisible(false)}>
-                    <Text style={{ color: '#555', fontWeight: 'bold' }}>キャンセル</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={{ flex: 2, padding: 12, backgroundColor: COLORS.primary, borderRadius: 10, alignItems: 'center' }} onPress={mgmtSaveEvent}>
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>保存</Text>
+                  <TouchableOpacity onPress={() => setMgmtModalVisible(false)}>
+                    <Ionicons name="close" size={28} color="#333" />
                   </TouchableOpacity>
                 </View>
+
+                {/* タブ */}
+                <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#EEE' }}>
+                  {(['list', 'add'] as const).map((t) => {
+                    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+                    const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
+                    const extCount = (ev as any)?.externalParticipants?.length || 0;
+                    const total = parts.filter((p: any) => p.status === '参加').length + extCount;
+                    const label = t === 'list' ? `参加者メンバー（${total}名）` : '新規追加';
+                    return (
+                      <TouchableOpacity key={t}
+                        style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: mgmtParticipantTab === t ? COLORS.primary : 'transparent' }}
+                        onPress={() => setMgmtParticipantTab(t)}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: mgmtParticipantTab === t ? COLORS.primary : '#888' }}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* ── 参加者一覧タブ ── */}
+                {mgmtParticipantTab === 'list' && (() => {
+                  const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+                  const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
+                  const attending = parts.filter((p: any) => p.status === '参加');
+                  const extParts = (ev as any)?.externalParticipants || [];
+                  return (
+                    <ScrollView style={{ flex: 1, padding: 16 }}>
+                      {/* イベント編集フォーム */}
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>イベント名</Text>
+                      <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
+                        value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>説明</Text>
+                      <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 70 }}
+                        value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                        {ev && (
+                          <TouchableOpacity style={{ flex: 1, padding: 11, backgroundColor: '#FFEBEE', borderRadius: 10, alignItems: 'center' }} onPress={mgmtDeleteEvent}>
+                            <Text style={{ color: '#E53935', fontWeight: 'bold', fontSize: 13 }}>削除</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={{ flex: 1, padding: 11, backgroundColor: '#F0F0F0', borderRadius: 10, alignItems: 'center' }} onPress={() => setMgmtModalVisible(false)}>
+                          <Text style={{ color: '#555', fontWeight: 'bold', fontSize: 13 }}>キャンセル</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={{ flex: 2, padding: 11, backgroundColor: COLORS.primary, borderRadius: 10, alignItems: 'center' }} onPress={mgmtSaveEvent}>
+                          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>保存</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* 参加者一覧 */}
+                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginBottom: 10 }}>学童メンバー（{attending.length}名）</Text>
+                      {attending.length === 0
+                        ? <Text style={{ color: '#aaa', fontStyle: 'italic', marginBottom: 8 }}>まだ登録がありません</Text>
+                        : attending.map((p: any) => (
+                          <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F5F5F5' }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333' }}>{p.childName}</Text>
+                              {(p.childSchool || p.childGrade) && (
+                                <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{[p.childSchool, p.childGrade].filter(Boolean).join(' / ')}</Text>
+                              )}
+                            </View>
+                            <TouchableOpacity onPress={() => mgmtRemoveMember(p.id)} style={{ padding: 6 }}>
+                              <Ionicons name="trash-outline" size={18} color="#E53935" />
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                      }
+                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginTop: 18, marginBottom: 10 }}>外部参加者（{extParts.length}名）</Text>
+                      {extParts.length === 0
+                        ? <Text style={{ color: '#aaa', fontStyle: 'italic', marginBottom: 8 }}>まだ登録がありません</Text>
+                        : extParts.map((ext: any) => (
+                          <View key={ext.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F5F5F5' }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333' }}>{ext.name}</Text>
+                              {(ext.school || ext.grade) && (
+                                <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{[ext.school, ext.grade].filter(Boolean).join(' / ')}</Text>
+                              )}
+                            </View>
+                            <TouchableOpacity onPress={() => mgmtRemoveExternal(ext.id)} style={{ padding: 6 }}>
+                              <Ionicons name="trash-outline" size={18} color="#E53935" />
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                      }
+                      <View style={{ height: 40 }} />
+                    </ScrollView>
+                  );
+                })()}
+
+                {/* ── 新規追加タブ ── */}
+                {mgmtParticipantTab === 'add' && (
+                  <View style={{ flex: 1 }}>
+                    {/* サブタブ */}
+                    <View style={{ flexDirection: 'row', margin: 12, borderRadius: 10, backgroundColor: '#F2F2F2', padding: 3 }}>
+                      {([['user', '利用者から追加'], ['external', '非利用者から追加']] as const).map(([key, label]) => (
+                        <TouchableOpacity key={key}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 8,
+                            ...(mgmtAddSubTab === key ? { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : {}) }}
+                          onPress={() => setMgmtAddSubTab(key)}
+                        >
+                          <Ionicons name={key === 'user' ? 'people-outline' : 'person-add-outline'} size={14} color={mgmtAddSubTab === key ? COLORS.primary : '#888'} />
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: mgmtAddSubTab === key ? COLORS.primary : '#888' }}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* 利用者から追加 */}
+                    {mgmtAddSubTab === 'user' && (() => {
+                      const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+                      const currentParts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
+                      const filtered = mgmtAllMembers.filter(m => {
+                        const q = mgmtMemberSearch.trim();
+                        return (!q || m.name.includes(q) || (m.nicknameKana || '').includes(q))
+                          && (!mgmtFilterSchool || m.school === mgmtFilterSchool)
+                          && (!mgmtFilterGrade || m.grade === mgmtFilterGrade);
+                      });
+                      return (
+                        <View style={{ flex: 1 }}>
+                          {/* 検索バー */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: '#FAFAFA' }}>
+                            <Ionicons name="search-outline" size={16} color="#aaa" style={{ marginRight: 6 }} />
+                            <TextInput style={{ flex: 1, fontSize: 14, color: '#333' }} placeholder="名前・ニックネームで検索" placeholderTextColor="#C0C0C0"
+                              value={mgmtMemberSearch} onChangeText={setMgmtMemberSearch} />
+                            {mgmtMemberSearch.length > 0 && (
+                              <TouchableOpacity onPress={() => setMgmtMemberSearch('')}>
+                                <Ionicons name="close-circle" size={16} color="#aaa" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          {/* 学校フィルター */}
+                          {mgmtAllSchools.length > 0 && (
+                            <View style={{ marginHorizontal: 16, marginBottom: 6 }}>
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#888', marginBottom: 4 }}>学校</Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View style={{ flexDirection: 'row', gap: 6 }}>
+                                  {['すべて', ...mgmtAllSchools].map(s => (
+                                    <TouchableOpacity key={s}
+                                      style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
+                                        borderColor: (s === 'すべて' ? !mgmtFilterSchool : mgmtFilterSchool === s) ? COLORS.primary : '#DDD',
+                                        backgroundColor: (s === 'すべて' ? !mgmtFilterSchool : mgmtFilterSchool === s) ? COLORS.primary : '#fff' }}
+                                      onPress={() => setMgmtFilterSchool(s === 'すべて' ? '' : (mgmtFilterSchool === s ? '' : s))}
+                                    >
+                                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: (s === 'すべて' ? !mgmtFilterSchool : mgmtFilterSchool === s) ? '#fff' : '#555' }}>{s}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              </ScrollView>
+                            </View>
+                          )}
+                          {/* 学年フィルター */}
+                          {mgmtAllGrades.length > 0 && (
+                            <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#888', marginBottom: 4 }}>学年</Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                <View style={{ flexDirection: 'row', gap: 6 }}>
+                                  {['すべて', ...mgmtAllGrades].map(g => (
+                                    <TouchableOpacity key={g}
+                                      style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1,
+                                        borderColor: (g === 'すべて' ? !mgmtFilterGrade : mgmtFilterGrade === g) ? COLORS.primary : '#DDD',
+                                        backgroundColor: (g === 'すべて' ? !mgmtFilterGrade : mgmtFilterGrade === g) ? COLORS.primary : '#fff' }}
+                                      onPress={() => setMgmtFilterGrade(g === 'すべて' ? '' : (mgmtFilterGrade === g ? '' : g))}
+                                    >
+                                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: (g === 'すべて' ? !mgmtFilterGrade : mgmtFilterGrade === g) ? '#fff' : '#555' }}>{g}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              </ScrollView>
+                            </View>
+                          )}
+                          {/* メンバーリスト */}
+                          <ScrollView style={{ flex: 1, paddingHorizontal: 16 }}>
+                            {filtered.length === 0
+                              ? <Text style={{ color: '#aaa', textAlign: 'center', marginTop: 24 }}>該当するメンバーがいません</Text>
+                              : filtered.map(member => {
+                                const added = currentParts.some((p: any) => p.childName === member.name);
+                                return (
+                                  <TouchableOpacity key={member.id}
+                                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F5F5F5', gap: 10, opacity: added ? 0.5 : 1 }}
+                                    onPress={() => { if (!added) mgmtAddMember(member); }}
+                                    disabled={added} activeOpacity={0.7}
+                                  >
+                                    <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.primary }}>{member.name.charAt(0)}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: added ? '#aaa' : '#333' }}>{member.name}</Text>
+                                      {(member.school || member.grade) && (
+                                        <Text style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{[member.school, member.grade].filter(Boolean).join(' ・ ')}</Text>
+                                      )}
+                                    </View>
+                                    {added
+                                      ? <View style={{ backgroundColor: '#E0E0E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ fontSize: 11, color: '#757575', fontWeight: 'bold' }}>追加済</Text></View>
+                                      : <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="add" size={18} color="#fff" /></View>
+                                    }
+                                  </TouchableOpacity>
+                                );
+                              })
+                            }
+                            <View style={{ height: 40 }} />
+                          </ScrollView>
+                        </View>
+                      );
+                    })()}
+
+                    {/* 非利用者から追加 */}
+                    {mgmtAddSubTab === 'external' && (
+                      <ScrollView style={{ flex: 1, padding: 16 }}>
+                        <Text style={{ fontSize: 13, color: '#888', marginBottom: 12, lineHeight: 18 }}>学童に登録のない外部参加者を手動で追加できます。</Text>
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>氏名 *</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
+                          value={mgmtExtName} onChangeText={setMgmtExtName} placeholder="例: 田中 太郎" placeholderTextColor="#C0C0C0" />
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>学校名</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
+                          value={mgmtExtSchool} onChangeText={setMgmtExtSchool} placeholder="例: ○○小学校" placeholderTextColor="#C0C0C0" />
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>学年</Text>
+                        <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 20, fontSize: 14 }}
+                          value={mgmtExtGrade} onChangeText={setMgmtExtGrade} placeholder="例: 小3" placeholderTextColor="#C0C0C0" />
+                        <TouchableOpacity
+                          style={{ flexDirection: 'row', padding: 14, backgroundColor: mgmtExtName.trim() ? COLORS.primary : '#CCC', borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                          onPress={mgmtAddExternal} disabled={!mgmtExtName.trim()}
+                        >
+                          <Ionicons name="person-add-outline" size={16} color="#fff" />
+                          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>外部参加者として追加</Text>
+                        </TouchableOpacity>
+                        <View style={{ height: 60 }} />
+                      </ScrollView>
+                    )}
+                  </View>
+                )}
+
               </View>
-            </View>
+            </SafeAreaView>
           </Modal>
         </View>
       )}
