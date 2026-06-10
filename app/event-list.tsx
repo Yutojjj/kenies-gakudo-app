@@ -40,6 +40,7 @@ type RichLine = RichSpan[];
 type RichDoc = RichLine[];
 interface YearEventDetail { id: string; eventId: string; description: RichDoc; items: RichDoc }
 interface VacationFlyer { id: string; vacation: VacTab; month: number; uri: string; title: string }
+interface PastPhoto { id: string; eventId: string; uri: string; storagePath: string; fiscalYear?: number }
 
 // ── 定数 ──────────────────────────────────────────────────────
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -139,6 +140,10 @@ export default function EventListScreen() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [secDesc, setSecDesc] = useState(false);
   const [secItems, setSecItems] = useState(false);
+  const [secPhotos, setSecPhotos] = useState(false);
+  const [pastPhotos, setPastPhotos] = useState<Record<string, PastPhoto[]>>({});
+  const [previewPhotos, setPreviewPhotos] = useState<PastPhoto[] | null>(null);
+  const [previewIdx, setPreviewIdx] = useState(0);
 
   // 詳細タブ内のサブタブ
   const [detailSubTab, setDetailSubTab] = useState<'year' | 'vacation'>('year');
@@ -270,6 +275,16 @@ export default function EventListScreen() {
           setDetails(map);
         });
 
+        const unsubPastPhotos = onSnapshot(collection(db, 'event_past_photos'), snap => {
+          const map: Record<string, PastPhoto[]> = {};
+          snap.forEach(d => {
+            const p = { id: d.id, ...d.data() } as PastPhoto;
+            if (!map[p.eventId]) map[p.eventId] = [];
+            map[p.eventId].push(p);
+          });
+          setPastPhotos(map);
+        });
+
         const unsubFlyers = onSnapshot(collection(db, 'vacation_flyers'), snap => {
           setFlyers(snap.docs.map(d => ({ id: d.id, ...d.data() } as VacationFlyer)));
         });
@@ -281,7 +296,7 @@ export default function EventListScreen() {
           if (snap.exists() && snap.data()?.periods) setHolidayPeriods(snap.data().periods);
         });
 
-        return () => { unsubEvents(); unsubParts(); unsubYearEvents(); unsubDetails(); unsubFlyers(); unsubHolidays(); };
+        return () => { unsubEvents(); unsubParts(); unsubYearEvents(); unsubDetails(); unsubPastPhotos(); unsubFlyers(); unsubHolidays(); };
       } catch (error) {
         console.error('データ取得エラー:', error);
         setLoading(false);
@@ -316,7 +331,7 @@ export default function EventListScreen() {
 
   const openDetail = (ev: EventItem) => {
     setDetailEvent(ev);
-    setSecDesc(false); setSecItems(false);
+    setSecDesc(false); setSecItems(false); setSecPhotos(false);
     setDetailOpen(true);
   };
 
@@ -402,6 +417,10 @@ export default function EventListScreen() {
   if (checking || !verified) return null;
 
   const detailDet = detailEvent ? details[detailEvent.id] : undefined;
+  const currentFY2 = getCurrentFY();
+  const detailPhotos = detailEvent
+    ? (pastPhotos[detailEvent.id] || []).filter(p => p.fiscalYear === undefined || p.fiscalYear === currentFY2 - 1)
+    : [];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -771,10 +790,62 @@ export default function EventListScreen() {
                   </View>
                 )}
               </View>
+              {/* 去年の写真 */}
+              <View style={[styles.section, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
+                <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#E8D6F5' }]} onPress={() => setSecPhotos(!secPhotos)}>
+                  <Ionicons name="images-outline" size={18} color="#8A5BB5" />
+                  <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
+                  <View style={{ flex: 1 }} />
+                  <Text style={{ fontSize: 12, color: '#8A5BB5', marginRight: 4 }}>{detailPhotos.length}枚</Text>
+                  <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
+                </TouchableOpacity>
+                {secPhotos && (
+                  <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
+                    {detailPhotos.length === 0
+                      ? <Text style={styles.emptyText}>写真はまだありません</Text>
+                      : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {detailPhotos.map((p, idx) => (
+                            <TouchableOpacity key={p.id} style={{ position: 'relative' }}
+                              onPress={() => { setPreviewPhotos(detailPhotos); setPreviewIdx(idx); }}
+                            >
+                              <Image source={{ uri: p.uri }} style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' }} />
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )
+                    }
+                  </View>
+                )}
+              </View>
+
               <View style={{ height: 40 }} />
             </ScrollView>
           </SafeAreaView>
         )}
+      </Modal>
+
+      {/* 写真フルスクリーンプレビュー */}
+      <Modal visible={!!previewPhotos} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setPreviewPhotos(null)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+          {previewPhotos && (
+            <>
+              <Image source={{ uri: previewPhotos[previewIdx].uri }} style={{ width: '100%', height: '70%' }} resizeMode="contain" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 32, marginTop: 16 }}>
+                <TouchableOpacity onPress={() => setPreviewIdx(i => Math.max(0, i - 1))} disabled={previewIdx === 0}>
+                  <Ionicons name="chevron-back" size={32} color={previewIdx === 0 ? '#555' : '#fff'} />
+                </TouchableOpacity>
+                <Text style={{ color: '#fff', fontSize: 14 }}>{previewIdx + 1} / {previewPhotos.length}</Text>
+                <TouchableOpacity onPress={() => setPreviewIdx(i => Math.min(previewPhotos.length - 1, i + 1))} disabled={previewIdx === previewPhotos.length - 1}>
+                  <Ionicons name="chevron-forward" size={32} color={previewIdx === previewPhotos.length - 1 ? '#555' : '#fff'} />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
       </Modal>
 
       {/* チラシプレビューモーダル */}
