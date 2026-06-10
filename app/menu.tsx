@@ -738,15 +738,14 @@ export default function MenuScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
             <Text style={styles.sectionLabel}>MENU</Text>
-            {/* 送迎費承諾バッジ（userかつ対象者のみ） */}
+            {/* 有料送迎費承諾のお願いバッジ（userかつ対象者のみ） */}
             {role === 'user' && isPaidTransportMember && (
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#4CAF50', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 }}
                 onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
                 activeOpacity={0.8}
               >
-                <Text style={{ fontSize: 13 }}>🚗</Text>
-                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2E7D32' }}>送迎費承諾</Text>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2E7D32' }}>有料送迎費承諾のお願い</Text>
               </TouchableOpacity>
             )}
           </View>

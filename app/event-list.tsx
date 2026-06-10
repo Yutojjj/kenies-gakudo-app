@@ -122,6 +122,9 @@ export default function EventListScreen() {
   const [calSelectedDate, setCalSelectedDate] = useState('');
   const [calModalVisible, setCalModalVisible] = useState(false);
   const [calPublicHolidays, setCalPublicHolidays] = useState<Record<string, string>>({});
+  // モーダル内の一時選択状態 key: `${eventId}_${childId}` → '参加'|'不参加'|undefined
+  const [tempStatus, setTempStatus] = useState<Record<string, string | undefined>>({});
+  const [saving, setSaving] = useState(false);
 
   // ── イベント詳細用state ──
   const [yearEvents, setYearEvents] = useState<Record<string, EventItem[]>>({});   // key: "YYYY-MM"
@@ -500,7 +503,18 @@ export default function EventListScreen() {
                       ]}
                       onPress={() => {
                         setCalSelectedDate(item.dateStr);
-                        if (evs.length > 0) setCalModalVisible(true);
+                        if (evs.length > 0) {
+                          // 現在の参加状況をtempStatusに読み込む
+                          const init: Record<string, string | undefined> = {};
+                          evs.forEach(ev => {
+                            children.forEach(child => {
+                              const k = `${ev.id}_${child.id}`;
+                              init[k] = participants[ev.id]?.[child.id];
+                            });
+                          });
+                          setTempStatus(init);
+                          setCalModalVisible(true);
+                        }
                       }}
                       activeOpacity={0.7}
                     >
@@ -544,7 +558,8 @@ export default function EventListScreen() {
                         {ev.description ? <Text style={styles.modalEventDesc}>{ev.description}</Text> : null}
                         <View style={{ borderTopWidth: 1, borderColor: '#F0F0F0', paddingTop: 12, marginTop: 8 }}>
                           {children.map(child => {
-                            const currentStatus = participants[ev.id]?.[child.id];
+                            const key = `${ev.id}_${child.id}`;
+                            const selected = tempStatus[key];
                             return (
                               <View key={child.id} style={styles.childRow}>
                                 <Text style={styles.childName}>
@@ -552,16 +567,16 @@ export default function EventListScreen() {
                                 </Text>
                                 <View style={styles.actionBtns}>
                                   <TouchableOpacity
-                                    style={[styles.statusBtn, currentStatus === '参加' && styles.statusBtnActiveY]}
-                                    onPress={() => toggleParticipation(ev.id, child.id, child.name, '参加')}
+                                    style={[styles.statusBtn, selected === '参加' && styles.statusBtnActiveY]}
+                                    onPress={() => setTempStatus(prev => ({ ...prev, [key]: selected === '参加' ? undefined : '参加' }))}
                                   >
-                                    <Text style={[styles.statusBtnText, currentStatus === '参加' && styles.statusBtnTextActiveY]}>参加</Text>
+                                    <Text style={[styles.statusBtnText, selected === '参加' && styles.statusBtnTextActiveY]}>参加</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
-                                    style={[styles.statusBtn, currentStatus === '不参加' && styles.statusBtnActiveN]}
-                                    onPress={() => toggleParticipation(ev.id, child.id, child.name, '不参加')}
+                                    style={[styles.statusBtn, selected === '不参加' && styles.statusBtnActiveN]}
+                                    onPress={() => setTempStatus(prev => ({ ...prev, [key]: selected === '不参加' ? undefined : '不参加' }))}
                                   >
-                                    <Text style={[styles.statusBtnText, currentStatus === '不参加' && styles.statusBtnTextActiveN]}>欠席</Text>
+                                    <Text style={[styles.statusBtnText, selected === '不参加' && styles.statusBtnTextActiveN]}>不参加</Text>
                                   </TouchableOpacity>
                                 </View>
                               </View>
@@ -570,8 +585,41 @@ export default function EventListScreen() {
                         </View>
                       </View>
                     ))}
-                    <View style={{ height: 30 }} />
+                    <View style={{ height: 16 }} />
                   </ScrollView>
+                  {/* 保存ボタン */}
+                  <View style={{ padding: 16, borderTopWidth: 1, borderColor: '#EEE' }}>
+                    <TouchableOpacity
+                      style={{ backgroundColor: saving ? '#ccc' : COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center' }}
+                      disabled={saving}
+                      onPress={async () => {
+                        setSaving(true);
+                        try {
+                          for (const ev of selectedEvs) {
+                            for (const child of children) {
+                              const key = `${ev.id}_${child.id}`;
+                              const status = tempStatus[key];
+                              if (status) {
+                                await setDoc(doc(db, 'event_participants', `${ev.id}_${child.id}`), {
+                                  eventId: ev.id, childId: child.id, childName: child.name,
+                                  status, updatedAt: new Date(),
+                                }, { merge: true });
+                              }
+                            }
+                          }
+                          setCalModalVisible(false);
+                        } catch {
+                          customAlert('エラー', '保存に失敗しました');
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                        {saving ? '保存中...' : '保存'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </SafeAreaView>
             </Modal>
