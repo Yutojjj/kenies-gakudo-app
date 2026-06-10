@@ -738,6 +738,17 @@ export default function MenuScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
             <Text style={styles.sectionLabel}>MENU</Text>
+            {/* 送迎費承諾バッジ（userかつ対象者のみ） */}
+            {role === 'user' && isPaidTransportMember && (
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#4CAF50', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 }}
+                onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13 }}>🚗</Text>
+                <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#2E7D32' }}>送迎費承諾</Text>
+              </TouchableOpacity>
+            )}
           </View>
           {(role === 'staff' || role === 'admin') && (
             <TouchableOpacity style={styles.noticeBtn} onPress={() => setNoticeVisible(true)}>
@@ -754,21 +765,7 @@ export default function MenuScreen() {
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
-              {isPaidTransportMember && (
-                <TouchableOpacity
-                  style={[styles.paidBanner, { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' }]}
-                  onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
-                  activeOpacity={0.85}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.paidBannerTitle, { color: '#2E7D32' }]}>🚗 送迎費承諾</Text>
-                    <Text style={[styles.paidBannerCount, { color: '#388E3C' }]}>確認・サインはこちら</Text>
-                  </View>
-                  <View style={[styles.paidBannerBtn, { backgroundColor: '#4CAF50' }]}>
-                    <Text style={styles.paidBannerBtnText}>確認する</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
+
               <Animated.View style={[{ opacity: cardAnims[0], transform: [{ scale: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
                 <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)} activeOpacity={0.85}>
                   <Image source={MENU_ICONS.schedule} style={styles.cardWideImage} resizeMode="contain" />

@@ -423,6 +423,7 @@ export default function EventListScreen() {
       {/* ══ 参加登録タブ ══════════════════════════════════════ */}
       {tab === 'register' && (() => {
         // カレンダー生成
+        const todayStr = getLocalDateString(new Date());
         const y = calDate.getFullYear(), m = calDate.getMonth();
         const firstDay = new Date(y, m, 1).getDay();
         const daysInMonth = new Date(y, m + 1, 0).getDate();
@@ -494,6 +495,7 @@ export default function EventListScreen() {
                       style={[
                         styles.calCell,
                         evs.length > 0 && styles.calCellHasEvent,
+                        item.dateStr === todayStr && styles.calCellToday,
                         isSelected && styles.calCellSelected,
                       ]}
                       onPress={() => {
@@ -502,7 +504,7 @@ export default function EventListScreen() {
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.calDayText, { color: isSelected ? '#fff' : dateColor }]}>{item.day}</Text>
+                      <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
                       {evs.map(ev => (
                         <View key={ev.id} style={styles.calEventBadge}>
                           <Text style={styles.calEventBadgeTitle} numberOfLines={1}>{ev.title}</Text>
@@ -766,7 +768,8 @@ const styles = StyleSheet.create({
   calCellEmpty: { width: '14.28%', minHeight: 70 },
   calCell: { width: '14.28%', minHeight: 70, borderWidth: 0.5, borderColor: COLORS.border, padding: 3, backgroundColor: COLORS.white },
   calCellHasEvent: { backgroundColor: '#F0F8FF' },
-  calCellSelected: { backgroundColor: COLORS.primary },
+  calCellToday: { backgroundColor: '#E8F5E1' },
+  calCellSelected: { borderWidth: 2, borderColor: COLORS.primary },
   calDayText: { fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
   calEventBadge: { backgroundColor: COLORS.primary + '22', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1, marginBottom: 2 },
   calEventBadgeTitle: { fontSize: 8, color: COLORS.primary, fontWeight: 'bold' },
