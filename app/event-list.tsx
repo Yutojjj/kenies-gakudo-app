@@ -117,6 +117,11 @@ export default function EventListScreen() {
   const [children, setChildren] = useState<ChildInfo[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<EventItem[]>([]);
   const [participants, setParticipants] = useState<Record<string, Record<string, string>>>({});
+  // カレンダー用
+  const [calDate, setCalDate] = useState(new Date());
+  const [calSelectedDate, setCalSelectedDate] = useState('');
+  const [calModalVisible, setCalModalVisible] = useState(false);
+  const [calPublicHolidays, setCalPublicHolidays] = useState<Record<string, string>>({});
 
   // ── イベント詳細用state ──
   const [yearEvents, setYearEvents] = useState<Record<string, EventItem[]>>({});   // key: "YYYY-MM"
@@ -188,6 +193,9 @@ export default function EventListScreen() {
 
   // ── データ取得 ──────────────────────────────────────────────
   useEffect(() => {
+    fetch('https://holidays-jp.github.io/api/v1/date.json')
+      .then(r => r.json()).then(d => setCalPublicHolidays(d)).catch(() => {});
+
     const fetchData = async () => {
       try {
         const targetName = name || '';
@@ -413,52 +421,161 @@ export default function EventListScreen() {
       </View>
 
       {/* ══ 参加登録タブ ══════════════════════════════════════ */}
-      {tab === 'register' && (
-        <ScrollView style={styles.scrollArea}>
-          <Text style={styles.instruction}>参加するイベントを選択してください</Text>
-          {upcomingEvents.length === 0
-            ? <Text style={styles.noEventText2}>現在、予定されているイベントはありません。</Text>
-            : upcomingEvents.map(ev => (
-              <View key={ev.id} style={styles.eventCard}>
-                <View style={styles.eventCardHeader}>
-                  <View style={styles.dateBadge}>
-                    <Text style={styles.dateText}>{ev.dateStr}</Text>
+      {tab === 'register' && (() => {
+        // カレンダー生成
+        const y = calDate.getFullYear(), m = calDate.getMonth();
+        const firstDay = new Date(y, m, 1).getDay();
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const calDays: (null | { day: number; dateStr: string })[] = [];
+        for (let i = 0; i < firstDay; i++) calDays.push(null);
+        for (let i = 1; i <= daysInMonth; i++) {
+          calDays.push({ day: i, dateStr: `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
+        }
+
+        // その日のイベント取得
+        const eventsOnDate = (dateStr: string) => upcomingEvents.filter(ev => ev.dateStr === dateStr);
+
+        // その日・その子の参加状況サマリ
+        const statusSummary = (dateStr: string) => {
+          const evs = eventsOnDate(dateStr);
+          if (evs.length === 0) return null;
+          const results: string[] = [];
+          evs.forEach(ev => {
+            children.forEach(child => {
+              const s = participants[ev.id]?.[child.id];
+              if (s) results.push(s);
+            });
+          });
+          if (results.length === 0) return null;
+          const hasJoin = results.includes('参加');
+          const hasAbsent = results.includes('不参加');
+          if (hasJoin && hasAbsent) return 'mixed';
+          if (hasJoin) return '参加';
+          return '不参加';
+        };
+
+        // 選択日のイベント
+        const selectedEvs = eventsOnDate(calSelectedDate);
+
+        return (
+          <View style={{ flex: 1 }}>
+            <ScrollView>
+              {/* 月ナビ */}
+              <View style={styles.calMonthNav}>
+                <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m - 1, 1))}>
+                  <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+                </TouchableOpacity>
+                <Text style={styles.calMonthText}>{y}年 {m + 1}月</Text>
+                <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m + 1, 1))}>
+                  <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* 曜日ヘッダー */}
+              <View style={styles.calWeekRow}>
+                {DAY_NAMES.map((w, i) => (
+                  <Text key={i} style={[styles.calWeekText, i === 0 && { color: '#E53935' }, i === 6 && { color: '#1E88E5' }]}>{w}</Text>
+                ))}
+              </View>
+
+              {/* 日付グリッド */}
+              <View style={styles.calGrid}>
+                {calDays.map((item, idx) => {
+                  if (!item) return <View key={`e-${idx}`} style={styles.calCellEmpty} />;
+                  const evs = eventsOnDate(item.dateStr);
+                  const dow = new Date(item.dateStr).getDay();
+                  const isHol = !!calPublicHolidays[item.dateStr];
+                  const dateColor = (dow === 0 || isHol) ? '#E53935' : dow === 6 ? '#1E88E5' : COLORS.text;
+                  const isSelected = calSelectedDate === item.dateStr;
+                  const summary = statusSummary(item.dateStr);
+                  return (
+                    <TouchableOpacity
+                      key={item.dateStr}
+                      style={[
+                        styles.calCell,
+                        evs.length > 0 && styles.calCellHasEvent,
+                        isSelected && styles.calCellSelected,
+                      ]}
+                      onPress={() => {
+                        setCalSelectedDate(item.dateStr);
+                        if (evs.length > 0) setCalModalVisible(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.calDayText, { color: isSelected ? '#fff' : dateColor }]}>{item.day}</Text>
+                      {evs.map(ev => (
+                        <View key={ev.id} style={styles.calEventBadge}>
+                          <Text style={styles.calEventBadgeTitle} numberOfLines={1}>{ev.title}</Text>
+                          {summary && (
+                            <Text style={[
+                              styles.calEventBadgeStatus,
+                              summary === '参加' && { color: '#4CAF50' },
+                              summary === '不参加' && { color: '#E53935' },
+                              summary === 'mixed' && { color: '#FF9800' },
+                            ]}>
+                              {summary === 'mixed' ? '一部参加' : summary}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={{ height: 40 }} />
+            </ScrollView>
+
+            {/* 参加登録モーダル */}
+            <Modal visible={calModalVisible} animationType="slide" transparent>
+              <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: '#EEE' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333' }}>{calSelectedDate}</Text>
+                    <TouchableOpacity onPress={() => setCalModalVisible(false)}>
+                      <Ionicons name="close" size={26} color="#333" />
+                    </TouchableOpacity>
                   </View>
-                  <Text style={styles.eventTitle}>{ev.title}</Text>
-                </View>
-                {ev.description ? <Text style={styles.eventDesc}>{ev.description}</Text> : null}
-                <View style={styles.participantSection}>
-                  {children.map(child => {
-                    const currentStatus = participants[ev.id]?.[child.id];
-                    return (
-                      <View key={child.id} style={styles.childRow}>
-                        <Text style={styles.childName}>
-                          <Ionicons name="person" size={14} color={COLORS.textLight} /> {child.name}
-                        </Text>
-                        <View style={styles.actionBtns}>
-                          <TouchableOpacity
-                            style={[styles.statusBtn, currentStatus === '参加' && styles.statusBtnActiveY]}
-                            onPress={() => toggleParticipation(ev.id, child.id, child.name, '参加')}
-                          >
-                            <Text style={[styles.statusBtnText, currentStatus === '参加' && styles.statusBtnTextActiveY]}>参加する</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.statusBtn, currentStatus === '不参加' && styles.statusBtnActiveN]}
-                            onPress={() => toggleParticipation(ev.id, child.id, child.name, '不参加')}
-                          >
-                            <Text style={[styles.statusBtnText, currentStatus === '不参加' && styles.statusBtnTextActiveN]}>欠席する</Text>
-                          </TouchableOpacity>
+                  <ScrollView style={{ padding: 16 }}>
+                    {selectedEvs.map(ev => (
+                      <View key={ev.id} style={styles.modalEventBlock}>
+                        <Text style={styles.modalEventTitle}>{ev.title}</Text>
+                        {ev.description ? <Text style={styles.modalEventDesc}>{ev.description}</Text> : null}
+                        <View style={{ borderTopWidth: 1, borderColor: '#F0F0F0', paddingTop: 12, marginTop: 8 }}>
+                          {children.map(child => {
+                            const currentStatus = participants[ev.id]?.[child.id];
+                            return (
+                              <View key={child.id} style={styles.childRow}>
+                                <Text style={styles.childName}>
+                                  <Ionicons name="person" size={14} color={COLORS.textLight} /> {child.name}
+                                </Text>
+                                <View style={styles.actionBtns}>
+                                  <TouchableOpacity
+                                    style={[styles.statusBtn, currentStatus === '参加' && styles.statusBtnActiveY]}
+                                    onPress={() => toggleParticipation(ev.id, child.id, child.name, '参加')}
+                                  >
+                                    <Text style={[styles.statusBtnText, currentStatus === '参加' && styles.statusBtnTextActiveY]}>参加</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.statusBtn, currentStatus === '不参加' && styles.statusBtnActiveN]}
+                                    onPress={() => toggleParticipation(ev.id, child.id, child.name, '不参加')}
+                                  >
+                                    <Text style={[styles.statusBtnText, currentStatus === '不参加' && styles.statusBtnTextActiveN]}>欠席</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            );
+                          })}
                         </View>
                       </View>
-                    );
-                  })}
+                    ))}
+                    <View style={{ height: 30 }} />
+                  </ScrollView>
                 </View>
-              </View>
-            ))
-          }
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      )}
+              </SafeAreaView>
+            </Modal>
+          </View>
+        );
+      })()}
 
       {/* ══ イベント詳細タブ ══════════════════════════════════ */}
       {tab === 'detail' && (
@@ -638,6 +755,25 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: COLORS.primary },
   tabText: { fontSize: 15, fontWeight: 'bold', color: '#888' },
   tabTextActive: { color: COLORS.primary },
+
+  // カレンダー
+  calMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+  calNavBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
+  calMonthText: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  calWeekRow: { flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 6, backgroundColor: '#fff' },
+  calWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4 },
+  calCellEmpty: { width: '14.28%', minHeight: 70 },
+  calCell: { width: '14.28%', minHeight: 70, borderWidth: 0.5, borderColor: COLORS.border, padding: 3, backgroundColor: COLORS.white },
+  calCellHasEvent: { backgroundColor: '#F0F8FF' },
+  calCellSelected: { backgroundColor: COLORS.primary },
+  calDayText: { fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
+  calEventBadge: { backgroundColor: COLORS.primary + '22', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1, marginBottom: 2 },
+  calEventBadgeTitle: { fontSize: 8, color: COLORS.primary, fontWeight: 'bold' },
+  calEventBadgeStatus: { fontSize: 8, fontWeight: 'bold' },
+  modalEventBlock: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+  modalEventTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
+  modalEventDesc: { fontSize: 13, color: COLORS.textLight, marginBottom: 6, lineHeight: 18 },
 
   // 参加登録
   scrollArea: { flex: 1, padding: 16 },
