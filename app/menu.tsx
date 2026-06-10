@@ -595,9 +595,12 @@ export default function MenuScreen() {
             />
 
             <View style={styles.headerContent}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ flexDirection: 'column', gap: 2 }}>
                 <Text style={[styles.headerGreeting, { color: '#fff', fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 3 }]}>
-                  こんにちは！{name || 'ゲスト'}さん
+                  こんにちは！
+                </Text>
+                <Text style={[styles.headerGreeting, { color: '#fff', fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 3, fontSize: 16 }]}>
+                  {name || 'ゲスト'}さん
                 </Text>
               </View>
             </View>
@@ -605,7 +608,23 @@ export default function MenuScreen() {
             {/* ホームページリンク（左下） */}
             <TouchableOpacity
               style={{ position: 'absolute', bottom: 14, left: 16, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }}
-              onPress={() => Linking.openURL('https://kanyes-club.com/')}
+              onPress={async () => {
+                const url = 'https://kanyes-club.com/';
+                try {
+                  if (Platform.OS === 'web') {
+                    window.open(url, '_blank');
+                  } else {
+                    const supported = await Linking.canOpenURL(url);
+                    if (supported) {
+                      await Linking.openURL(url);
+                    } else {
+                      customAlert('エラー', 'URLを開けませんでした');
+                    }
+                  }
+                } catch (e) {
+                  customAlert('エラー', '公式サイトを開けませんでした');
+                }
+              }}
             >
               <Ionicons name="globe-outline" size={14} color="#fff" />
               <Text style={{ fontSize: 11, color: '#fff', fontWeight: 'bold' }}>公式サイトへ</Text>

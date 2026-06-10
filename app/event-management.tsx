@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -46,7 +46,7 @@ type Participant = { id: string; childName: string; status: string; };
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function EventManagementScreen() {
-  const { verified, checking } = useRequireRole('admin');
+  const { verified, checking } = useRequireRole(['admin', 'staff']);
 
   const router = useRouter();
   const { role } = useLocalSearchParams<{ role: string }>();
@@ -68,11 +68,37 @@ export default function EventManagementScreen() {
   const [extSchool, setExtSchool] = useState('');
   const [extGrade, setExtGrade] = useState('');
 
+  // 既存メンバー追加用
+  const [allMembers, setAllMembers] = useState<{ id: string; name: string; grade?: string; role: string }[]>([]);
+  const [memberPickerVisible, setMemberPickerVisible] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+
   useEffect(() => {
     fetch('https://holidays-jp.github.io/api/v1/date.json')
       .then(res => res.json())
       .then(data => setPublicHolidays(data))
       .catch(e => console.warn('祝日API取得失敗', e));
+
+    // アカウント一覧を取得（既存メンバー追加用）
+    getDocs(collection(db, 'accounts')).then(snap => {
+      const members: { id: string; name: string; grade?: string; role: string }[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.role === 'user' && data.name) {
+          members.push({ id: d.id, name: data.name, grade: data.grade, role: 'user' });
+          // 兄弟も追加
+          (data.siblings || []).forEach((s: any, i: number) => {
+            if (s.name) members.push({ id: `${d.id}_sib_${i}`, name: s.name, grade: s.grade, role: 'user' });
+          });
+        } else if (data.role === 'staff' && data.hasChild) {
+          (data.staffChildren || []).forEach((c: any, i: number) => {
+            if (c.name) members.push({ id: `${d.id}_child_${i}`, name: c.name, grade: c.grade, role: 'staff' });
+          });
+        }
+      });
+      members.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+      setAllMembers(members);
+    });
 
     const unsubEvents = onSnapshot(collection(db, 'events'), (snap) => {
       const eData: Record<string, EventData> = {};
@@ -166,6 +192,29 @@ export default function EventManagementScreen() {
     const ev = events[selectedDateStr];
     const updatedExtList = ev.externalParticipants.filter(p => p.id !== extId);
     await setDoc(doc(db, 'events', selectedDateStr), { externalParticipants: updatedExtList }, { merge: true });
+  };
+
+  // 既存メンバーを参加者として追加
+  const addMemberAsParticipant = async (member: { id: string; name: string; grade?: string }) => {
+    try {
+      const docId = `${selectedDateStr}_${member.id}`;
+      await setDoc(doc(db, 'event_participants', docId), {
+        eventId: selectedDateStr,
+        childId: member.id,
+        childName: member.name,
+        status: '参加',
+        updatedAt: new Date(),
+      }, { merge: true });
+    } catch (e) {
+      customAlert('エラー', '追加に失敗しました');
+    }
+  };
+
+  // 参加者を削除（内部メンバー）
+  const removeMemberParticipant = async (participantDocId: string) => {
+    customConfirm('削除確認', 'この参加者を一覧から削除しますか？', async () => {
+      await deleteDoc(doc(db, 'event_participants', participantDocId));
+    });
   };
 
 
@@ -286,7 +335,27 @@ export default function EventManagementScreen() {
                   {attendingInternals.length === 0 ? (
                     <Text style={styles.emptyText}>参加登録はありません</Text>
                   ) : (
-                    attendingInternals.map(p => <Text key={p.id} style={styles.participantName}>・{p.childName}</Text>)
+                    attendingInternals.map(p => (
+                      <View key={p.id} style={styles.extRow}>
+                        <Text style={styles.participantName}>・{p.childName}</Text>
+                        {isAdmin && (
+                          <TouchableOpacity onPress={() => removeMemberParticipant(p.id)}>
+                            <Ionicons name="trash" size={18} color={COLORS.danger}/>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))
+                  )}
+
+                  {/* 既存メンバー追加ボタン */}
+                  {isAdmin && (
+                    <TouchableOpacity
+                      style={styles.addMemberBtn}
+                      onPress={() => { setMemberSearch(''); setMemberPickerVisible(true); }}
+                    >
+                      <Ionicons name="person-add-outline" size={16} color={COLORS.white} />
+                      <Text style={styles.addMemberBtnText}>既存メンバーを追加</Text>
+                    </TouchableOpacity>
                   )}
                   
                   <Text style={[styles.subTitle, { marginTop: 16 }]}>■ 外部参加者 ({externalParts.length}名)</Text>
@@ -321,6 +390,66 @@ export default function EventManagementScreen() {
                 </View>
               )}
               <View style={{ height: 40 }}/>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ── 既存メンバー追加ピッカー ── */}
+      <Modal visible={memberPickerVisible} animationType="slide" transparent>
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { height: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>メンバーを選択</Text>
+              <TouchableOpacity onPress={() => setMemberPickerVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+              <TextInput
+                style={[styles.smallInput, { marginBottom: 8 }]}
+                placeholder="名前で検索..."
+                placeholderTextColor="#BBBBBB"
+                value={memberSearch}
+                onChangeText={setMemberSearch}
+              />
+            </View>
+            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }}>
+              {allMembers
+                .filter(m => m.name.includes(memberSearch))
+                .map(member => {
+                  const alreadyAdded = (participantsMap[selectedDateStr] || []).some(p => p.childName === member.name);
+                  return (
+                    <TouchableOpacity
+                      key={member.id}
+                      style={[styles.memberPickerRow, alreadyAdded && styles.memberPickerRowAdded]}
+                      onPress={async () => {
+                        if (!alreadyAdded) {
+                          await addMemberAsParticipant(member);
+                        }
+                      }}
+                      disabled={alreadyAdded}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.memberPickerName, alreadyAdded && { color: COLORS.textLight }]}>
+                          {member.name}
+                        </Text>
+                        {member.grade ? (
+                          <Text style={styles.memberPickerGrade}>{member.grade}</Text>
+                        ) : null}
+                      </View>
+                      {alreadyAdded ? (
+                        <View style={styles.memberPickerBadge}>
+                          <Text style={styles.memberPickerBadgeText}>追加済</Text>
+                        </View>
+                      ) : (
+                        <Ionicons name="add-circle-outline" size={24} color={COLORS.primary} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              }
+              <View style={{ height: 40 }} />
             </ScrollView>
           </View>
         </SafeAreaView>
@@ -407,5 +536,15 @@ const styles = StyleSheet.create({
 
   addExtBox: { backgroundColor: '#F9F9F9', padding: 16, borderRadius: 8, marginTop: 20, borderWidth: 1, borderColor: COLORS.border },
   smallInput: { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.white, padding: 10, borderRadius: 6 },
-  addExtBtn: { backgroundColor: COLORS.secondary, padding: 12, alignItems: 'center', borderRadius: 6, marginTop: 8 }
+  addExtBtn: { backgroundColor: COLORS.secondary, padding: 12, alignItems: 'center', borderRadius: 6, marginTop: 8 },
+
+  addMemberBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, alignSelf: 'flex-start', marginTop: 10 },
+  addMemberBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 14 },
+
+  memberPickerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: COLORS.border },
+  memberPickerRowAdded: { opacity: 0.5 },
+  memberPickerName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  memberPickerGrade: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
+  memberPickerBadge: { backgroundColor: '#E0E0E0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  memberPickerBadgeText: { fontSize: 12, color: '#757575', fontWeight: 'bold' },
 });

@@ -1184,7 +1184,7 @@ export default function YearEventsScreen() {
         <TouchableOpacity style={[styles.mainTab, mainTab === 'vacation' && styles.mainTabActive]} onPress={() => setMainTab('vacation')}>
           <Text style={[styles.mainTabText, mainTab === 'vacation' && styles.mainTabTextActive]}>長期休み</Text>
         </TouchableOpacity>
-        {isAdmin && (
+        {(isAdmin || role === 'staff') && (
           <TouchableOpacity style={[styles.mainTab, mainTab === 'management' && styles.mainTabActive]} onPress={() => setMainTab('management')}>
             <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>イベント管理</Text>
           </TouchableOpacity>
