@@ -7,7 +7,7 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=yes" />
 
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#FF69B4" />
@@ -19,6 +19,13 @@ export default function Root({ children }: PropsWithChildren) {
 
         <link rel="icon" href="/favicon.ico" />
         <ScrollViewStyleReset />
+
+        {/* iOSでinput/textareaフォーカス時の自動ズームを防ぐ（16px未満だとiOSが自動拡大する仕様への対処） */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          input, textarea, select {
+            font-size: 16px !important;
+          }
+        `}} />
 
         <script dangerouslySetInnerHTML={{
           __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js');});}`

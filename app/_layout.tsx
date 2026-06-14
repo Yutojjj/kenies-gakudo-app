@@ -8,19 +8,6 @@ import { COLORS } from '../constants/theme';
 import { CallProvider } from '../contexts/CallContext';
 import { db } from '../firebase';
 
-// ピンチズームを無効化
-if (Platform.OS === 'web' && typeof document !== 'undefined') {
-  const meta = document.querySelector('meta[name="viewport"]');
-  const content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-  if (meta) {
-    meta.setAttribute('content', content);
-  } else {
-    const m = document.createElement('meta');
-    m.name = 'viewport';
-    m.content = content;
-    document.head.appendChild(m);
-  }
-}
 
 const PUBLIC_PATHS = ['/', '/index'];
 
