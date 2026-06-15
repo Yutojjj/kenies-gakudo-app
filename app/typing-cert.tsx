@@ -97,7 +97,7 @@ function SectionHeader({ title }: { title: string }) {
 
 // ─── メイン ─────────────────────────────────────────────────────────────
 export default function TypingCertScreen() {
-  const { verified, checking } = useRequireRole('admin');
+  const { verified, checking } = useRequireRole(['admin', 'staff']);
   const router = useRouter();
 
   // ── タブ

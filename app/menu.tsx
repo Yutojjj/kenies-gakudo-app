@@ -1322,12 +1322,20 @@ export default function MenuScreen() {
                 </>
               )}
               {role !== 'admin' && (
-                <View style={styles.drawerItem}>
-                  <TouchableOpacity onPress={openPasswordModal} style={{ alignItems: 'center', width: '100%' }}>
-                    <Text style={styles.drawerItemText}>パスワード変更</Text>
-                  </TouchableOpacity>
-                  <View style={styles.drawerDivider} />
-                </View>
+                <>
+                  <View style={styles.drawerItem}>
+                    <TouchableOpacity onPress={() => { closeSettings(); router.push('/typing-cert' as any); }} style={{ alignItems: 'center', width: '100%' }}>
+                      <Text style={styles.drawerItemText}>タイピング検定</Text>
+                    </TouchableOpacity>
+                    <View style={styles.drawerDivider} />
+                  </View>
+                  <View style={styles.drawerItem}>
+                    <TouchableOpacity onPress={openPasswordModal} style={{ alignItems: 'center', width: '100%' }}>
+                      <Text style={styles.drawerItemText}>パスワード変更</Text>
+                    </TouchableOpacity>
+                    <View style={styles.drawerDivider} />
+                  </View>
+                </>
               )}
               <View style={[styles.drawerItem, { marginTop: 16 }]}>
                 <TouchableOpacity onPress={handleLogout} style={{ alignItems: 'center', width: '100%' }}>
