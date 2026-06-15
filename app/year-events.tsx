@@ -169,6 +169,14 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
   const [previewHtml, setPreviewHtml] = React.useState('');
   const editorRef = React.useRef<any>(null);
 
+  // 先行スタイル（文字を打つ前に選択するスタイル）
+  const [pendingSize, setPendingSize] = React.useState<number | null>(null);
+  const [pendingColor, setPendingColor] = React.useState<string | null>(null);
+  const pendingSizeRef = React.useRef<number | null>(null);
+  const pendingColorRef = React.useRef<string | null>(null);
+  React.useEffect(() => { pendingSizeRef.current = pendingSize; }, [pendingSize]);
+  React.useEffect(() => { pendingColorRef.current = pendingColor; }, [pendingColor]);
+
   const docToHtml = (doc: RichDoc): string =>
     doc.map(line =>
       '<div>' + (line.length === 0 || (line.length === 1 && !line[0].text)
@@ -241,8 +249,34 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
     return result.length ? result : [[{ text: '' }]];
   };
 
-  const handleInput = () => {
-    if (!editorRef.current) return;
+  // 先行スタイルがある場合、入力された文字をspanで包んで挿入する
+  const handleKeyDown = (e: any) => {
+    const size = pendingSizeRef.current;
+    const color = pendingColorRef.current;
+    if (!size && !color) return;
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter' ||
+        e.key.startsWith('Arrow') || e.ctrlKey || e.metaKey) return;
+    if (e.key.length !== 1) return; // 印刷可能文字のみ
+    e.preventDefault();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!sel.isCollapsed) range.deleteContents();
+    const span = document.createElement('span');
+    if (size) span.style.fontSize = `${size}px`;
+    if (color) span.style.color = color;
+    span.textContent = e.key;
+    range.insertNode(span);
+    // カーソルをspanの後ろへ
+    const newRange = document.createRange();
+    newRange.setStartAfter(span);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    editorRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const handleInput = () => {    if (!editorRef.current) return;
     const html = editorRef.current.innerHTML;
     setPreviewHtml(html); // プレビュー即時更新
     const newDoc = htmlToDoc(html);
@@ -259,14 +293,35 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
   const applyFontSize = (size: number) => {
     if (typeof window === 'undefined') return;
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-    const span = window.document.createElement('span');
-    span.style.fontSize = `${size}px`;
-    try { range.surroundContents(span); }
-    catch { const f = range.extractContents(); span.appendChild(f); range.insertNode(span); }
-    editorRef.current?.focus();
-    handleInput();
+    if (sel && !sel.isCollapsed) {
+      // 選択範囲がある場合はそこに即適用
+      const range = sel.getRangeAt(0);
+      const span = window.document.createElement('span');
+      span.style.fontSize = `${size}px`;
+      try { range.surroundContents(span); }
+      catch { const f = range.extractContents(); span.appendChild(f); range.insertNode(span); }
+      editorRef.current?.focus();
+      handleInput();
+      setPendingSize(null);
+    } else {
+      // 選択範囲なし → 先行スタイルとしてセット（トグル）
+      setPendingSize(prev => prev === size ? null : size);
+      editorRef.current?.focus();
+    }
+  };
+
+  const applyColor = (color: string) => {
+    if (typeof window === 'undefined') return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      // 選択範囲がある場合はそこに即適用
+      execCmd('foreColor', color);
+      setPendingColor(null);
+    } else {
+      // 選択範囲なし → 先行スタイルとしてセット（トグル）
+      setPendingColor(prev => prev === color ? null : color);
+      editorRef.current?.focus();
+    }
   };
 
   const insertEmoji = (emoji: string) => {
@@ -307,8 +362,8 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
             <View style={{ flexDirection: 'row', gap: 3 }}>
               {SIZES.map(s => (
                 <TouchableOpacity key={s} onPress={() => applyFontSize(s)}
-                  style={{ paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#D0D0D0' }}>
-                  <Text style={{ fontSize: 11 }}>{s}</Text>
+                  style={{ paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: pendingSize === s ? COLORS.primary : '#fff', borderWidth: 1, borderColor: pendingSize === s ? COLORS.primary : '#D0D0D0' }}>
+                  <Text style={{ fontSize: 11, color: pendingSize === s ? '#fff' : '#333' }}>{s}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -321,8 +376,8 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Text style={{ fontSize: 11, color: '#888' }}>色:</Text>
           {COLORS_LIST.map(c => (
-            <TouchableOpacity key={c} onPress={() => execCmd('foreColor', c)}
-              style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: c, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' }} />
+            <TouchableOpacity key={c} onPress={() => applyColor(c)}
+              style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: c, borderWidth: pendingColor === c ? 3 : 1, borderColor: pendingColor === c ? '#333' : 'rgba(0,0,0,0.15)' }} />
           ))}
         </View>
         {showEmoji && (
@@ -361,6 +416,7 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
+        onKeyDown={handleKeyDown}
         style={{ padding: 12, minHeight: 200, outline: 'none', fontSize: 14, color: '#333', lineHeight: '1.8', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto', maxHeight: 400 } as any}
       />
     </View>
