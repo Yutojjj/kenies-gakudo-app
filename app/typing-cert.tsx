@@ -238,18 +238,22 @@ export default function TypingCertScreen() {
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     // ポップアップブロック回避：await前に先にタブを開く
     const printTab = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+    console.log('printTab:', printTab);
     setSaving(true);
     try {
       await saveCertAndUpdateStudent(
         student, certifier?.name || '', date, star, grade, score, wpmResult.wpm, result,
       );
+      console.log('saveCert OK');
     } catch (e) {
-      alert$('エラー', '保存に失敗しました');
+      console.error('saveCert error:', e);
+      alert$('エラー', '保存に失敗しました: ' + String(e));
       setSaving(false);
       if (printTab) printTab.close();
       return;
     }
     setSaving(false);
+    console.log('about to open:', printTab);
     const p = new URLSearchParams({
       result,
       name: student.name,
