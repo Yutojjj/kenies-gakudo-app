@@ -35,6 +35,7 @@ interface Student {
   kana: string;
   star: Star;
   grade: number;
+  days: string[];
   updatedAt: string;
 }
 
@@ -116,8 +117,8 @@ export default function TypingCertScreen() {
   const [star, setStar]             = useState<Star>('kuro');
   const [grade, setGrade]           = useState(3);
   const [score, setScore]           = useState('');
-  const [stageCount, setStageCount] = useState(3);
-  const [stageVals, setStageVals]   = useState<string[]>(Array(3).fill(''));
+  const [stageCount, setStageCount] = useState(8);
+  const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
   const [result, setResult]         = useState<Result>('pass');
   const [saving, setSaving]         = useState(false);
 
@@ -126,6 +127,10 @@ export default function TypingCertScreen() {
   const [newStudentKana, setNewStudentKana] = useState('');
   const [newStudentStar, setNewStudentStar] = useState<Star>('kuro');
   const [newStudentGrade, setNewStudentGrade] = useState(3);
+  const [newStudentDays, setNewStudentDays] = useState<string[]>([]);
+  const [filterDay, setFilterDay] = useState('');        // 受講者一覧絞り込み
+  const [createFilterDay, setCreateFilterDay] = useState(''); // 認定書作成絞り込み
+  const [editCert, setEditCert] = useState<Cert | null>(null); // 履歴編集
 
   // ── 認定者管理
   const [newCertifierName, setNewCertifierName] = useState('');
@@ -271,9 +276,10 @@ export default function TypingCertScreen() {
     const name = newStudentName.trim();
     if (!name) return;
     if (students.find(s => s.name === name)) { alert$('エラー', '同じ名前の受講者がいます'); return; }
-    await addDoc(collection(db, 'typing_students'), { name, kana: newStudentKana.trim(), star: newStudentStar, grade: newStudentGrade, updatedAt: todayStr() });
+    await addDoc(collection(db, 'typing_students'), { name, kana: newStudentKana.trim(), star: newStudentStar, grade: newStudentGrade, days: newStudentDays, updatedAt: todayStr() });
     setNewStudentKana('');
     setNewStudentName('');
+    setNewStudentDays([]);
   };
 
   // ── 受講者の級・星を更新
@@ -343,6 +349,18 @@ export default function TypingCertScreen() {
           {/* 基本情報 */}
           <View style={styles.card}>
             <SectionHeader title="基本情報" />
+            {/* 曜日フィルター */}
+            <Text style={styles.fieldLabel}>曜日で絞り込み</Text>
+            <View style={[styles.dayRow, { marginBottom: 8 }]}>
+              <TouchableOpacity style={[styles.dayBtn, createFilterDay === '' && styles.dayBtnActive]} onPress={() => setCreateFilterDay('')}>
+                <Text style={[styles.dayBtnText, createFilterDay === '' && styles.dayBtnTextActive]}>全</Text>
+              </TouchableOpacity>
+              {['月','火','水','木','金'].map(d => (
+                <TouchableOpacity key={d} style={[styles.dayBtn, createFilterDay === d && styles.dayBtnActive]} onPress={() => setCreateFilterDay(d)}>
+                  <Text style={[styles.dayBtnText, createFilterDay === d && styles.dayBtnTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             {/* 氏名 */}
             <Text style={styles.fieldLabel}>氏名</Text>
             <TouchableOpacity style={styles.selector} onPress={() => setPickerTarget('student')}>
@@ -490,27 +508,34 @@ export default function TypingCertScreen() {
           {/* 受講者追加 */}
           <View style={styles.card}>
             <SectionHeader title="受講者を追加" />
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                value={newStudentName}
-                onChangeText={setNewStudentName}
-                placeholder="氏名（漢字）"
-                placeholderTextColor="#bbb"
-                returnKeyType="next"
-              />
-              <View style={{ width: 8 }} />
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                value={newStudentKana}
-                onChangeText={setNewStudentKana}
-                placeholder="よみがな"
-                placeholderTextColor="#bbb"
-                returnKeyType="done"
-                onSubmitEditing={handleAddStudent}
-              />
+            <TextInput
+              style={styles.input}
+              value={newStudentName}
+              onChangeText={setNewStudentName}
+              placeholder="氏名（漢字）"
+              placeholderTextColor="#bbb"
+              returnKeyType="next"
+            />
+            <TextInput
+              style={styles.input}
+              value={newStudentKana}
+              onChangeText={setNewStudentKana}
+              placeholder="よみがな"
+              placeholderTextColor="#bbb"
+              returnKeyType="done"
+            />
+            <Text style={styles.fieldLabel}>登録曜日（複数選択可）</Text>
+            <View style={styles.dayRow}>
+              {['月','火','水','木','金'].map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.dayBtn, newStudentDays.includes(d) && styles.dayBtnActive]}
+                  onPress={() => setNewStudentDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])}
+                >
+                  <Text style={[styles.dayBtnText, newStudentDays.includes(d) && styles.dayBtnTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <View style={{ height: 8 }} />
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fieldLabel}>星の色</Text>
@@ -536,14 +561,27 @@ export default function TypingCertScreen() {
           {/* 受講者一覧 */}
           <View style={styles.card}>
             <SectionHeader title="受講者一覧" />
+            <View style={styles.dayRow}>
+              <TouchableOpacity style={[styles.dayBtn, filterDay === '' && styles.dayBtnActive]} onPress={() => setFilterDay('')}>
+                <Text style={[styles.dayBtnText, filterDay === '' && styles.dayBtnTextActive]}>全</Text>
+              </TouchableOpacity>
+              {['月','火','水','木','金'].map(d => (
+                <TouchableOpacity key={d} style={[styles.dayBtn, filterDay === d && styles.dayBtnActive]} onPress={() => setFilterDay(d)}>
+                  <Text style={[styles.dayBtnText, filterDay === d && styles.dayBtnTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             {loading && <ActivityIndicator color={COLORS.primary} />}
             {!loading && students.length === 0 && <Text style={styles.emptyText}>受講者がいません</Text>}
-            {students.map(s => (
+            {students.filter(s => filterDay === '' || (s.days || []).includes(filterDay)).map(s => (
               <View key={s.id} style={styles.studentRow}>
                 <View style={{ flex: 1 }}>
                   {s.kana ? <Text style={styles.studentKana}>{s.kana}</Text> : null}
                   <Text style={styles.studentName}>{s.name}</Text>
                   <StarBadge star={s.star} grade={s.grade} />
+                  {(s.days || []).length > 0 && (
+                    <Text style={{ fontSize: 10, color: '#7eb8d8', marginTop: 2 }}>{(s.days || []).join('・')}曜日</Text>
+                  )}
                   <Text style={styles.studentDate}>{s.updatedAt}</Text>
                 </View>
                 <View style={styles.studentActions}>
@@ -616,7 +654,7 @@ export default function TypingCertScreen() {
           contentContainerStyle={styles.scrollContent}
           ListEmptyComponent={<Text style={[styles.emptyText, { textAlign: 'center', marginTop: 40 }]}>まだ記録がありません</Text>}
           renderItem={({ item }) => (
-            <View style={[styles.card, styles.historyCard]}>
+            <TouchableOpacity style={[styles.card, styles.historyCard]} onPress={() => setEditCert(item)} activeOpacity={0.85}>
               <View style={styles.historyTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.historyName}>{item.studentName}</Text>
@@ -663,11 +701,102 @@ export default function TypingCertScreen() {
               >
                 <Text style={styles.historyPrintBtnText}>PDF印刷</Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}
 
+
+
+      {/* ══════════ 履歴編集モーダル ══════════ */}
+      {editCert !== null && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setEditCert(null)}>
+          <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'flex-end' }}>
+            <View style={{ backgroundColor:'#fff', borderTopLeftRadius:20, borderTopRightRadius:20, padding:20, maxHeight:'85%' }}>
+              <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                <Text style={{ fontSize:17, fontWeight:'bold', color:'#1e3a5f' }}>履歴を編集</Text>
+                <TouchableOpacity onPress={() => setEditCert(null)}>
+                  <Ionicons name="close" size={24} color="#888" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView>
+                <Text style={styles.fieldLabel}>得点</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(editCert.score)}
+                  onChangeText={v => setEditCert({ ...editCert, score: v })}
+                  keyboardType="numeric"
+                  placeholder="85"
+                  placeholderTextColor="#bbb"
+                />
+                <Text style={styles.fieldLabel}>WPM</Text>
+                <TextInput
+                  style={styles.input}
+                  value={String(editCert.wpm)}
+                  onChangeText={v => setEditCert({ ...editCert, wpm: +v || 0 })}
+                  keyboardType="numeric"
+                  placeholder="60"
+                  placeholderTextColor="#bbb"
+                />
+                <Text style={styles.fieldLabel}>星の色</Text>
+                <View style={styles.starRow}>
+                  {(['kuro','aka','ki'] as Star[]).map(st => (
+                    <TouchableOpacity
+                      key={st}
+                      style={[styles.starMiniBtn, editCert.star === st && { backgroundColor: STAR_COLOR[st]+'33', borderColor: STAR_COLOR[st] }]}
+                      onPress={() => setEditCert({ ...editCert, star: st })}
+                    >
+                      <Text style={{ fontSize: 12, color: STAR_COLOR[st], fontWeight:'bold' }}>{STAR_LABEL[st]}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.fieldLabel}>級</Text>
+                <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+                  {Array.from({length:11},(_,i)=>i+1).map(g => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[styles.dayBtn, editCert.grade === g && styles.dayBtnActive]}
+                      onPress={() => setEditCert({ ...editCert, grade: g })}
+                    >
+                      <Text style={[styles.dayBtnText, editCert.grade === g && styles.dayBtnTextActive]}>{g}級</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.fieldLabel}>判定</Text>
+                <View style={[styles.row, { marginBottom:12 }]}>
+                  {(['pass','fail'] as Result[]).map(r => (
+                    <TouchableOpacity
+                      key={r}
+                      style={[styles.resultBtn, editCert.result === r && (r==='pass' ? styles.resultBtnPass : styles.resultBtnFail)]}
+                      onPress={() => setEditCert({ ...editCert, result: r })}
+                    >
+                      <Text style={[styles.resultBtnText, editCert.result === r && { color: r==='pass'?'#fff':'#fff' }]}>
+                        {r === 'pass' ? '合格' : '不合格'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveBtn, { marginTop:8 }]}
+                  onPress={async () => {
+                    if (!editCert) return;
+                    await updateDoc(doc(db, 'typing_certs', editCert.id), {
+                      score: editCert.score,
+                      wpm: editCert.wpm,
+                      star: editCert.star,
+                      grade: editCert.grade,
+                      result: editCert.result,
+                    });
+                    setEditCert(null);
+                  }}
+                >
+                  <Text style={styles.saveBtnText}>保存</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
@@ -682,9 +811,14 @@ export default function TypingCertScreen() {
             </Text>
             <ScrollView style={{ maxHeight: 320 }}>
               {/* 受講者 */}
-              {pickerTarget === 'student' && students.map(s => (
+              {pickerTarget === 'student' && students
+                .filter(s => createFilterDay === '' || (s.days || []).includes(createFilterDay))
+                .map(s => (
                 <TouchableOpacity key={s.id} style={styles.pickerItem} onPress={() => handleSelectStudent(s.id)}>
-                  <Text style={styles.pickerItemText}>{s.name}</Text>
+                  <View>
+                    {s.kana ? <Text style={{ fontSize: 10, color: '#94a3b8' }}>{s.kana}</Text> : null}
+                    <Text style={styles.pickerItemText}>{s.name}</Text>
+                  </View>
                   <StarBadge star={s.star} grade={s.grade} />
                 </TouchableOpacity>
               ))}
@@ -823,6 +957,14 @@ const styles = StyleSheet.create({
   },
   chipText:    { fontSize: 13, color: '#1e3a5f' },
   emptyText:   { color: '#94a3b8', fontSize: 14, paddingVertical: 12 },
+  dayRow: { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' },
+  dayBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    borderWidth: 1.5, borderColor: '#bfdbfe', backgroundColor: '#f0f9ff',
+  },
+  dayBtnActive: { backgroundColor: '#7eb8d8', borderColor: '#5aabcc' },
+  dayBtnText: { fontSize: 12, fontWeight: 'bold', color: '#4a7a9b' },
+  dayBtnTextActive: { color: '#fff' },
   historyCard: { marginBottom: 10 },
   historyTop:  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
   historyName: { fontSize: 16, fontWeight: 'bold', color: '#1e3a5f' },
