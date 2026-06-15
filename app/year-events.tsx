@@ -249,33 +249,6 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
     return result.length ? result : [[{ text: '' }]];
   };
 
-  // 先行スタイルがある場合、入力された文字をspanで包んで挿入する
-  const handleKeyDown = (e: any) => {
-    const size = pendingSizeRef.current;
-    const color = pendingColorRef.current;
-    if (!size && !color) return;
-    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter' ||
-        e.key.startsWith('Arrow') || e.ctrlKey || e.metaKey) return;
-    if (e.key.length !== 1) return; // 印刷可能文字のみ
-    e.preventDefault();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    if (!sel.isCollapsed) range.deleteContents();
-    const span = document.createElement('span');
-    if (size) span.style.fontSize = `${size}px`;
-    if (color) span.style.color = color;
-    span.textContent = e.key;
-    range.insertNode(span);
-    // カーソルをspanの後ろへ
-    const newRange = document.createRange();
-    newRange.setStartAfter(span);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-    editorRef.current?.dispatchEvent(new Event('input', { bubbles: true }));
-  };
-
   const handleInput = () => {    if (!editorRef.current) return;
     const html = editorRef.current.innerHTML;
     setPreviewHtml(html); // プレビュー即時更新
@@ -331,12 +304,41 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
 
   const initialized = React.useRef(false);
   React.useEffect(() => {
-    if (editorRef.current && !initialized.current) {
+    if (!editorRef.current) return;
+    if (!initialized.current) {
       const html = richDocToHtml(value);
       editorRef.current.innerHTML = html;
       setPreviewHtml(html);
       initialized.current = true;
     }
+    // keydownリスナーをネイティブで登録（先行スタイル適用）
+    const el = editorRef.current;
+    const handler = (e: KeyboardEvent) => {
+      const size = pendingSizeRef.current;
+      const color = pendingColorRef.current;
+      if (!size && !color) return;
+      if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter' ||
+          e.key.startsWith('Arrow') || e.ctrlKey || e.metaKey) return;
+      if (e.key.length !== 1) return;
+      e.preventDefault();
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      if (!sel.isCollapsed) range.deleteContents();
+      const span = document.createElement('span');
+      if (size) span.style.fontSize = `${size}px`;
+      if (color) span.style.color = color;
+      span.textContent = e.key;
+      range.insertNode(span);
+      const newRange = document.createRange();
+      newRange.setStartAfter(span);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    el.addEventListener('keydown', handler);
+    return () => el.removeEventListener('keydown', handler);
   }, []);
 
   if (typeof window === 'undefined') return (
@@ -416,7 +418,6 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
-        onKeyDown={handleKeyDown}
         style={{ padding: 12, minHeight: 200, outline: 'none', fontSize: 14, color: '#333', lineHeight: '1.8', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowY: 'auto', maxHeight: 400 } as any}
       />
     </View>
