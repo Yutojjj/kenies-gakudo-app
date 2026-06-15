@@ -154,7 +154,7 @@ export default function LessonManagementScreen() {
             d.staffChildren.forEach((child: any, idx: number) => {
               if (!child.name) return; // 名前がない場合はスキップ
               allKids.push({
-                id: child.id || `${parentId}_staffchild_${idx}`,
+                id: `${parentId}_${child.id || `staffchild_${idx}`}`,
                 name: child.name,
                 school: child.school || '',
                 grade: child.grade || '',

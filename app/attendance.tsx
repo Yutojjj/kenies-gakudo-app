@@ -134,7 +134,7 @@ export default function AttendanceScreen() {
             if (data.staffChildren && data.staffChildren.length > 0) {
               data.staffChildren.forEach((child: any, idx: number) => {
                  allKids.push({
-                   id: child.id || `${parentId}_staffchild_${idx}`,
+                   id: `${parentId}_${child.id || `staffchild_${idx}`}`,
                    name: child.name,
                    school: child.school || '',
                    grade: child.grade || '',
