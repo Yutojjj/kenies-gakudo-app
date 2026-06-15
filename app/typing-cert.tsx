@@ -120,7 +120,6 @@ export default function TypingCertScreen() {
   const [stageVals, setStageVals]   = useState<string[]>(Array(3).fill(''));
   const [result, setResult]         = useState<Result>('pass');
   const [saving, setSaving]         = useState(false);
-  const [printPreview, setPrintPreview] = useState<null | { studentName:string; studentKana:string; certifierName:string; date:string; star:Star; grade:number; score:string; wpm:number; result:Result }>(null);
 
   // ── 受講者管理
   const [newStudentName, setNewStudentName] = useState('');
@@ -230,7 +229,7 @@ export default function TypingCertScreen() {
     }
   };
 
-  // ── 印刷（保存 → その場でプレビュー → window.print()）
+  // ── 印刷（保存 → print.htmlを別タブで開く）
   const handlePrint = async () => {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
@@ -247,18 +246,22 @@ export default function TypingCertScreen() {
       return;
     }
     setSaving(false);
-    // プレビュー状態にセット
-    setPrintPreview({
-      studentName: student.name,
-      studentKana: student.kana || '',
-      certifierName: certifier?.name || '',
+    const p = new URLSearchParams({
+      result,
+      name: student.name,
+      kana: student.kana || '',
       date,
       star,
-      grade,
+      grade: String(grade),
       score,
-      wpm: wpmResult.wpm,
-      result,
+      wpm: String(wpmResult.wpm),
+      certifier: certifier?.name || '',
     });
+    if (Platform.OS === 'web') {
+      window.open(`/cert/print.html?${p.toString()}`, '_blank');
+    } else {
+      alert$('Web専用', 'PDF出力はWebブラウザから操作してください');
+    }
     setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
     setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
   };
@@ -644,17 +647,18 @@ export default function TypingCertScreen() {
                 style={styles.historyPrintBtn}
                 onPress={() => {
                   const s = students.find(st => st.name === item.studentName);
-                  setPrintPreview({
-                    studentName: item.studentName,
-                    studentKana: s?.kana || '',
-                    certifierName: item.certifierName,
+                  const p = new URLSearchParams({
+                    result: item.result,
+                    name: item.studentName,
+                    kana: s?.kana || '',
                     date: item.date,
                     star: item.star,
-                    grade: item.grade,
+                    grade: String(item.grade),
                     score: String(item.score),
-                    wpm: item.wpm,
-                    result: item.result,
+                    wpm: String(item.wpm),
+                    certifier: item.certifierName,
                   });
+                  if (Platform.OS === 'web') window.open(`/cert/print.html?${p.toString()}`, '_blank');
                 }}
               >
                 <Text style={styles.historyPrintBtnText}>PDF印刷</Text>
@@ -664,129 +668,6 @@ export default function TypingCertScreen() {
         />
       )}
 
-
-      {/* ══════════ 印刷プレビューModal ══════════ */}
-      {printPreview !== null && Platform.OS === 'web' && (() => {
-        const pv = printPreview;
-        const SLABEL: Record<Star,string> = { kuro: '黒★', aka: '赤★', ki: '黄★' };
-        const SCOLOR: Record<Star,string> = { kuro: '#111111', aka: '#c00000', ki: '#b07d00' };
-        const gradeText = SLABEL[pv.star] + ' ' + pv.grade;
-        const passLayout: Record<string,{top:number;left:number;fontSize:number}> = {
-          name:      { top: 358, left: 296, fontSize: 56 },
-          date:      { top: 690, left: 334, fontSize: 30 },
-          grade:     { top: 751, left: 180, fontSize: 44 },
-          score:     { top: 821, left: 255, fontSize: 44 },
-          wpm:       { top: 816, left: 561, fontSize: 44 },
-          certifier: { top: 950, left: 218, fontSize: 25 },
-        };
-        const failLayout: Record<string,{top:number;left:number;fontSize:number}> = {
-          name:      { top: 370, left: 285, fontSize: 56 },
-          date:      { top: 491, left: 249, fontSize: 39 },
-          grade:     { top: 593, left: 426, fontSize: 42 },
-          score:     { top: 719, left: 240, fontSize: 42 },
-          wpm:       { top: 719, left: 543, fontSize: 38 },
-          certifier: { top: 839, left: 267, fontSize: 37 },
-        };
-        const layout = pv.result === 'pass' ? passLayout : failLayout;
-        const bgSrc  = pv.result === 'pass' ? '/cert/cert-pass.png' : '/cert/cert-fail.png';
-        const dateStr = (() => {
-          if (!pv.date) return '';
-          const [y,m,d] = pv.date.split('-');
-          return `${y}年${m}月${d}日`;
-        })();
-        const fields: Array<{key:string; text:string; color:string}> = [
-          // name は ruby で別途描画するためここでは除外
-          { key:'date',      text: dateStr,            color: '#1a3a6b' },
-          { key:'grade',     text: gradeText,          color: SCOLOR[pv.star] },
-          { key:'score',     text: String(pv.score),   color: '#1a3a6b' },
-          { key:'wpm',       text: String(pv.wpm),     color: '#1a3a6b' },
-          { key:'certifier', text: pv.certifierName,   color: '#1a3a6b' },
-        ];
-        return (
-          <View style={styles.printOverlay}>
-            {/* 操作バー（印刷時は非表示） */}
-            <View style={styles.printBar}>
-              <TouchableOpacity style={styles.printBackBtn} onPress={() => setPrintPreview(null)}>
-                <Text style={{ color:'#fff', fontWeight:'bold' }}>戻る</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.printExecBtn} onPress={() => {
-                if(Platform.OS==='web'){
-                  // ルートdiv以外を非表示にして印刷
-                  const root = document.getElementById('cert-print-root');
-                  const allSiblings: Element[] = [];
-                  if(root && root.parentElement){
-                    Array.from(root.parentElement.children).forEach(el => {
-                      if(el !== root){ (el as HTMLElement).style.display = 'none'; allSiblings.push(el); }
-                    });
-                  }
-                  window.print();
-                  allSiblings.forEach(el => { (el as HTMLElement).style.display = ''; });
-                }
-              }}>
-                <Text style={{ color:'#fff', fontWeight:'bold' }}>印刷 / PDF保存</Text>
-              </TouchableOpacity>
-            </View>
-            {/* 認定書 */}
-            <ScrollView contentContainerStyle={{ alignItems:'center', paddingVertical: 16 }}>
-              <View style={styles.certPage} nativeID="cert-print-root">
-                {/* 背景画像 */}
-                <img
-                  src={bgSrc}
-                  style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%' } as any}
-                  alt=""
-                />
-                {/* 氏名（ルビ付き） */}
-                {(() => {
-                  const pos = layout['name'];
-                  if (!pos) return null;
-                  return (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: pos.top,
-                        left: pos.left,
-                        fontSize: pos.fontSize,
-                        fontWeight: 'bold',
-                        color: '#1a3a6b',
-                        fontFamily: "'Hiragino Kaku Gothic ProN', Meiryo, sans-serif",
-                        whiteSpace: 'nowrap',
-                        lineHeight: 1.2,
-                      } as any}
-                    >
-                      {pv.studentKana
-                        ? <ruby style={{ rubyAlign: 'center' } as any}>{pv.studentName}<rt style={{ fontSize: pos.fontSize * 0.35, fontWeight: 'bold', color: '#1a3a6b' } as any}>{pv.studentKana}</rt></ruby>
-                        : pv.studentName
-                      }
-                    </div>
-                  );
-                })()}
-                {/* その他フィールド */}
-                {fields.map(f => {
-                  const pos = layout[f.key];
-                  if (!pos) return null;
-                  return (
-                    <Text
-                      key={f.key}
-                      style={{
-                        position: 'absolute',
-                        top: pos.top,
-                        left: pos.left,
-                        fontSize: pos.fontSize,
-                        fontWeight: 'bold',
-                        color: f.color,
-                        fontFamily: "'Hiragino Kaku Gothic ProN', Meiryo, sans-serif",
-                        whiteSpace: 'nowrap',
-                      } as any}
-                    >
-                      {f.text}
-                    </Text>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-        );
-      })()}
 
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
@@ -965,27 +846,9 @@ const styles = StyleSheet.create({
   pickerTitle: { fontSize: 14, fontWeight: 'bold', color: '#1e3a5f', textAlign: 'center', paddingVertical: 12 },
   pickerItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: '#f0f0f0' },
   pickerItemText: { fontSize: 16, color: '#1e3a5f' },
-  printOverlay: {
-    position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#f0f0f0', zIndex: 999,
-  },
-  printBar: {
-    flexDirection: 'row' as const, justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#b8d8f0', paddingHorizontal: 16, paddingVertical: 10,
-  },
-  printBackBtn: {
-    flexDirection: 'row' as const, alignItems: 'center',
-    backgroundColor: '#7eb8d8', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8,
-  },
-  printExecBtn: {
-    flexDirection: 'row' as const, alignItems: 'center',
-    backgroundColor: '#5aabcc', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8,
-  },
-  certPage: {
-    position: 'relative' as const,
-    width: 794, height: 1123,
-    backgroundColor: '#fff',
-    overflow: 'hidden' as const,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
-  },
+
+
+
+
+
 });

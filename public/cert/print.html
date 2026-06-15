@@ -72,6 +72,7 @@ const name      = params.get('name')      || '';
 const date      = params.get('date')      || '';
 const star      = params.get('star')      || 'kuro';
 const grade     = params.get('grade')     || '';
+ const kana      = params.get('kana')      || '';
 const score     = params.get('score')     || '';
 const wpm       = params.get('wpm')       || '';
 const certifier = params.get('certifier') || '';
@@ -98,7 +99,16 @@ const set = (id, text, colorClass, isFail) => {
 const fail = result === 'fail';
 const gradeText = (STAR_LABEL[star] || '') + ' ' + grade + '級';
 
-set('f-name',      name,             null,              fail);
+// name は ruby で直接セット
+ const nameEl = document.getElementById('f-name');
+ if (nameEl) {
+   nameEl.className = 'field-text' + (fail ? ' fail' : '');
+   if (kana) {
+     nameEl.innerHTML = '<ruby>' + name + '<rt style="font-weight:bold;font-size:0.35em">' + kana + '</rt></ruby>';
+   } else {
+     nameEl.textContent = name;
+   }
+ }
 set('f-date',      formatDate(date), null,              fail);
 set('f-grade',     gradeText,        STAR_CLASS[star],  fail);
 set('f-score',     score,            null,              fail);
