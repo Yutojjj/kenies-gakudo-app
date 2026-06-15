@@ -137,6 +137,7 @@ export default function TypingCertScreen() {
   // ── Firestore 購読
   useEffect(() => {
     if (!verified) return;
+    console.log('typing-cert: verified OK, starting onSnapshot');
     const unsubs = [
       onSnapshot(query(collection(db, 'typing_students'), orderBy('name')), snap => {
         setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
