@@ -236,24 +236,17 @@ export default function TypingCertScreen() {
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
-    // ポップアップブロック回避：await前に先にタブを開く
-    const printTab = typeof window !== 'undefined' ? window.open('', '_blank') : null;
-    console.log('printTab:', printTab);
     setSaving(true);
     try {
       await saveCertAndUpdateStudent(
         student, certifier?.name || '', date, star, grade, score, wpmResult.wpm, result,
       );
-      console.log('saveCert OK');
     } catch (e) {
-      console.error('saveCert error:', e);
-      alert$('エラー', '保存に失敗しました: ' + String(e));
+      alert$('エラー', '保存に失敗しました');
       setSaving(false);
-      if (printTab) printTab.close();
       return;
     }
     setSaving(false);
-    console.log('about to open:', printTab);
     const p = new URLSearchParams({
       result,
       name: student.name,
@@ -265,11 +258,12 @@ export default function TypingCertScreen() {
       wpm: String(wpmResult.wpm),
       certifier: certifier?.name || '',
     });
-    if (printTab) {
-      printTab.location.href = `/cert/print.html?${p.toString()}`;
-    }
     setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
     setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
+    // 同じタブでprint.htmlに遷移（ポップアップブロック回避）
+    if (typeof window !== 'undefined') {
+      window.location.href = '/cert/print.html?' + p.toString();
+    }
   };
 
   // ── 受講者追加
