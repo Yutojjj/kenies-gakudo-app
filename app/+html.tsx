@@ -25,6 +25,14 @@ export default function Root({ children }: PropsWithChildren) {
           input, textarea, select {
             font-size: 16px !important;
           }
+          @media print {
+            .no-print { display: none !important; }
+          }
+          body.printing-cert .no-print { display: none !important; }
+          @media print {
+            body.printing-cert > div > div > div:not(.cert-print-target) { display: none !important; }
+            body.printing-cert .cert-print-target { display: block !important; }
+          }
         `}} />
 
         <script dangerouslySetInnerHTML={{

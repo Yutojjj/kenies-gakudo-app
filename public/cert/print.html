@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>タイピング検定認定書</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 210mm; height: 297mm; background: white; }
+
+.cert-container {
+  position: relative;
+  width: 794px;
+  height: 1123px;
+  transform-origin: top left;
+}
+.cert-container img.bg {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%; display: block;
+}
+.field-text {
+  position: absolute;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
+  font-weight: bold;
+  white-space: nowrap;
+  color: #1a3a6b;
+}
+.color-kuro { color: #111111; }
+.color-aka  { color: #c00000; }
+.color-ki   { color: #b07d00; }
+
+/* ── 合格レイアウト ── */
+#f-name      { top: 358px; left: 296px; font-size: 56px; }
+#f-date      { top: 690px; left: 334px; font-size: 30px; }
+#f-grade     { top: 751px; left: 180px; font-size: 44px; }
+#f-score     { top: 821px; left: 255px; font-size: 44px; }
+#f-wpm       { top: 816px; left: 561px; font-size: 44px; }
+#f-certifier { top: 950px; left: 218px; font-size: 25px; }
+
+/* ── 不合格レイアウト ── */
+#f-name.fail      { top: 370px; left: 285px; font-size: 56px; }
+#f-date.fail      { top: 491px; left: 249px; font-size: 39px; }
+#f-grade.fail     { top: 593px; left: 426px; font-size: 42px; }
+#f-score.fail     { top: 719px; left: 240px; font-size: 42px; }
+#f-wpm.fail       { top: 719px; left: 543px; font-size: 38px; }
+#f-certifier.fail { top: 839px; left: 267px; font-size: 37px; }
+
+@media print {
+  html, body { width: 210mm; height: 297mm; }
+  .cert-container { page-break-inside: avoid; }
+  .no-print { display: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="cert-container" id="cert">
+  <img class="bg" id="cert-bg" src="" alt="">
+  <span class="field-text" id="f-name"></span>
+  <span class="field-text" id="f-date"></span>
+  <span class="field-text" id="f-grade"></span>
+  <span class="field-text" id="f-score"></span>
+  <span class="field-text" id="f-wpm"></span>
+  <span class="field-text" id="f-certifier"></span>
+</div>
+
+<script>
+const STAR_LABEL = { kuro: '黒★', aka: '赤★', ki: '黄★' };
+const STAR_CLASS  = { kuro: 'color-kuro', aka: 'color-aka', ki: 'color-ki' };
+
+const params = new URLSearchParams(location.search);
+const result    = params.get('result') || 'pass';
+const name      = params.get('name')      || '';
+const date      = params.get('date')      || '';
+const star      = params.get('star')      || 'kuro';
+const grade     = params.get('grade')     || '';
+const score     = params.get('score')     || '';
+const wpm       = params.get('wpm')       || '';
+const certifier = params.get('certifier') || '';
+
+// 画像
+document.getElementById('cert-bg').src =
+  result === 'pass' ? 'cert-pass.png' : 'cert-fail.png';
+
+// 日付フォーマット
+function formatDate(s) {
+  if (!s) return '';
+  const [y, m, d] = s.split('-');
+  return `${y}年${m}月${d}日`;
+}
+
+// 各フィールドをセット
+const set = (id, text, colorClass, isFail) => {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  if (colorClass) el.classList.add(colorClass);
+  if (isFail)     el.classList.add('fail');
+};
+
+const fail = result === 'fail';
+const gradeText = (STAR_LABEL[star] || '') + ' ' + grade + '級';
+
+set('f-name',      name,             null,              fail);
+set('f-date',      formatDate(date), null,              fail);
+set('f-grade',     gradeText,        STAR_CLASS[star],  fail);
+set('f-score',     score,            null,              fail);
+set('f-wpm',       wpm,              null,              fail);
+set('f-certifier', certifier,        null,              fail);
+
+// 画像読み込み後に印刷
+document.getElementById('cert-bg').onload = () => {
+  setTimeout(() => window.print(), 200);
+};
+</script>
+</body>
+</html>
