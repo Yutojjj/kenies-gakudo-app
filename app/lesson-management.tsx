@@ -152,6 +152,7 @@ export default function LessonManagementScreen() {
         if (d.role === 'staff' && d.hasChild) {
           if (d.staffChildren && d.staffChildren.length > 0) {
             d.staffChildren.forEach((child: any, idx: number) => {
+              if (!child.name) return; // 名前がない場合はスキップ
               allKids.push({
                 id: child.id || `${parentId}_staffchild_${idx}`,
                 name: child.name,
@@ -255,7 +256,7 @@ export default function LessonManagementScreen() {
       if (filterGrade && k.grade !== filterGrade) return false;
       if (!searchQuery.trim()) return true;
       const q = searchQuery.trim().toLowerCase();
-      return k.name.toLowerCase().includes(q) || k.nicknameKana.toLowerCase().includes(q);
+      return (k.name || '').toLowerCase().includes(q) || (k.nicknameKana || '').toLowerCase().includes(q);
     });
   }, [kids, searchQuery, filterSchool, filterGrade]);
 
