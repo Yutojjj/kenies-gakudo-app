@@ -236,7 +236,7 @@ export default function TypingCertScreen() {
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     // ポップアップブロック回避：await前に先にタブを開く
-    const printTab = Platform.OS === 'web' ? window.open('', '_blank') : null;
+    const printTab = typeof window !== 'undefined' ? window.open('', '_blank') : null;
     setSaving(true);
     try {
       await saveCertAndUpdateStudent(
@@ -262,8 +262,6 @@ export default function TypingCertScreen() {
     });
     if (printTab) {
       printTab.location.href = `/cert/print.html?${p.toString()}`;
-    } else {
-      alert$('Web専用', 'PDF出力はWebブラウザから操作してください');
     }
     setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
     setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
