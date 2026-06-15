@@ -5,18 +5,26 @@
 <title>タイピング検定認定書</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 210mm; height: 297mm; background: white; }
 
+html, body {
+  width: 210mm;
+  height: 297mm;
+  background: white;
+}
+
+/* 画面表示用：mm単位でA4に合わせる */
 .cert-container {
   position: relative;
-  width: 794px;
-  height: 1123px;
-  transform-origin: top left;
+  width: 210mm;
+  height: 297mm;
+  overflow: hidden;
 }
 .cert-container img.bg {
   position: absolute; top: 0; left: 0;
   width: 100%; height: 100%; display: block;
 }
+
+/* テキストはA4(210×297mm)基準の% or mm指定 */
 .field-text {
   position: absolute;
   font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
@@ -28,26 +36,57 @@ html, body { width: 210mm; height: 297mm; background: white; }
 .color-aka  { color: #c00000; }
 .color-ki   { color: #b07d00; }
 
+/*
+  座標変換: 元画像794×1123px → A4 210×297mm
+  x_mm = x_px / 794 * 210
+  y_mm = y_px / 1123 * 297
+  font_mm = font_px / 794 * 210
+*/
+
 /* ── 合格レイアウト ── */
-#f-name      { top: 358px; left: 296px; font-size: 56px; }
-#f-date      { top: 690px; left: 334px; font-size: 30px; }
-#f-grade     { top: 751px; left: 180px; font-size: 44px; }
-#f-score     { top: 821px; left: 255px; font-size: 44px; }
-#f-wpm       { top: 816px; left: 561px; font-size: 44px; }
-#f-certifier { top: 950px; left: 218px; font-size: 25px; }
+/* name:      x=296 y=358 font=56 */
+#f-name      { top: 94.6mm; left: 78.2mm; font-size: 14.8mm; }
+/* date:      x=334 y=690 font=30 */
+#f-date      { top: 182.5mm; left: 88.3mm; font-size: 7.9mm; }
+/* grade:     x=180 y=751 font=44 */
+#f-grade     { top: 198.6mm; left: 47.6mm; font-size: 11.6mm; }
+/* score:     x=255 y=821 font=44 */
+#f-score     { top: 217.1mm; left: 67.4mm; font-size: 11.6mm; }
+/* wpm:       x=561 y=816 font=44 */
+#f-wpm       { top: 215.8mm; left: 148.3mm; font-size: 11.6mm; }
+/* certifier: x=218 y=950 font=25 */
+#f-certifier { top: 251.3mm; left: 57.6mm; font-size: 6.6mm; }
 
 /* ── 不合格レイアウト ── */
-#f-name.fail      { top: 370px; left: 285px; font-size: 56px; }
-#f-date.fail      { top: 491px; left: 249px; font-size: 39px; }
-#f-grade.fail     { top: 593px; left: 426px; font-size: 42px; }
-#f-score.fail     { top: 719px; left: 240px; font-size: 42px; }
-#f-wpm.fail       { top: 719px; left: 543px; font-size: 38px; }
-#f-certifier.fail { top: 839px; left: 267px; font-size: 37px; }
+/* name:      x=285 y=370 font=56 */
+#f-name.fail      { top: 97.8mm; left: 75.3mm; font-size: 14.8mm; }
+/* date:      x=249 y=491 font=39 */
+#f-date.fail      { top: 129.8mm; left: 65.8mm; font-size: 10.3mm; }
+/* grade:     x=426 y=593 font=42 */
+#f-grade.fail     { top: 156.8mm; left: 112.6mm; font-size: 11.1mm; }
+/* score:     x=240 y=719 font=42 */
+#f-score.fail     { top: 190.1mm; left: 63.4mm; font-size: 11.1mm; }
+/* wpm:       x=543 y=719 font=38 */
+#f-wpm.fail       { top: 190.1mm; left: 143.5mm; font-size: 10.0mm; }
+/* certifier: x=267 y=839 font=37 */
+#f-certifier.fail { top: 221.9mm; left: 70.6mm; font-size: 9.8mm; }
 
 @media print {
-  html, body { width: 210mm; height: 297mm; }
-  .cert-container { page-break-inside: avoid; }
-  .no-print { display: none !important; }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+  }
+  .cert-container {
+    width: 210mm;
+    height: 297mm;
+    page-break-inside: avoid;
+  }
 }
 </style>
 </head>
@@ -66,29 +105,38 @@ html, body { width: 210mm; height: 297mm; background: white; }
 const STAR_LABEL = { kuro: '黒★', aka: '赤★', ki: '黄★' };
 const STAR_CLASS  = { kuro: 'color-kuro', aka: 'color-aka', ki: 'color-ki' };
 
-const params = new URLSearchParams(location.search);
-const result    = params.get('result') || 'pass';
+const params    = new URLSearchParams(location.search);
+const result    = params.get('result')    || 'pass';
 const name      = params.get('name')      || '';
+const kana      = params.get('kana')      || '';
 const date      = params.get('date')      || '';
 const star      = params.get('star')      || 'kuro';
 const grade     = params.get('grade')     || '';
- const kana      = params.get('kana')      || '';
 const score     = params.get('score')     || '';
 const wpm       = params.get('wpm')       || '';
 const certifier = params.get('certifier') || '';
 
-// 画像
 document.getElementById('cert-bg').src =
   result === 'pass' ? 'cert-pass.png' : 'cert-fail.png';
 
-// 日付フォーマット
 function formatDate(s) {
   if (!s) return '';
   const [y, m, d] = s.split('-');
   return `${y}年${m}月${d}日`;
 }
 
-// 各フィールドをセット
+const fail = result === 'fail';
+
+// 氏名（ルビ付き）
+const nameEl = document.getElementById('f-name');
+nameEl.className = 'field-text' + (fail ? ' fail' : '');
+if (kana) {
+  nameEl.innerHTML = `<ruby>${name}<rt style="font-weight:bold;font-size:0.35em">${kana}</rt></ruby>`;
+} else {
+  nameEl.textContent = name;
+}
+
+// その他フィールド
 const set = (id, text, colorClass, isFail) => {
   const el = document.getElementById(id);
   el.textContent = text;
@@ -96,28 +144,16 @@ const set = (id, text, colorClass, isFail) => {
   if (isFail)     el.classList.add('fail');
 };
 
-const fail = result === 'fail';
-const gradeText = (STAR_LABEL[star] || '') + ' ' + grade + '級';
-
-// name は ruby で直接セット
- const nameEl = document.getElementById('f-name');
- if (nameEl) {
-   nameEl.className = 'field-text' + (fail ? ' fail' : '');
-   if (kana) {
-     nameEl.innerHTML = '<ruby>' + name + '<rt style="font-weight:bold;font-size:0.35em">' + kana + '</rt></ruby>';
-   } else {
-     nameEl.textContent = name;
-   }
- }
-set('f-date',      formatDate(date), null,              fail);
-set('f-grade',     gradeText,        STAR_CLASS[star],  fail);
-set('f-score',     score,            null,              fail);
-set('f-wpm',       wpm,              null,              fail);
-set('f-certifier', certifier,        null,              fail);
+const gradeText = (STAR_LABEL[star] || '') + ' ' + grade;
+set('f-date',      formatDate(date), null,             fail);
+set('f-grade',     gradeText,        STAR_CLASS[star], fail);
+set('f-score',     score,            null,             fail);
+set('f-wpm',       wpm,              null,             fail);
+set('f-certifier', certifier,        null,             fail);
 
 // 画像読み込み後に印刷
 document.getElementById('cert-bg').onload = () => {
-  setTimeout(() => window.print(), 200);
+  setTimeout(() => window.print(), 300);
 };
 </script>
 </body>

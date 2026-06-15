@@ -235,6 +235,8 @@ export default function TypingCertScreen() {
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
+    // ポップアップブロック回避：await前に先にタブを開く
+    const printTab = Platform.OS === 'web' ? window.open('', '_blank') : null;
     setSaving(true);
     try {
       await saveCertAndUpdateStudent(
@@ -243,6 +245,7 @@ export default function TypingCertScreen() {
     } catch (e) {
       alert$('エラー', '保存に失敗しました');
       setSaving(false);
+      if (printTab) printTab.close();
       return;
     }
     setSaving(false);
@@ -257,8 +260,8 @@ export default function TypingCertScreen() {
       wpm: String(wpmResult.wpm),
       certifier: certifier?.name || '',
     });
-    if (Platform.OS === 'web') {
-      window.open(`/cert/print.html?${p.toString()}`, '_blank');
+    if (printTab) {
+      printTab.location.href = `/cert/print.html?${p.toString()}`;
     } else {
       alert$('Web専用', 'PDF出力はWebブラウザから操作してください');
     }
