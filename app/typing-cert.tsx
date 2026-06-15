@@ -16,10 +16,8 @@ import {
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal, Platform, SafeAreaView, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Alert, Modal, Platform, SafeAreaView, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -131,6 +129,7 @@ export default function TypingCertScreen() {
   const [filterDay, setFilterDay] = useState('');        // 受講者一覧絞り込み
   const [createFilterDay, setCreateFilterDay] = useState(''); // 認定書作成絞り込み
   const [editCert, setEditCert] = useState<Cert | null>(null); // 履歴編集
+  const [historyFilterDay, setHistoryFilterDay] = useState(''); // 履歴曜日フィルター
 
   // ── 認定者管理
   const [newCertifierName, setNewCertifierName] = useState('');
@@ -349,18 +348,6 @@ export default function TypingCertScreen() {
           {/* 基本情報 */}
           <View style={styles.card}>
             <SectionHeader title="基本情報" />
-            {/* 曜日フィルター */}
-            <Text style={styles.fieldLabel}>曜日で絞り込み</Text>
-            <View style={[styles.dayRow, { marginBottom: 8 }]}>
-              <TouchableOpacity style={[styles.dayBtn, createFilterDay === '' && styles.dayBtnActive]} onPress={() => setCreateFilterDay('')}>
-                <Text style={[styles.dayBtnText, createFilterDay === '' && styles.dayBtnTextActive]}>全</Text>
-              </TouchableOpacity>
-              {['月','火','水','木','金'].map(d => (
-                <TouchableOpacity key={d} style={[styles.dayBtn, createFilterDay === d && styles.dayBtnActive]} onPress={() => setCreateFilterDay(d)}>
-                  <Text style={[styles.dayBtnText, createFilterDay === d && styles.dayBtnTextActive]}>{d}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
             {/* 氏名 */}
             <Text style={styles.fieldLabel}>氏名</Text>
             <TouchableOpacity style={styles.selector} onPress={() => setPickerTarget('student')}>
@@ -647,64 +634,71 @@ export default function TypingCertScreen() {
       )}
 
       {/* ══════════ 履歴タブ ══════════ */}
-      {tab === 'history' && (
-        <FlatList
-          data={certs}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.scrollContent}
-          ListEmptyComponent={<Text style={[styles.emptyText, { textAlign: 'center', marginTop: 40 }]}>まだ記録がありません</Text>}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={[styles.card, styles.historyCard]} onPress={() => setEditCert(item)} activeOpacity={0.85}>
-              <View style={styles.historyTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.historyName}>{item.studentName}</Text>
-                  <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
-                </View>
-                <View style={[styles.resultPill, { backgroundColor: item.result === 'pass' ? '#dbeafe' : '#fee2e2' }]}>
-                  <Text style={{ fontWeight: 'bold', color: item.result === 'pass' ? '#1d4ed8' : '#b91c1c', fontSize: 13 }}>
-                    {item.result === 'pass' ? '✅ 合格' : '❌ 不合格'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => confirm$('削除', `${item.studentName} の記録を削除しますか？`, async () => {
-                    await deleteDoc(doc(db, 'typing_certs', item.id));
-                  })}
-                  style={{ marginLeft: 8, padding: 4 }}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.historyRow}>
-                <StarBadge star={item.star} grade={item.grade} />
-                <Text style={styles.historyMeta}>得点: {item.score}点</Text>
-                <Text style={styles.historyMeta}>WPM: {item.wpm}</Text>
-              </View>
-              {item.certifierName ? <Text style={styles.historyCertifier}>認定者: {item.certifierName}</Text> : null}
-              {/* 印刷ボタン */}
-              <TouchableOpacity
-                style={styles.historyPrintBtn}
-                onPress={() => {
-                  const s = students.find(st => st.name === item.studentName);
-                  const p = new URLSearchParams({
-                    result: item.result,
-                    name: item.studentName,
-                    kana: s?.kana || '',
-                    date: item.date,
-                    star: item.star,
-                    grade: String(item.grade),
-                    score: String(item.score),
-                    wpm: String(item.wpm),
-                    certifier: item.certifierName,
-                  });
-                  if (typeof window !== 'undefined') window.location.href = '/cert/print.html?' + p.toString();
-                }}
-              >
-                <Text style={styles.historyPrintBtnText}>PDF印刷</Text>
+      {tab === 'history' && (() => {
+        // 曜日フィルター
+        const filteredCerts = certs.filter(c => {
+          if (!historyFilterDay) return true;
+          const s = students.find(st => st.name === c.studentName);
+          return (s?.days || []).includes(historyFilterDay);
+        });
+        // 日付でグループ化（新しい順）
+        const grouped: { date: string; items: Cert[] }[] = [];
+        filteredCerts.forEach(c => {
+          const existing = grouped.find(g => g.date === c.date);
+          if (existing) existing.items.push(c);
+          else grouped.push({ date: c.date, items: [c] });
+        });
+        grouped.sort((a, b) => b.date.localeCompare(a.date));
+        return (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            {/* 曜日フィルター */}
+            <View style={[styles.dayRow, { marginBottom: 8 }]}>
+              <TouchableOpacity style={[styles.dayBtn, historyFilterDay === '' && styles.dayBtnActive]} onPress={() => setHistoryFilterDay('')}>
+                <Text style={[styles.dayBtnText, historyFilterDay === '' && styles.dayBtnTextActive]}>全</Text>
               </TouchableOpacity>
-            </TouchableOpacity>
-          )}
-        />
-      )}
+              {['月','火','水','木','金'].map(d => (
+                <TouchableOpacity key={d} style={[styles.dayBtn, historyFilterDay === d && styles.dayBtnActive]} onPress={() => setHistoryFilterDay(d)}>
+                  <Text style={[styles.dayBtnText, historyFilterDay === d && styles.dayBtnTextActive]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {grouped.length === 0 && <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 40 }]}>まだ記録がありません</Text>}
+            {grouped.map(group => (
+              <View key={group.date}>
+                {/* 日付ヘッダー */}
+                <View style={styles.historyDateHeader}>
+                  <Text style={styles.historyDateHeaderText}>{formatDate(group.date)}</Text>
+                </View>
+                {group.items.map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.card, styles.historyCard]}
+                    onPress={() => setEditCert({ ...item })}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.historyTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.historyName}>{item.studentName}</Text>
+                      </View>
+                      <View style={[styles.resultPill, { backgroundColor: item.result === 'pass' ? '#dbeafe' : '#fee2e2' }]}>
+                        <Text style={{ fontWeight: 'bold', color: item.result === 'pass' ? '#1d4ed8' : '#b91c1c', fontSize: 13 }}>
+                          {item.result === 'pass' ? '合格' : '不合格'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.historyRow}>
+                      <StarBadge star={item.star} grade={item.grade} />
+                      <Text style={styles.historyMeta}>得点: {item.score}点</Text>
+                      <Text style={styles.historyMeta}>WPM: {item.wpm}</Text>
+                    </View>
+                    {item.certifierName ? <Text style={styles.historyCertifier}>認定者: {item.certifierName}</Text> : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        );
+      })()}
 
 
 
@@ -792,6 +786,37 @@ export default function TypingCertScreen() {
                 >
                   <Text style={styles.saveBtnText}>保存</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.printBtn, { marginTop:8 }]}
+                  onPress={() => {
+                    if (!editCert) return;
+                    const s = students.find(st => st.name === editCert.studentName);
+                    const p = new URLSearchParams({
+                      result: editCert.result,
+                      name: editCert.studentName,
+                      kana: s?.kana || '',
+                      date: editCert.date,
+                      star: editCert.star,
+                      grade: String(editCert.grade),
+                      score: String(editCert.score),
+                      wpm: String(editCert.wpm),
+                      certifier: editCert.certifierName,
+                    });
+                    if (typeof window !== 'undefined') window.location.href = '/cert/print.html?' + p.toString();
+                  }}
+                >
+                  <Text style={styles.saveBtnText}>PDF印刷</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ marginTop:12, alignItems:'center' }}
+                  onPress={() => confirm$('削除', `${editCert?.studentName} の記録を削除しますか？`, async () => {
+                    if (!editCert) return;
+                    await deleteDoc(doc(db, 'typing_certs', editCert.id));
+                    setEditCert(null);
+                  })}
+                >
+                  <Text style={{ color:'#ef4444', fontSize:14 }}>この記録を削除</Text>
+                </TouchableOpacity>
               </ScrollView>
             </View>
           </View>
@@ -810,18 +835,33 @@ export default function TypingCertScreen() {
                : 'ステージ数を選択'}
             </Text>
             <ScrollView style={{ maxHeight: 320 }}>
-              {/* 受講者 */}
-              {pickerTarget === 'student' && students
-                .filter(s => createFilterDay === '' || (s.days || []).includes(createFilterDay))
-                .map(s => (
-                <TouchableOpacity key={s.id} style={styles.pickerItem} onPress={() => handleSelectStudent(s.id)}>
-                  <View>
-                    {s.kana ? <Text style={{ fontSize: 10, color: '#94a3b8' }}>{s.kana}</Text> : null}
-                    <Text style={styles.pickerItemText}>{s.name}</Text>
+              {/* 受講者 - 曜日フィルター付き */}
+              {pickerTarget === 'student' && (
+                <>
+                  <View style={[styles.dayRow, { paddingHorizontal: 8, paddingBottom: 8 }]}>
+                    <TouchableOpacity style={[styles.dayBtn, createFilterDay === '' && styles.dayBtnActive]} onPress={() => setCreateFilterDay('')}>
+                      <Text style={[styles.dayBtnText, createFilterDay === '' && styles.dayBtnTextActive]}>全</Text>
+                    </TouchableOpacity>
+                    {['月','火','水','木','金'].map(d => (
+                      <TouchableOpacity key={d} style={[styles.dayBtn, createFilterDay === d && styles.dayBtnActive]} onPress={() => setCreateFilterDay(d)}>
+                        <Text style={[styles.dayBtnText, createFilterDay === d && styles.dayBtnTextActive]}>{d}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                  <StarBadge star={s.star} grade={s.grade} />
-                </TouchableOpacity>
-              ))}
+                  {students
+                    .filter(s => createFilterDay === '' || (s.days || []).includes(createFilterDay))
+                    .map(s => (
+                      <TouchableOpacity key={s.id} style={styles.pickerItem} onPress={() => handleSelectStudent(s.id)}>
+                        <View>
+                          {s.kana ? <Text style={{ fontSize: 10, color: '#94a3b8' }}>{s.kana}</Text> : null}
+                          <Text style={styles.pickerItemText}>{s.name}</Text>
+                        </View>
+                        <StarBadge star={s.star} grade={s.grade} />
+                      </TouchableOpacity>
+                    ))
+                  }
+                </>
+              )}
               {/* 認定者 */}
               {pickerTarget === 'certifier' && certifiers.map(c => (
                 <TouchableOpacity key={c.id} style={styles.pickerItem} onPress={() => { setSelCertifierId(c.id); setPickerTarget(null); }}>
@@ -965,7 +1005,9 @@ const styles = StyleSheet.create({
   dayBtnActive: { backgroundColor: '#7eb8d8', borderColor: '#5aabcc' },
   dayBtnText: { fontSize: 12, fontWeight: 'bold', color: '#4a7a9b' },
   dayBtnTextActive: { color: '#fff' },
-  historyCard: { marginBottom: 10 },
+  historyCard: { marginBottom: 8 },
+  historyDateHeader: { paddingVertical: 6, paddingHorizontal: 4, marginBottom: 4, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#7eb8d8', paddingLeft: 10 },
+  historyDateHeaderText: { fontSize: 13, fontWeight: 'bold', color: '#2e7fc1' },
   historyTop:  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
   historyName: { fontSize: 16, fontWeight: 'bold', color: '#1e3a5f' },
   historyDate: { fontSize: 12, color: '#94a3b8' },
@@ -986,7 +1028,7 @@ const styles = StyleSheet.create({
     width: 280, maxHeight: 400, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10,
   },
   pickerTitle: { fontSize: 14, fontWeight: 'bold', color: '#1e3a5f', textAlign: 'center', paddingVertical: 12 },
-  pickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: '#f0f0f0' },
+  pickerItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: '#f0f0f0' },
   pickerItemText: { fontSize: 16, color: '#1e3a5f' },
 
 
