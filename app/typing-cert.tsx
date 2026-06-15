@@ -658,7 +658,7 @@ export default function TypingCertScreen() {
                     wpm: String(item.wpm),
                     certifier: item.certifierName,
                   });
-                  if (Platform.OS === 'web') window.open(`/cert/print.html?${p.toString()}`, '_blank');
+                  if (typeof window !== 'undefined') window.location.href = '/cert/print.html?' + p.toString();
                 }}
               >
                 <Text style={styles.historyPrintBtnText}>PDF印刷</Text>
