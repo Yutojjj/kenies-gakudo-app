@@ -1038,6 +1038,13 @@ export default function MessagesScreen() {
           }).map(item => {
             const isGroupItem = item.type === 'group';
             const unread = hasUnread(item);
+            // direct会話でnameが空の場合、相手アカウントから名前を解決
+            let displayName = item.name;
+            if (!displayName && !isGroupItem && item.id.startsWith('direct_')) {
+              const otherId = item.id.replace('direct_', '');
+              const otherAcc = homeAllAccounts.find((a: any) => a.id === otherId);
+              displayName = otherAcc?.name || '';
+            }
             return (
               <TouchableOpacity key={item.id} style={styles.convRow} onPress={() => openChat(item)} activeOpacity={0.75}>
                 <View style={[styles.convAvatar, isGroupItem && styles.convAvatarGroup]}>
@@ -1046,7 +1053,7 @@ export default function MessagesScreen() {
                 <View style={styles.convBody}>
                   <View style={styles.convTitleRow}>
                     <Text style={[styles.convName, unread && styles.convNameUnread]}>
-                      {item.name || (isGroupItem ? 'グループ' : '利用者')}
+                      {displayName || (isGroupItem ? 'グループ' : '名称未設定')}
                     </Text>
                     <Text style={styles.convTime}>{relTime(item.lastMessageAt)}</Text>
                   </View>

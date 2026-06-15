@@ -549,7 +549,7 @@ export default function LessonManagementScreen() {
                                   {timeGroup.map(lesson => (
                                     <View key={lesson.id} style={styles.groupChildRow}>
                                       <View style={{ flex:1 }}>
-                                        <Text style={styles.groupChildName}>{lesson.childName}</Text>
+                                        <Text style={styles.groupChildName}>{lesson.childName || (() => { const k = kids.find(k => k.id === lesson.childId); return k ? `${k.name}${k.isStaffChild ? ` [${k.parentName}]` : ''}` : '(名前不明)'; })()}</Text>
                                         <View style={{ flexDirection:'row', gap:4, marginTop:2 }}>
                                           {lesson.dayOfWeek && (
                                             <View style={[styles.lessonBadge, { backgroundColor:'#EDE7F6', paddingHorizontal:5, paddingVertical:1 }]}>

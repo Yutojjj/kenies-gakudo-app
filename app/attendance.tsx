@@ -471,7 +471,7 @@ export default function AttendanceScreen() {
                 setLayouts(prev => ({ ...prev, [dateKey]: currentY })); 
               }}
             >
-              <View style={styles.dayHeaderContainer}>
+              <View style={[styles.dayHeaderContainer, Platform.OS === 'web' && ({ position: 'sticky', top: 0, zIndex: 10 } as any)]}>
                 <Text style={[styles.dayHeaderText, headerColorStyle]}>{m}月{day}日 ({dayStr})</Text>
                 {isPublicHoliday && <Text style={{ color: 'red', marginLeft: 8, fontSize: 12, fontWeight: 'bold' }}>{publicHolidays[dateStr]}</Text>}
                 {eventTitle && <View style={styles.eventBadgeLarge}><Text style={styles.eventBadgeTextLarge}>{eventTitle}</Text></View>}
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
   loadMoreBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white, margin: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: COLORS.primary, borderStyle: 'dashed' },
   loadMoreText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 14, marginLeft: 8 },
   daySection: { marginBottom: 32 },
-  dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8, flexWrap: 'wrap' },
+  dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8, flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 6, paddingHorizontal: 8 },
   dayHeaderText: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
   
   eventBadgeLarge: { backgroundColor: '#20B2AA', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 12 },
