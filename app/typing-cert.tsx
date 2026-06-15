@@ -986,7 +986,7 @@ const styles = StyleSheet.create({
     width: 280, maxHeight: 400, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10,
   },
   pickerTitle: { fontSize: 14, fontWeight: 'bold', color: '#1e3a5f', textAlign: 'center', paddingVertical: 12 },
-  pickerItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: '#f0f0f0' },
+  pickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: '#f0f0f0' },
   pickerItemText: { fontSize: 16, color: '#1e3a5f' },
 
 
