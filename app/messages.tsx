@@ -831,6 +831,30 @@ export default function MessagesScreen() {
   const isAdmin = resolvedUser?.role === 'admin';
   const isDirect = activeConv?.type === 'direct';
   const isGroup = activeConv?.type === 'group';
+
+  // 会話IDから表示名を解決する（direct_/staff_dm_/direct_admin対応）
+  const resolveConvName = (convId: string, convName?: string): string => {
+    if (convName) return convName;
+    const allAccs = homeAllAccounts.length > 0 ? homeAllAccounts : availableAccounts;
+    if (convId === 'direct_admin' || convId === 'staff_group') {
+      return convId === 'staff_group' ? 'スタッフグループ' : '管理者';
+    }
+    if (convId.startsWith('direct_')) {
+      const otherId = convId.replace('direct_', '');
+      const acc = allAccs.find((a: any) => a.id === otherId);
+      return acc?.name || '';
+    }
+    if (convId.startsWith('staff_dm_')) {
+      const parts = convId.replace('staff_dm_', '').split('__');
+      const myId = resolvedUser?.accountId || ADMIN_ID;
+      const otherId = parts.find(p => p !== myId);
+      if (otherId) {
+        const acc = allAccs.find((a: any) => a.id === otherId);
+        return acc?.name || '';
+      }
+    }
+    return '';
+  };
   
   // 管理者は常にOK。DMは常にOK。グループは設定に従う
   const canChat = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowChat !== false);
@@ -1038,13 +1062,7 @@ export default function MessagesScreen() {
           }).map(item => {
             const isGroupItem = item.type === 'group';
             const unread = hasUnread(item);
-            // direct会話でnameが空の場合、相手アカウントから名前を解決
-            let displayName = item.name;
-            if (!displayName && !isGroupItem && item.id.startsWith('direct_')) {
-              const otherId = item.id.replace('direct_', '');
-              const otherAcc = homeAllAccounts.find((a: any) => a.id === otherId);
-              displayName = otherAcc?.name || '';
-            }
+            const displayName = resolveConvName(item.id, item.name);
             return (
               <TouchableOpacity key={item.id} style={styles.convRow} onPress={() => openChat(item)} activeOpacity={0.75}>
                 <View style={[styles.convAvatar, isGroupItem && styles.convAvatarGroup]}>
@@ -1357,7 +1375,7 @@ export default function MessagesScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeConv?.name || 'チャット'}
+          {activeConv ? (resolveConvName(activeConv.id, activeConv.name) || 'チャット') : 'チャット'}
         </Text>
         {isAdmin && activeConv?.type === 'direct' && (
           <TouchableOpacity
