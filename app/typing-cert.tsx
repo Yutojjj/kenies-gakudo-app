@@ -140,14 +140,14 @@ export default function TypingCertScreen() {
     const unsubs = [
       onSnapshot(query(collection(db, 'typing_students'), orderBy('name')), snap => {
         setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
-      }),
+      }, e => console.error('typing_students error:', e.code, e.message)),
       onSnapshot(query(collection(db, 'typing_certifiers'), orderBy('name')), snap => {
         setCertifiers(snap.docs.map(d => ({ id: d.id, ...d.data() } as Certifier)));
         setLoading(false);
-      }),
+      }, e => console.error('typing_certifiers error:', e.code, e.message)),
       onSnapshot(query(collection(db, 'typing_certs'), orderBy('createdAt', 'desc')), snap => {
         setCerts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cert)));
-      }),
+      }, e => console.error('typing_certs error:', e.code, e.message)),
     ];
     return () => unsubs.forEach(u => u());
   }, [verified]);
