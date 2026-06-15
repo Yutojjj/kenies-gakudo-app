@@ -337,8 +337,55 @@ const RichEditor = ({ value, onChange }: { value: RichDoc; onChange: (v: RichDoc
       sel.addRange(newRange);
       el.dispatchEvent(new Event('input', { bubbles: true }));
     };
-    el.addEventListener('keydown', handler);
-    return () => el.removeEventListener('keydown', handler);
+    // IME変換中はkeydownをスキップ
+    const keydownHandler = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
+      handler(e);
+    };
+
+    // 日本語変換確定時（compositionend）に先行スタイルを適用
+    const compositionHandler = (e: CompositionEvent) => {
+      const size = pendingSizeRef.current;
+      const color = pendingColorRef.current;
+      if (!size && !color) return;
+      const text = e.data;
+      if (!text) return;
+
+      // ブラウザがテキストをDOMに書き込んだ後に処理するためsetTimeout(0)
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        const anchor = range.startContainer;
+        if (anchor.nodeType !== 3) return; // 3 = TEXT_NODE
+        const textNode = anchor as any;
+        const offset = range.startOffset;
+        const len = text.length;
+        if (offset < len) return;
+
+        const before = textNode.splitText(offset - len);
+        before.splitText(len);
+        const span = document.createElement('span');
+        if (size) span.style.fontSize = `${size}px`;
+        if (color) span.style.color = color;
+        span.textContent = text;
+        before.parentNode?.replaceChild(span, before);
+
+        const newRange = document.createRange();
+        newRange.setStartAfter(span);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }, 0);
+    };
+
+    el.addEventListener('keydown', keydownHandler);
+    el.addEventListener('compositionend', compositionHandler);
+    return () => {
+      el.removeEventListener('keydown', keydownHandler);
+      el.removeEventListener('compositionend', compositionHandler);
+    };
   }, []);
 
   if (typeof window === 'undefined') return (
