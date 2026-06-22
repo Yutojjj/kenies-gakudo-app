@@ -45,24 +45,34 @@ export default function QrScanScreen() {
       let finalAccountId = scannedData;
 
       // 1. まず「qrToken」として検索（一括更新で発行された新しいQRコード用）
-      const q = query(collection(db, 'accounts'), where('qrToken', '==', scannedData));
-      const tokenSnap = await getDocs(q);
+      try {
+        const q = query(collection(db, 'accounts'), where('qrToken', '==', scannedData));
+        const tokenSnap = await getDocs(q);
+        if (!tokenSnap.empty) {
+          accountData = tokenSnap.docs[0].data();
+          finalAccountId = tokenSnap.docs[0].id;
+        }
+      } catch (tokenErr) {
+        console.warn("qrToken検索エラー:", tokenErr);
+      }
 
-      if (!tokenSnap.empty) {
-        accountData = tokenSnap.docs[0].data();
-        finalAccountId = tokenSnap.docs[0].id;
-      } else {
-        // 2. 見つからなければ従来のドキュメントIDとして検索（移行前の古いQRコードも読めるようにする措置）
-        const accountSnap = await getDoc(doc(db, 'accounts', scannedData));
-        if (accountSnap.exists()) {
-          accountData = accountSnap.data();
-          finalAccountId = accountSnap.id;
+      // 2. 見つからなければ従来のドキュメントIDとして検索（移行前の古いQRコードを読んだ場合の措置）
+      // ※ここで不正な文字列が渡されるとエラーで落ちるため、独立したtry-catchで保護します
+      if (!accountData) {
+        try {
+          const accountSnap = await getDoc(doc(db, 'accounts', scannedData));
+          if (accountSnap.exists()) {
+            accountData = accountSnap.data();
+            finalAccountId = accountSnap.id;
+          }
+        } catch (docErr) {
+          console.warn("docID検索エラー:", docErr);
         }
       }
 
       // どちらでも見つからなかった場合
       if (!accountData) {
-        setErrorMsg('アカウントが見つかりません。無効なQRコードです。');
+        setErrorMsg(`アカウントが見つかりません。無効なQRコードです。\n\n【読み取ったデータ】\n${scannedData}`);
         setStatus('error');
         return;
       }
@@ -113,8 +123,8 @@ export default function QrScanScreen() {
       setStatus('success');
     } catch (err: any) {
       console.error(err);
-      // エラーの詳細を画面に出すように修正
-      setErrorMsg(`処理中にエラーが発生しました。\n${err?.message || ''}`);
+      // 万が一別のエラーが出ても、原因が画面に表示されるように修正
+      setErrorMsg(`処理中に予期せぬエラーが発生しました。\n\n【読み取ったデータ】\n${scannedData}\n\n【エラー内容】\n${err?.message || ''}`);
       setStatus('error');
     }
   };
@@ -129,6 +139,11 @@ export default function QrScanScreen() {
     if (data.includes('?id=')) {
       extractedId = data.split('?id=')[1].split('&')[0];
     }
+    
+    // URLエンコードされている場合に戻す (例: %20 など)
+    try {
+      extractedId = decodeURIComponent(extractedId);
+    } catch (e) {}
     
     // データベースがクラッシュするのを完全に防ぐため、英数字とハイフン、アンダースコア以外を除去
     extractedId = extractedId.replace(/[^a-zA-Z0-9_-]/g, '');
