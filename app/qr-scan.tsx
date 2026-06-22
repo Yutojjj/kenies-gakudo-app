@@ -24,13 +24,21 @@ export default function QrScanScreen() {
 
   useEffect(() => {
     if (id) {
-      processEntry(id);
+      // パラメータにスラッシュ等が含まれているとクラッシュするためサニタイズ（安全化）
+      const cleanId = typeof id === 'string' ? id.replace(/[^a-zA-Z0-9_-]/g, '') : '';
+      processEntry(cleanId);
     } else {
       setStatus('scanning');
     }
   }, [id]);
 
   const processEntry = async (scannedData: string) => {
+    if (!scannedData) {
+      setErrorMsg('QRコードからデータを読み取れませんでした。');
+      setStatus('error');
+      return;
+    }
+
     setStatus('loading');
     try {
       let accountData = null;
@@ -42,7 +50,7 @@ export default function QrScanScreen() {
 
       if (!tokenSnap.empty) {
         accountData = tokenSnap.docs[0].data();
-        finalAccountId = tokenSnap.docs[0].id; // 実際のドキュメントIDを取得
+        finalAccountId = tokenSnap.docs[0].id;
       } else {
         // 2. 見つからなければ従来のドキュメントIDとして検索（移行前の古いQRコードも読めるようにする措置）
         const accountSnap = await getDoc(doc(db, 'accounts', scannedData));
@@ -103,9 +111,10 @@ export default function QrScanScreen() {
       }
 
       setStatus('success');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMsg('処理中にエラーが発生しました。');
+      // エラーの詳細を画面に出すように修正
+      setErrorMsg(`処理中にエラーが発生しました。\n${err?.message || ''}`);
       setStatus('error');
     }
   };
@@ -113,16 +122,17 @@ export default function QrScanScreen() {
   const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
+    
     let extractedId = data;
-    try {
-      // URL形式が含まれている場合（例: https://xxx.com/qr-scan?id=トークン）
-      if (data.includes('?id=')) {
-        const url = new URL(data.startsWith('http') ? data : `https://dummy.com${data}`);
-        extractedId = url.searchParams.get('id') || data;
-      }
-    } catch(e) {
-      // URLパースエラーの場合は文字列そのままで続行
+    
+    // URL形式が含まれている場合、確実に「?id=」の後ろを文字列カットして抽出
+    if (data.includes('?id=')) {
+      extractedId = data.split('?id=')[1].split('&')[0];
     }
+    
+    // データベースがクラッシュするのを完全に防ぐため、英数字とハイフン、アンダースコア以外を除去
+    extractedId = extractedId.replace(/[^a-zA-Z0-9_-]/g, '');
+
     processEntry(extractedId);
   };
 
@@ -162,7 +172,7 @@ export default function QrScanScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBg}>
-        <Text style={styles.headerTitle}>ケーニーズ学童クラブ</Text>
+        <Text style={styles.headerTitle}>ケーニーズクラブ学童保育</Text>
       </View>
 
       <View style={styles.card}>
@@ -317,10 +327,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   successMsg: {
-    fontSize: 15,
+    fontSize: 13,
     color: COLORS.textLight,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
     marginBottom: 20,
   },
   divider: {
@@ -340,10 +350,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorMsg: {
-    fontSize: 15,
+    fontSize: 14,
     color: COLORS.textLight,
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 20,
   },
   retryBtn: {
     backgroundColor: THEME_COLOR,
