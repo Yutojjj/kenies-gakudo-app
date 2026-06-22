@@ -21,6 +21,9 @@ export default function QrScanScreen() {
   const [time, setTime] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  
+  // カメラの向きを管理するステート（初期値は外カメラ）
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
 
   useEffect(() => {
     if (id) {
@@ -151,6 +154,11 @@ export default function QrScanScreen() {
     processEntry(extractedId);
   };
 
+  // 内カメラ・外カメラの切り替え処理
+  const toggleCameraFacing = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
+  };
+
   if (status === 'scanning') {
     if (!permission) {
       return <View style={styles.centerContainer}><ActivityIndicator size="large" color={THEME_COLOR} /></View>;
@@ -169,11 +177,16 @@ export default function QrScanScreen() {
       <SafeAreaView style={{flex: 1, backgroundColor: '#000'}}>
         <CameraView
           style={StyleSheet.absoluteFillObject}
-          facing="back"
+          facing={facing}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         />
         <View style={styles.scannerOverlay}>
+          {/* カメラ反転ボタン */}
+          <TouchableOpacity style={styles.flipBtn} onPress={toggleCameraFacing}>
+            <Ionicons name="camera-reverse" size={32} color="#FFFFFF" />
+          </TouchableOpacity>
+
           <View style={styles.scannerBox} />
           <Text style={styles.scannerText}>入室用QRコードを枠内に合わせてください</Text>
           <TouchableOpacity style={[styles.retryBtn, {marginTop: 40}]} onPress={() => router.push('/menu')}>
@@ -402,5 +415,19 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  flipBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 60 : 50,
+    right: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
 });
