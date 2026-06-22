@@ -195,7 +195,7 @@ export default function QrCardsScreen() {
 
   const clearSelect = () => setSelected(new Set());
 
-  // 印刷（選択された子供のカードをprint.htmlで開く）
+  // 印刷（選択された子供のカードを非表示のiframeで読み込んで直接印刷画面を開く）
   const handlePrint = () => {
     if (!selected.size) {
       const msg = '印刷する子供を選択してください。';
@@ -225,7 +225,34 @@ export default function QrCardsScreen() {
         children: payload,
         baseUrl: window.location.origin,
       }));
-      window.open('/qr-cards/print.html?src=session', '_blank');
+
+      // 古い印刷用iframeが残っていればあらかじめ削除
+      const oldIframe = document.getElementById('qr-print-iframe');
+      if (oldIframe) {
+        oldIframe.remove();
+      }
+
+      // 非表示の隠しiframeを作成してbodyに挿入
+      const iframe = document.createElement('iframe');
+      iframe.id = 'qr-print-iframe';
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      iframe.style.border = 'none';
+      iframe.style.opacity = '0';
+      iframe.src = '/qr-cards/print.html?src=session';
+
+      document.body.appendChild(iframe);
+
+      // iframeの読み込みが完了したら、中のウィンドウにフォーカスを当てて印刷ダイアログを起動
+      iframe.onload = () => {
+        setTimeout(() => {
+          if (iframe.contentWindow) {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          }
+        }, 300);
+      };
     } else {
       Alert.alert('印刷', 'この機能はWeb版（ブラウザ）から利用してください。');
     }
