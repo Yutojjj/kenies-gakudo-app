@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import TransportModal from '../components/TransportModal';
@@ -31,7 +31,7 @@ interface Kid {
   hasMemo?: boolean;
 }
 
-type ViewMode = 'attendance' | 'schoolUsers' | 'transport';
+type ViewMode = 'attendance' | 'todayStatus' | 'schoolUsers' | 'transport';
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const PASTEL_COLORS = ['#FFE4E1', '#E6F2FF', '#F0FFF0', '#F8F0FF', '#FFFFE0', '#FFF5EE'];
@@ -98,6 +98,7 @@ export default function AttendanceScreen() {
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
 
   const [activeSchool, setActiveSchool] = useState<string | null>(null);
+  const [todayEntries, setTodayEntries] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -259,6 +260,23 @@ export default function AttendanceScreen() {
       }
     };
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    // 今日の入室ログを取得
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const unsub = onSnapshot(
+      query(collection(db, 'entry_logs'), where('dateStr', '==', dateStr)),
+      (snap) => {
+        const entries: Record<string, boolean> = {};
+        snap.forEach(d => {
+          entries[d.data().accountId] = true;
+        });
+        setTodayEntries(entries);
+      }
+    );
+    return () => unsub();
   }, []);
 
   const datesToDisplay = useMemo(() => {
@@ -629,22 +647,139 @@ export default function AttendanceScreen() {
     </>
   );
 
-  const transportDates = (() => {
-    const dates = [];
+  const renderTodayStatusView = () => {
     const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i + transportWeekOffset * 7);
-      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      dates.push({ date: d, dateStr: ds });
-    }
-    return dates;
-  })();
+    const attendanceData = getAttendanceForDay(today);
+    
+    const expectedKids: Kid[] = [];
+    const addedIds = new Set<string>();
+    
+    // 今日の利用予定の子を全員取得
+    Object.values(attendanceData.schools).forEach(timeMap => {
+      Object.values(timeMap).forEach(kids => {
+        kids.forEach(k => {
+          if (!addedIds.has(k.id)) {
+            expectedKids.push(k);
+            addedIds.add(k.id);
+          }
+        });
+      });
+    });
+    Object.values(attendanceData.lessons).forEach(kids => {
+      kids.forEach(k => {
+        if (!addedIds.has(k.id)) {
+          expectedKids.push(k);
+          addedIds.add(k.id);
+        }
+      });
+    });
 
-  const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
-    const docRef = doc(db, 'pickup_assignments', dateStr);
-    const current = pickupAssignments[dateStr] || {};
-    await setDoc(docRef, { ...current, [blockKey]: staffName }, { merge: true });
+    expectedKids.sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade) || a.name.localeCompare(b.name, 'ja'));
+
+    const arrivedKids = expectedKids.filter(k => todayEntries[k.parentDocId || k.id] || todayEntries[k.id]);
+    const notArrivedKids = expectedKids.filter(k => !(todayEntries[k.parentDocId || k.id] || todayEntries[k.id]));
+
+    const renderGroupedKids = (kidsList: Kid[], statusType: 'arrived' | 'notArrived') => {
+      if (kidsList.length === 0) {
+        return <View style={styles.noDataBox}><Text style={styles.noDataText}>{statusType === 'arrived' ? '登所済みの児童はいません' : '未登所の児童はいません'}</Text></View>;
+      }
+
+      // 学校別にグループ化
+      const grouped: Record<string, Kid[]> = {};
+      kidsList.forEach(k => {
+        const s = k.school || '未設定';
+        if (!grouped[s]) grouped[s] = [];
+        grouped[s].push(k);
+      });
+
+      // 学校をソート
+      const sortedSchools = Object.keys(grouped).sort((a, b) => {
+        const idxA = sortedSchoolNames.indexOf(a);
+        const idxB = sortedSchoolNames.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.localeCompare(b);
+      });
+
+      return (
+        <View style={{ gap: 12 }}>
+          {sortedSchools.map(school => {
+            const schoolKids = grouped[school];
+            const bgColor = getCardColor(school);
+            return (
+              <View key={school} style={{ backgroundColor: bgColor, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{school}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 }}>
+                  {schoolKids.map(k => {
+                    const isArrived = statusType === 'arrived';
+                    return (
+                      <View key={k.id} style={{ 
+                        backgroundColor: isArrived ? '#E8F5E9' : '#FFFFFF', 
+                        paddingHorizontal: 10, 
+                        paddingVertical: 10, 
+                        borderRadius: 12, 
+                        flexDirection: 'row', 
+                        alignItems: 'center', 
+                        shadowColor: '#000', 
+                        shadowOpacity: 0.04, 
+                        shadowRadius: 3, 
+                        elevation: 1,
+                        borderWidth: 2,
+                        borderColor: isArrived ? '#4CAF50' : '#EEEEEE',
+                        width: '48%'
+                      }}>
+                        <Ionicons 
+                          name={isArrived ? "checkmark-circle" : "person-circle-outline"} 
+                          size={20} 
+                          color={isArrived ? "#4CAF50" : COLORS.danger} 
+                          style={{ marginRight: 6 }} 
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.text }} numberOfLines={1}>{k.name}</Text>
+                          <Text style={{ fontSize: 10, color: isArrived ? '#4CAF50' : COLORS.textLight, marginTop: 2 }}>
+                            {k.grade}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {/* 要素が奇数の場合にレイアウト崩れを防ぐためのダミー要素 */}
+                  {schoolKids.length % 2 !== 0 && <View style={{ width: '48%' }} />}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      );
+    };
+
+    return (
+      <ScrollView style={styles.mainScroll}>
+        <View style={{ padding: 16 }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: COLORS.text }}>
+            {today.getMonth()+1}月{today.getDate()}日の登所状況
+          </Text>
+          
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.danger }}>未登所</Text>
+              <Text style={{ fontSize: 14, color: COLORS.danger, marginLeft: 8 }}>({notArrivedKids.length}名)</Text>
+            </View>
+            {renderGroupedKids(notArrivedKids, 'notArrived')}
+          </View>
+
+          <View style={{ marginBottom: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#4CAF50' }}>登所済み</Text>
+              <Text style={{ fontSize: 14, color: '#4CAF50', marginLeft: 8 }}>({arrivedKids.length}名)</Text>
+            </View>
+            {renderGroupedKids(arrivedKids, 'arrived')}
+          </View>
+
+        </View>
+      </ScrollView>
+    );
   };
 
   const renderSchoolUsersView = () => {
@@ -652,7 +787,6 @@ export default function AttendanceScreen() {
     const allUsers = Object.values(groupedUsersBySchool).flat();
     const hasFilter = !!(userListSearch || userListFilterDow || activeSchool);
 
-    // 絞り込み結果を計算
     const filtered = allUsers.filter((u: any) => {
       if (userListSearch) {
         const q = userListSearch.toLowerCase();
@@ -745,7 +879,25 @@ export default function AttendanceScreen() {
     );
   };
 
-    const renderTransportView = () => {
+  const transportDates = (() => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i + transportWeekOffset * 7);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      dates.push({ date: d, dateStr: ds });
+    }
+    return dates;
+  })();
+
+  const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
+    const docRef = doc(db, 'pickup_assignments', dateStr);
+    const current = pickupAssignments[dateStr] || {};
+    await setDoc(docRef, { ...current, [blockKey]: staffName }, { merge: true });
+  };
+
+  const renderTransportView = () => {
     return (
       <View style={{ flex: 1 }}>
         <View style={styles.weekNav}>
@@ -837,13 +989,16 @@ export default function AttendanceScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '利用者一覧' : '送迎一覧'}
+          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '利用者一覧' : currentView === 'todayStatus' ? '本日の登所' : '送迎一覧'}
         </Text>
       </View>
 
       <View style={styles.tabNavigation}>
         <TouchableOpacity style={[styles.tabNavBtn, currentView === 'attendance' && styles.tabNavBtnActive]} onPress={() => setCurrentView('attendance')}>
           <Text style={[styles.tabNavText, currentView === 'attendance' && styles.tabNavTextActive]}>出欠一覧</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'todayStatus' && styles.tabNavBtnActive]} onPress={() => setCurrentView('todayStatus')}>
+          <Text style={[styles.tabNavText, currentView === 'todayStatus' && styles.tabNavTextActive]}>本日の登所</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tabNavBtn, currentView === 'schoolUsers' && styles.tabNavBtnActive]} onPress={() => setCurrentView('schoolUsers')}>
           <Text style={[styles.tabNavText, currentView === 'schoolUsers' && styles.tabNavTextActive]}>利用者一覧</Text>
@@ -854,6 +1009,7 @@ export default function AttendanceScreen() {
       </View>
 
       {currentView === 'attendance' && renderAttendanceView()}
+      {currentView === 'todayStatus' && renderTodayStatusView()}
       {currentView === 'schoolUsers' && renderSchoolUsersView()}
       {currentView === 'transport' && renderTransportView()}
 

@@ -32,6 +32,7 @@ type Child = {
   school: string;
   grade: string;
   qrCode?: string;     // QRに埋め込むURL（生成済みの場合）
+  qrToken?: string;    // 新しいQR用トークン
   isParentAccount: boolean; // true=メインアカウントの子供、false=兄弟
   parentId?: string;   // 兄弟の場合の親アカウントID
   sibIndex?: number;   // 兄弟インデックス
@@ -58,6 +59,7 @@ export default function QrCardsScreen() {
         school: acc.school || '',
         grade: acc.grade || '',
         qrCode: acc.qrCode,
+        qrToken: acc.qrToken,
         isParentAccount: true,
       });
       // 兄弟
@@ -69,6 +71,7 @@ export default function QrCardsScreen() {
             school: sib.school || acc.school || '',
             grade: sib.grade || '',
             qrCode: sib.qrCode,
+            qrToken: sib.qrToken,
             isParentAccount: false,
             parentId: acc.id,
             sibIndex: sibIdx,
@@ -97,9 +100,11 @@ export default function QrCardsScreen() {
   }, []);
 
   // ── QRコードURL生成 ──────────────────────────
-  const buildQrUrl = (childId: string): string => {
+  const buildQrUrl = (child: Child): string => {
     const base = Platform.OS === 'web' ? window.location.origin : (process.env.EXPO_PUBLIC_APP_URL || '');
-    return `${base}/qr-scan?id=${childId}`;
+    // qrTokenがあればそれを、なければドキュメントIDを使用する
+    const token = child.qrToken || child.id;
+    return `${base}/qr-scan?id=${token}`;
   };
 
   // 一括QR生成（未生成のもの全部）
@@ -125,7 +130,7 @@ export default function QrCardsScreen() {
         const toUpdateAccounts: Record<string, any> = {}; // accountId -> updates
 
         for (const child of missing) {
-          const qrUrl = buildQrUrl(child.id);
+          const qrUrl = buildQrUrl(child);
           if (child.isParentAccount) {
             // メインアカウントに直接qrCodeを保存
             if (!toUpdateAccounts[child.id]) toUpdateAccounts[child.id] = { siblings: accountMap[child.id]?.siblings ? [...accountMap[child.id].siblings] : [] };
@@ -214,6 +219,7 @@ export default function QrCardsScreen() {
         id: c.id,
         name: c.name,
         school: c.school,
+        qrCodeUrl: c.qrCode // 新しいqrTokenが含まれたURLを渡す
       }));
       sessionStorage.setItem('qr_print_data', JSON.stringify({
         children: payload,
@@ -227,7 +233,7 @@ export default function QrCardsScreen() {
 
   // 単独QR生成
   const handleGenerateSingle = async (child: Child) => {
-    const qrUrl = buildQrUrl(child.id);
+    const qrUrl = buildQrUrl(child);
     try {
       if (child.isParentAccount) {
         await updateDoc(doc(db, 'accounts', child.id), { qrCode: qrUrl, updatedAt: serverTimestamp() });

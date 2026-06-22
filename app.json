@@ -3,8 +3,16 @@
     "name": "ケーニーズ学童クラブ",
     "slug": "kenies-gakudo-app",
     "version": "1.0.0",
-    "scheme": "kenies-gakudo-app", 
+    "scheme": "kenies-gakudo-app",
     "icon": "./assets/images/icon.png",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "QRコードをスキャンするためにカメラを使用します。"
+        }
+      ]
+    ],
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png",

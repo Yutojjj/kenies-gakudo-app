@@ -1311,6 +1311,8 @@ export default function MenuScreen() {
                     { label: 'パスワード変更', onPress: () => { closeSettings(); openPasswordModal(); } },
                     { label: `アンケート${surveyCount > 0 ? `（${surveyCount}件）` : ''}`, onPress: () => { closeSettings(); router.push('/survey' as any); } },
                     { label: 'タイピング検定', onPress: () => { closeSettings(); router.push('/typing-cert' as any); } },
+                    { label: '入室QRリーダー', onPress: () => { closeSettings(); router.push('/qr-scan' as any); } },
+                    { label: 'QRコード一括更新', onPress: () => { closeSettings(); router.push('/admin/qr-updater' as any); } },
                   ].map((item, i) => (
                     <View key={i} style={styles.drawerItem}>
                       <TouchableOpacity onPress={item.onPress} style={{ alignItems: 'center', width: '100%' }}>
@@ -1326,6 +1328,12 @@ export default function MenuScreen() {
                   <View style={styles.drawerItem}>
                     <TouchableOpacity onPress={() => { closeSettings(); router.push('/typing-cert' as any); }} style={{ alignItems: 'center', width: '100%' }}>
                       <Text style={styles.drawerItemText}>タイピング検定</Text>
+                    </TouchableOpacity>
+                    <View style={styles.drawerDivider} />
+                  </View>
+                  <View style={styles.drawerItem}>
+                    <TouchableOpacity onPress={() => { closeSettings(); router.push('/qr-scan' as any); }} style={{ alignItems: 'center', width: '100%' }}>
+                      <Text style={styles.drawerItemText}>入室QRリーダー</Text>
                     </TouchableOpacity>
                     <View style={styles.drawerDivider} />
                   </View>
