@@ -5,6 +5,7 @@
 <title>入室QRカード印刷</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
+/* ── 基本リセット ── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
@@ -12,7 +13,7 @@ html, body {
   font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
 }
 
-/* ── 画面表示用コントロール ── */
+/* ── 画面表示用コントロール（印刷時は非表示） ── */
 .controls {
   background: #fff;
   border-bottom: 2px solid #00C0C7;
@@ -20,202 +21,176 @@ html, body {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
-.controls h1 { font-size: 18px; color: #333; flex: 1; }
+.controls h1 { font-size: 16px; color: #333; flex: 1; }
 .print-btn {
   background: #00C0C7;
   color: white;
   border: none;
-  padding: 12px 32px;
-  border-radius: 8px;
-  font-size: 16px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
   font-weight: bold;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
-.print-btn:hover { background: #0097A7; }
 .close-btn {
-  background: #f0f0f0;
+  background: #eee;
   color: #333;
   border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 15px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
   cursor: pointer;
 }
 
-/* ── カードグリッド（画面表示） ── */
+/* ── カードグリッド ── */
 .cards-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 91mm); /* 2列 */
+  gap: 2mm 4mm; /* カード間の隙間 */
+  padding: 10mm; /* 画面上での余白 */
   justify-content: center;
-  max-width: 900px;
-  margin: 0 auto;
 }
 
-/* ── 1枚のカード（名刺サイズ・横長レイアウト） ── */
+/* ── 1枚のカード（名刺サイズ 91x55mm） ── */
 .qr-card {
   width: 91mm;
   height: 55mm;
   background: #FFFFFF;
-  border-radius: 8px;
+  border: 0.3mm solid #00C0C7; /* 線の太さを少し細くして印刷ずれに対応 */
+  border-radius: 5mm;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  border: 2px solid #00C0C7;
   display: flex;
   flex-direction: row;
+  position: relative;
+  page-break-inside: avoid;
 }
 
+/* 左側：QRコードエリア */
 .card-left {
-  width: 40%;
+  width: 38%;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #fff;
-  border-right: 1px dashed #ddd;
+  border-right: 0.2mm dashed #00C0C7;
 }
-
 .card-qr {
   display: flex;
   justify-content: center;
   align-items: center;
 }
+/* QRのサイズ調整 */
 .card-qr canvas, .card-qr img {
-  width: 28mm !important;
-  height: 28mm !important;
+  width: 30mm !important;
+  height: 30mm !important;
 }
 
+/* 右側：コンテンツエリア */
 .card-right {
-  width: 60%;
+  width: 62%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
 }
 
+/* カード上部：タイトル */
 .card-header {
   background: #00C0C7;
-  padding: 6px;
+  padding: 4mm 2mm 3mm;
   text-align: center;
 }
 .card-title {
   color: white;
-  font-size: 10px;
+  font-size: 10pt;
   font-weight: bold;
-  letter-spacing: 1px;
+  line-height: 1;
 }
 .card-subtitle {
   color: rgba(255,255,255,0.9);
-  font-size: 8px;
+  font-size: 7pt;
+  margin-top: 1mm;
 }
 
+/* カード中央：イラストと名前 */
 .card-body {
-  padding: 6px 10px;
-  text-align: center;
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  padding: 2mm;
 }
-
-/* ランダムイラスト用のスタイル */
 .card-illustration {
-  width: 22mm;
-  height: 22mm;
+  width: 18mm;
+  height: 18mm;
   object-fit: contain;
-  margin-bottom: 2px;
+  margin-bottom: 1mm;
 }
-
 .card-name {
-  font-size: 16px;
+  font-size: 14pt;
   font-weight: bold;
   color: #333;
-  margin-bottom: 2px;
+  margin-bottom: 0.5mm;
 }
 .card-school {
-  font-size: 10px;
+  font-size: 8pt;
   color: #666;
   font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+/* カード下部：フッター */
 .card-footer {
-  background: #E0F7FA;
-  padding: 5px;
+  background: #f0fbfc;
+  padding: 2mm;
   text-align: center;
-  border-top: 1px solid #B2EBF2;
+  border-top: 0.1mm solid #00C0C7;
 }
 .card-footer-text {
-  font-size: 9px;
-  color: #00838F;
+  font-size: 8pt;
+  color: #00C0C7;
   font-weight: bold;
 }
 
-/* ── 印刷スタイル ── */
+/* ── 印刷用設定 ── */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 15mm;
+    margin: 5mm; /* プリンタの最小余白に合わせる */
   }
-  .controls { display: none !important; }
-  html, body { background: white; }
-
-  /* 2列×5行 = 1ページ10枚。自動改ページ */
+  html, body {
+    background: white;
+  }
+  .controls {
+    display: none !important;
+  }
   .cards-grid {
     padding: 0;
-    display: grid;
-    grid-template-columns: repeat(2, 91mm);
-    gap: 4mm 10mm;
-    width: auto;
-    max-width: none;
-    justify-content: center;
+    margin: 0 auto;
+    gap: 2mm 4mm; /* 紙のサイズに収まるよう調整 */
   }
-
   .qr-card {
-    width: 91mm;
-    height: 55mm;
-    box-shadow: none;
-    page-break-inside: avoid;
-    break-inside: avoid;
-    border: 1pt solid #00C0C7;
-    border-radius: 4pt;
+    box-shadow: none !important; /* 印刷時は影を消す */
   }
-
-  .card-title { font-size: 8pt; }
-  .card-subtitle { font-size: 6pt; }
-  .card-illustration { width: 20mm; height: 20mm; }
-  .card-name { font-size: 13pt; }
-  .card-school { font-size: 8pt; }
-  .card-footer-text { font-size: 7pt; }
 }
 
-.loading-msg {
+/* メッセージ用 */
+.loading-msg, .error-msg {
+  grid-column: span 2;
   text-align: center;
-  padding: 48px;
+  padding: 50px;
+  font-size: 18px;
   color: #888;
-  font-size: 16px;
-}
-.error-msg {
-  text-align: center;
-  padding: 48px;
-  color: #E74C3C;
-  font-size: 16px;
 }
 </style>
 </head>
 <body>
 
 <div class="controls">
-  <h1>📇 入室QRカード印刷プレビュー</h1>
-  <button class="close-btn" onclick="window.history.back()">← 戻る</button>
-  <button class="print-btn" onclick="window.print()">🖨️ 印刷する</button>
+  <h1>📇 入室QRカード 印刷プレビュー (A4 1枚につき10枚)</h1>
+  <button class="close-btn" onclick="window.close()">閉じる</button>
+  <button class="print-btn" onclick="window.print()">🖨️ 印刷を開始する</button>
 </div>
 
 <div id="cards-grid" class="cards-grid">
@@ -223,10 +198,9 @@ html, body {
 </div>
 
 <script>
-// ★★★ 用意したポケモンの画像の枚数をここに設定してください ★★★
+// ポケモンイラストの枚数
 const TOTAL_ILLUSTRATIONS = 10;
 
-// URLパラメーターから子供データを取得
 (function() {
   const params = new URLSearchParams(window.location.search);
   const grid = document.getElementById('cards-grid');
@@ -234,7 +208,7 @@ const TOTAL_ILLUSTRATIONS = 10;
   let children = [];
   let baseUrl = window.location.origin;
 
-  // sessionStorage経由（src=session）
+  // データの読み込み
   if (params.get('src') === 'session') {
     try {
       const raw = sessionStorage.getItem('qr_print_data');
@@ -244,28 +218,25 @@ const TOTAL_ILLUSTRATIONS = 10;
         baseUrl = parsed.baseUrl || baseUrl;
       }
     } catch(e) {
-      grid.innerHTML = '<div class="error-msg">データの読み込みに失敗しました。再度お試しください。</div>';
+      grid.innerHTML = '<div class="error-msg">データの取得に失敗しました。</div>';
       return;
     }
   }
 
   if (!children.length) {
-    grid.innerHTML = '<div class="error-msg">印刷する子供のデータがありません。</div>';
+    grid.innerHTML = '<div class="error-msg">印刷する対象が選択されていません。</div>';
     return;
   }
 
   grid.innerHTML = '';
 
   children.forEach(function(child, index) {
-    // 既にqrCodeUrlがある場合はそれを使う、なければ従来のid方式
     const qrUrl = child.qrCodeUrl || (baseUrl + '/qr-scan?id=' + child.id);
-
-    // 1 から TOTAL_ILLUSTRATIONS の間でランダムな数値を生成
+    
+    // イラストをランダムに選択（1〜TOTAL_ILLUSTRATIONS）
     const randomImageId = Math.floor(Math.random() * TOTAL_ILLUSTRATIONS) + 1;
-    // 画像のパスを生成（/illustrations/1.png などの形になります）
     const imageUrl = '/illustrations/' + randomImageId + '.png';
 
-    // カードDOM生成（横長・名刺レイアウト）
     const card = document.createElement('div');
     card.className = 'qr-card';
     card.innerHTML = `
@@ -278,7 +249,7 @@ const TOTAL_ILLUSTRATIONS = 10;
           <div class="card-subtitle">入室確認 QRカード</div>
         </div>
         <div class="card-body">
-          <img src="${imageUrl}" class="card-illustration" alt="アイコン" onerror="this.style.display='none'">
+          <img src="${imageUrl}" class="card-illustration" alt="icon" onerror="this.style.visibility='hidden'">
           <div class="card-name">${escapeHtml(child.name)}</div>
           <div class="card-school">${escapeHtml(child.school || '')}</div>
         </div>
@@ -290,29 +261,25 @@ const TOTAL_ILLUSTRATIONS = 10;
 
     grid.appendChild(card);
 
-    // QRコード生成
+    // QR生成
     try {
       new QRCode(document.getElementById('qr-' + index), {
         text: qrUrl,
-        width: 100, // 高解像度のために少し大きめに生成してCSSで縮小表示
-        height: 100,
-        colorDark: '#1a1a1a',
+        width: 120,
+        height: 120,
+        colorDark: '#333333',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.M,
+        correctLevel: QRCode.CorrectLevel.M
       });
     } catch(e) {
-      document.getElementById('qr-' + index).innerHTML = '<div style="color:red;font-size:10px;padding:8px">QR生成失敗</div>';
+      console.error(e);
     }
   });
 })();
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
 </body>
