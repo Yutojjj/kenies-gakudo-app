@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>帰宅QRカード印刷</title>
+<!-- qrcode.js CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #f5f5f5;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
+}
+
+/* ── 画面表示用コントロール ── */
+.controls {
+  background: #fff;
+  border-bottom: 2px solid #D4AF37;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.controls h1 { font-size: 18px; color: #333; flex: 1; }
+.print-btn {
+  background: #D4AF37;
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.print-btn:hover { background: #B8860B; }
+.close-btn {
+  background: #f0f0f0;
+  color: #333;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* ── カードグリッド（画面表示） ── */
+.cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 24px;
+  justify-content: center;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── 1枚のカード ── */
+.qr-card {
+  width: 200px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  border: 2px solid #D4AF37;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.card-header {
+  width: 100%;
+  background: #D4AF37;
+  padding: 10px 12px 8px;
+  text-align: center;
+}
+.card-title {
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+.card-subtitle {
+  color: rgba(255,255,255,0.85);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+
+.card-qr {
+  padding: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: white;
+}
+/* qrcode.js が生成するcanvas/imgのサイズ合わせ */
+.card-qr canvas, .card-qr img {
+  width: 120px !important;
+  height: 120px !important;
+}
+
+.card-body {
+  width: 100%;
+  padding: 0 12px 14px;
+  text-align: center;
+}
+.card-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+.card-school {
+  font-size: 11px;
+  color: #888;
+  font-weight: bold;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-footer {
+  width: 100%;
+  background: #FFF8E7;
+  border-top: 1px solid #F3E5AB;
+  padding: 6px 10px;
+  text-align: center;
+}
+.card-footer-text {
+  font-size: 8px;
+  color: #B8860B;
+  font-weight: bold;
+}
+
+/* ── 印刷スタイル ── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+  .controls { display: none !important; }
+  html, body { background: white; }
+
+  /* 2列×5行 = 1ページ10枚。11枚目から自動改ページ */
+  .cards-grid {
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6mm;
+    width: 190mm;
+    max-width: 190mm;
+  }
+
+  .qr-card {
+    width: 100%;
+    box-shadow: none;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: 1.5pt solid #D4AF37;
+    border-radius: 6pt;
+  }
+
+  .card-header { padding: 6px 10px 5px; }
+  .card-title { font-size: 7pt; }
+  .card-subtitle { font-size: 6pt; }
+  .card-qr { padding: 8px; }
+  .card-qr canvas, .card-qr img {
+    width: 38mm !important;
+    height: 38mm !important;
+  }
+  .card-body { padding: 0 10px 10px; }
+  .card-name { font-size: 13pt; }
+  .card-school { font-size: 7.5pt; margin-bottom: 6px; }
+  .card-footer { padding: 4px 8px; }
+  .card-footer-text { font-size: 6pt; }
+}
+
+.loading-msg {
+  text-align: center;
+  padding: 48px;
+  color: #888;
+  font-size: 16px;
+}
+.error-msg {
+  text-align: center;
+  padding: 48px;
+  color: #E74C3C;
+  font-size: 16px;
+}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>📇 帰宅QRカード印刷プレビュー</h1>
+  <button class="close-btn" onclick="window.history.back()">← 戻る</button>
+  <button class="print-btn" onclick="window.print()">🖨️ 印刷する</button>
+</div>
+
+<div id="cards-grid" class="cards-grid">
+  <div class="loading-msg">QRコードを生成中...</div>
+</div>
+
+<script>
+// URLパラメーターから子供データを取得
+// 形式: ?data=JSON.stringify([{id, name, school}, ...])
+// または ?d0=id|name|school&d1=id|name|school&...
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const grid = document.getElementById('cards-grid');
+
+  let children = [];
+  let baseUrl = window.location.origin;
+
+  // sessionStorage経由（src=session）
+  if (params.get('src') === 'session') {
+    try {
+      const raw = sessionStorage.getItem('qr_print_data');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        children = parsed.children || [];
+        baseUrl = parsed.baseUrl || baseUrl;
+      }
+    } catch(e) {
+      grid.innerHTML = '<div class="error-msg">データの読み込みに失敗しました。再度お試しください。</div>';
+      return;
+    }
+  }
+  // URLパラメーター形式（後方互換）
+  else {
+    const dataParam = params.get('data');
+    if (dataParam) {
+      try { children = JSON.parse(decodeURIComponent(dataParam)); } catch(e) {}
+    } else {
+      let i = 0;
+      while (true) {
+        const d = params.get('d' + i);
+        if (d === null) break;
+        const parts = d.split('|');
+        if (parts.length >= 3) {
+          children.push({ id: parts[0], name: decodeURIComponent(parts[1]), school: decodeURIComponent(parts[2]) });
+        }
+        i++;
+      }
+      baseUrl = params.get('baseUrl') || baseUrl;
+    }
+  }
+
+  if (!children.length) {
+    grid.innerHTML = '<div class="error-msg">印刷する子供のデータがありません。</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+
+  children.forEach(function(child, index) {
+    const qrUrl = baseUrl + '/qr-scan?id=' + child.id;
+
+    // カードDOM生成
+    const card = document.createElement('div');
+    card.className = 'qr-card';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-title">ケーニーズ学童クラブ</div>
+        <div class="card-subtitle">帰宅確認 QRカード</div>
+      </div>
+      <div class="card-qr" id="qr-${index}"></div>
+      <div class="card-body">
+        <div class="card-name">${escapeHtml(child.name)}</div>
+        <div class="card-school">${escapeHtml(child.school || '')}</div>
+      </div>
+      <div class="card-footer">
+        <div class="card-footer-text">帰るときにスキャンしてね</div>
+      </div>
+    `;
+
+    grid.appendChild(card);
+
+    // QRコード生成
+    try {
+      new QRCode(document.getElementById('qr-' + index), {
+        text: qrUrl,
+        width: 120,
+        height: 120,
+        colorDark: '#1a1a1a',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    } catch(e) {
+      document.getElementById('qr-' + index).innerHTML = '<div style="color:red;font-size:10px;padding:8px">QR生成失敗</div>';
+    }
+  });
+})();
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

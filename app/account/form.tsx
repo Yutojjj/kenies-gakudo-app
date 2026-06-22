@@ -189,12 +189,26 @@ export default function AccountFormScreen() {
         const docRef = await addDoc(collection(db, 'accounts'), accountData);
         
         // ★ ④ 新規作成直後に、確定した親のIDを使って兄弟のIDを正しい形式で上書き保存する
+        // ★ QRコードURLも同時に生成・保存する
+        const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.EXPO_PUBLIC_APP_URL || '');
+        const qrCodeUrl = `${appBaseUrl}/qr-scan?id=${docRef.id}`;
+
         if (role === 'staff' && accountData.staffChildren.length > 0) {
            const finalChildren = accountData.staffChildren.map((c:any, i:number) => ({...c, id: `${docRef.id}_staffchild_${i}`}));
-           await updateDoc(docRef, { staffChildren: finalChildren });
-        } else if (role === 'user' && accountData.siblings.length > 0) {
-           const finalSiblings = accountData.siblings.map((s:any, i:number) => ({...s, id: `${docRef.id}_sib_${i}`}));
-           await updateDoc(docRef, { siblings: finalSiblings });
+           await updateDoc(docRef, { staffChildren: finalChildren, qrCode: qrCodeUrl });
+        } else if (role === 'user') {
+          const updatePayload: any = { qrCode: qrCodeUrl };
+          if (accountData.siblings.length > 0) {
+            const finalSiblings = accountData.siblings.map((s:any, i:number) => ({
+              ...s,
+              id: `${docRef.id}_sib_${i}`,
+              qrCode: `${appBaseUrl}/qr-scan?id=${docRef.id}_sib_${i}`,
+            }));
+            updatePayload.siblings = finalSiblings;
+          }
+          await updateDoc(docRef, updatePayload);
+        } else {
+          await updateDoc(docRef, { qrCode: qrCodeUrl });
         }
 
         Alert.alert('保存完了', `アカウントを保存しました。\nID: ${generatedId}\nPW: ${generatedPw}`);

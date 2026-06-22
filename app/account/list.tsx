@@ -187,6 +187,13 @@ export default function AccountManagementScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>アカウント管理</Text>
+        <TouchableOpacity
+          style={styles.qrBtn}
+          onPress={() => router.push('/account/qr-cards')}
+        >
+          <Ionicons name="qr-code" size={20} color="#5D4037" />
+          <Text style={styles.qrBtnText}>QRカード</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterContainer}>
@@ -476,9 +483,24 @@ const styles = StyleSheet.create({
   },
   backBtn: { 
     marginRight: 16,
-    backgroundColor: 'rgba(255,255,255,0.6)', // アイコンの背景を少し白抜きに
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: 6,
     borderRadius: 16,
+  },
+  qrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+    marginLeft: 8,
+  },
+  qrBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#5D4037',
   },
   headerTitle: { 
     fontSize: 20, 
