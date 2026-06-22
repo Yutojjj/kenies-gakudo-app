@@ -120,15 +120,25 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
 }
+
+/* ランダムイラスト用のスタイル */
+.card-illustration {
+  width: 22mm;
+  height: 22mm;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+
 .card-name {
   font-size: 16px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .card-school {
-  font-size: 11px;
+  font-size: 10px;
   color: #666;
   font-weight: bold;
   white-space: nowrap;
@@ -180,8 +190,9 @@ html, body {
 
   .card-title { font-size: 8pt; }
   .card-subtitle { font-size: 6pt; }
-  .card-name { font-size: 14pt; }
-  .card-school { font-size: 9pt; }
+  .card-illustration { width: 20mm; height: 20mm; }
+  .card-name { font-size: 13pt; }
+  .card-school { font-size: 8pt; }
   .card-footer-text { font-size: 7pt; }
 }
 
@@ -212,6 +223,9 @@ html, body {
 </div>
 
 <script>
+// ★★★ 用意したポケモンの画像の枚数をここに設定してください ★★★
+const TOTAL_ILLUSTRATIONS = 10;
+
 // URLパラメーターから子供データを取得
 (function() {
   const params = new URLSearchParams(window.location.search);
@@ -246,6 +260,11 @@ html, body {
     // 既にqrCodeUrlがある場合はそれを使う、なければ従来のid方式
     const qrUrl = child.qrCodeUrl || (baseUrl + '/qr-scan?id=' + child.id);
 
+    // 1 から TOTAL_ILLUSTRATIONS の間でランダムな数値を生成
+    const randomImageId = Math.floor(Math.random() * TOTAL_ILLUSTRATIONS) + 1;
+    // 画像のパスを生成（/illustrations/1.png などの形になります）
+    const imageUrl = '/illustrations/' + randomImageId + '.png';
+
     // カードDOM生成（横長・名刺レイアウト）
     const card = document.createElement('div');
     card.className = 'qr-card';
@@ -259,6 +278,7 @@ html, body {
           <div class="card-subtitle">入室確認 QRカード</div>
         </div>
         <div class="card-body">
+          <img src="${imageUrl}" class="card-illustration" alt="アイコン" onerror="this.style.display='none'">
           <div class="card-name">${escapeHtml(child.name)}</div>
           <div class="card-school">${escapeHtml(child.school || '')}</div>
         </div>
