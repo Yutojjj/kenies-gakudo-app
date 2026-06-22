@@ -11,6 +11,8 @@
 html, body {
   background: #f5f5f5;
   font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 /* ── 画面表示用コントロール（印刷時は非表示） ── */
@@ -49,9 +51,9 @@ html, body {
 /* ── カードグリッド ── */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(2, 91mm); /* 2列 */
-  gap: 2mm 4mm; /* カード間の隙間 */
-  padding: 10mm; /* 画面上での余白 */
+  grid-template-columns: repeat(2, 91mm); /* 横2列に固定 */
+  gap: 4mm 6mm; /* 上下左右のカード間の適度な隙間 */
+  padding: 10mm;
   justify-content: center;
 }
 
@@ -60,118 +62,123 @@ html, body {
   width: 91mm;
   height: 55mm;
   background: #FFFFFF;
-  border: 0.3mm solid #00C0C7; /* 線の太さを少し細くして印刷ずれに対応 */
-  border-radius: 5mm;
+  border: 0.4mm solid #00C0C7; /* 枠線が途切れないよう少しだけ存在感を調整 */
+  border-radius: 4mm;
   overflow: hidden;
   display: flex;
   flex-direction: row;
   position: relative;
   page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 /* 左側：QRコードエリア */
 .card-left {
-  width: 38%;
+  width: 40%;
   display: flex;
   justify-content: center;
   align-items: center;
-  border-right: 0.2mm dashed #00C0C7;
+  background: #FFFFFF;
+  border-right: 0.3mm dashed #00C0C7; /* 切り取り線風の点線 */
+  padding: 2mm;
 }
 .card-qr {
   display: flex;
   justify-content: center;
   align-items: center;
 }
-/* QRのサイズ調整 */
+/* QRコードが完全に収まり、かつ小さすぎないベストサイズ */
 .card-qr canvas, .card-qr img {
-  width: 30mm !important;
-  height: 30mm !important;
+  width: 29mm !important;
+  height: 29mm !important;
 }
 
 /* 右側：コンテンツエリア */
 .card-right {
-  width: 62%;
+  width: 60%;
   display: flex;
   flex-direction: column;
+  background: #FFFFFF;
 }
 
-/* カード上部：タイトル */
+/* カード上部：ヘッダー */
 .card-header {
   background: #00C0C7;
-  padding: 4mm 2mm 3mm;
+  padding: 4mm 2mm;
   text-align: center;
 }
 .card-title {
   color: white;
-  font-size: 10pt;
+  font-size: 11pt;
   font-weight: bold;
-  line-height: 1;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
 }
 .card-subtitle {
   color: rgba(255,255,255,0.9);
-  font-size: 7pt;
-  margin-top: 1mm;
+  font-size: 7.5pt;
+  font-weight: 500;
+  margin-top: 0.8mm;
+  letter-spacing: 0.5px;
 }
 
-/* カード中央：イラストと名前 */
+/* カード中央：イラストとお名前、学校名（フッター削除分、縦に広々と綺麗に配置） */
 .card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 2mm;
+  padding: 2mm 3mm 3mm;
 }
 .card-illustration {
   width: 18mm;
   height: 18mm;
   object-fit: contain;
-  margin-bottom: 1mm;
+  margin-bottom: 1.5mm;
 }
 .card-name {
-  font-size: 14pt;
+  font-size: 15pt;
   font-weight: bold;
-  color: #333;
-  margin-bottom: 0.5mm;
+  color: #222222;
+  margin-bottom: 0.8mm;
+  text-align: center;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-school {
-  font-size: 8pt;
-  color: #666;
+  font-size: 8.5pt;
+  color: #666666;
   font-weight: bold;
-}
-
-/* カード下部：フッター */
-.card-footer {
-  background: #f0fbfc;
-  padding: 2mm;
   text-align: center;
-  border-top: 0.1mm solid #00C0C7;
-}
-.card-footer-text {
-  font-size: 8pt;
-  color: #00C0C7;
-  font-weight: bold;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── 印刷用設定 ── */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 5mm; /* プリンタの最小余白に合わせる */
+    margin: 8mm 10mm; /* 上下左右の余白を最適化して途切れを完全に防止 */
   }
   html, body {
     background: white;
   }
   .controls {
-    display: none !important;
+    display: none !important; /* コントロールバーは非表示 */
   }
   .cards-grid {
     padding: 0;
     margin: 0 auto;
-    gap: 2mm 4mm; /* 紙のサイズに収まるよう調整 */
+    gap: 4mm 6mm;
   }
   .qr-card {
-    box-shadow: none !important; /* 印刷時は影を消す */
+    box-shadow: none !important;
+    border: 0.4mm solid #00C0C7 !important; /* 印刷時も枠線を維持 */
   }
 }
 
@@ -180,7 +187,7 @@ html, body {
   grid-column: span 2;
   text-align: center;
   padding: 50px;
-  font-size: 18px;
+  font-size: 16px;
   color: #888;
 }
 </style>
@@ -188,7 +195,7 @@ html, body {
 <body>
 
 <div class="controls">
-  <h1>📇 入室QRカード 印刷プレビュー (A4 1枚につき10枚)</h1>
+  <h1>📇 入室QRカード 印刷プレビュー (A4 1枚につき最大10枚)</h1>
   <button class="close-btn" onclick="window.close()">閉じる</button>
   <button class="print-btn" onclick="window.print()">🖨️ 印刷を開始する</button>
 </div>
@@ -198,7 +205,7 @@ html, body {
 </div>
 
 <script>
-// ポケモンイラストの枚数
+// ポケモンイラストの総枚数（実際の枚数に合わせて調整してください）
 const TOTAL_ILLUSTRATIONS = 10;
 
 (function() {
@@ -208,7 +215,7 @@ const TOTAL_ILLUSTRATIONS = 10;
   let children = [];
   let baseUrl = window.location.origin;
 
-  // データの読み込み
+  // データの取得（SessionStorage経由）
   if (params.get('src') === 'session') {
     try {
       const raw = sessionStorage.getItem('qr_print_data');
@@ -218,13 +225,13 @@ const TOTAL_ILLUSTRATIONS = 10;
         baseUrl = parsed.baseUrl || baseUrl;
       }
     } catch(e) {
-      grid.innerHTML = '<div class="error-msg">データの取得に失敗しました。</div>';
+      grid.innerHTML = '<div class="error-msg">データの取得に失敗しました。画面を閉じてやり直してください。</div>';
       return;
     }
   }
 
   if (!children.length) {
-    grid.innerHTML = '<div class="error-msg">印刷する対象が選択されていません。</div>';
+    grid.innerHTML = '<div class="error-msg">印刷する対象の児童が選択されていません。</div>';
     return;
   }
 
@@ -245,29 +252,26 @@ const TOTAL_ILLUSTRATIONS = 10;
       </div>
       <div class="card-right">
         <div class="card-header">
-          <div class="card-title">ケーニーズ学童クラブ</div>
-          <div class="card-subtitle">入室確認 QRカード</div>
+          <div class="card-title">ケーニーズクラブ学童保育</div>
+          <div class="card-subtitle">入室QRカード</div>
         </div>
         <div class="card-body">
           <img src="${imageUrl}" class="card-illustration" alt="icon" onerror="this.style.visibility='hidden'">
           <div class="card-name">${escapeHtml(child.name)}</div>
           <div class="card-school">${escapeHtml(child.school || '')}</div>
         </div>
-        <div class="card-footer">
-          <div class="card-footer-text">入室時にスキャンしてね</div>
-        </div>
       </div>
     `;
 
     grid.appendChild(card);
 
-    // QR生成
+    // QRコードの生成
     try {
       new QRCode(document.getElementById('qr-' + index), {
         text: qrUrl,
         width: 120,
         height: 120,
-        colorDark: '#333333',
+        colorDark: '#1a1a1a',
         colorLight: '#ffffff',
         correctLevel: QRCode.CorrectLevel.M
       });
