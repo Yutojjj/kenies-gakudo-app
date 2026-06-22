@@ -13,11 +13,11 @@ import {
   addDoc, collection, deleteDoc, doc,
   onSnapshot, orderBy, query, serverTimestamp, updateDoc,
 } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert, Modal, Platform, SafeAreaView, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, FlatList,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -185,6 +185,14 @@ export default function TypingCertScreen() {
   };
   const wpmResult = calcWPM();
 
+  // ── 印刷ページを開く（aタグclickでポップアップブロック回避）
+  const openPrintPage = (params: Record<string, string>) => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(params);
+    // replaceで履歴に残さず遷移→戻るで正しくアプリに戻れる
+    window.location.href = '/cert/print.html?' + p.toString();
+  };
+
   // ── 認定書を保存し、受講者の級・星も更新する共通処理
   const saveCertAndUpdateStudent = async (
     student: Student,
@@ -251,7 +259,9 @@ export default function TypingCertScreen() {
       return;
     }
     setSaving(false);
-    const p = new URLSearchParams({
+    setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
+    setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
+    openPrintPage({
       result,
       name: student.name,
       kana: student.kana || '',
@@ -262,12 +272,6 @@ export default function TypingCertScreen() {
       wpm: String(wpmResult.wpm),
       certifier: certifier?.name || '',
     });
-    setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
-    setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
-    // 同じタブでprint.htmlに遷移（ポップアップブロック回避）
-    if (typeof window !== 'undefined') {
-      window.location.href = '/cert/print.html?' + p.toString();
-    }
   };
 
   // ── 受講者追加
@@ -802,7 +806,17 @@ export default function TypingCertScreen() {
                       wpm: String(editCert.wpm),
                       certifier: editCert.certifierName,
                     });
-                    if (typeof window !== 'undefined') window.location.href = '/cert/print.html?' + p.toString();
+                    openPrintPage({
+                      result: editCert.result,
+                      name: editCert.studentName,
+                      kana: s?.kana || '',
+                      date: editCert.date,
+                      star: editCert.star,
+                      grade: String(editCert.grade),
+                      score: String(editCert.score),
+                      wpm: String(editCert.wpm),
+                      certifier: editCert.certifierName,
+                    });
                   }}
                 >
                   <Text style={styles.saveBtnText}>PDF印刷</Text>
@@ -1036,3 +1050,4 @@ const styles = StyleSheet.create({
 
 
 });
+

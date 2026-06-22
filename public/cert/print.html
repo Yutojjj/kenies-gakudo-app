@@ -155,6 +155,11 @@ set('f-certifier', certifier,        null,             fail);
 document.getElementById('cert-bg').onload = () => {
   setTimeout(() => window.print(), 300);
 };
+// 戻ったときにリロードしてFirestoreデータを再取得させる
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) window.location.reload();
+});
 </script>
 </body>
 </html>
+
