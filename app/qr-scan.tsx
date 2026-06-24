@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { sendPushNotification } from '../utils/sendPushNotification';
 
 // メニュー画面のヘッダーと同じベースカラー
 const THEME_COLOR = '#00C0C7';
@@ -101,25 +102,13 @@ export default function QrScanScreen() {
 
       // 3. 保護者（このアカウント）に通知を送る
       try {
-        const fcmSnap = await getDoc(doc(db, 'fcm_tokens', finalAccountId));
-        if (fcmSnap.exists()) {
-          const token = fcmSnap.data()?.token;
-          if (token) {
-            const appUrl = Platform.OS === 'web' ? window.location.origin : process.env.EXPO_PUBLIC_APP_URL || '';
-            await fetch(`${appUrl}/api/send-notification`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tokens: [token],
-                title: '🏫 入室のお知らせ',
-                body: `${name}さんが ${timeStr} に学童に入室しました。`,
-                url: '/menu',
-              }),
-            });
-          }
-        }
+        await sendPushNotification({
+          accountIds: [finalAccountId],
+          title: '🏫 入室のお知らせ',
+          body: `${name}さんが ${timeStr} に学童に入室しました。`,
+          url: '/menu',
+        });
       } catch (notifError) {
-        // 通知失敗はログに出すが処理は続行
         console.warn('通知送信エラー:', notifError);
       }
 

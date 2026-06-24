@@ -36,7 +36,16 @@ export default function Root({ children }: PropsWithChildren) {
         `}} />
 
         <script dangerouslySetInnerHTML={{
-          __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js');});}`
+          __html: `
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function () {
+                // キャッシュ用SW
+                navigator.serviceWorker.register('/sw.js');
+                // FCMプッシュ通知用SW（これがないと通知が届かない）
+                navigator.serviceWorker.register('/firebase-messaging-sw.js');
+              });
+            }
+          `
         }} />
       </head>
       <body>{children}</body>

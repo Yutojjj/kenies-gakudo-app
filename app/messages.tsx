@@ -13,6 +13,8 @@ import {
   onSnapshot, orderBy, query, serverTimestamp, setDoc,
   where
 } from 'firebase/firestore';
+import { setupPushToken } from '../utils/setupPushToken';
+import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -72,22 +74,7 @@ async function resolveAccountId(user: UserInfo): Promise<string> {
   return user.name;
 }
 
-async function setupFCMToken(accountId: string) {
-  if (Platform.OS !== 'web' || typeof Notification === 'undefined') return;
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
-    const { getMessaging, getToken } = await import('firebase/messaging');
-    const { app } = await import('../firebase');
-    const messaging = getMessaging(app);
-    const vapidKey = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
-    if (!vapidKey) return;
-    const token = await getToken(messaging, { vapidKey });
-    if (token) {
-      await setDoc(doc(db, 'fcm_tokens', accountId), { token, updatedAt: new Date() });
-    }
-  } catch (e) { /* 通知権限なしでも動作可 */ }
-}
+// setupPushToken は utils/setupPushToken.ts に移動（iOS/Android自動分岐）
 
 function deriveParticipants(convId: string): string[] {
   if (convId.startsWith('staff_dm_')) {
@@ -115,28 +102,27 @@ async function pushNotify(
 ) {
   if (Platform.OS !== 'web') return;
   try {
-    let recipientIds: string[] = [];
     if (convType === 'group') {
-      const snap = await getDocs(collection(db, 'fcm_tokens'));
-      recipientIds = snap.docs.map(d => d.id).filter(id => id !== senderAccountId);
+      await sendPushNotificationToAll({
+        excludeAccountId: senderAccountId,
+        title: `${senderName}からメッセージ`,
+        body: text,
+        url,
+      });
     } else {
       const s = await getDoc(doc(db, 'conversations', convId));
       const parts: string[] = s.data()?.participants?.length
         ? s.data()!.participants
         : deriveParticipants(convId);
-      recipientIds = parts.filter(id => id !== senderAccountId);
+      const recipientIds = parts.filter(id => id !== senderAccountId);
+      if (!recipientIds.length) return;
+      await sendPushNotification({
+        accountIds: recipientIds.slice(0, 10),
+        title: `${senderName}からメッセージ`,
+        body: text,
+        url,
+      });
     }
-    if (!recipientIds.length) return;
-    const tokenDocs = await Promise.all(
-      recipientIds.slice(0, 10).map(id => getDoc(doc(db, 'fcm_tokens', id)))
-    );
-    const tokens = tokenDocs.filter(d => d.exists()).map(d => d.data()!.token).filter(Boolean);
-    if (!tokens.length) return;
-    await fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tokens, title: `${senderName}からメッセージ`, body: text, url }),
-    });
   } catch (e) { }
 }
 
@@ -443,7 +429,7 @@ export default function MessagesScreen() {
   }, []);
 
   useEffect(() => {
-    if (resolvedUser) setupFCMToken(resolvedUser.accountId);
+    if (resolvedUser) setupPushToken(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
 
   // ⑬ ホームタブ用データロード（管理者・スタッフ共通）

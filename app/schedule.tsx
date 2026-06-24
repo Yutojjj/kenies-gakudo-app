@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
+import { sendPushNotification } from '../utils/sendPushNotification';
 import {
   Alert,
   Image,
@@ -429,24 +430,14 @@ export default function ScheduleScreen() {
             changeDay.getFullYear() === today.getFullYear() &&
             changeDay.getMonth() === today.getMonth();
           if (isSameMonth) {
-            const adminTokenDoc = await getDoc(doc(db, 'fcm_tokens', 'admin'));
-            if (adminTokenDoc.exists()) {
-              const token = adminTokenDoc.data().token;
-              if (token) {
-                const d = new Date(dateStr);
-                const label = `${d.getMonth() + 1}月${d.getDate()}日`;
-                fetch('/api/send-notification', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    tokens: [token],
-                    title: `${loggedInUser.name}さんがスケジュールを変更`,
-                    body: `${label} ${child.name}: ${desc}`,
-                    url: '/schedule-changes',
-                  }),
-                }).catch(() => {});
-              }
-            }
+            const d = new Date(dateStr);
+            const label = `${d.getMonth() + 1}月${d.getDate()}日`;
+            sendPushNotification({
+              accountIds: ['admin'],
+              title: `${loggedInUser.name}さんがスケジュールを変更`,
+              body: `${label} ${child.name}: ${desc}`,
+              url: '/schedule-changes',
+            }).catch(() => {});
           }
         }
       }
