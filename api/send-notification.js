@@ -84,6 +84,7 @@ async function getAccessToken() {
 
 function firestoreValueToJson(value) {
   if (!value) return undefined;
+  if ('nullValue' in value) return null;
   if ('stringValue' in value) return value.stringValue;
   if ('booleanValue' in value) return value.booleanValue;
   if ('integerValue' in value) return Number(value.integerValue);
@@ -116,17 +117,26 @@ async function firestoreListDocuments(path, token) {
   const serviceAccount = parseServiceAccount();
   const projectId = serviceAccount.project_id || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
+  console.log(`[push] Firestore GET: ${url}`);
+
   const response = await fetch(`${url}?pageSize=500`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (response.status === 404) return [];
+  console.log(`[push] Firestore response status: ${response.status} for path: ${path}`);
+
+  if (response.status === 404) {
+    console.log(`[push] 404 for path: ${path}`);
+    return [];
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new Error(`Firestore request failed: ${response.status} ${text}`);
   }
 
   const data = await response.json();
+  console.log(`[push] Firestore docs count: ${(data.documents || []).length} for path: ${path}`);
+  console.log(`[push] Firestore raw keys: ${Object.keys(data).join(', ')}`);
   return data.documents || [];
 }
 
@@ -147,13 +157,14 @@ async function loadSubscriptions(accountIds, token) {
   const subscriptions = [];
   await Promise.all(
     accountIds.map(async (accountId) => {
-      const docs = await firestoreListDocuments(
-        `${PUSH_SUBSCRIPTIONS_COLLECTION}/${encodeURIComponent(accountId)}/devices`,
-        token
-      );
+      const path = `${PUSH_SUBSCRIPTIONS_COLLECTION}/${encodeURIComponent(accountId)}/devices`;
+      console.log(`[push] Loading devices for accountId: ${accountId}, path: ${path}`);
+      const docs = await firestoreListDocuments(path, token);
+      console.log(`[push] Got ${docs.length} device docs for ${accountId}`);
       docs.forEach((doc) => {
         const deviceId = decodeURIComponent(doc.name.split('/').pop());
         const data = firestoreDocToJson(doc);
+        console.log(`[push] Device ${deviceId}: enabled=${data.enabled}, hasEndpoint=${!!data.subscription?.endpoint}`);
         if (data.enabled === false) return;
         if (data.subscription?.endpoint) {
           subscriptions.push({ accountId, deviceId, subscription: data.subscription });
@@ -197,13 +208,17 @@ export default async function handler(req, res) {
       token
     );
 
+    console.log(`[push] targetAccountIds: ${JSON.stringify(targetAccountIds)}`);
+
     if (!targetAccountIds.length) {
       return res.status(200).json({ sent: 0, total: 0 });
     }
 
     const subscriptions = await loadSubscriptions(targetAccountIds, token);
+    console.log(`[push] total subscriptions found: ${subscriptions.length}`);
+
     if (!subscriptions.length) {
-      return res.status(200).json({ sent: 0, total: 0 });
+      return res.status(200).json({ sent: 0, total: 0, accountIds: targetAccountIds, debug: 'no subscriptions found' });
     }
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
