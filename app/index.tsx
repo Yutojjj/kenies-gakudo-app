@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { setupPushToken } from '../utils/setupPushToken';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -102,6 +103,9 @@ export default function LoginScreen() {
           name: '管理者',
           accountId: 'admin',
         }));
+        if (Platform.OS === 'web') {
+          setupPushToken('admin').catch(() => {});
+        }
         setLoading(false);
         router.replace({ pathname: '/menu', params: { role: 'admin', name: '管理者' } });
         return;
@@ -122,6 +126,9 @@ export default function LoginScreen() {
             name: userData.name,
             accountId: querySnapshot.docs[0].id,
           }));
+          if (Platform.OS === 'web') {
+            setupPushToken(querySnapshot.docs[0].id).catch(() => {});
+          }
           router.replace({ pathname: '/menu', params: { role: userData.role, name: userData.name } });
           return;
         }

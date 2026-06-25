@@ -87,6 +87,9 @@ function deriveParticipants(convId: string): string[] {
     const parts = convId.replace('staff_dm_', '').split('__');
     return parts.length === 2 ? parts : [];
   }
+  if (convId === 'direct_admin') {
+    return [ADMIN_ID];
+  }
   if (convId.startsWith('direct_')) {
     const userId = convId.replace('direct_', '');
     return [ADMIN_ID, userId];
@@ -292,22 +295,24 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
 
   return (
     <View style={{ marginHorizontal: 12, marginBottom: 10, backgroundColor: '#E8F0FE', borderRadius: 10, borderWidth: 1, borderColor: '#BBDEFB', overflow: 'hidden' }}>
-      {/* 稲熊（管理者）カード - 常に最上部に表示 */}
-      <TouchableOpacity
-        style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1.5, borderColor: '#AEE4F5', backgroundColor: '#F0F9FF' }}
-        onPress={() => openChat({ id: 'direct_admin', type: 'direct', name: '稲熊' })}
-      >
-        <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#AEE4F5', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
-          <Ionicons name="star" size={16} color="#5D4037" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>稲熊</Text>
-          <Text style={{ fontSize: 11, color: '#888' }}>管理者</Text>
-        </View>
-        <View style={{ padding: 10, backgroundColor: '#AEE4F5', borderRadius: 10 }}>
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5D4037" />
-        </View>
-      </TouchableOpacity>
+      {/* 稲熊（管理者）カード - スタッフ画面で最上部に表示 */}
+      {myAccountId ? (
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1.5, borderColor: '#AEE4F5', backgroundColor: '#F0F9FF' }}
+          onPress={() => openChat({ id: `direct_${myAccountId}`, type: 'direct', name: '稲熊', participants: [ADMIN_ID, myAccountId] })}
+        >
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#AEE4F5', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+            <Ionicons name="star" size={16} color="#5D4037" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>稲熊</Text>
+            <Text style={{ fontSize: 11, color: '#888' }}>管理者</Text>
+          </View>
+          <View style={{ padding: 10, backgroundColor: '#AEE4F5', borderRadius: 10 }}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5D4037" />
+          </View>
+        </TouchableOpacity>
+      ) : null}
 
       {staffList.map(acc => (
         <View key={acc.id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderColor: '#EEE' }}>
@@ -468,9 +473,13 @@ export default function MessagesScreen() {
             const convType = (params.conversationType as 'direct' | 'group') || 'direct';
             conv = { id: params.conversationId!, type: convType, name: params.conversationName || 'ユーザー' };
             if (convType !== 'group') {
+              const routeParticipants = deriveParticipants(params.conversationId!);
+              const participants = params.conversationId === 'direct_admin' && resolvedUser.role !== 'admin'
+                ? [ADMIN_ID, resolvedUser.accountId]
+                : routeParticipants;
               setDoc(doc(db, 'conversations', params.conversationId!), {
                 type: 'direct', name: params.conversationName || 'ユーザー',
-                participants: [ADMIN_ID, params.conversationId!.replace('direct_', '')],
+                participants,
               }, { merge: true }).catch(() => {});
             }
           }
@@ -512,6 +521,10 @@ export default function MessagesScreen() {
             type: 'group', name: 'スタッフグループ',
             participants: arrayUnion(ADMIN_ID, resolvedUser.accountId),
           }, { merge: true });
+          await setDoc(doc(db, 'conversations', `direct_${resolvedUser.accountId}`), {
+            type: 'direct', name: resolvedUser.name,
+            participants: [ADMIN_ID, resolvedUser.accountId],
+          }, { merge: true });
         } else {
           const convId = `direct_${resolvedUser.accountId}`;
           await setDoc(doc(db, 'conversations', convId), {
@@ -537,8 +550,44 @@ export default function MessagesScreen() {
     return () => { unsubListRef.current?.(); };
   }, [resolvedUser]);
 
+  const getConversationParticipants = (conv: ConvDoc): string[] => {
+    const existing = conv.participants?.filter(Boolean) || [];
+    if (existing.length) return Array.from(new Set(existing));
+    if (conv.type === 'group') return [];
+    if (conv.id === 'direct_admin' && resolvedUser && resolvedUser.role !== 'admin') {
+      return [ADMIN_ID, resolvedUser.accountId];
+    }
+    return Array.from(new Set(deriveParticipants(conv.id)));
+  };
+
+  const getStoredConversationName = (conv: ConvDoc): string => {
+    if (conv.type === 'group') return conv.name;
+    if (conv.id.startsWith('direct_')) {
+      const accountId = conv.id.replace('direct_', '');
+      if (accountId === resolvedUser?.accountId) return resolvedUser.name;
+      const allAccs = homeAllAccounts.length > 0 ? homeAllAccounts : availableAccounts;
+      const acc = allAccs.find((a: any) => a.id === accountId);
+      return acc?.name || conv.name || '';
+    }
+    return conv.name || '';
+  };
+
+  const ensureConversationDoc = (conv: ConvDoc) => {
+    if (conv.type === 'group') return;
+    const participants = getConversationParticipants(conv);
+    if (!participants.length) return;
+    setDoc(doc(db, 'conversations', conv.id), {
+      type: 'direct',
+      name: getStoredConversationName(conv),
+      participants,
+    }, { merge: true }).catch(e => console.warn('Ensure conversation error', e));
+  };
+
   const openChat = (conv: ConvDoc) => {
-    setActiveConv(conv);
+    const participants = getConversationParticipants(conv);
+    const normalizedConv = participants.length ? { ...conv, participants } : conv;
+    ensureConversationDoc(normalizedConv);
+    setActiveConv(normalizedConv);
     setView('chat');
     setConvReadBy([]);
     unsubMsgsRef.current?.();
@@ -588,7 +637,7 @@ export default function MessagesScreen() {
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
         participants = s.data()?.participants?.length
           ? s.data()!.participants
-          : deriveParticipants(activeConv.id);
+          : getConversationParticipants(activeConv);
       }
       const unreadFor = participants.filter(id => id !== resolvedUser.accountId);
 
@@ -598,7 +647,8 @@ export default function MessagesScreen() {
       });
       await setDoc(doc(db, 'conversations', activeConv.id), {
         lastMessage: text, lastMessageAt: serverTimestamp(),
-        unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
+        unreadFor, type: activeConv.type || 'direct', name: getStoredConversationName(activeConv),
+        participants,
         readBy: [resolvedUser.accountId],
       }, { merge: true });
       const convUrl = `/messages?conversationId=${encodeURIComponent(activeConv.id)}&conversationName=${encodeURIComponent(activeConv.name || '')}&conversationType=${activeConv.type}`;
@@ -640,7 +690,7 @@ export default function MessagesScreen() {
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
         participants = s.data()?.participants?.length
           ? s.data()!.participants
-          : deriveParticipants(activeConv.id);
+          : getConversationParticipants(activeConv);
       }
       const unreadFor = participants.filter(id => id !== resolvedUser.accountId);
 
@@ -650,7 +700,8 @@ export default function MessagesScreen() {
       });
       await setDoc(doc(db, 'conversations', activeConv.id), {
         lastMessage: '📷 画像', lastMessageAt: serverTimestamp(),
-        unreadFor, type: activeConv.type || 'direct', name: activeConv.name,
+        unreadFor, type: activeConv.type || 'direct', name: getStoredConversationName(activeConv),
+        participants,
         readBy: [resolvedUser.accountId],
       }, { merge: true });
       const convUrl = `/messages?conversationId=${encodeURIComponent(activeConv.id)}&conversationName=${encodeURIComponent(activeConv.name || '')}&conversationType=${activeConv.type}`;

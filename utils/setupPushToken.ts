@@ -13,6 +13,13 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return output.buffer;
 }
 
+function arrayBufferEquals(a?: ArrayBuffer | null, b?: ArrayBuffer | null): boolean {
+  if (!a || !b || a.byteLength !== b.byteLength) return false;
+  const left = new Uint8Array(a);
+  const right = new Uint8Array(b);
+  return left.every((value, index) => value === right[index]);
+}
+
 /** 端末固有IDを生成（endpoint末尾を使用） */
 function deviceIdFromEndpoint(endpoint: string): string {
   return endpoint.slice(-60).replace(/[^a-zA-Z0-9]/g, '_');
@@ -43,14 +50,20 @@ export async function setupPushToken(accountId: string): Promise<void> {
 
     const vapidKey = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
     if (!vapidKey) { console.warn('[push] VAPID key not set'); return; }
+    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
     const reg = await navigator.serviceWorker.ready;
 
     let sub = await reg.pushManager.getSubscription();
+    const currentKey = sub?.options?.applicationServerKey || null;
+    if (sub && currentKey && !arrayBufferEquals(currentKey, applicationServerKey)) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey,
       });
     }
 

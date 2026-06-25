@@ -7,6 +7,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { CallProvider } from '../contexts/CallContext';
 import { db } from '../firebase';
+import { setupPushToken } from '../utils/setupPushToken';
 
 
 const PUBLIC_PATHS = ['/', '/index'];
@@ -46,6 +47,21 @@ export default function RootLayout() {
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
+    const setupLoggedInPush = async () => {
+      if (Platform.OS !== 'web') return;
+      try {
+        const raw = await AsyncStorage.getItem('loggedInUser');
+        if (!raw) return;
+        const user = JSON.parse(raw);
+        const accountId = user.accountId || (user.role === 'admin' ? 'admin' : '');
+        if (accountId) await setupPushToken(accountId);
+      } catch (e) {
+        console.warn('Push setup failed', e);
+      }
+    };
+
+    setupLoggedInPush();
+
     // オンライン状態の監視
     const checkOnline = async () => {
       try {
