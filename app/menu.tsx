@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import SignaturePad from '../components/SignaturePad';
 import { db, storage } from '../firebase';
+import { getNotificationState, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -196,6 +197,11 @@ export default function MenuScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
 
+  // 通知許可バナー
+  const [pushState, setPushState] = useState<'granted' | 'denied' | 'default' | 'unsupported' | 'ios-not-standalone' | null>(null);
+  const [pushRequesting, setPushRequesting] = useState(false);
+  const [accountId, setAccountId] = useState<string>('');
+
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -220,10 +226,17 @@ export default function MenuScreen() {
       }
       setRole(user.role || '');
       setName(user.name || '');
+      setAccountId(user.accountId || (user.role === 'admin' ? 'admin' : ''));
       setAuthChecked(true);
     };
     checkAuth();
   }, []);
+
+  // 通知許可状態を確認（webのみ）
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    setPushState(getNotificationState());
+  }, [authChecked]);
 
   // アンケート公開件数を購読（管理者は全件、それ以外は公開中のみ）
   useEffect(() => {
@@ -570,6 +583,94 @@ export default function MenuScreen() {
     <SafeAreaView style={styles.container}>
       <DecoBackground />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* ── 通知許可バナー ── */}
+        {Platform.OS === 'web' && pushState === 'default' && (
+          <TouchableOpacity
+            style={{
+              margin: 12,
+              marginBottom: 0,
+              backgroundColor: '#E3F2FD',
+              borderRadius: 12,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              borderWidth: 1,
+              borderColor: '#90CAF9',
+            }}
+            onPress={async () => {
+              if (!accountId || pushRequesting) return;
+              setPushRequesting(true);
+              const result = await setupPushToken(accountId);
+              setPushState(getNotificationState());
+              setPushRequesting(false);
+              if (result === 'denied') {
+                Alert.alert('通知がブロックされました', 'ブラウザの設定から通知を許可してください。\n\nChrome: アドレスバー左の🔒→「通知」→「許可」');
+              }
+            }}
+            disabled={pushRequesting}
+          >
+            <Ionicons name="notifications-outline" size={22} color="#1565C0" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#1565C0', fontWeight: 'bold', fontSize: 13 }}>
+                {pushRequesting ? '設定中...' : 'プッシュ通知を有効にする'}
+              </Text>
+              <Text style={{ color: '#1976D2', fontSize: 11, marginTop: 2 }}>
+                タップして許可すると入室・メッセージ通知が届きます
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#1565C0" />
+          </TouchableOpacity>
+        )}
+        {Platform.OS === 'web' && pushState === 'denied' && (
+          <View
+            style={{
+              margin: 12,
+              marginBottom: 0,
+              backgroundColor: '#FFF3E0',
+              borderRadius: 12,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              borderWidth: 1,
+              borderColor: '#FFCC80',
+            }}
+          >
+            <Ionicons name="notifications-off-outline" size={22} color="#E65100" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#E65100', fontWeight: 'bold', fontSize: 13 }}>通知がブロックされています</Text>
+              <Text style={{ color: '#BF360C', fontSize: 11, marginTop: 2 }}>
+                ブラウザのアドレスバー左の🔒から「通知→許可」に変更してください
+              </Text>
+            </View>
+          </View>
+        )}
+        {Platform.OS === 'web' && pushState === 'ios-not-standalone' && (
+          <View
+            style={{
+              margin: 12,
+              marginBottom: 0,
+              backgroundColor: '#F3E5F5',
+              borderRadius: 12,
+              padding: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              borderWidth: 1,
+              borderColor: '#CE93D8',
+            }}
+          >
+            <Ionicons name="phone-portrait-outline" size={22} color="#6A1B9A" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#6A1B9A', fontWeight: 'bold', fontSize: 13 }}>iPhoneで通知を受け取るには</Text>
+              <Text style={{ color: '#4A148C', fontSize: 11, marginTop: 2 }}>
+                Safari下部の「共有」→「ホーム画面に追加」後、ホーム画面から起動してください
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* ── ヘッダー ── */}
         <Animated.View style={{

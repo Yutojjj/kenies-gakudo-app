@@ -1,4 +1,4 @@
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const PUSH_SUBSCRIPTIONS_COLLECTION = 'push_subscriptions_v2';
@@ -28,30 +28,46 @@ function deviceIdFromEndpoint(endpoint: string): string {
 }
 
 /**
+ * 現在の通知許可状態を返す。
+ * - 'granted'  : 許可済み・購読可能
+ * - 'denied'   : ブロック済み・設定から手動解除が必要
+ * - 'default'  : 未決定・ダイアログを出せる
+ * - 'unsupported' : ブラウザ非対応
+ * - 'ios-not-standalone' : iOS でホーム画面未追加
+ */
+export function getNotificationState(): 'granted' | 'denied' | 'default' | 'unsupported' | 'ios-not-standalone' {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') return 'unsupported';
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+  const isStandalone =
+    (window.navigator as any).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (isIOS && !isStandalone) return 'ios-not-standalone';
+
+  return Notification.permission as 'granted' | 'denied' | 'default';
+}
+
+/**
  * Web Push サブスクリプションを取得して Firestore に保存する。
  *
- * 保存先: push_subscriptions_v2/{accountId}/devices/{deviceId}
- * 複数端末（iPhoneとPC等）に対応するためサブコレクション構造を使用。
+ * ⚠️ この関数は必ずボタンタップ等のユーザー操作から呼ぶこと。
+ *    useEffect から自動で呼ぶと Chrome/Safari でブロックされる。
  *
- * iOS制約: ホーム画面に追加（standalone）していないと通知が届かない。
- * 許可ダイアログはユーザー操作後に呼ぶこと（自動では失敗しやすい）。
+ * 保存先: push_subscriptions_v2/{accountId}/devices/{deviceId}
  */
-export async function setupPushToken(accountId: string): Promise<void> {
-  if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-
-  // iOSでstandaloneでない場合はスキップ
-  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  const isStandalone = (window.navigator as any).standalone === true
-    || window.matchMedia('(display-mode: standalone)').matches;
-  if (isIOS && !isStandalone) return;
+export async function setupPushToken(accountId: string): Promise<'granted' | 'denied' | 'error'> {
+  const state = getNotificationState();
+  if (state === 'unsupported' || state === 'ios-not-standalone') return 'error';
+  if (state === 'denied') return 'denied';
 
   try {
+    // ユーザー操作から呼ばれた場合のみダイアログが表示される
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
+    if (permission !== 'granted') return 'denied';
 
     const vapidKey = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
-    if (!vapidKey) { console.warn('[push] VAPID key not set'); return; }
+    if (!vapidKey) { console.warn('[push] VAPID key not set'); return 'error'; }
     const applicationServerKey = urlBase64ToUint8Array(vapidKey);
 
     const reg = await navigator.serviceWorker.ready;
@@ -79,8 +95,6 @@ export async function setupPushToken(accountId: string): Promise<void> {
       { merge: true }
     );
 
-    // 端末ごとのサブスクリプションを保存
-    // push_subscriptions_v2/{accountId}/devices/{deviceId}
     await setDoc(
       doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId),
       {
@@ -93,7 +107,67 @@ export async function setupPushToken(accountId: string): Promise<void> {
     );
 
     console.info('[push] Web Push登録完了:', deviceId);
+    return 'granted';
   } catch (e) {
     console.warn('[push] setupPushToken failed:', e);
+    return 'error';
+  }
+}
+
+/**
+ * 既存のサブスクリプションがあれば再登録のみ（許可ダイアログなし）。
+ * 起動時の自動呼び出し専用。許可済みの端末を再接続するために使う。
+ */
+export async function refreshPushSubscription(accountId: string): Promise<void> {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+  const isStandalone =
+    (window.navigator as any).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (isIOS && !isStandalone) return;
+
+  try {
+    const vapidKey = process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
+    if (!vapidKey) return;
+    const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    const currentKey = sub?.options?.applicationServerKey || null;
+    if (sub && currentKey && !arrayBufferEquals(currentKey, applicationServerKey)) {
+      await sub.unsubscribe();
+      sub = null;
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+    }
+
+    const json = sub.toJSON() as { endpoint: string; keys?: { p256dh: string; auth: string } };
+    const deviceId = deviceIdFromEndpoint(json.endpoint);
+
+    await setDoc(
+      doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId),
+      { enabled: true, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+    await setDoc(
+      doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId),
+      {
+        subscription: json,
+        userAgent: navigator.userAgent,
+        enabled: true,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    console.info('[push] Push subscription refreshed:', deviceId);
+  } catch (e) {
+    console.warn('[push] refreshPushSubscription failed:', e);
   }
 }

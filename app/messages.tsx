@@ -13,8 +13,6 @@ import {
   onSnapshot, orderBy, query, serverTimestamp, setDoc,
   where
 } from 'firebase/firestore';
-import { setupPushToken } from '../utils/setupPushToken';
-import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -30,6 +28,8 @@ import {
 import { COLORS } from '../constants/theme';
 import { useCall } from '../contexts/CallContext';
 import { db, storage } from '../firebase';
+import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
+import { refreshPushSubscription } from '../utils/setupPushToken';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -439,7 +439,7 @@ export default function MessagesScreen() {
   }, []);
 
   useEffect(() => {
-    if (resolvedUser) setupPushToken(resolvedUser.accountId);
+    if (resolvedUser) refreshPushSubscription(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
 
   // ⑬ ホームタブ用データロード（管理者・スタッフ共通）
