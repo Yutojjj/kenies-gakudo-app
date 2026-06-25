@@ -1,6 +1,8 @@
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
+const PUSH_SUBSCRIPTIONS_COLLECTION = 'push_subscriptions_v2';
+
 /** VAPID公開鍵（Base64URL）→ ArrayBuffer */
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -28,7 +30,7 @@ function deviceIdFromEndpoint(endpoint: string): string {
 /**
  * Web Push サブスクリプションを取得して Firestore に保存する。
  *
- * 保存先: push_subscriptions/{accountId}/devices/{deviceId}
+ * 保存先: push_subscriptions_v2/{accountId}/devices/{deviceId}
  * 複数端末（iPhoneとPC等）に対応するためサブコレクション構造を使用。
  *
  * iOS制約: ホーム画面に追加（standalone）していないと通知が届かない。
@@ -70,17 +72,17 @@ export async function setupPushToken(accountId: string): Promise<void> {
     const json = sub.toJSON() as { endpoint: string; keys?: { p256dh: string; auth: string } };
     const deviceId = deviceIdFromEndpoint(json.endpoint);
 
-    // 親ドキュメントを先に作る（これがないとgetDocsで一覧に出てこない）
+    // 親ドキュメントを先に作る（これがないと一覧取得で出てこない）
     await setDoc(
-      doc(db, 'push_subscriptions', accountId),
+      doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId),
       { enabled: true, updatedAt: serverTimestamp() },
       { merge: true }
     );
 
     // 端末ごとのサブスクリプションを保存
-    // push_subscriptions/{accountId}/devices/{deviceId}
+    // push_subscriptions_v2/{accountId}/devices/{deviceId}
     await setDoc(
-      doc(db, 'push_subscriptions', accountId, 'devices', deviceId),
+      doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId),
       {
         subscription: json,
         userAgent: navigator.userAgent,

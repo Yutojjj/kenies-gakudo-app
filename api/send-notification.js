@@ -11,6 +11,8 @@ const ALLOWED_URL_PREFIXES = [
   '/survey',
 ];
 
+const PUSH_SUBSCRIPTIONS_COLLECTION = 'push_subscriptions_v2';
+
 let cachedToken = null;
 
 function isAllowedUrl(url) {
@@ -135,7 +137,7 @@ async function resolveTargetAccountIds({ accountIds, sendToAll, excludeAccountId
       .slice(0, 100);
   }
 
-  const docs = await firestoreListDocuments('push_subscriptions', token);
+  const docs = await firestoreListDocuments(PUSH_SUBSCRIPTIONS_COLLECTION, token);
   return docs
     .map((doc) => decodeURIComponent(doc.name.split('/').pop()))
     .filter((id) => id && id !== excludeAccountId);
@@ -146,7 +148,7 @@ async function loadSubscriptions(accountIds, token) {
   await Promise.all(
     accountIds.map(async (accountId) => {
       const docs = await firestoreListDocuments(
-        `push_subscriptions/${encodeURIComponent(accountId)}/devices`,
+        `${PUSH_SUBSCRIPTIONS_COLLECTION}/${encodeURIComponent(accountId)}/devices`,
         token
       );
       docs.forEach((doc) => {
