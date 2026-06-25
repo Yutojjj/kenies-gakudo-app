@@ -7,6 +7,7 @@ import {
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
+import { sendPushNotification } from '../utils/sendPushNotification';
 
 type CallStatus = 'idle' | 'calling' | 'receiving' | 'connected';
 
@@ -242,17 +243,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
       missedTimerRef.current = setTimeout(async () => {
         await setDoc(doc(db, 'calls', callRef.id), { status: 'missed' }, { merge: true }).catch(() => {});
-        if (calleeFcmTokenRef.current) {
-          fetch('/api/send-notification', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tokens: [calleeFcmTokenRef.current],
-              title: '不在着信',
-              body: `${myName}からの着信を受け取れませんでした`,
-              url: '/messages',
-            }),
-          }).catch(() => {});
-        }
+        sendPushNotification({
+          accountIds: [calleeId],
+          title: '不在着信',
+          body: `${myName}からの着信を受け取れませんでした`,
+          url: '/messages',
+        }).catch(() => {});
         setRemotePartyName(`${calleeName}（不在）`);
         setTimeout(() => cleanupCall(), 3000);
       }, 30000);
@@ -274,18 +270,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         if (data.status === 'ended') cleanupCall();
       });
 
-      const tokenDoc = await getDoc(doc(db, 'fcm_tokens', calleeId));
-      if (tokenDoc.exists()) {
-        const token = tokenDoc.data().token;
-        calleeFcmTokenRef.current = token || '';
-        if (token) fetch('/api/send-notification', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tokens: [token], title: `${myName}から着信`,
-            body: 'アプリを開いて応答してください', url: '/messages',
-          }),
-        }).catch(() => {});
-      }
+      sendPushNotification({
+        accountIds: [calleeId],
+        title: `${myName}から着信`,
+        body: 'アプリを開いて応答してください',
+        url: '/messages',
+      }).catch(() => {});
     } catch (e) {
       cleanupCall();
       if (typeof window !== 'undefined') window.alert('カメラとマイクへのアクセスが必要です。ブラウザ設定を確認してください。');

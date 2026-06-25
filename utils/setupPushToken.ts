@@ -1,27 +1,40 @@
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
-/** VAPID公開鍵（Base64URL）→ Uint8Array */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+/** VAPID公開鍵（Base64URL）→ ArrayBuffer */
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
-  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    output[i] = rawData.charCodeAt(i);
+  }
+  return output.buffer;
+}
+
+/** 端末固有IDを生成（endpoint末尾を使用） */
+function deviceIdFromEndpoint(endpoint: string): string {
+  return endpoint.slice(-60).replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 /**
- * Web Push サブスクリプションを取得してFirestoreに保存する。
- * iOS / Android / Chrome すべて同じWeb Push APIを使う（FCM不使用）。
+ * Web Push サブスクリプションを取得して Firestore に保存する。
+ *
+ * 保存先: push_subscriptions/{accountId}/devices/{deviceId}
+ * 複数端末（iPhoneとPC等）に対応するためサブコレクション構造を使用。
  *
  * iOS制約: ホーム画面に追加（standalone）していないと通知が届かない。
+ * 許可ダイアログはユーザー操作後に呼ぶこと（自動では失敗しやすい）。
  */
 export async function setupPushToken(accountId: string): Promise<void> {
   if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
-  // iOSでstandaloneでない場合はスキップ（ブラウザで開いてるだけでは通知不可）
+  // iOSでstandaloneでない場合はスキップ
   const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  const isStandalone = (window.navigator as any).standalone === true;
+  const isStandalone = (window.navigator as any).standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches;
   if (isIOS && !isStandalone) return;
 
   try {
@@ -33,7 +46,6 @@ export async function setupPushToken(accountId: string): Promise<void> {
 
     const reg = await navigator.serviceWorker.ready;
 
-    // 既存のサブスクリプションを取得、なければ新規作成
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
@@ -42,10 +54,30 @@ export async function setupPushToken(accountId: string): Promise<void> {
       });
     }
 
-    await setDoc(doc(db, 'fcm_tokens', accountId), {
-      subscription: sub.toJSON(),
-      updatedAt: new Date(),
-    });
+    const json = sub.toJSON() as { endpoint: string; keys?: { p256dh: string; auth: string } };
+    const deviceId = deviceIdFromEndpoint(json.endpoint);
+
+    // 親ドキュメントを先に作る（これがないとgetDocsで一覧に出てこない）
+    await setDoc(
+      doc(db, 'push_subscriptions', accountId),
+      { enabled: true, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+
+    // 端末ごとのサブスクリプションを保存
+    // push_subscriptions/{accountId}/devices/{deviceId}
+    await setDoc(
+      doc(db, 'push_subscriptions', accountId, 'devices', deviceId),
+      {
+        subscription: json,
+        userAgent: navigator.userAgent,
+        enabled: true,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    console.info('[push] Web Push登録完了:', deviceId);
   } catch (e) {
     console.warn('[push] setupPushToken failed:', e);
   }

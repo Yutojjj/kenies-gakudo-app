@@ -12,3 +12,22 @@ export const COLORS = {
   success: '#D4AF37',    // 全体の統一感を出すためサクセスもゴールド系に
   info: '#B8860B',
 };
+
+export const Colors = {
+  light: {
+    text: COLORS.text,
+    background: COLORS.background,
+    tint: COLORS.primary,
+    icon: COLORS.textLight,
+    tabIconDefault: COLORS.textLight,
+    tabIconSelected: COLORS.primary,
+  },
+  dark: {
+    text: COLORS.white,
+    background: COLORS.text,
+    tint: COLORS.primary,
+    icon: COLORS.border,
+    tabIconDefault: COLORS.textLight,
+    tabIconSelected: COLORS.primary,
+  },
+};

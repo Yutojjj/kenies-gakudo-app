@@ -87,10 +87,29 @@ html, body {
     height: 297mm;
     page-break-inside: avoid;
   }
+  #back-btn { display: none; }
 }
+
+#back-btn {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 9999;
+  padding: 8px 18px;
+  background: #1a3a6b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+#back-btn:hover { background: #2a5298; }
 </style>
 </head>
 <body>
+<button id="back-btn" onclick="window.history.back()">← 戻る</button>
 <div class="cert-container" id="cert">
   <img class="bg" id="cert-bg" src="" alt="">
   <span class="field-text" id="f-name"></span>
@@ -151,9 +170,15 @@ set('f-score',     score,            null,             fail);
 set('f-wpm',       wpm,              null,             fail);
 set('f-certifier', certifier,        null,             fail);
 
-// 画像読み込み後に印刷
+// 画像読み込み後に印刷、印刷後に自動で戻る
 document.getElementById('cert-bg').onload = () => {
-  setTimeout(() => window.print(), 300);
+  setTimeout(() => {
+    window.print();
+    // 印刷ダイアログを閉じたら自動で前の画面に戻る
+    window.addEventListener('afterprint', () => {
+      window.history.back();
+    }, { once: true });
+  }, 300);
 };
 // 戻ったときにリロードしてFirestoreデータを再取得させる
 window.addEventListener('pageshow', (e) => {

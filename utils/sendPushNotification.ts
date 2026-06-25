@@ -1,32 +1,54 @@
-/**
- * sendPushNotification
- * Firebase Cloud Functions (asia-northeast1) 経由でFCM通知を送る。
- * 旧: /api/send-notification（Vercel静的ビルドでは動かない）
- * 新: Cloud Functions URL
- */
-
-const SEND_NOTIFICATION_URL =
+const NOTIFY_API =
   'https://asia-northeast1-kanyes-8bfcb.cloudfunctions.net/sendNotification';
 
+async function postNotification(payload: Record<string, unknown>): Promise<void> {
+  const res = await fetch(NOTIFY_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => '');
+    throw new Error(`Notification API failed: ${res.status} ${message}`);
+  }
+}
+
+/** 指定したaccountIdリストに通知を送る */
 export async function sendPushNotification({
-  tokens,
+  accountIds,
   title,
   body,
   url = '/menu',
 }: {
-  tokens: string[];
+  accountIds: string[];
   title: string;
   body: string;
   url?: string;
 }): Promise<void> {
-  if (!tokens.length) return;
+  if (!accountIds.length) return;
   try {
-    await fetch(SEND_NOTIFICATION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tokens, title, body, url }),
-    });
+    await postNotification({ accountIds, title, body, url });
   } catch (e) {
-    console.warn('通知送信エラー:', e);
+    console.warn('[push] sendPushNotification failed:', e);
+  }
+}
+
+/** 全ユーザーに通知（グループメッセージ等）*/
+export async function sendPushNotificationToAll({
+  excludeAccountId,
+  title,
+  body,
+  url = '/menu',
+}: {
+  excludeAccountId?: string;
+  title: string;
+  body: string;
+  url?: string;
+}): Promise<void> {
+  try {
+    await postNotification({ sendToAll: true, excludeAccountId, title, body, url });
+  } catch (e) {
+    console.warn('[push] sendPushNotificationToAll failed:', e);
   }
 }

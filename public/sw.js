@@ -1,59 +1,96 @@
 // ケーニーズ学童クラブ Service Worker
-const CACHE_NAME = 'kenies-gakudo-v1';
+// キャッシュ + Web Push を1ファイルに統合
 
-// インストール時にキャッシュするファイル
+const CACHE_NAME = 'kenies-gakudo-v2';
+
+const PRECACHE = [
+  '/',
+  '/manifest.json',
+  '/favicon.ico',
+  '/assets/images/icon.png',
+];
+
+// ── インストール ──────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/manifest.json',
-        '/favicon.ico',
-        '/assets/images/icon.png',
-      ]);
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-// 古いキャッシュを削除
+// ── アクティベート（古いキャッシュ削除） ─────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// ネットワーク優先、失敗時にキャッシュを返す
+// ── フェッチ（ネットワーク優先、失敗時キャッシュ） ───────────────────
 self.addEventListener('fetch', (event) => {
-  // Firebaseへのリクエストはキャッシュしない
-  if (event.request.url.includes('firebase') || event.request.url.includes('firestore')) {
-    return;
-  }
+  if (event.request.method !== 'GET') return;
+  const url = event.request.url;
+  if (url.includes('firebase') || url.includes('firestore') || url.includes('googleapis')) return;
 
   event.respondWith(
     fetch(event.request)
-      .then((response) => {
-        // 成功したレスポンスをキャッシュに保存
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+      .then(res => {
+        if (res.status === 200) {
+          caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()));
         }
-        return response;
+        return res;
       })
-      .catch(() => {
-        // オフライン時はキャッシュから返す
-        return caches.match(event.request).then((cached) => {
-          return cached || caches.match('/');
-        });
-      })
+      .catch(() =>
+        caches.match(event.request).then(cached => cached || caches.match('/'))
+      )
   );
+});
+
+// ── Web Push 受信 ─────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    const title = data.title || 'お知らせ';
+    const body  = data.body  || '';
+    const url   = data.data?.url || '/menu';
+
+    event.waitUntil(
+      self.registration.showNotification(title, {
+        body,
+        icon:  '/icon-192.png',
+        badge: '/icon-192.png',
+        data:  { url },
+      })
+    );
+  } catch (e) {
+    console.warn('[SW] push parse error:', e);
+  }
+});
+
+// ── 通知タップ ────────────────────────────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/menu';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const client of list) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.postMessage({ type: 'NAVIGATE', url });
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
+
+// ── メッセージ受信（SKIP_WAITING等） ─────────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });

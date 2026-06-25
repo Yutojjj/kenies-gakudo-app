@@ -46,6 +46,11 @@ type Message = {
 const STAFF_GROUP_ID = 'staff_group';
 const ADMIN_ID = 'admin';
 
+async function getAllMessageRecipientIds(): Promise<string[]> {
+  const snap = await getDocs(collection(db, 'accounts'));
+  return [ADMIN_ID, ...snap.docs.map(d => d.id)];
+}
+
 function relTime(ts: any) {
   if (!ts?.toDate) return '';
   const d: Date = ts.toDate();
@@ -578,8 +583,7 @@ export default function MessagesScreen() {
     try {
       let participants: string[];
       if (activeConv.type === 'group') {
-        const snap = await getDocs(collection(db, 'fcm_tokens'));
-        participants = [ADMIN_ID, ...snap.docs.map(d => d.id)];
+        participants = await getAllMessageRecipientIds();
       } else {
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
         participants = s.data()?.participants?.length
@@ -631,8 +635,7 @@ export default function MessagesScreen() {
 
       let participants: string[];
       if (activeConv.type === 'group') {
-        const snap = await getDocs(collection(db, 'fcm_tokens'));
-        participants = [ADMIN_ID, ...snap.docs.map(d => d.id)];
+        participants = await getAllMessageRecipientIds();
       } else {
         const s = await getDoc(doc(db, 'conversations', activeConv.id));
         participants = s.data()?.participants?.length
