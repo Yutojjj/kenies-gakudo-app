@@ -1,5 +1,4 @@
-const NOTIFY_API =
-  'https://asia-northeast1-kanyes-8bfcb.cloudfunctions.net/sendNotification';
+const NOTIFY_API = '/api/send-notification';
 
 async function postNotification(payload: Record<string, unknown>): Promise<void> {
   const res = await fetch(NOTIFY_API, {

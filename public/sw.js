@@ -1,20 +1,21 @@
 // ケーニーズ学童クラブ Service Worker
 // キャッシュ + Web Push を1ファイルに統合
 
-const CACHE_NAME = 'kenies-gakudo-v2';
+const CACHE_NAME = 'kenies-gakudo-v3';
 
 const PRECACHE = [
   '/',
   '/manifest.json',
   '/favicon.ico',
-  '/assets/images/icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 // ── インストール ──────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE))
+      .then(cache => Promise.allSettled(PRECACHE.map(url => cache.add(url))))
       .then(() => self.skipWaiting())
   );
 });
