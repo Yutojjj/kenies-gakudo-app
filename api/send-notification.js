@@ -237,7 +237,11 @@ export default async function handler(req, res) {
     const sent = results.filter((result) => result.status === 'fulfilled').length;
     const failed = results
       .filter((result) => result.status === 'rejected')
-      .map((result) => result.reason?.statusCode || result.reason?.message || 'unknown');
+      .map((result) => {
+        const r = result.reason;
+        console.error('[push] FCM error:', r?.statusCode, r?.message, r?.body);
+        return r?.statusCode || r?.message || 'unknown';
+      });
 
     return res.status(200).json({
       sent,
