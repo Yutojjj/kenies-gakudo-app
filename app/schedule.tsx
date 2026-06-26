@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { sendPushNotification } from '../utils/sendPushNotification';
 import {
   Alert,
   Image,
@@ -19,6 +18,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { sendPushNotification } from '../utils/sendPushNotification';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
