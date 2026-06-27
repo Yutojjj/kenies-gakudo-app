@@ -532,6 +532,7 @@ export default function YearEventsScreen() {
   const router = useRouter();
   const { role, name, tab } = useLocalSearchParams<{ role?: string; name?: string; tab?: string }>();
   const isAdmin = role === 'admin';
+  const canEditEventDetail = isAdmin || role === 'staff';
   const isUser = role === 'user';
 
   // 参加状態 key: eventId → '参加' | undefined
@@ -1174,7 +1175,7 @@ export default function YearEventsScreen() {
           <Image source={{ uri: ev.coverImage }} style={styles.eventCoverImgFull} resizeMode="cover" />
         ) : (
           <View style={[styles.eventCoverImgFull, { backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center' }]}>
-            {isAdmin && (
+            {canEditEventDetail && (
               <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); pickEventCover(ev.id); }} style={{ alignItems: 'center' }}>
                 <Ionicons name="camera-outline" size={22} color="#bbb" />
                 <Text style={{ fontSize: 10, color: '#bbb', marginTop: 3 }}>画像追加</Text>
@@ -1182,7 +1183,7 @@ export default function YearEventsScreen() {
             )}
           </View>
         )}
-        {isAdmin && ev.coverImage && (
+        {canEditEventDetail && ev.coverImage && (
           <View style={styles.coverActionBtns}>
             <TouchableOpacity style={styles.coverActionBtn} onPress={(e) => { e.stopPropagation?.(); pickEventCover(ev.id); }}>
               <Ionicons name="camera-outline" size={13} color="#fff" />
@@ -1337,7 +1338,7 @@ export default function YearEventsScreen() {
                 ) : (
                   <View style={{ marginTop: 10 }}>
                     {detailDet?.description ? <RichText doc={detailDet.description} /> : <Text style={styles.emptyText}>説明はまだありません</Text>}
-                    {isAdmin && (
+                    {canEditEventDetail && (
                       <TouchableOpacity style={styles.editBtn} onPress={() => { setDescDraft(detailDet?.description || EMPTY_RICH); setEditDesc(true); }}>
                         <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
                         <Text style={styles.editBtnText}>編集</Text>
@@ -1372,7 +1373,7 @@ export default function YearEventsScreen() {
                 ) : (
                   <View>
                     {detailDet?.items ? <RichText doc={detailDet.items} /> : <Text style={styles.emptyText}>情報はまだありません</Text>}
-                    {isAdmin && (
+                    {canEditEventDetail && (
                       <TouchableOpacity style={styles.editBtn} onPress={() => { setItemsDraft(detailDet?.items || EMPTY_RICH); setEditItems(true); }}>
                         <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
                         <Text style={styles.editBtnText}>編集</Text>
@@ -1393,8 +1394,8 @@ export default function YearEventsScreen() {
                 <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
               </TouchableOpacity>
               <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
-                {isAdmin && (
-                  <TouchableOpacity style={styles.uploadPhotoBtn} onPress={uploadPastPhoto}>
+              {canEditEventDetail && (
+                <TouchableOpacity style={styles.uploadPhotoBtn} onPress={uploadPastPhoto}>
                     <Ionicons name="cloud-upload-outline" size={16} color={COLORS.primary} />
                     <Text style={styles.uploadPhotoBtnText}>写真をアップロード</Text>
                   </TouchableOpacity>
@@ -1407,8 +1408,8 @@ export default function YearEventsScreen() {
                     {detailPhotos.map((p, idx) => (
                       <TouchableOpacity key={p.id} style={styles.photoThumbWrap} onPress={() => { setPreviewPhotos(detailPhotos); setPreviewIdx(idx); }}>
                         <Image source={{ uri: p.uri }} style={styles.photoThumb} />
-                        {isAdmin && (
-                          <TouchableOpacity style={styles.photoDeleteBtn} onPress={() => deletePastPhoto(p)}>
+                    {canEditEventDetail && (
+                      <TouchableOpacity style={styles.photoDeleteBtn} onPress={() => deletePastPhoto(p)}>
                             <Ionicons name="close-circle" size={18} color={COLORS.danger} />
                           </TouchableOpacity>
                         )}
