@@ -502,19 +502,19 @@ export default function ScheduleScreen() {
         });
       }
 
-      // 管理者以外の操作のみログ記録
-      if (loggedInUser && loggedInUser.role !== 'admin') {
-        if (desc) {
-          await addDoc(collection(db, 'scheduleChanges'), {
-            date: dateStr,
-            userId: parentDocId,
-            userName: loggedInUser.name,
-            childName: child.name,
-            description: desc,
-            changedAt: serverTimestamp(),
-          });
+      if (loggedInUser && desc) {
+        await addDoc(collection(db, 'scheduleChanges'), {
+          date: dateStr,
+          userId: parentDocId,
+          userName: loggedInUser.name,
+          actorRole: loggedInUser.role,
+          childName: child.name,
+          description: desc,
+          changedAt: serverTimestamp(),
+        });
 
-          // 変更対象日が今月であれば管理者へ通知
+        // 変更対象日が今月で、管理者以外の操作であれば管理者へ通知
+        if (loggedInUser.role !== 'admin') {
           const today = new Date();
           const changeDay = new Date(dateStr);
           const isSameMonth =

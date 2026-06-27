@@ -212,6 +212,7 @@ export default function MenuScreen() {
   const [showAllPickup, setShowAllPickup] = useState(false);
   const [noticeVisible, setNoticeVisible] = useState(false);
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
+  const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
   const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
   const [newNotice, setNewNotice] = useState('');
   const [appDialog, setAppDialog] = useState<{
@@ -593,7 +594,30 @@ export default function MenuScreen() {
       snap => setAdminNotices(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))
     );
 
-    return () => { unsubNotices(); };
+    const unsubScheduleChanges = onSnapshot(
+      query(collection(db, 'scheduleChanges'), where('date', '==', dateStr)),
+      snap => {
+        const grouped: Record<string, string[]> = {};
+        snap.docs.forEach(changeDoc => {
+          const data = changeDoc.data();
+          const childName = data.childName || data.kidName || data.name || '名前未設定';
+          const description = data.description || '';
+          if (!description) return;
+          if (!grouped[childName]) grouped[childName] = [];
+          if (!grouped[childName].includes(description)) grouped[childName].push(description);
+        });
+        setTodayScheduleChanges(
+          Object.entries(grouped)
+            .sort(([a], [b]) => a.localeCompare(b, 'ja'))
+            .map(([childName, descriptions]) => ({ childName, descriptions }))
+        );
+      }
+    );
+
+    return () => {
+      unsubNotices();
+      unsubScheduleChanges();
+    };
   }, [role, staffPlanDate]);
 
   // ⑩ 今日〜6日後の週間メモをロード
@@ -1180,6 +1204,28 @@ export default function MenuScreen() {
                   <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#1565C0' }}>{m.kidName}</Text>
                 </View>
                 <Text style={{ fontSize: 13, color: '#424242', flex: 1, lineHeight: 18 }}>{m.memo}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ── 予定変更インライン表示（連絡の下） ── */}
+        {(role === 'staff' || role === 'admin') && todayScheduleChanges.length > 0 && (
+          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#FFB03A', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>予定変更</Text>
+              <TouchableOpacity style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }} onPress={() => router.push('/schedule-changes' as any)}>
+                <Text style={{ color: '#C2410C', fontSize: 11, fontWeight: 'bold' }}>変更履歴を見る</Text>
+              </TouchableOpacity>
+            </View>
+            {todayScheduleChanges.map((item, i) => (
+              <View key={`${item.childName}-${i}`} style={{ backgroundColor: '#FFF9ED', borderRadius: 12, padding: 12, marginBottom: i === todayScheduleChanges.length - 1 ? 0 : 8, borderWidth: 1, borderColor: '#FFE0A8' }}>
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#8A3B12', marginBottom: 5 }}>{item.childName}</Text>
+                {item.descriptions.map((description, descIdx) => (
+                  <Text key={`${item.childName}-${descIdx}`} style={{ fontSize: 13, color: '#424242', lineHeight: 19 }}>
+                    {description}
+                  </Text>
+                ))}
               </View>
             ))}
           </View>
