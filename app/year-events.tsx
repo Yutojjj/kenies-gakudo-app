@@ -538,6 +538,7 @@ export default function YearEventsScreen() {
   const [mgmtModalVisible, setMgmtModalVisible] = useState(false);
   const [mgmtTitle, setMgmtTitle] = useState('');
   const [mgmtDesc, setMgmtDesc] = useState('');
+  const [mgmtDeadlineDate, setMgmtDeadlineDate] = useState('');
   const [mgmtExtName, setMgmtExtName] = useState('');
   const [mgmtExtSchool, setMgmtExtSchool] = useState('');
   const [mgmtExtGrade, setMgmtExtGrade] = useState('');
@@ -856,6 +857,7 @@ export default function YearEventsScreen() {
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === dateStr);
     setMgmtTitle(ev?.title || '');
     setMgmtDesc(ev?.description || '');
+    setMgmtDeadlineDate(ev?.deadlineDate || '');
     setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
     setMgmtParticipantTab('list');
     setMgmtAddSubTab('user');
@@ -866,7 +868,14 @@ export default function YearEventsScreen() {
     if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
     const docId = ev?.id || `${mgmtSelectedDate}_${Date.now()}`;
-    await setDoc(doc(db, 'events', docId), { id: docId, dateStr: mgmtSelectedDate, title: mgmtTitle, description: mgmtDesc, externalParticipants: ev?.externalParticipants || [] }, { merge: true });
+    await setDoc(doc(db, 'events', docId), {
+      id: docId,
+      dateStr: mgmtSelectedDate,
+      title: mgmtTitle,
+      description: mgmtDesc,
+      deadlineDate: mgmtDeadlineDate.trim() || '',
+      externalParticipants: ev?.externalParticipants || [],
+    }, { merge: true });
     setMgmtModalVisible(false);
   };
   const mgmtDeleteEvent = async () => {
@@ -1555,6 +1564,9 @@ export default function YearEventsScreen() {
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>イベント名</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
                         value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>参加締め切り日</Text>
+                      <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
+                        value={mgmtDeadlineDate} onChangeText={setMgmtDeadlineDate} placeholder="例: 2026-07-10（空欄ならしめきりなし）" placeholderTextColor="#C0C0C0" />
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>説明</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 70 }}
                         value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />

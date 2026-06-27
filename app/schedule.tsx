@@ -50,7 +50,7 @@ const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
 export default function ScheduleScreen() {
   const router = useRouter();
   // リストなどから飛んできたときに対象となる児童の名前（同じ名前の兄弟などは一意のIDで判定します）
-  const { name } = useLocalSearchParams<{ name: string }>();
+  const { name, dateStr: initialDateStr, openEdit } = useLocalSearchParams<{ name: string; dateStr?: string; openEdit?: string }>();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [children, setChildren] = useState<ChildInfo[]>([]);
@@ -106,6 +106,20 @@ export default function ScheduleScreen() {
   const memoDataRef = React.useRef<Record<string, string>>({});
   const [memoSaved, setMemoSaved] = useState(false);
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
+  const initialEditOpenedRef = useRef(false);
+
+  const formatScheduleModalDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return `${d.getMonth() + 1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
+  };
+
+  const makeLocalDateString = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -569,6 +583,15 @@ export default function ScheduleScreen() {
     }
   };
 
+  useEffect(() => {
+    if (openEdit !== '1' || !initialDateStr || initialEditOpenedRef.current || children.length === 0) return;
+    initialEditOpenedRef.current = true;
+    const target = String(initialDateStr);
+    const parsed = new Date(target);
+    if (!isNaN(parsed.getTime())) setCurrentDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+    setTimeout(() => handleDayPress(target), 250);
+  }, [openEdit, initialDateStr, children.length]);
+
   const openTimePicker = (target: 'pickup' | 'lesson', defaultTime: string, lessonIndex: number = -1) => {
     setEditModalVisible(false); // モーダル重複によるフリーズを防ぐ
     setTimePickerTarget(target);
@@ -842,211 +865,197 @@ export default function ScheduleScreen() {
       <Modal visible={editModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.editModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {selectedDateStr} の予定 
-                {publicHolidays[selectedDateStr] ? ` (${publicHolidays[selectedDateStr]})` : ''}
-              </Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={28} color={COLORS.textLight} />
+            <View style={styles.scheduleSheetHeader}>
+              <TouchableOpacity style={styles.scheduleSheetIconBtn} onPress={() => setEditModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#475569" />
               </TouchableOpacity>
+              <View style={styles.scheduleDateStepper}>
+                <TouchableOpacity
+                  style={styles.scheduleDateArrow}
+                  onPress={() => {
+                    const d = new Date(selectedDateStr);
+                    d.setDate(d.getDate() - 1);
+                    handleDayPress(makeLocalDateString(d));
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={19} color="#64748B" />
+                </TouchableOpacity>
+                <Text style={styles.scheduleSheetTitle}>
+                  {formatScheduleModalDate(selectedDateStr)}
+                  {publicHolidays[selectedDateStr] ? ` (${publicHolidays[selectedDateStr]})` : ''}
+                </Text>
+                <TouchableOpacity
+                  style={styles.scheduleDateArrow}
+                  onPress={() => {
+                    const d = new Date(selectedDateStr);
+                    d.setDate(d.getDate() + 1);
+                    handleDayPress(makeLocalDateString(d));
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={19} color="#64748B" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-                {/* ── イベントセクション（その日にイベントがある場合のみ表示） ── */}
-                {eventsData[selectedDateStr] && (
-                  <View style={[styles.editSection, { backgroundColor: '#FFFDE7', borderRadius: 12, borderWidth: 1, borderColor: '#FFD54F', marginBottom: 8 }]}>
-                    {!eventSectionCollapsed ? (
-                      <>
-                        <View style={styles.editSectionHeader}>
-                          <Ionicons name="star" size={20} color="#DAA520" />
-                          <Text style={[styles.editSectionTitle, { color: '#B8860B' }]}>イベント</Text>
-                          <View style={{ flex: 1 }} />
-                        </View>
-                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#5D4037', marginBottom: 6 }}>
-                          {eventsData[selectedDateStr].title}
-                        </Text>
-                        {eventsData[selectedDateStr].description && (
-                          <Text style={{ fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 12 }}>
-                            {eventsData[selectedDateStr].description}
-                          </Text>
-                        )}
-                        {/* 参加ステータス */}
-                        {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? (
-                          <View style={{ gap: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', padding: 10, borderRadius: 8 }}>
-                              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#4CAF50', marginLeft: 6 }}>参加申し込み済み</Text>
-                            </View>
-                            <TouchableOpacity
-                              style={{ backgroundColor: '#FFEBEE', padding: 10, borderRadius: 8, alignItems: 'center' }}
-                              onPress={() => toggleEventParticipation(selectedDateStr, false)}
-                            >
-                              <Text style={{ color: COLORS.danger, fontWeight: 'bold', fontSize: 13 }}>参加をキャンセルする</Text>
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={{ backgroundColor: COLORS.primary, padding: 12, borderRadius: 10, alignItems: 'center' }}
-                            onPress={() => toggleEventParticipation(selectedDateStr, true)}
-                          >
-                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>このイベントに参加する</Text>
-                          </TouchableOpacity>
-                        )}
-                        {/* 折りたたみボタン */}
+              <View style={styles.pickupHeroCard}>
+                <View style={styles.pickupHeroTop}>
+                  <View style={styles.pickupHeroLabel}>
+                    <Ionicons name="car-outline" size={18} color="#F59E0B" />
+                    <Text style={styles.pickupHeroLabelText}>学校へお迎え</Text>
+                  </View>
+                  <TouchableOpacity style={styles.scheduleEditPill} onPress={() => openTimePicker('pickup', getCellData(selectedDateStr).pickupTime || '15:00')}>
+                    <Text style={styles.scheduleEditPillText}>編集</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.pickupHeroTimeRow}>
+                  <Ionicons name="time-outline" size={18} color="#F59E0B" />
+                  <Text style={styles.pickupHeroTime}>{getCellData(selectedDateStr).pickupTime || '利用なし'}</Text>
+                  <Text style={styles.pickupHeroPlace}>{children[activeChildIdx]?.school || '学校'} へお迎え</Text>
+                  <View style={{ flex: 1 }} />
+                  {!!getCellData(selectedDateStr).pickupTime && (
+                    <TouchableOpacity onPress={() => deleteItem('pickup')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={18} color="#CBD5E1" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {((children[activeChildIdx]?.pickupTimes || []).length > 0 || !!getCellData(selectedDateStr).pickupTime) && (
+                  <View style={styles.pickupSavedTimes}>
+                    {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
+                      const isActive = getCellData(selectedDateStr).pickupTime === t;
+                      return (
                         <TouchableOpacity
-                          style={{ alignItems: 'center', marginTop: 10, paddingVertical: 4 }}
-                          onPress={() => setEventSectionCollapsed(true)}
+                          key={t}
+                          style={[styles.pickupSavedTimeChip, isActive && styles.pickupSavedTimeChipActive]}
+                          onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
+                          activeOpacity={0.82}
                         >
-                          <Text style={{ color: '#aaa', fontSize: 12 }}>▲ 閉じる</Text>
+                          <Text style={[styles.pickupSavedTimeText, isActive && styles.pickupSavedTimeTextActive]}>{t}</Text>
                         </TouchableOpacity>
-                      </>
-                    ) : (
+                      );
+                    })}
+                    {!!getCellData(selectedDateStr).pickupTime && !(children[activeChildIdx]?.pickupTimes || []).includes(getCellData(selectedDateStr).pickupTime) && (
                       <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', padding: 4, gap: 8 }}
-                        onPress={() => setEventSectionCollapsed(false)}
+                        style={styles.pickupSavedTimeAddChip}
+                        onPress={() => savePickupTimeToAccount(getCellData(selectedDateStr).pickupTime)}
+                        activeOpacity={0.82}
                       >
-                        <Ionicons name="star" size={16} color="#DAA520" />
-                        <Text style={{ fontSize: 13, color: '#B8860B', fontWeight: 'bold', flex: 1 }}>
-                          {eventsData[selectedDateStr].title}
-                        </Text>
-                        <Text style={{ color: '#aaa', fontSize: 12 }}>▼</Text>
+                        <Ionicons name="add" size={13} color="#9A5B05" />
+                        <Text style={styles.pickupSavedTimeText}>この時刻を保存</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 )}
+              </View>
 
-                <View style={styles.editSection}>
-                  <View style={styles.editSectionHeader}>
-                    <Ionicons name="home-outline" size={20} color={COLORS.primary} />
-                    <Text style={styles.editSectionTitle}>利用(お迎え)時間</Text>
-                  </View>
-                  <View style={[styles.editCard, { flexDirection: 'column' }]}>
-                    {/* ① 現在登録されている時間 */}
-                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8 }}>現在登録されている時間</Text>
-                    {getCellData(selectedDateStr).pickupTime ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <View style={{ backgroundColor: COLORS.primary + '20', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.primary }}>
-                          <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.primary }}>{getCellData(selectedDateStr).pickupTime}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('pickup')}>
-                          <Text style={styles.btnTextDanger}>削除</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <Text style={[styles.noDataText, { marginBottom: 4 }]}>未設定</Text>
-                    )}
-
-                    {/* ② 候補時間のリスト */}
-                    <View style={{ borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 16, marginTop: 16, marginBottom: 0 }}>
-                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8 }}>候補時間のリスト</Text>
-                      {(children[activeChildIdx]?.pickupTimes || []).length === 0 ? (
-                        <Text style={styles.noDataText}>候補時間が登録されていません</Text>
-                      ) : (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
-                            const isActive = getCellData(selectedDateStr).pickupTime === t;
-                            return (
-                              <TouchableOpacity
-                                key={t}
-                                style={{ paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5,
-                                  borderColor: isActive ? COLORS.primary : COLORS.border,
-                                  backgroundColor: isActive ? COLORS.primary : COLORS.white,
-                                  flexDirection: 'row', alignItems: 'center', gap: 8 }}
-                                onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
-                              >
-                                <Text style={{ fontSize: 15, fontWeight: 'bold', color: isActive ? COLORS.white : COLORS.text }}>{t}</Text>
-                                <TouchableOpacity
-                                  onPress={(e) => { e.stopPropagation?.(); removePickupTimeFromAccount(t); }}
-                                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                                >
-                                  <Ionicons name="close-circle" size={16} color={isActive ? 'rgba(255,255,255,0.8)' : COLORS.textLight} />
-                                </TouchableOpacity>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
-
-                    {/* ③ 候補時間の追加 */}
-                    <View style={{ borderTopWidth: 1, borderColor: COLORS.border, paddingTop: 16, marginTop: 16 }}>
-                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 10 }}>候補時間を追加</Text>
-                      <TouchableOpacity
-                        style={[styles.addSmallBtn, { alignSelf: 'flex-start' }]}
-                        onPress={() => { setAddPickupHour(15); setAddPickupMinute(0); setAddPickupPickerVisible(true); }}
-                      >
-                        <Ionicons name="time-outline" size={16} color={COLORS.white} />
-                        <Text style={styles.addSmallBtnText}>時間を入力</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.editSection}>
-                  <View style={styles.editSectionHeader}>
-                    <Ionicons name="bus-outline" size={20} color={COLORS.info} />
-                    <Text style={styles.editSectionTitle}>習い事</Text>
-                  </View>
-                  
-                  {getCellData(selectedDateStr).lessons && getCellData(selectedDateStr).lessons!.length > 0 ? (
-                      getCellData(selectedDateStr).lessons!.map((lesson, idx) => (
-                          <View key={`edit-les-${idx}`} style={[styles.editCard, {marginBottom: 8}]}>
-                            <View>
-                              <Text style={styles.editLessonName}>{lesson.name}</Text>
-                              <Text style={styles.editTimeText}>送り: {lesson.time}</Text>
-                            </View>
-                            <View style={styles.editActions}>
-                              <TouchableOpacity style={styles.editActionBtn} onPress={() => openTimePicker('lesson', lesson.time, idx)}>
-                                <Text style={styles.btnTextPrimary}>変更</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.editActionBtn} onPress={() => deleteItem('lesson', idx)}>
-                                <Text style={styles.btnTextDanger}>削除</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                      ))
-                  ) : (
-                      <View style={styles.editCard}>
-                        <Text style={styles.noDataText}>習い事はありません</Text>
-                      </View>
-                  )}
-                  
-                  <TouchableOpacity style={[styles.saveBtn, {marginTop: 8, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]} onPress={() => {
-                      setEditModalVisible(false);
-                      setReturnToEdit(true);
-                      setTemplateSelectMode('singleDay');
-                      setTimeout(() => setTemplateModalVisible(true), 300);
+              <View style={styles.dayPlanSection}>
+                <View style={styles.dayPlanHeader}>
+                  <Text style={styles.dayPlanTitle}>この日の予定</Text>
+                  <TouchableOpacity style={styles.dayAddBtn} onPress={() => {
+                    setEditModalVisible(false);
+                    setReturnToEdit(true);
+                    setTemplateSelectMode('singleDay');
+                    setTimeout(() => setTemplateModalVisible(true), 300);
                   }}>
-                      <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
-                      <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>この日に習い事を追加</Text>
+                    <Ionicons name="add" size={15} color="#2F80ED" />
+                    <Text style={styles.dayAddBtnText}>追加</Text>
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.editSection}>
-                  <View style={styles.editSectionHeader}>
-                    <Ionicons name="document-text-outline" size={20} color="#888" />
-                    <Text style={styles.editSectionTitle}>メモ</Text>
+                {eventsData[selectedDateStr] && (
+                  <View style={styles.timelineRow}>
+                    <View style={[styles.timelineDot, { backgroundColor: '#F59E0B' }]} />
+                    <View style={styles.timelineLine} />
+                    <View style={[styles.timelineCard, styles.eventTimelineCard]}>
+                      <View style={styles.timelineBadge}><Text style={styles.timelineBadgeText}>イベント</Text></View>
+                      <Text style={styles.timelineTitle}>{eventsData[selectedDateStr].title}</Text>
+                      {!!eventsData[selectedDateStr].description && <Text style={styles.timelineSubText} numberOfLines={2}>{eventsData[selectedDateStr].description}</Text>}
+                      <TouchableOpacity
+                        style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelBtn : styles.timelineJoinBtn}
+                        onPress={() => toggleEventParticipation(selectedDateStr, participantData[selectedDateStr]?.[children[activeChildIdx]?.id] !== '参加')}
+                      >
+                        <Text style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelText : styles.timelineJoinText}>
+                          {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? '参加を取り消す' : '参加する'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <TextInput
-                    style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 15, minHeight: 80, backgroundColor: COLORS.surface, textAlignVertical: 'top' }}
-                    placeholder="この日のメモを入力..." placeholderTextColor="#BBBBBB"
-                    value={editingMemo}
-                    onChangeText={(t) => { setEditingMemo(t); setMemoSaved(false); }}
-                    multiline
-                  />
+                )}
+
+                {getCellData(selectedDateStr).lessons && getCellData(selectedDateStr).lessons!.length > 0 ? (
+                  getCellData(selectedDateStr).lessons!.map((lesson, idx) => (
+                    <View key={`edit-les-${idx}`} style={styles.timelineRow}>
+                      <View style={[styles.timelineDot, { backgroundColor: '#C084FC' }]} />
+                      <View style={styles.timelineLine} />
+                      <View style={styles.timelineCard}>
+                        <View style={styles.timelineBadgePurple}><Text style={styles.timelineBadgePurpleText}>習い事</Text></View>
+                          <View style={styles.timelineContentRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.timelineTime}>{lesson.time}</Text>
+                            <Text style={styles.timelineTitle}>{lesson.name}</Text>
+                          </View>
+                          <TouchableOpacity style={styles.timelineIconBtn} onPress={() => openTimePicker('lesson', lesson.time, idx)}>
+                            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.timelineIconBtn} onPress={() => deleteItem('lesson', idx)}>
+                            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.emptyTimelineCard}>
+                    <Text style={styles.emptyTimelineText}>習い事はありません</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.memoSheetSection}>
+                <View style={styles.dayPlanHeader}>
+                  <Text style={styles.dayPlanTitle}>メモ</Text>
                   <TouchableOpacity
-                    style={[styles.saveBtn, { marginTop: 8, backgroundColor: memoSaved ? '#4CAF50' : undefined }]}
+                    style={styles.dayAddBtn}
                     onPress={() => {
                       saveToFirestore(selectedDateStr, { memo: editingMemo });
                       setMemoSaved(true);
                     }}
                   >
-                    <Ionicons name={memoSaved ? "checkmark-circle" : "checkmark"} size={18} color={COLORS.white} style={{ marginRight: 6 }} />
-                    <Text style={styles.saveBtnText}>{memoSaved ? '保存済み ✓' : 'メモを保存'}</Text>
+                    <Ionicons name={memoSaved ? "checkmark" : "add"} size={15} color="#2F80ED" />
+                    <Text style={styles.dayAddBtnText}>{memoSaved ? '保存済み' : '保存'}</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={{height: 20}} />
+                <TextInput
+                  style={styles.memoSheetInput}
+                  placeholder="この日のメモを入力..."
+                  placeholderTextColor="#94A3B8"
+                  value={editingMemo}
+                  onChangeText={(t) => { setEditingMemo(t); setMemoSaved(false); }}
+                  multiline
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.sheetSaveButton}
+                onPress={() => {
+                  saveToFirestore(selectedDateStr, { memo: editingMemo });
+                  setMemoSaved(true);
+                  setEditModalVisible(false);
+                }}
+              >
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.sheetSaveButtonText}>保存する</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sheetContinueButton}
+                onPress={() => {
+                  saveToFirestore(selectedDateStr, { memo: editingMemo });
+                  setMemoSaved(true);
+                }}
+              >
+                <Ionicons name="checkmark-done-outline" size={18} color="#2F80ED" />
+                <Text style={styles.sheetContinueButtonText}>保存して続ける</Text>
+              </TouchableOpacity>
+              <View style={{height: 14}} />
             </ScrollView>
           </View>
         </View>
@@ -1510,62 +1519,85 @@ const styles = StyleSheet.create({
   },
   modalOverlay: { 
     flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
+    backgroundColor: 'rgba(25,32,45,0.42)', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    padding: 20 
+    paddingHorizontal: 10,
+    paddingVertical: 18,
   },
   modalHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    marginBottom: 16 
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
   },
   modalTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: COLORS.text 
+    fontSize: 19, 
+    fontWeight: '900', 
+    color: '#1F2937',
+    letterSpacing: 0,
   },
   editModalContent: { 
     width: '100%', 
-    maxHeight: '90%',
-    backgroundColor: COLORS.white, 
-    borderRadius: 16, 
-    padding: 20 
+    maxWidth: 392,
+    maxHeight: '86%',
+    backgroundColor: '#F8FBFF', 
+    borderRadius: 22, 
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    shadowColor: '#1D4ED8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 10,
   },
   editSection: { 
-    marginBottom: 20 
+    marginBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E7EEF8',
   },
   editSectionHeader: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    marginBottom: 8 
+    marginBottom: 10,
   },
   editSectionTitle: { 
     fontSize: 16, 
-    fontWeight: 'bold', 
+    fontWeight: '900', 
     color: COLORS.text, 
     marginLeft: 8 
   },
   editCard: { 
-    backgroundColor: COLORS.surface, 
-    padding: 16, 
-    borderRadius: 12, 
+    backgroundColor: COLORS.white, 
+    padding: 14, 
+    borderRadius: 14, 
     borderWidth: 1, 
-    borderColor: COLORS.border, 
+    borderColor: '#E5EEF9', 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
-    alignItems: 'center' 
+    alignItems: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   editTimeText: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: COLORS.text 
+    fontSize: 19, 
+    fontWeight: '900', 
+    color: '#1F2937',
   },
   editLessonName: { 
-    fontSize: 14, 
-    color: COLORS.textLight, 
-    fontWeight: 'bold', 
+    fontSize: 15, 
+    color: '#1F2937', 
+    fontWeight: '900', 
     marginBottom: 4 
   },
   editActions: { 
@@ -1573,7 +1605,10 @@ const styles = StyleSheet.create({
     gap: 12 
   },
   editActionBtn: { 
-    padding: 8 
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#EEF6FF',
   },
   btnTextPrimary: { 
     color: COLORS.primary, 
@@ -1584,23 +1619,383 @@ const styles = StyleSheet.create({
     fontWeight: 'bold' 
   },
   noDataText: { 
-    color: COLORS.textLight, 
-    fontStyle: 'italic', 
+    color: '#94A3B8', 
+    fontStyle: 'normal', 
+    fontWeight: '700',
     flex: 1 
   },
   addSmallBtn: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: COLORS.primary, 
+    backgroundColor: '#2F80ED', 
     paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 6 
+    paddingVertical: 8, 
+    borderRadius: 12,
+    shadowColor: '#2F80ED',
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
   },
   addSmallBtnText: { 
     color: COLORS.white, 
     fontWeight: 'bold', 
     fontSize: 12, 
     marginLeft: 4 
+  },
+  scheduleSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  scheduleSheetIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  scheduleDateStepper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingRight: 32,
+  },
+  scheduleDateArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#D7E8FF',
+  },
+  scheduleSheetTitle: {
+    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#111827',
+    minWidth: 112,
+  },
+  pickupHeroCard: {
+    backgroundColor: '#FFF7E6',
+    borderRadius: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FFE0A3',
+    marginBottom: 10,
+  },
+  pickupHeroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  pickupHeroLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pickupHeroLabelText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#7C4A03',
+  },
+  scheduleEditPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#FDBA4B',
+  },
+  scheduleEditPillText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#F59E0B',
+  },
+  pickupHeroTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  pickupHeroTime: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  pickupHeroPlace: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    flexShrink: 1,
+  },
+  pickupSavedTimes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  pickupSavedTimeChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    borderWidth: 1,
+    borderColor: '#FFE0A3',
+  },
+  pickupSavedTimeChipActive: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  pickupSavedTimeAddChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FFF9E8',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#F8C66A',
+  },
+  pickupSavedTimeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#9A5B05',
+  },
+  pickupSavedTimeTextActive: {
+    color: '#fff',
+  },
+  dayPlanSection: {
+    marginBottom: 12,
+  },
+  dayPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  dayPlanTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  dayAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  dayAddBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#2F80ED',
+  },
+  timelineRow: {
+    position: 'relative',
+    paddingLeft: 20,
+    marginBottom: 10,
+  },
+  timelineDot: {
+    position: 'absolute',
+    left: 2,
+    top: 14,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 2,
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 6,
+    top: 18,
+    bottom: -14,
+    width: 2,
+    backgroundColor: '#BFDBFE',
+  },
+  timelineCard: {
+    backgroundColor: '#F5F9FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 14,
+    padding: 10,
+  },
+  eventTimelineCard: {
+    backgroundColor: '#FFFBEA',
+    borderColor: '#FDE68A',
+  },
+  timelineBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    marginBottom: 6,
+  },
+  timelineBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  timelineBadgePurple: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3E8FF',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    marginBottom: 7,
+  },
+  timelineBadgePurpleText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#7E22CE',
+  },
+  timelineContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  timelineIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  timelineTime: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 2,
+  },
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  timelineSubText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  timelineIconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  timelineJoinBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#2F80ED',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  timelineJoinText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  timelineCancelBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  timelineCancelText: {
+    color: '#DC2626',
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  emptyTimelineCard: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    backgroundColor: 'rgba(239,246,255,0.7)',
+  },
+  emptyTimelineText: {
+    color: '#64748B',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  memoSheetSection: {
+    marginBottom: 12,
+  },
+  memoSheetInput: {
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    textAlignVertical: 'top',
+    color: '#111827',
+  },
+  sheetSaveButton: {
+    minHeight: 44,
+    borderRadius: 16,
+    backgroundColor: '#2F80ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    shadowColor: '#2F80ED',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  sheetSaveButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  sheetContinueButton: {
+    minHeight: 42,
+    borderRadius: 15,
+    backgroundColor: '#EAF4FF',
+    borderWidth: 1,
+    borderColor: '#B9DCFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  sheetContinueButtonText: {
+    color: '#2F80ED',
+    fontSize: 14,
+    fontWeight: '900',
   },
   templateContent: { 
     width: '100%', 
@@ -1641,83 +2036,92 @@ const styles = StyleSheet.create({
   pickerOverlay: { 
     flex: 1, 
     backgroundColor: 'rgba(0,0,0,0.5)', 
-    justifyContent: 'flex-end' 
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
   },
   pickerContent: { 
     backgroundColor: COLORS.white, 
-    borderTopLeftRadius: 24, 
-    borderTopRightRadius: 24, 
-    padding: 24, 
-    height: 480 
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    width: '100%',
+    maxWidth: 340,
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    elevation: 12,
   },
   pickerTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
+    fontSize: 17, 
+    fontWeight: '900', 
     textAlign: 'center', 
-    marginBottom: 20, 
+    marginBottom: 12, 
     color: COLORS.text 
   },
   pickerColumns: { 
     flexDirection: 'row', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    height: 150
+    height: 132
   },
   pickerScroll: { 
-    width: 80, 
+    width: 88, 
     height: '100%' 
   },
   pickerColon: { 
     fontSize: 24, 
     fontWeight: 'bold', 
     color: COLORS.textLight, 
-    marginHorizontal: 16 
+    marginHorizontal: 8 
   },
   pickerItem: { 
-    paddingVertical: 12, 
+    paddingVertical: 9, 
     alignItems: 'center', 
     borderRadius: 12 
   },
   pickerItemActive: { 
-    backgroundColor: COLORS.primary + '20' 
+    backgroundColor: '#FFF5D6' 
   },
   pickerItemText: { 
-    fontSize: 20, 
+    fontSize: 19, 
     color: COLORS.textLight, 
-    fontWeight: '500' 
+    fontWeight: '700' 
   },
   pickerItemTextActive: { 
-    color: COLORS.primary, 
+    color: '#D6A91E', 
     fontWeight: 'bold', 
-    fontSize: 24 
+    fontSize: 22 
   },
   pickerFooter: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
-    marginTop: 20, 
-    gap: 16 
+    marginTop: 16, 
+    gap: 10 
   },
   pickerCancelBtn: { 
     flex: 1, 
-    paddingVertical: 16, 
+    paddingVertical: 13, 
     backgroundColor: COLORS.surface, 
     borderRadius: 12, 
     alignItems: 'center' 
   },
   pickerCancelText: { 
-    fontSize: 16, 
+    fontSize: 14, 
     fontWeight: 'bold', 
     color: COLORS.textLight 
   },
   pickerConfirmBtn: { 
     flex: 1, 
-    paddingVertical: 16, 
-    backgroundColor: COLORS.primary, 
+    paddingVertical: 13, 
+    backgroundColor: '#D6B336', 
     borderRadius: 12, 
     alignItems: 'center' 
   },
   pickerConfirmText: { 
-    fontSize: 16, 
+    fontSize: 14, 
     fontWeight: 'bold', 
     color: COLORS.white 
   },

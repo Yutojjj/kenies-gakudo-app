@@ -33,7 +33,7 @@ const customConfirm = (title: string, message: string, onConfirm: () => void) =>
 
 // ── 型 ──────────────────────────────────────────────────────────
 type ChildInfo = { id: string; name: string };
-type EventItem = { id: string; dateStr: string; title: string; description: string; hidden?: boolean; coverImage?: string };
+type EventItem = { id: string; dateStr: string; title: string; description: string; deadlineDate?: string; hidden?: boolean; coverImage?: string };
 type VacTab = 'summer' | 'winter' | 'spring';
 type RichSpan = { text: string; bold?: boolean; italic?: boolean; fontSize?: number; color?: string };
 type RichLine = RichSpan[];
@@ -109,7 +109,7 @@ const toRichDoc = (data: any): RichDoc => {
 export default function EventListScreen() {
   const { verified, checking } = useRequireRole(['admin', 'staff', 'user']);
   const router = useRouter();
-  const { name } = useLocalSearchParams<{ name: string }>();
+  const { name, eventId: targetEventId, openDetail: openDetailParam } = useLocalSearchParams<{ name: string; eventId?: string; openDetail?: string }>();
 
   const [tab, setTab] = useState<'register' | 'detail'>('register');
 
@@ -334,6 +334,14 @@ export default function EventListScreen() {
     setSecDesc(false); setSecItems(false); setSecPhotos(false);
     setDetailOpen(true);
   };
+
+  useEffect(() => {
+    if (!targetEventId || openDetailParam !== '1' || loading) return;
+    const target = Object.values(yearEvents).flat().find(ev => ev.id === targetEventId);
+    if (!target || !details[targetEventId]) return;
+    setTab('detail');
+    openDetail(target);
+  }, [targetEventId, openDetailParam, loading, yearEvents, details]);
 
   // ── EventChipコンポーネント ───────────────────────────────
   const EventChip = ({ ev }: { ev: EventItem }) => (

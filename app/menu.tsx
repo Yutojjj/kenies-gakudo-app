@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadString } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -41,6 +41,12 @@ const MENU_ICONS = {
   yearEvents:      require('../assets/menu/year-events.png'),
 };
 
+const TODAY_PLAN_IMAGES = {
+  pickup: require('../assets/menu/today-pickup-illust.png'),
+  lesson: require('../assets/menu/today-lesson-illust.png'),
+  memo: require('../assets/menu/today-message-illust.png'),
+};
+
 const STAFF_COLORS = [
   '#FF8A65','#FFB74D','#FFD54F','#AED581','#4DB6AC',
   '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
@@ -48,6 +54,24 @@ const STAFF_COLORS = [
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
 
 const { width } = Dimensions.get('window');
+const EVENT_PLAN_CARD_HEIGHT = width <= 390 ? 192 : 208;
+const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+
+type TodayPlanSummary = {
+  pickupTimes: string[];
+  lessons: string[];
+  memos: string[];
+};
+
+type MenuEventItem = {
+  id: string;
+  dateStr: string;
+  title: string;
+  description?: string;
+  deadlineDate?: string;
+  hidden?: boolean;
+  coverImage?: string | null;
+};
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -69,6 +93,32 @@ const customConfirm = (title: string, message: string, onConfirm: () => void) =>
 };
 
 const hashPassword = (password: string) => Crypto.SHA256(password).toString();
+
+const makeDateStr = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const formatMenuDateLabel = (date: Date) =>
+  `${date.getMonth() + 1}月${date.getDate()}日(${DAY_NAMES[date.getDay()]})`;
+
+const formatEventDateLabel = (dateStr: string) => {
+  const [year, month, day] = String(dateStr || '').split('-').map(Number);
+  if (!year || !month || !day) return dateStr || '';
+  const date = new Date(year, month - 1, day);
+  return `${month}月${day}日(${DAY_NAMES[date.getDay()]})`;
+};
+
+const formatDeadlineLabel = (dateStr?: string) => dateStr
+  ? `しめきり ${formatEventDateLabel(dateStr)}`
+  : 'しめきりなし';
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const uniqueValues = (values: string[]) =>
+  Array.from(new Set(values.map(v => String(v || '').trim()).filter(Boolean)));
 
 // ── メニューカード ──
 function MenuCard({
@@ -196,6 +246,13 @@ export default function MenuScreen() {
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
+  const [scheduleDate, setScheduleDate] = useState(new Date());
+  const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
+  const [todayPlanLoading, setTodayPlanLoading] = useState(false);
+  const [menuEvents, setMenuEvents] = useState<MenuEventItem[]>([]);
+  const [menuEventDetails, setMenuEventDetails] = useState<Record<string, boolean>>({});
+  const [menuEventParticipations, setMenuEventParticipations] = useState<Record<string, string>>({});
+  const [menuEventIndex, setMenuEventIndex] = useState(0);
 
   // 通知許可バナー
   const [pushState, setPushState] = useState<'granted' | 'denied' | 'default' | 'unsupported' | 'ios-not-standalone' | null>(null);
@@ -290,6 +347,199 @@ export default function MenuScreen() {
       setIsPaidTransportMember(isMember);
     });
   }, [role, name]);
+
+  useEffect(() => {
+    if (role !== 'user' || !name) return;
+    let cancelled = false;
+
+    const loadTodayPlan = async () => {
+      setTodayPlanLoading(true);
+      const dateStr = makeDateStr(scheduleDate);
+      try {
+        const accountSnap = await getDocs(collection(db, 'accounts'));
+        let parentId = '';
+        let accountData: any = null;
+
+        accountSnap.docs.forEach(docSnap => {
+          const d = docSnap.data();
+          if (
+            d.name === name ||
+            d.childName === name ||
+            (Array.isArray(d.siblings) && d.siblings.some((s: any) => s.name === name)) ||
+            (Array.isArray(d.staffChildren) && d.staffChildren.some((c: any) => c.name === name))
+          ) {
+            parentId = docSnap.id;
+            accountData = d;
+          }
+        });
+
+        if (!parentId || !accountData) {
+          if (!cancelled) setTodayPlan({ pickupTimes: [], lessons: [], memos: [] });
+          return;
+        }
+
+        const childIds: string[] = [];
+        const menuChildren: any[] = [];
+        if (accountData.role === 'user') {
+          childIds.push(parentId);
+          menuChildren.push({
+            id: parentId,
+            name: accountData.name,
+            school: accountData.school || '',
+            grade: accountData.grade || '',
+            days: accountData.days || {},
+          });
+          if (Array.isArray(accountData.siblings)) {
+            accountData.siblings.forEach((sib: any, idx: number) => {
+              const sibId = sib.id || `${parentId}_sib_${idx}`;
+              childIds.push(sibId);
+              menuChildren.push({
+                id: sibId,
+                name: sib.name,
+                school: sib.school || '',
+                grade: sib.grade || '',
+                days: sib.days || {},
+              });
+            });
+          }
+        } else if (accountData.role === 'staff' && accountData.hasChild) {
+          if (Array.isArray(accountData.staffChildren) && accountData.staffChildren.length > 0) {
+            accountData.staffChildren.forEach((child: any, idx: number) => {
+              const childId = child.id || `${parentId}_staffchild_${idx}`;
+              childIds.push(childId);
+              menuChildren.push({
+                id: childId,
+                name: child.name,
+                school: child.school || '',
+                grade: child.grade || '',
+                days: child.days || {},
+                isStaffChild: true,
+              });
+            });
+          } else if (accountData.childName) {
+            const childId = `${parentId}_staffchild_0`;
+            childIds.push(childId);
+            menuChildren.push({
+              id: childId,
+              name: accountData.childName,
+              school: accountData.childSchool || '',
+              grade: accountData.childGrade || '',
+              days: {},
+              isStaffChild: true,
+            });
+          }
+        }
+
+        const [scheduleSnap, memoSnap, eventSnap, schoolTimesSnap, holidaysDoc] = await Promise.all([
+          getDocs(query(collection(db, 'schedules2'), where('parentId', '==', parentId), where('dateStr', '==', dateStr))),
+          getDocs(query(collection(db, 'schedule_memos'), where('parentId', '==', parentId), where('dateStr', '==', dateStr))),
+          getDocs(query(collection(db, 'events'), where('dateStr', '==', dateStr))),
+          getDocs(collection(db, 'school_times')),
+          getDoc(doc(db, 'settings', 'holidays_data')),
+        ]);
+
+        const pickupTimes: string[] = [];
+        const lessons: string[] = [];
+        const memos: string[] = [];
+        const schoolTimesData: Record<string, any> = {};
+        schoolTimesSnap.forEach(d => { schoolTimesData[d.id] = d.data(); });
+        const holidayData = holidaysDoc.exists() ? holidaysDoc.data() : null;
+        const holidayPeriods = Array.isArray(holidayData?.periods) ? holidayData.periods : [];
+        const d = new Date(dateStr);
+        const dayName = DAY_NAMES[d.getDay()];
+        const isHolidayPeriod = holidayPeriods.some((h: any) => dateStr >= h.start && dateStr <= h.end);
+
+        if (dayName !== '土' && dayName !== '日' && !isHolidayPeriod) {
+          menuChildren.forEach(child => {
+            if (!child.isStaffChild && child.days && child.days[dayName] === false) return;
+            const autoPickup = schoolTimesData[child.school]?.[child.grade]?.[dayName];
+            if (autoPickup) pickupTimes.push(String(autoPickup));
+          });
+        }
+
+        scheduleSnap.forEach(docSnap => {
+          const item = docSnap.data();
+          if (childIds.length > 0 && item.childId && !childIds.includes(item.childId)) return;
+          if (item.pickupTime) pickupTimes.push(String(item.pickupTime));
+          const itemLessons = Array.isArray(item.lessons) ? item.lessons : item.lesson ? [item.lesson] : [];
+          itemLessons.forEach((lesson: any) => {
+            const lessonName = lesson.name || lesson.lessonName || '';
+            const lessonTime = lesson.time || lesson.lessonTime || '';
+            if (lessonName || lessonTime) lessons.push(`${lessonTime ? `${lessonTime} ` : ''}${lessonName}`.trim());
+          });
+          if (item.memo) memos.push(String(item.memo));
+        });
+
+        memoSnap.forEach(docSnap => {
+          const item = docSnap.data();
+          if (childIds.length > 0 && item.childId && !childIds.includes(item.childId)) return;
+          if (item.memo) memos.push(String(item.memo));
+        });
+
+        eventSnap.forEach(docSnap => {
+          const item = docSnap.data();
+          if (item.title) memos.push(`イベント: ${item.title}`);
+        });
+
+        if (!cancelled) {
+          setTodayPlan({
+            pickupTimes: uniqueValues(pickupTimes),
+            lessons: uniqueValues(lessons),
+            memos: uniqueValues(memos),
+          });
+        }
+      } catch (e) {
+        if (!cancelled) setTodayPlan({ pickupTimes: [], lessons: [], memos: [] });
+      } finally {
+        if (!cancelled) setTodayPlanLoading(false);
+      }
+    };
+
+    loadTodayPlan();
+    return () => { cancelled = true; };
+  }, [role, name, scheduleDate]);
+
+  useEffect(() => {
+    if (role !== 'user') return;
+    const unsub = onSnapshot(collection(db, 'events'), snap => {
+      const items = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as MenuEventItem))
+        .filter(item => !!item.dateStr && !!item.title)
+        .sort((a, b) => {
+          const dateCompare = String(a.dateStr).localeCompare(String(b.dateStr));
+          if (dateCompare !== 0) return dateCompare;
+          return String(a.title || '').localeCompare(String(b.title || ''));
+        });
+      setMenuEvents(items);
+    });
+    return () => unsub();
+  }, [role]);
+
+  useEffect(() => {
+    if (role !== 'user') return;
+    const unsub = onSnapshot(collection(db, 'year_event_details'), snap => {
+      const map: Record<string, boolean> = {};
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.eventId) map[data.eventId] = true;
+      });
+      setMenuEventDetails(map);
+    });
+    return () => unsub();
+  }, [role]);
+
+  useEffect(() => {
+    if (role !== 'user' || !accountId) return;
+    const unsub = onSnapshot(query(collection(db, 'event_participants'), where('childId', '==', accountId)), snap => {
+      const map: Record<string, string> = {};
+      snap.forEach(d => {
+        const data = d.data();
+        if (data.eventId && data.status) map[data.eventId] = data.status;
+      });
+      setMenuEventParticipations(map);
+    });
+    return () => unsub();
+  }, [role, accountId]);
 
   // 今日のメモと管理者お知らせを取得
   useEffect(() => {
@@ -497,6 +747,53 @@ export default function MenuScreen() {
       </SafeAreaView>
     );
   }
+
+  const pickupSummary = todayPlanLoading
+    ? '読み込み中...'
+    : todayPlan.pickupTimes.length > 0
+      ? todayPlan.pickupTimes.join(' / ')
+      : '今日はお迎え予定はありません';
+  const lessonSummary = todayPlanLoading
+    ? '読み込み中...'
+    : todayPlan.lessons.length > 0
+      ? todayPlan.lessons.join(' / ')
+      : '今日は習い事の予定はありません';
+  const memoSummary = todayPlanLoading
+    ? '読み込み中...'
+    : todayPlan.memos.length > 0
+      ? todayPlan.memos.join(' / ')
+      : '新しい連絡はありません';
+  const todayStr = makeDateStr(new Date());
+  const upcomingMenuEvents = menuEvents
+    .filter(event => event.dateStr >= todayStr)
+    .slice(0, 5);
+  const visibleMenuEvents = upcomingMenuEvents.length > 0
+    ? upcomingMenuEvents
+    : [...menuEvents].sort((a, b) => String(b.dateStr).localeCompare(String(a.dateStr))).slice(0, 5);
+
+  const toggleMenuEventParticipation = (event: MenuEventItem) => {
+    if (!accountId) {
+      customAlert('エラー', 'ユーザー情報の取得に失敗しました。もう一度ログインしてください。');
+      return;
+    }
+    const docId = `${event.id}_${accountId}`;
+    const isJoined = menuEventParticipations[event.id] === '参加';
+    if (isJoined) {
+      customConfirm('参加を取り消す', '参加を取り消しますか？', async () => {
+        await deleteDoc(doc(db, 'event_participants', docId));
+      });
+      return;
+    }
+    customConfirm('参加登録', '参加登録しますか？', async () => {
+      await setDoc(doc(db, 'event_participants', docId), {
+        eventId: event.id,
+        childId: accountId,
+        childName: name || '',
+        status: '参加',
+        updatedAt: new Date(),
+      });
+    });
+  };
 
   const GRADE_UP_MAP: Record<string, string> = {
     '小1': '小2', '小2': '小3', '小3': '小4',
@@ -834,6 +1131,219 @@ export default function MenuScreen() {
           </View>
         )}
 
+        {role === 'user' && (
+          <View style={styles.todayPlanSection}>
+            <View style={styles.todayPlanHeader}>
+              <View style={styles.todayPlanHeaderTop}>
+                <View style={styles.todayPlanTitleWrap}>
+                  <View style={styles.todayPlanTitleBar} />
+                  <Text style={styles.todayPlanTitle}>本日の予定</Text>
+                </View>
+                <View style={styles.todayPlanDateWrap}>
+                  <TouchableOpacity
+                    style={styles.todayPlanDateButton}
+                    onPress={() => setScheduleDate(prev => addDays(prev, -1))}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="chevron-back" size={18} color="#6D5A4D" />
+                  </TouchableOpacity>
+                  <Text style={styles.todayPlanDateText}>{formatMenuDateLabel(scheduleDate)}</Text>
+                  <TouchableOpacity
+                    style={styles.todayPlanDateButton}
+                    onPress={() => setScheduleDate(prev => addDays(prev, 1))}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="chevron-forward" size={18} color="#6D5A4D" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={styles.todayPlanScheduleHeaderButton}
+                  onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+                  activeOpacity={0.82}
+                >
+                  <Text style={styles.todayPlanScheduleHeaderText}>スケジュール表を表示</Text>
+                  <Ionicons name="chevron-forward" size={15} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanPickupCard]}
+              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+              activeOpacity={0.84}
+            >
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoStar]}>✦</Text>
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoFlower]}>✿</Text>
+              <Image source={TODAY_PLAN_IMAGES.pickup} style={styles.todayPlanIllust} resizeMode="contain" />
+              <View style={styles.todayPlanTextBox}>
+                <Text style={styles.todayPlanCardTitle}>おむかえ</Text>
+                <View style={styles.todayPlanDivider} />
+                <Text style={styles.todayPlanCardText} numberOfLines={2}>{pickupSummary}</Text>
+              </View>
+              <View style={styles.todayPlanChevron}>
+                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanLessonCard]}
+              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+              activeOpacity={0.84}
+            >
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoNote]}>♪</Text>
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoSmallStar]}>✧</Text>
+              <Image source={TODAY_PLAN_IMAGES.lesson} style={styles.todayPlanIllust} resizeMode="contain" />
+              <View style={styles.todayPlanTextBox}>
+                <Text style={styles.todayPlanCardTitle}>習い事</Text>
+                <View style={[styles.todayPlanDivider, styles.todayPlanLessonDivider]} />
+                <Text style={styles.todayPlanCardText} numberOfLines={2}>{lessonSummary}</Text>
+              </View>
+              <View style={styles.todayPlanChevron}>
+                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanMemoCard]}
+              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+              activeOpacity={0.84}
+            >
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoLeaf]}>⌒</Text>
+              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoDot]}>•</Text>
+              <Image source={TODAY_PLAN_IMAGES.memo} style={styles.todayPlanIllust} resizeMode="contain" />
+              <View style={styles.todayPlanTextBox}>
+                <Text style={styles.todayPlanCardTitle}>連絡</Text>
+                <View style={[styles.todayPlanDivider, styles.todayPlanMemoDivider]} />
+                <Text style={styles.todayPlanCardText} numberOfLines={2}>{memoSummary}</Text>
+              </View>
+              <View style={styles.todayPlanChevron}>
+                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {role === 'user' && (
+          <View style={styles.eventPlanSection}>
+            <View style={styles.eventPlanHeader}>
+              <View style={styles.eventPlanTitleWrap}>
+                <View style={styles.eventPlanTitleBar} />
+                <Text style={styles.eventPlanTitle}>イベント予定</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.eventPlanJoinButton}
+                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.eventPlanJoinText}>イベントカレンダーを表示</Text>
+                <Ionicons name="chevron-forward" size={15} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {visibleMenuEvents.length > 0 ? (
+              <>
+                <ScrollView
+                horizontal
+                pagingEnabled
+                snapToInterval={width - 24}
+                decelerationRate="fast"
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.eventPlanScrollInner}
+                onMomentumScrollEnd={(e: any) => {
+                  const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                  setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
+                }}
+              >
+                {visibleMenuEvents.map((event, index) => (
+                  <View
+                    key={event.id}
+                    style={styles.eventPlanCard}
+                  >
+                    {event.coverImage ? (
+                      <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.eventPlanPlaceholderFull}>
+                        <Ionicons name="balloon-outline" size={58} color="#F59E0B" />
+                        <Text style={styles.eventPlanPlaceholderIcon}>✦</Text>
+                      </View>
+                    )}
+                    <View style={styles.eventPlanOverlay} />
+                    <View style={styles.eventPlanContent}>
+                      <View style={styles.eventPlanDateBadge}>
+                        <Text style={styles.eventPlanDateText}>{formatEventDateLabel(event.dateStr)}</Text>
+                      </View>
+                      <View style={styles.eventPlanTextArea}>
+                        <View style={styles.eventPlanDeadlineBadge}>
+                          <Ionicons name="time-outline" size={13} color="#7A4A00" />
+                          <Text style={styles.eventPlanDeadlineText}>{formatDeadlineLabel(event.deadlineDate)}</Text>
+                        </View>
+                        <Text style={styles.eventPlanCardTitle} numberOfLines={2}>{event.title}</Text>
+                        {!!event.description && (
+                          <Text style={styles.eventPlanCardDesc} numberOfLines={2}>{event.description}</Text>
+                        )}
+                      </View>
+                      <View style={styles.eventPlanActionRow}>
+                        {menuEventDetails[event.id] && (
+                          <TouchableOpacity
+                            style={styles.eventPlanDetailButton}
+                            onPress={() => router.push({ pathname: '/event-list', params: { name: name || '', eventId: event.id, openDetail: '1' } } as any)}
+                            activeOpacity={0.82}
+                          >
+                            <Ionicons name="document-text-outline" size={15} color="#275E63" />
+                            <Text style={styles.eventPlanActionText}>詳細を見る</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[styles.eventPlanRegisterButton, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredButton]}
+                          onPress={() => toggleMenuEventParticipation(event)}
+                          activeOpacity={0.82}
+                        >
+                          <Ionicons
+                            name={menuEventParticipations[event.id] === '参加' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                            size={15}
+                            color={menuEventParticipations[event.id] === '参加' ? '#246B43' : '#8B3F64'}
+                          />
+                          <Text style={[styles.eventPlanRegisterText, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredText]}>
+                            {menuEventParticipations[event.id] === '参加' ? '登録済み' : '参加登録'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+                </ScrollView>
+                <View style={styles.eventPlanPager}>
+                {visibleMenuEvents.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[styles.eventPlanPagerDot, menuEventIndex === index && styles.eventPlanPagerDotActive]}
+                  >
+                    <Text style={[styles.eventPlanPagerText, menuEventIndex === index && styles.eventPlanPagerTextActive]}>
+                      {index + 1}
+                    </Text>
+                  </View>
+                ))}
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.eventPlanEmptyCard}
+                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                activeOpacity={0.84}
+              >
+                <Ionicons name="calendar-clear-outline" size={24} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventPlanEmptyTitle}>登録されているイベントはありません</Text>
+                  <Text style={styles.eventPlanEmptyText}>イベントが登録されるとここに表示されます</Text>
+                </View>
+                <View style={styles.eventPlanEmptyChevron}>
+                  <Ionicons name="chevron-forward" size={18} color="#A66A18" />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* ── セクションラベル ── */}
         <View style={styles.sectionLabelWrap}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -865,28 +1375,16 @@ export default function MenuScreen() {
         <View style={styles.grid}>
           {role === 'user' ? (
             <>
-
-              <Animated.View style={[{ opacity: cardAnims[0], transform: [{ scale: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[0].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
-                <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/schedule', params: { name: name || '' } } as any)} activeOpacity={0.85}>
-                  <Image source={MENU_ICONS.schedule} style={styles.cardWideImage} resizeMode="contain" />
-                </TouchableOpacity>
-              </Animated.View>
-              <Animated.View style={[{ opacity: cardAnims[1], transform: [{ scale: cardAnims[1].interpolate({ inputRange: [0,1], outputRange: [0.7,1] }) }, { translateY: cardAnims[1].interpolate({ inputRange: [0,1], outputRange: [40,0] }) }] }]}>
-                <TouchableOpacity style={styles.cardWide} onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)} activeOpacity={0.85}>
-                  <Image source={MENU_ICONS.eventList} style={styles.cardWideImage} resizeMode="contain" />
-                </TouchableOpacity>
-              </Animated.View>
-
               <View style={styles.gridRow}>
                 <MenuCard
                   image={MENU_ICONS.album} title="アルバム" subtitle="" bgColor="#C49FD8"
                   onPress={() => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any)}
-                  animValue={cardAnims[2]}
+                  animValue={cardAnims[0]}
                 />
                 <MenuCard
                   image={MENU_ICONS.messages} title="メッセージ" subtitle="" bgColor="#C9AADF"
                   onPress={() => router.push('/messages' as any)}
-                  animValue={cardAnims[3]}
+                  animValue={cardAnims[1]}
                   badge={unreadCount}
                 />
               </View>
@@ -1691,6 +2189,529 @@ const styles = StyleSheet.create({
   pickupStaffBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, backgroundColor: '#E0E0E0' },
   pickupStaffBadgeMe: { backgroundColor: '#5B9BD5' },
   pickupStaffText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
+
+  // ── 本日の予定 ──
+  todayPlanSection: {
+    marginHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  todayPlanHeader: {
+    marginBottom: 10,
+  },
+  todayPlanHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  todayPlanTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  todayPlanTitleBar: {
+    width: 4,
+    height: 28,
+    borderRadius: 2,
+    backgroundColor: '#00C0C7',
+    marginRight: 10,
+  },
+  todayPlanTitle: {
+    fontSize: width <= 390 ? 19 : 21,
+    fontWeight: '900',
+    color: '#333333',
+    fontStyle: 'italic',
+  },
+  todayPlanScheduleHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#00BFC7',
+    borderRadius: 18,
+    paddingHorizontal: width <= 390 ? 8 : 10,
+    paddingVertical: 8,
+    shadowColor: '#00BFC7',
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  todayPlanScheduleHeaderText: {
+    color: '#FFFFFF',
+    fontSize: width <= 390 ? 10 : 11,
+    fontWeight: '900',
+  },
+  todayPlanDateWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    flexShrink: 0,
+  },
+  todayPlanDateButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: '#B9ECF5',
+    shadowColor: '#5B9BD5',
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  todayPlanDateText: {
+    minWidth: width <= 390 ? 76 : 86,
+    textAlign: 'center',
+    fontSize: width <= 390 ? 12 : 13,
+    fontWeight: '800',
+    color: '#5F4B42',
+  },
+  todayPlanCard: {
+    minHeight: 104,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.4,
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  todayPlanPickupCard: {
+    backgroundColor: '#FFF8E9',
+    borderColor: '#FFBE68',
+  },
+  todayPlanLessonCard: {
+    backgroundColor: '#F1FAFF',
+    borderColor: '#84D0FF',
+  },
+  todayPlanMemoCard: {
+    backgroundColor: '#F4FBF0',
+    borderColor: '#9ED99B',
+  },
+  todayPlanIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    marginRight: 8,
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  todayPlanPickupIconBox: {
+    backgroundColor: '#FFF0D5',
+    borderColor: '#FFB25C',
+  },
+  todayPlanLessonIconBox: {
+    backgroundColor: '#E4F5FF',
+    borderColor: '#75C7FF',
+  },
+  todayPlanMemoIconBox: {
+    backgroundColor: '#E9F8E5',
+    borderColor: '#8ED68B',
+  },
+  todayPlanIllust: {
+    width: 78,
+    height: 78,
+    marginRight: 10,
+  },
+  todayPlanTextBox: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+  },
+  todayPlanCardTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#3F302B',
+    marginBottom: 7,
+    textAlign: 'center',
+  },
+  todayPlanDivider: {
+    width: 142,
+    maxWidth: '86%',
+    borderTopWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#F2B66C',
+    marginBottom: 8,
+  },
+  todayPlanLessonDivider: {
+    borderColor: '#8FCDF8',
+  },
+  todayPlanMemoDivider: {
+    borderColor: '#9FD69C',
+  },
+  todayPlanCardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#6F5A50',
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  todayPlanChevron: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    marginLeft: 8,
+  },
+  todayPlanDeco: {
+    position: 'absolute',
+    zIndex: 0,
+    fontWeight: '900',
+  },
+  todayPlanDecoStar: {
+    right: 82,
+    top: 14,
+    color: '#F6CA51',
+    fontSize: 18,
+    opacity: 0.72,
+    transform: [{ rotate: '12deg' }],
+  },
+  todayPlanDecoFlower: {
+    right: 34,
+    bottom: 13,
+    color: '#F2A65E',
+    fontSize: 19,
+    opacity: 0.48,
+    transform: [{ rotate: '-16deg' }],
+  },
+  todayPlanDecoNote: {
+    right: 82,
+    top: 12,
+    color: '#74BDF2',
+    fontSize: 21,
+    opacity: 0.62,
+    transform: [{ rotate: '9deg' }],
+  },
+  todayPlanDecoSmallStar: {
+    right: 36,
+    bottom: 12,
+    color: '#A3CEF1',
+    fontSize: 18,
+    opacity: 0.58,
+    transform: [{ rotate: '-10deg' }],
+  },
+  todayPlanDecoLeaf: {
+    right: 78,
+    top: 14,
+    color: '#8DCB71',
+    fontSize: 24,
+    opacity: 0.5,
+    transform: [{ rotate: '-28deg' }],
+  },
+  todayPlanDecoDot: {
+    right: 44,
+    bottom: 13,
+    color: '#F4D35E',
+    fontSize: 24,
+    opacity: 0.56,
+  },
+
+  // ── イベント予定 ──
+  eventPlanSection: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  eventPlanHeader: {
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  eventPlanTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  eventPlanTitleBar: {
+    width: 4,
+    height: 28,
+    borderRadius: 2,
+    backgroundColor: '#FFB03A',
+    marginRight: 10,
+  },
+  eventPlanTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#333333',
+    fontStyle: 'italic',
+  },
+  eventPlanJoinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFA83D',
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    shadowColor: '#FFA83D',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  eventPlanJoinText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  eventPlanScrollInner: {
+    paddingLeft: 12,
+    paddingRight: 12,
+  },
+  eventPlanCard: {
+    width: width - 24,
+    height: EVENT_PLAN_CARD_HEIGHT,
+    borderRadius: 20,
+    backgroundColor: '#FFF7DF',
+    borderWidth: 1.4,
+    borderColor: '#FFD178',
+    overflow: 'hidden',
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  eventPlanCardDecoCircle: {
+    position: 'absolute',
+    right: -26,
+    top: -26,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: 'rgba(255, 211, 120, 0.22)',
+    zIndex: 3,
+  },
+  eventPlanCardDecoStar: {
+    position: 'absolute',
+    right: 18,
+    top: 14,
+    color: '#F6C44D',
+    fontSize: 18,
+    opacity: 0.75,
+    zIndex: 4,
+  },
+  eventPlanDateBadge: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    alignSelf: 'flex-start',
+  },
+  eventPlanDateText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#8A5A1C',
+  },
+  eventPlanImageFull: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  eventPlanPlaceholderFull: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFE7B5',
+  },
+  eventPlanPlaceholderIcon: {
+    position: 'absolute',
+    right: 40,
+    top: 34,
+    color: '#F6C44D',
+    fontSize: 26,
+    opacity: 0.55,
+  },
+  eventPlanOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(40, 25, 12, 0.34)',
+    zIndex: 1,
+  },
+  eventPlanContent: {
+    flex: 1,
+    zIndex: 2,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  eventPlanTextArea: {
+    marginTop: 'auto',
+    marginBottom: 10,
+  },
+  eventPlanDeadlineBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 232, 178, 0.94)',
+    borderRadius: 13,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginBottom: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.62)',
+  },
+  eventPlanDeadlineText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#7A4A00',
+  },
+  eventPlanCardTitle: {
+    fontSize: width <= 390 ? 19 : 21,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.36)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  eventPlanCardDesc: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.92)',
+    lineHeight: 18,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  eventPlanActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  eventPlanDetailButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 19,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#A8DADC',
+    borderWidth: 1,
+    borderColor: '#D9F3F4',
+  },
+  eventPlanRegisterButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 19,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#FFD6E8',
+    borderWidth: 1,
+    borderColor: '#FFF0F6',
+  },
+  eventPlanRegisteredButton: {
+    backgroundColor: '#8BD3A7',
+    borderColor: '#DDF6E6',
+  },
+  eventPlanActionText: {
+    color: '#275E63',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  eventPlanRegisterText: {
+    color: '#8B3F64',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  eventPlanRegisteredText: {
+    color: '#246B43',
+  },
+  eventPlanPager: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  eventPlanPagerDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1D3',
+    borderWidth: 1,
+    borderColor: '#FFD178',
+  },
+  eventPlanPagerDotActive: {
+    backgroundColor: '#FFA83D',
+    borderColor: '#FFA83D',
+  },
+  eventPlanPagerText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#A66A18',
+  },
+  eventPlanPagerTextActive: {
+    color: '#FFFFFF',
+  },
+  eventPlanEmptyCard: {
+    marginHorizontal: 12,
+    minHeight: 78,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFF7DF',
+    borderWidth: 1.4,
+    borderColor: '#FFD178',
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 7,
+    elevation: 2,
+  },
+  eventPlanEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#3F302B',
+    marginBottom: 3,
+  },
+  eventPlanEmptyText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7A6254',
+  },
+  eventPlanEmptyChevron: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+  },
 
   // ── セクションラベル ──
   sectionLabelWrap: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
