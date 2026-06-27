@@ -46,6 +46,18 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 const PICKER_ITEM_HEIGHT = 41;
 const PICKER_VIEW_HEIGHT = 132;
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+const SCHEDULE_NOTIFY_DELAY_MS = 5 * 60 * 1000;
+
+type ScheduleNotifyBatch = {
+  timer: ReturnType<typeof setTimeout>;
+  accountId: string;
+  dateStr: string;
+  childName: string;
+  actorName: string;
+  descriptions: string[];
+};
+
+const scheduleNotifyBatches: Record<string, ScheduleNotifyBatch> = {};
 
 const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
 
@@ -123,6 +135,57 @@ export default function ScheduleScreen() {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  };
+
+  const queueGuardianScheduleNotification = ({
+    accountId,
+    dateStr,
+    childName,
+    description,
+    actorName,
+  }: {
+    accountId: string;
+    dateStr: string;
+    childName: string;
+    description: string;
+    actorName: string;
+  }) => {
+    if (!accountId || !description) return;
+    const key = `${accountId}_${dateStr}_${childName}`;
+    if (scheduleNotifyBatches[key]) {
+      scheduleNotifyBatches[key].descriptions.push(description);
+      return;
+    }
+
+    const batch: ScheduleNotifyBatch = {
+      accountId,
+      dateStr,
+      childName,
+      actorName,
+      descriptions: [description],
+      timer: setTimeout(() => {
+        const currentBatch = scheduleNotifyBatches[key];
+        if (!currentBatch) return;
+        delete scheduleNotifyBatches[key];
+
+        const d = new Date(`${currentBatch.dateStr}T00:00:00`);
+        const label = isNaN(d.getTime())
+          ? currentBatch.dateStr
+          : `${d.getMonth() + 1}月${d.getDate()}日`;
+        const count = currentBatch.descriptions.length;
+        const body = count >= 2
+          ? `${label}の予定に${count}件の変更がありました。`
+          : `${label} ${currentBatch.childName}: ${currentBatch.descriptions[0]}`;
+
+        sendPushNotification({
+          accountIds: [currentBatch.accountId],
+          title: 'スケジュールが変更されました',
+          body,
+          url: '/schedule',
+        }).catch(() => {});
+      }, SCHEDULE_NOTIFY_DELAY_MS),
+    };
+    scheduleNotifyBatches[key] = batch;
   };
 
   useEffect(() => {
@@ -428,9 +491,19 @@ export default function ScheduleScreen() {
       }
       await setDoc(doc(db, 'schedules2', docId), saveData, { merge: true });
 
+      const desc = buildChangeDesc(data, current);
+      if (desc && loggedInUser && (loggedInUser.role === 'staff' || loggedInUser.role === 'admin')) {
+        queueGuardianScheduleNotification({
+          accountId: parentDocId,
+          dateStr,
+          childName: child.name,
+          description: desc,
+          actorName: loggedInUser.name,
+        });
+      }
+
       // 管理者以外の操作のみログ記録
       if (loggedInUser && loggedInUser.role !== 'admin') {
-        const desc = buildChangeDesc(data, current);
         if (desc) {
           await addDoc(collection(db, 'scheduleChanges'), {
             date: dateStr,
@@ -904,9 +977,6 @@ export default function ScheduleScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.editModalContent}>
             <View style={styles.scheduleSheetHeader}>
-              <TouchableOpacity style={styles.scheduleSheetIconBtn} onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#475569" />
-              </TouchableOpacity>
               <View style={styles.scheduleDateStepper}>
                 <TouchableOpacity
                   style={styles.scheduleDateArrow}
@@ -933,6 +1003,9 @@ export default function ScheduleScreen() {
                   <Ionicons name="chevron-forward" size={19} color="#64748B" />
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity style={styles.scheduleSheetIconBtn} onPress={() => setEditModalVisible(false)}>
+                <Ionicons name="close" size={28} color="#475569" />
+              </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1781,12 +1854,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   scheduleSheetIconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   scheduleDateStepper: {
     flex: 1,
@@ -1794,7 +1869,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingRight: 32,
+    paddingLeft: 42,
   },
   scheduleDateArrow: {
     width: 32,

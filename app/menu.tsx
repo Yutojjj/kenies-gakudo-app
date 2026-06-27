@@ -214,6 +214,13 @@ export default function MenuScreen() {
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
   const [newNotice, setNewNotice] = useState('');
+  const [appDialog, setAppDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    confirm?: boolean;
+    onConfirm?: () => void;
+  }>({ visible: false, title: '' });
   // ⑩ 週間メモ用
   const [weekMemoVisible, setWeekMemoVisible] = useState(false);
   const [weekMemoDay, setWeekMemoDay] = useState<string | null>(null);
@@ -229,6 +236,14 @@ export default function MenuScreen() {
   const [gradeUpPreview, setGradeUpPreview] = useState<{id:string; name:string; oldGrade:string; newGrade:string; role:string}[]>([]);
   const [gradeUpLoading, setGradeUpLoading] = useState(false);
   const [gradeUpDirection, setGradeUpDirection] = useState<'up'|'down'>('up');
+
+  const showAppAlert = (title: string, message?: string) => {
+    setAppDialog({ visible: true, title, message, confirm: false });
+  };
+
+  const showAppConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setAppDialog({ visible: true, title, message, confirm: true, onConfirm });
+  };
 
   const userDocIdRef = useRef<string>('');
   const [fetchingDocId, setFetchingDocId] = useState(false);
@@ -688,7 +703,7 @@ export default function MenuScreen() {
   };
 
   const handleLogout = async () => {
-    customConfirm('ログアウト', 'ログアウトしますか？', async () => {
+    showAppConfirm('ログアウト', 'ログアウトしますか？', async () => {
       await AsyncStorage.removeItem('loggedInUser');
       router.replace('/');
     });
@@ -697,10 +712,10 @@ export default function MenuScreen() {
   const saveShiftPeriod = async () => {
     try {
       await setDoc(doc(db, 'settings', 'shift_period'), { start: startDay, end: endDay });
-      customAlert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
+      showAppAlert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
       setPeriodModal(false);
     } catch (e) {
-      customAlert('エラー', '保存に失敗しました');
+      showAppAlert('エラー', '保存に失敗しました');
     }
   };
 
@@ -719,7 +734,7 @@ export default function MenuScreen() {
 
   const savePassword = async () => {
     if (!newPassword) return;
-    if (!userDocIdRef.current) { customAlert('エラー', 'ユーザー情報の取得に失敗しました。'); return; }
+    if (!userDocIdRef.current) { showAppAlert('エラー', 'ユーザー情報の取得に失敗しました。'); return; }
     try {
       const hashedPassword = hashPassword(newPassword);
       await setDoc(
@@ -727,10 +742,10 @@ export default function MenuScreen() {
         { generatedPw: hashedPassword, password: hashedPassword },
         { merge: true }
       );
-      customAlert('変更完了', 'パスワードを変更しました。次回から新しいパスワードでログインしてください。');
+      showAppAlert('変更完了', 'パスワードを変更しました。次回から新しいパスワードでログインしてください。');
       setPasswordModal(false);
       setNewPassword('');
-    } catch (e) { customAlert('エラー', 'パスワード変更に失敗しました。'); }
+    } catch (e) { showAppAlert('エラー', 'パスワード変更に失敗しました。'); }
   };
 
   const floatStyle = {
@@ -774,18 +789,18 @@ export default function MenuScreen() {
 
   const toggleMenuEventParticipation = (event: MenuEventItem) => {
     if (!accountId) {
-      customAlert('エラー', 'ユーザー情報の取得に失敗しました。もう一度ログインしてください。');
+      showAppAlert('エラー', 'ユーザー情報の取得に失敗しました。もう一度ログインしてください。');
       return;
     }
     const docId = `${event.id}_${accountId}`;
     const isJoined = menuEventParticipations[event.id] === '参加';
     if (isJoined) {
-      customConfirm('参加を取り消す', '参加を取り消しますか？', async () => {
+      showAppConfirm('参加を取り消す', '参加を取り消しますか？', async () => {
         await deleteDoc(doc(db, 'event_participants', docId));
       });
       return;
     }
-    customConfirm('参加登録', '参加登録しますか？', async () => {
+    showAppConfirm('参加登録', '参加登録しますか？', async () => {
       await setDoc(doc(db, 'event_participants', docId), {
         eventId: event.id,
         childId: accountId,
@@ -1029,11 +1044,11 @@ export default function MenuScreen() {
                     if (supported) {
                       await Linking.openURL(url);
                     } else {
-                      customAlert('エラー', 'URLを開けませんでした');
+                      showAppAlert('エラー', 'URLを開けませんでした');
                     }
                   }
                 } catch (e) {
-                  customAlert('エラー', '公式サイトを開けませんでした');
+                  showAppAlert('エラー', '公式サイトを開けませんでした');
                 }
               }}
             >
@@ -2263,6 +2278,36 @@ export default function MenuScreen() {
           </View>
         </View>
       </Modal>
+      <Modal visible={appDialog.visible} transparent animationType="fade">
+        <View style={styles.appDialogOverlay}>
+          <View style={styles.appDialogBox}>
+            <Text style={styles.appDialogTitle}>{appDialog.title}</Text>
+            {!!appDialog.message && <Text style={styles.appDialogMessage}>{appDialog.message}</Text>}
+            <View style={styles.appDialogActions}>
+              {appDialog.confirm && (
+                <TouchableOpacity
+                  style={[styles.appDialogButton, styles.appDialogCancelButton]}
+                  onPress={() => setAppDialog({ visible: false, title: '' })}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appDialogCancelText}>キャンセル</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.appDialogButton, styles.appDialogOkButton]}
+                onPress={() => {
+                  const action = appDialog.onConfirm;
+                  setAppDialog({ visible: false, title: '' });
+                  if (action) action();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.appDialogOkText}>{appDialog.confirm ? 'OK' : '閉じる'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3038,6 +3083,16 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#FFF8F0', padding: 24, borderRadius: 24 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#5D4037' },
   modalBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 14 },
+  appDialogOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', justifyContent: 'center', alignItems: 'center', padding: 22 },
+  appDialogBox: { width: '100%', maxWidth: 340, backgroundColor: '#FFFDF8', borderRadius: 22, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderWidth: 1, borderColor: '#F0DFC2', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 10 },
+  appDialogTitle: { fontSize: 18, fontWeight: '900', color: '#3F302B', marginBottom: 10, textAlign: 'center' },
+  appDialogMessage: { fontSize: 14, fontWeight: '700', color: '#6F5A50', lineHeight: 21, textAlign: 'center', marginBottom: 18 },
+  appDialogActions: { flexDirection: 'row', gap: 10 },
+  appDialogButton: { flex: 1, minHeight: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  appDialogCancelButton: { backgroundColor: '#F4F0EA' },
+  appDialogOkButton: { backgroundColor: '#00BFC7' },
+  appDialogCancelText: { fontSize: 14, fontWeight: '900', color: '#7A6254' },
+  appDialogOkText: { fontSize: 14, fontWeight: '900', color: '#fff' },
   numInput: {
     borderWidth: 1, borderColor: '#E8DDD0', padding: 12,
     borderRadius: 10, width: 60, textAlign: 'center', fontSize: 18,
