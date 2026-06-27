@@ -1197,15 +1197,15 @@ export default function MenuScreen() {
                     <Ionicons name="chevron-forward" size={18} color="#6D5A4D" />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.todayPlanScheduleHeaderButton}
-                  onPress={() => router.push({ pathname: '/schedule', params: { name } } as any)}
-                  activeOpacity={0.82}
-                >
-                  <Text style={styles.todayPlanScheduleHeaderText}>スケジュール表を表示</Text>
-                  <Ionicons name="chevron-forward" size={15} color="#fff" />
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={styles.todayPlanScheduleHeaderButton}
+                onPress={() => router.push({ pathname: '/schedule', params: { name } } as any)}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.todayPlanScheduleHeaderText}>スケジュール表を表示</Text>
+                <Ionicons name="chevron-forward" size={15} color="#fff" />
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
@@ -1264,7 +1264,7 @@ export default function MenuScreen() {
           </View>
         )}
 
-        {role === 'user' && (
+        {false && role === 'user' && (
           <View style={styles.eventPlanSection}>
             <View style={styles.eventPlanHeader}>
               <View style={styles.eventPlanTitleWrap}>
@@ -1309,8 +1309,7 @@ export default function MenuScreen() {
                       <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
                     ) : (
                       <View style={styles.eventPlanPlaceholderFull}>
-                        <Ionicons name="balloon-outline" size={58} color="#F59E0B" />
-                        <Text style={styles.eventPlanPlaceholderIcon}>✦</Text>
+                        <Ionicons name="calendar-outline" size={44} color="#F7C46C" />
                       </View>
                     )}
                     <View style={styles.eventPlanOverlay} />
@@ -1507,6 +1506,128 @@ export default function MenuScreen() {
             </>
           )}
         </View>
+
+        {role === 'user' && (
+          <View style={styles.eventPlanSection}>
+            <View style={styles.eventPlanHeader}>
+              <View style={styles.eventPlanTitleWrap}>
+                <View style={styles.eventPlanTitleBar} />
+                <Text style={styles.eventPlanTitle}>イベント予定</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.eventPlanJoinButton}
+                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.eventPlanJoinText}>イベントカレンダーを表示</Text>
+                <Ionicons name="chevron-forward" size={15} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {visibleMenuEvents.length > 0 ? (
+              <>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  snapToInterval={width - 24}
+                  decelerationRate="fast"
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.eventPlanScrollInner}
+                  scrollEventThrottle={16}
+                  onScroll={(e: any) => {
+                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                    setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
+                  }}
+                  onMomentumScrollEnd={(e: any) => {
+                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                    setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
+                  }}
+                >
+                  {visibleMenuEvents.map((event) => (
+                    <View key={event.id} style={styles.eventPlanCard}>
+                      {event.coverImage ? (
+                        <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
+                      ) : (
+                        <View style={styles.eventPlanPlaceholderFull}>
+                          <Ionicons name="calendar-outline" size={44} color="#F7C46C" />
+                        </View>
+                      )}
+                      <View style={styles.eventPlanOverlay} />
+                      <View style={styles.eventPlanContent}>
+                        <View style={styles.eventPlanDateBadge}>
+                          <Text style={styles.eventPlanDateText}>{formatEventDateLabel(event.dateStr)}</Text>
+                        </View>
+                        <View style={styles.eventPlanTextArea}>
+                          <View style={styles.eventPlanDeadlineBadge}>
+                            <Ionicons name="time-outline" size={13} color="#7A4A00" />
+                            <Text style={styles.eventPlanDeadlineText}>{formatDeadlineLabel(event.deadlineDate)}</Text>
+                          </View>
+                          <Text style={styles.eventPlanCardTitle} numberOfLines={2}>{event.title}</Text>
+                          {!!event.description && (
+                            <Text style={styles.eventPlanCardDesc} numberOfLines={2}>{event.description}</Text>
+                          )}
+                        </View>
+                        <View style={styles.eventPlanActionRow}>
+                          {menuEventDetails[event.id] && (
+                            <TouchableOpacity
+                              style={styles.eventPlanDetailButton}
+                              onPress={() => router.push({ pathname: '/event-list', params: { name: name || '', eventId: event.id, openDetail: '1' } } as any)}
+                              activeOpacity={0.82}
+                            >
+                              <Ionicons name="document-text-outline" size={15} color="#275E63" />
+                              <Text style={styles.eventPlanActionText}>詳細を見る</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={[styles.eventPlanRegisterButton, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredButton]}
+                            onPress={() => toggleMenuEventParticipation(event)}
+                            activeOpacity={0.82}
+                          >
+                            <Ionicons
+                              name={menuEventParticipations[event.id] === '参加' ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                              size={15}
+                              color={menuEventParticipations[event.id] === '参加' ? '#246B43' : '#8B3F64'}
+                            />
+                            <Text style={[styles.eventPlanRegisterText, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredText]}>
+                              {menuEventParticipations[event.id] === '参加' ? '登録済み' : '参加登録'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+                <View style={styles.eventPlanPager}>
+                  {visibleMenuEvents.map((_, index) => (
+                    <View
+                      key={index}
+                      style={[styles.eventPlanPagerDot, menuEventIndex === index && styles.eventPlanPagerDotActive]}
+                    >
+                      <Text style={[styles.eventPlanPagerText, menuEventIndex === index && styles.eventPlanPagerTextActive]}>
+                        {index + 1}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={styles.eventPlanEmptyCard}
+                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                activeOpacity={0.84}
+              >
+                <Ionicons name="calendar-clear-outline" size={24} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventPlanEmptyTitle}>登録されているイベントはありません</Text>
+                  <Text style={styles.eventPlanEmptyText}>イベントが登録されるとここに表示されます</Text>
+                </View>
+                <View style={styles.eventPlanEmptyChevron}>
+                  <Ionicons name="chevron-forward" size={18} color="#A66A18" />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
 
       </ScrollView>
@@ -2318,6 +2439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginBottom: 8,
   },
   todayPlanTitleWrap: {
     flexDirection: 'row',
@@ -2338,8 +2460,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   todayPlanScheduleHeaderButton: {
-    position: 'absolute',
-    right: 0,
+    alignSelf: 'flex-end',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
