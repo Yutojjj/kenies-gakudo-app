@@ -65,6 +65,17 @@ interface PastPhoto {
   fiscalYear?: number; // アップロード時の年度（前年度として保存）
 }
 
+interface EventTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  deadlineDate?: string;
+  detailDescription?: RichDoc;
+  detailItems?: RichDoc;
+  coverImage?: string | null;
+  photos?: { uri: string; fiscalYear?: number }[];
+}
+
 // ─── 学期定義 ──────────────────────────────────────────────────
 const TERM1_MONTHS = [4, 5, 6, 7];
 const TERM2_MONTHS = [9, 10, 11, 12];
@@ -551,6 +562,8 @@ export default function YearEventsScreen() {
   const [mgmtMemberSearch, setMgmtMemberSearch] = useState('');
   const [mgmtFilterSchool, setMgmtFilterSchool] = useState('');
   const [mgmtFilterGrade, setMgmtFilterGrade] = useState('');
+  const [eventTemplates, setEventTemplates] = useState<EventTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   // Firestore data
   const [events, setEvents] = useState<Record<string, any[]>>({});   // key: "YYYY-MM"→配列 (events collection)
@@ -713,8 +726,26 @@ export default function YearEventsScreen() {
       });
       setMgmtParticipants(map);
     });
+    const unsubMgmt3 = onSnapshot(collection(db, 'event_templates'), snap => {
+      const list: EventTemplate[] = [];
+      snap.forEach(d => {
+        const data = d.data();
+        list.push({
+          id: d.id,
+          title: data.title || '',
+          description: data.description || '',
+          deadlineDate: data.deadlineDate || '',
+          detailDescription: data.detailDescription ? firestoreToRichDoc(data.detailDescription) : EMPTY_RICH,
+          detailItems: data.detailItems ? firestoreToRichDoc(data.detailItems) : EMPTY_RICH,
+          coverImage: data.coverImage || null,
+          photos: data.photos || [],
+        });
+      });
+      list.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+      setEventTemplates(list);
+    });
 
-    return () => { unsub(); unsub2(); unsub3(); unsub4(); unsubHolidays(); unsubMgmt1(); unsubMgmt2(); };
+    return () => { unsub(); unsub2(); unsub3(); unsub4(); unsubHolidays(); unsubMgmt1(); unsubMgmt2(); unsubMgmt3(); };
   }, []);
 
   // ─── ヘルパー ──────────────────────────────────────────────
@@ -858,6 +889,7 @@ export default function YearEventsScreen() {
     setMgmtTitle(ev?.title || '');
     setMgmtDesc(ev?.description || '');
     setMgmtDeadlineDate(ev?.deadlineDate || '');
+    setSelectedTemplateId('');
     setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
     setMgmtParticipantTab('list');
     setMgmtAddSubTab('user');
@@ -868,6 +900,7 @@ export default function YearEventsScreen() {
     if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
     const docId = ev?.id || `${mgmtSelectedDate}_${Date.now()}`;
+    const template = selectedTemplateId ? eventTemplates.find(t => t.id === selectedTemplateId) : undefined;
     await setDoc(doc(db, 'events', docId), {
       id: docId,
       dateStr: mgmtSelectedDate,
@@ -875,8 +908,54 @@ export default function YearEventsScreen() {
       description: mgmtDesc,
       deadlineDate: mgmtDeadlineDate.trim() || '',
       externalParticipants: ev?.externalParticipants || [],
+      coverImage: ev?.coverImage || template?.coverImage || null,
+      coverStoragePath: ev?.coverStoragePath || null,
     }, { merge: true });
+    if (template) {
+      await setDoc(doc(db, 'year_event_details', docId), {
+        eventId: docId,
+        description: richDocToFirestore(template.detailDescription || EMPTY_RICH),
+        items: richDocToFirestore(template.detailItems || EMPTY_RICH),
+      }, { merge: true });
+      const existingPhotos = pastPhotos[docId] || [];
+      if (existingPhotos.length === 0 && template.photos?.length) {
+        for (const photo of template.photos) {
+          await addDoc(collection(db, 'event_past_photos'), {
+            eventId: docId,
+            uri: photo.uri,
+            storagePath: '',
+            fiscalYear: photo.fiscalYear,
+            createdAt: new Date(),
+          });
+        }
+      }
+    }
     setMgmtModalVisible(false);
+  };
+  const applyEventTemplate = (template: EventTemplate) => {
+    setSelectedTemplateId(template.id);
+    setMgmtTitle(template.title || '');
+    setMgmtDesc(template.description || '');
+    setMgmtDeadlineDate(template.deadlineDate || '');
+  };
+  const saveCurrentAsEventTemplate = async () => {
+    if (!mgmtTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
+    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) as any;
+    const det = ev ? details[ev.id] : undefined;
+    const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({ uri: p.uri, fiscalYear: p.fiscalYear })) : [];
+    const docId = `tpl_${Date.now()}`;
+    await setDoc(doc(db, 'event_templates', docId), {
+      id: docId,
+      title: mgmtTitle.trim(),
+      description: mgmtDesc.trim(),
+      deadlineDate: mgmtDeadlineDate.trim(),
+      detailDescription: richDocToFirestore(det?.description || EMPTY_RICH),
+      detailItems: richDocToFirestore(det?.items || EMPTY_RICH),
+      coverImage: ev?.coverImage || null,
+      photos: photosForTemplate,
+      updatedAt: new Date(),
+    }, { merge: true });
+    customAlert('保存完了', '固定イベントとして保存しました。次回から選んで使えます。');
   };
   const mgmtDeleteEvent = async () => {
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
@@ -1115,6 +1194,7 @@ export default function YearEventsScreen() {
         )}
         <View style={styles.eventChipGradient}>
           <Text style={styles.eventChipTitle} numberOfLines={2}>{ev.title}</Text>
+          <Text style={styles.eventChipDate}>{formatDateWithDay(ev.dateStr)}</Text>
           {ev.hidden && <Text style={styles.hiddenBadge}>非表示</Text>}
         </View>
       </View>
@@ -1561,6 +1641,23 @@ export default function YearEventsScreen() {
                   return (
                     <ScrollView style={{ flex: 1, padding: 16 }}>
                       {/* イベント編集フォーム */}
+                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>固定イベントから選ぶ</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+                        {eventTemplates.length === 0 ? (
+                          <View style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16, backgroundColor: '#F7F7F7', borderWidth: 1, borderColor: '#EEE' }}>
+                            <Text style={{ fontSize: 12, color: '#999', fontWeight: 'bold' }}>まだ固定イベントはありません</Text>
+                          </View>
+                        ) : eventTemplates.map(tpl => (
+                          <TouchableOpacity
+                            key={tpl.id}
+                            style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16, backgroundColor: selectedTemplateId === tpl.id ? '#FFD98A' : '#FFF8E1', borderWidth: 1, borderColor: '#FFD98A' }}
+                            onPress={() => applyEventTemplate(tpl)}
+                            activeOpacity={0.82}
+                          >
+                            <Text style={{ fontSize: 12, color: '#8A5A00', fontWeight: '900' }}>{tpl.title}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>イベント名</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
                         value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
@@ -1570,6 +1667,13 @@ export default function YearEventsScreen() {
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>説明</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 70 }}
                         value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
+                      <TouchableOpacity
+                        style={{ padding: 11, backgroundColor: '#EAF7FF', borderRadius: 10, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#BFE7FF' }}
+                        onPress={saveCurrentAsEventTemplate}
+                        activeOpacity={0.82}
+                      >
+                        <Text style={{ color: '#2878A8', fontWeight: 'bold', fontSize: 13 }}>この内容・詳細・写真を固定イベントとして保存</Text>
+                      </TouchableOpacity>
                       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
                         {ev && (
                           <TouchableOpacity style={{ flex: 1, padding: 11, backgroundColor: '#FFEBEE', borderRadius: 10, alignItems: 'center' }} onPress={mgmtDeleteEvent}>

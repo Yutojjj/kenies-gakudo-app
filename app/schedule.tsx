@@ -43,6 +43,8 @@ type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+const PICKER_ITEM_HEIGHT = 41;
+const PICKER_VIEW_HEIGHT = 132;
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
@@ -77,6 +79,8 @@ export default function ScheduleScreen() {
   const [scheduleLessons, setScheduleLessons] = useState<any[]>([]);
   const [isStampingMode, setIsStampingMode] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<LessonTemplate | null>(null);
+  const [isPickupStampingMode, setIsPickupStampingMode] = useState(false);
+  const [activePickupTime, setActivePickupTime] = useState('');
 
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [newPickupTimeInput, setNewPickupTimeInput] = useState('');
@@ -561,7 +565,9 @@ export default function ScheduleScreen() {
   };
 
   const handleDayPress = (dateStr: string) => {
-    if (isStampingMode && activeTemplate) {
+    if (isPickupStampingMode && activePickupTime) {
+      saveToFirestore(dateStr, { pickupTime: activePickupTime });
+    } else if (isStampingMode && activeTemplate) {
       const key = getScheduleKey(dateStr);
       const currentLessons = scheduleDataRef.current[key]?.lessons || [];
       const existingIdx = currentLessons.findIndex(l => l.id === activeTemplate.id);
@@ -602,8 +608,8 @@ export default function ScheduleScreen() {
     } else {
       setTempHour(15); setTempMinute(0);
     }
-    // 少し遅延してからピッカーを開く（前のモーダルが閉じるのを待つ）
-    setTimeout(() => setTimePickerVisible(true), 300);
+    // 中央の時刻パネルを軽く表示する
+    setTimeout(() => setTimePickerVisible(true), 120);
   };
 
   const confirmTime = () => {
@@ -707,6 +713,8 @@ export default function ScheduleScreen() {
         setTempHour(h); setTempMinute(m);
         setTimeout(() => setLessonAddVisible(true), 300);
     } else if (templateSelectMode === 'stamping') {
+      setIsPickupStampingMode(false);
+      setActivePickupTime('');
       setActiveTemplate(template);
       setIsStampingMode(true);
       setTemplateModalVisible(false);
@@ -834,10 +842,14 @@ export default function ScheduleScreen() {
         </View>
       )}
 
-      {isStampingMode && activeTemplate && (
+      {((isStampingMode && activeTemplate) || (isPickupStampingMode && activePickupTime)) && (
         <View style={styles.stampingBanner}>
-          <Text style={styles.stampingText}>選択中: {activeTemplate.name} ({activeTemplate.time})</Text>
-          <TouchableOpacity style={styles.stampingEndBtn} onPress={() => setIsStampingMode(false)}>
+          <Text style={styles.stampingText}>
+            {isPickupStampingMode && activePickupTime
+              ? `選択中: お迎え ${activePickupTime}`
+              : `選択中: ${activeTemplate?.name} (${activeTemplate?.time})`}
+          </Text>
+          <TouchableOpacity style={styles.stampingEndBtn} onPress={() => { setIsStampingMode(false); setIsPickupStampingMode(false); setActivePickupTime(''); }}>
             <Text style={styles.stampingEndText}>終了</Text>
           </TouchableOpacity>
         </View>
@@ -856,11 +868,37 @@ export default function ScheduleScreen() {
         {renderCalendar()}
       </ScrollView>
 
-      {!isStampingMode && (
-        <TouchableOpacity style={styles.fabLesson} onPress={() => { setTemplateSelectMode('stamping'); setTemplateModalVisible(true); }}>
-          <Image source={LESSON_ACTION_IMG} style={styles.fabLessonImg} resizeMode="cover" />
+      <View style={styles.bulkInputBar}>
+        <TouchableOpacity
+          style={[styles.bulkInputButton, styles.bulkPickupButton, isPickupStampingMode && styles.bulkInputButtonActive]}
+          onPress={() => {
+            setAddPickupPickerVisible(true);
+          }}
+          activeOpacity={0.84}
+        >
+          <Ionicons name="car-outline" size={18} color="#A05B00" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bulkInputTitle}>お迎え</Text>
+            <Text style={styles.bulkInputSubText}>{isPickupStampingMode && activePickupTime ? `${activePickupTime} を入力中` : '時刻を保存して入力'}</Text>
+          </View>
         </TouchableOpacity>
-      )}
+        <TouchableOpacity
+          style={[styles.bulkInputButton, styles.bulkLessonButton, isStampingMode && styles.bulkInputButtonActive]}
+          onPress={() => {
+            setIsPickupStampingMode(false);
+            setActivePickupTime('');
+            setTemplateSelectMode('stamping');
+            setTemplateModalVisible(true);
+          }}
+          activeOpacity={0.84}
+        >
+          <Ionicons name="musical-notes-outline" size={18} color="#2C70B8" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bulkInputTitle}>習い事</Text>
+            <Text style={styles.bulkInputSubText}>{isStampingMode && activeTemplate ? `${activeTemplate.name} を入力中` : '名前と時間を保存して入力'}</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
 
       <Modal visible={editModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -968,16 +1006,20 @@ export default function ScheduleScreen() {
                     <View style={styles.timelineLine} />
                     <View style={[styles.timelineCard, styles.eventTimelineCard]}>
                       <View style={styles.timelineBadge}><Text style={styles.timelineBadgeText}>イベント</Text></View>
-                      <Text style={styles.timelineTitle}>{eventsData[selectedDateStr].title}</Text>
-                      {!!eventsData[selectedDateStr].description && <Text style={styles.timelineSubText} numberOfLines={2}>{eventsData[selectedDateStr].description}</Text>}
-                      <TouchableOpacity
-                        style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelBtn : styles.timelineJoinBtn}
-                        onPress={() => toggleEventParticipation(selectedDateStr, participantData[selectedDateStr]?.[children[activeChildIdx]?.id] !== '参加')}
-                      >
-                        <Text style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelText : styles.timelineJoinText}>
-                          {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? '参加を取り消す' : '参加する'}
-                        </Text>
-                      </TouchableOpacity>
+                      <View style={styles.eventTimelineTitleRow}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.timelineTitle} numberOfLines={1}>{eventsData[selectedDateStr].title}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelBtn : styles.timelineJoinBtn}
+                          onPress={() => toggleEventParticipation(selectedDateStr, participantData[selectedDateStr]?.[children[activeChildIdx]?.id] !== '参加')}
+                        >
+                          <Text style={participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? styles.timelineCancelText : styles.timelineJoinText}>
+                            {participantData[selectedDateStr]?.[children[activeChildIdx]?.id] === '参加' ? '取消' : '参加する'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      {!!eventsData[selectedDateStr].description && <Text style={styles.timelineSubText} numberOfLines={1}>{eventsData[selectedDateStr].description}</Text>}
                     </View>
                   </View>
                 )}
@@ -1035,17 +1077,6 @@ export default function ScheduleScreen() {
                 />
               </View>
               <TouchableOpacity
-                style={styles.sheetSaveButton}
-                onPress={() => {
-                  saveToFirestore(selectedDateStr, { memo: editingMemo });
-                  setMemoSaved(true);
-                  setEditModalVisible(false);
-                }}
-              >
-                <Ionicons name="checkmark" size={18} color="#fff" />
-                <Text style={styles.sheetSaveButtonText}>保存する</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={styles.sheetContinueButton}
                 onPress={() => {
                   saveToFirestore(selectedDateStr, { memo: editingMemo });
@@ -1054,6 +1085,17 @@ export default function ScheduleScreen() {
               >
                 <Ionicons name="checkmark-done-outline" size={18} color="#2F80ED" />
                 <Text style={styles.sheetContinueButtonText}>保存して続ける</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sheetSaveButton}
+                onPress={() => {
+                  saveToFirestore(selectedDateStr, { memo: editingMemo });
+                  setMemoSaved(true);
+                  setEditModalVisible(false);
+                }}
+              >
+                <Ionicons name="checkmark" size={18} color="#fff" />
+                <Text style={styles.sheetSaveButtonText}>保存して閉じる</Text>
               </TouchableOpacity>
               <View style={{height: 14}} />
             </ScrollView>
@@ -1119,12 +1161,17 @@ export default function ScheduleScreen() {
       </Modal>
 
       {/* 候補時間追加ピッカー */}
-      <Modal visible={addPickupPickerVisible} transparent animationType="slide">
+      <Modal visible={addPickupPickerVisible} transparent animationType="fade">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
             <View style={styles.pickerColumns}>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.pickerScrollInner}
+                contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(addPickupHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+              >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => setAddPickupHour(h)}>
                     <Text style={[styles.pickerItemText, addPickupHour === h && styles.pickerItemTextActive]}>{h}</Text>
@@ -1132,7 +1179,12 @@ export default function ScheduleScreen() {
                 ))}
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.pickerScrollInner}
+                contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(addPickupMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+              >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => setAddPickupMinute(m)}>
                     <Text style={[styles.pickerItemText, addPickupMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
@@ -1151,23 +1203,32 @@ export default function ScheduleScreen() {
                   const t = `${String(addPickupHour).padStart(2, '0')}:${String(addPickupMinute).padStart(2, '0')}`;
                   setPickupTimeSaving(true);
                   await savePickupTimeToAccount(t);
+                  setActivePickupTime(t);
+                  setIsPickupStampingMode(true);
+                  setIsStampingMode(false);
+                  setActiveTemplate(null);
                   setPickupTimeSaving(false);
                   setAddPickupPickerVisible(false);
                 }}
               >
-                <Text style={styles.pickerConfirmText}>{pickupTimeSaving ? '追加中...' : '候補に追加'}</Text>
+                <Text style={styles.pickerConfirmText}>{pickupTimeSaving ? '保存中...' : '保存して入力開始'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={timePickerVisible} transparent animationType="slide">
+      <Modal visible={timePickerVisible} transparent animationType="fade">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns}>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.pickerScrollInner}
+                contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(tempHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+              >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
                     <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
@@ -1175,7 +1236,12 @@ export default function ScheduleScreen() {
                 ))}
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
-              <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.pickerScroll}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.pickerScrollInner}
+                contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(tempMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+              >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
                     <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
@@ -1250,7 +1316,7 @@ export default function ScheduleScreen() {
         </View>
       </Modal>
       
-      <Modal visible={lessonAddVisible} transparent animationType="slide">
+      <Modal visible={lessonAddVisible} transparent animationType="fade">
           <View style={styles.pickerOverlay}>
               <View style={styles.pickerContent}>
                   <Text style={styles.pickerTitle}>{editingTemplateId ? '習い事を編集' : '習い事を追加'}</Text>
@@ -1265,7 +1331,12 @@ export default function ScheduleScreen() {
 
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>送迎時間</Text>
                   <View style={styles.pickerColumns}>
-                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                      style={styles.pickerScroll}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.pickerScrollInner}
+                      contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(tempHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                    >
                       {HOURS.map(h => (
                         <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
                           <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
@@ -1273,7 +1344,12 @@ export default function ScheduleScreen() {
                       ))}
                     </ScrollView>
                     <Text style={styles.pickerColon}>:</Text>
-                    <ScrollView style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                      style={styles.pickerScroll}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.pickerScrollInner}
+                      contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(tempMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                    >
                       {MINUTES.map(m => (
                         <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
                           <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
@@ -1407,7 +1483,7 @@ const styles = StyleSheet.create({
   },
   calendarContainer: { 
     paddingHorizontal: 8, 
-    paddingBottom: 40 
+    paddingBottom: 112 
   },
   calHeaderRow: {
     flexDirection: 'row',
@@ -1496,6 +1572,61 @@ const styles = StyleSheet.create({
   },
   fabLesson: { position: 'absolute', bottom: 24, right: 20, width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabLessonImg: { width: '100%', height: '100%' },
+  bulkInputBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 8,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 252, 246, 0.96)',
+    borderWidth: 1,
+    borderColor: '#F3DFC0',
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  bulkInputButton: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 17,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+  },
+  bulkPickupButton: {
+    backgroundColor: '#FFF5DE',
+    borderColor: '#F8C66A',
+  },
+  bulkLessonButton: {
+    backgroundColor: '#EDF8FF',
+    borderColor: '#9BD7FF',
+  },
+  bulkInputButtonActive: {
+    borderWidth: 2,
+    shadowColor: '#F4B942',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  bulkInputTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#3F302B',
+  },
+  bulkInputSubText: {
+    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#75665F',
+  },
   fab: { 
     position: 'absolute', 
     right: 20, 
@@ -1894,6 +2025,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#111827',
   },
+  eventTimelineTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   timelineSubText: {
     fontSize: 12,
     color: '#64748B',
@@ -1909,11 +2045,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.8)',
   },
   timelineJoinBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     backgroundColor: '#2F80ED',
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 7,
   },
   timelineJoinText: {
@@ -1922,11 +2057,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   timelineCancelBtn: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     backgroundColor: '#FEE2E2',
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 7,
   },
   timelineCancelText: {
@@ -1974,6 +2108,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 8,
     elevation: 4,
+    marginTop: 8,
   },
   sheetSaveButtonText: {
     color: '#fff',
@@ -1990,7 +2125,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
-    marginTop: 8,
   },
   sheetContinueButtonText: {
     color: '#2F80ED',
@@ -2065,11 +2199,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    height: 132
+    height: PICKER_VIEW_HEIGHT
   },
   pickerScroll: { 
     width: 88, 
     height: '100%' 
+  },
+  pickerScrollInner: {
+    paddingVertical: (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2,
   },
   pickerColon: { 
     fontSize: 24, 
@@ -2078,8 +2215,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 8 
   },
   pickerItem: { 
-    paddingVertical: 9, 
+    height: PICKER_ITEM_HEIGHT,
     alignItems: 'center', 
+    justifyContent: 'center',
     borderRadius: 12 
   },
   pickerItemActive: { 

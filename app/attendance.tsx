@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -64,6 +64,7 @@ const sortKidsByGrade = (kidsArray: any[]) => {
 
 export default function AttendanceScreen() {
   const router = useRouter();
+  const { dateStr: initialTransportDate } = useLocalSearchParams<{ dateStr?: string }>();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
   const [userListSearch, setUserListSearch] = useState('');
@@ -73,6 +74,7 @@ export default function AttendanceScreen() {
   const [transportWeekOffset, setTransportWeekOffset] = useState(0);
   const [selectedTransportDate, setSelectedTransportDate] = useState<string | null>(null);
   const [transportModalVisible, setTransportModalVisible] = useState(false);
+  const initialTransportOpenedRef = useRef(false);
   const [showKidNames, setShowKidNames] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -87,6 +89,22 @@ export default function AttendanceScreen() {
 
   const [schoolModalData, setSchoolModalData] = useState<{ date: string, title: string, kids: Kid[] } | null>(null);
   const [timeModalData, setTimeModalData] = useState<{ date: string, title: string, subtitle: string, kids: Kid[] } | null>(null);
+
+  useEffect(() => {
+    if (!initialTransportDate || initialTransportOpenedRef.current) return;
+    const target = String(initialTransportDate);
+    const parsed = new Date(`${target}T00:00:00`);
+    if (isNaN(parsed.getTime())) return;
+    initialTransportOpenedRef.current = true;
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const targetOnly = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    const diffDays = Math.floor((targetOnly.getTime() - todayOnly.getTime()) / (24 * 60 * 60 * 1000));
+    setTransportWeekOffset(Math.floor(diffDays / 7));
+    setCurrentView('transport');
+    setSelectedTransportDate(target);
+    setTimeout(() => setTransportModalVisible(true), 250);
+  }, [initialTransportDate]);
 
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
   const [scheduleMemoData, setScheduleMemoData] = useState<Record<string, string>>({});

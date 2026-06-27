@@ -355,6 +355,7 @@ export default function EventListScreen() {
         }
         <View style={styles.eventChipOverlay}>
           <Text style={styles.eventChipTitle} numberOfLines={2}>{ev.title}</Text>
+          <Text style={styles.eventChipDate}>{formatDateWithDay(ev.dateStr)}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -948,6 +949,7 @@ const styles = StyleSheet.create({
   eventCoverImg: { width: '100%', height: 72, borderRadius: 8 },
   eventChipOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.38)', borderBottomLeftRadius: 8, borderBottomRightRadius: 8, padding: 4 },
   eventChipTitle: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
+  eventChipDate: { fontSize: 9, color: 'rgba(255,255,255,0.86)', fontWeight: '700', marginTop: 1 },
 
   // 長期休み
   vacTabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE' },

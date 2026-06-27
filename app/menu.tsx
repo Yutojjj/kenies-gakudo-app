@@ -205,6 +205,7 @@ export default function MenuScreen() {
   const [name, setName] = useState(nameParam || '');
   const [authChecked, setAuthChecked] = useState(false);
   const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
+  const [staffPlanDate, setStaffPlanDate] = useState(new Date());
   const [paidTransportCount, setPaidTransportCount] = useState(0);
   const [isPaidTransportMember, setIsPaidTransportMember] = useState(false);
   const [signModalVisible, setSignModalVisible] = useState(false);
@@ -541,10 +542,10 @@ export default function MenuScreen() {
     return () => unsub();
   }, [role, accountId]);
 
-  // 今日のメモと管理者お知らせを取得
+  // 選択日のメモと管理者お知らせを取得
   useEffect(() => {
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    if (role !== 'staff' && role !== 'admin') return;
+    const dateStr = makeDateStr(staffPlanDate);
 
     // schedulesとschedule_memos両方からメモを取得
     const fromSchedules = getDocs(collection(db, 'schedules2')).then(snap => {
@@ -578,7 +579,7 @@ export default function MenuScreen() {
     );
 
     return () => { unsubNotices(); };
-  }, []);
+  }, [role, staffPlanDate]);
 
   // ⑩ 今日〜6日後の週間メモをロード
   useEffect(() => {
@@ -640,14 +641,14 @@ export default function MenuScreen() {
   }, []);
 
   useEffect(() => {
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    if (role !== 'staff' && role !== 'admin') return;
+    const dateStr = makeDateStr(staffPlanDate);
     const unsub2 = onSnapshot(doc(db, 'pickup_assignments', dateStr), snap => {
       if (snap.exists()) setTodayPickup(snap.data() as Record<string, string>);
       else setTodayPickup({});
     });
     return () => unsub2();
-  }, []);
+  }, [role, staffPlanDate]);
 
   useEffect(() => {
     // フワフワアニメーション
@@ -969,12 +970,24 @@ export default function MenuScreen() {
           </View>
         )}
 
+        {(role === 'user' || role === 'staff' || role === 'admin') && (
+          <TouchableOpacity onPress={openSettings} style={styles.compactMenuBtn}>
+            <Text style={{ fontSize: 20 }}>☰</Text>
+            {surveyCount > 0 && (
+              <View style={styles.menuBtnBadge}>
+                <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>{surveyCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* ── ヘッダー ── */}
-        <Animated.View style={{
-          opacity: headerAnim,
-          transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
-        }}>
-          <View style={styles.headerBg}>
+        {false && (
+          <Animated.View style={{
+            opacity: headerAnim,
+            transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+          }}>
+            <View style={styles.headerBg}>
             {/* ☰ ボタン：最前面に固定 */}
             <TouchableOpacity onPress={openSettings} style={styles.menuBtn}>
               <Text style={{ fontSize: 20 }}>☰</Text>
@@ -1034,21 +1047,43 @@ export default function MenuScreen() {
               <Image source={ANIMALS.bear} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
             </View>
           </View>
-        </Animated.View>
+          </Animated.View>
+        )}
 
-        {/* ── 今日の送迎先（スタッフ用） ── */}
-        {(role === 'staff' || role === 'admin') && Object.keys(todayPickup).length > 0 && (
-          <View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#FF8F00' }]}>
-            <View style={styles.pickupSectionHeader}>
-              <View>
-                <Text style={[styles.pickupSectionTitle, { fontSize: 16 }]}>今日の送迎担当</Text>
-                <Text style={{ fontSize: 11, color: '#BCAAA4', marginTop: 1 }}>{new Date().getMonth()+1}月{new Date().getDate()}日</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
+        {(role === 'staff' || role === 'admin') && (
+          <View style={styles.staffTodaySection}>
+            <View style={styles.staffMenuTitleWrap}>
+              <View style={styles.todayPlanTitleBar} />
+              <Text style={styles.staffMenuTitle}>本日の予定</Text>
+            </View>
+            <View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#FF8F00', marginTop: 8, marginHorizontal: 0 }]}>
+              <View style={styles.pickupSectionHeader}>
+                <View>
+                  <Text style={[styles.pickupSectionTitle, { fontSize: 16 }]}>送迎担当</Text>
+                <View style={styles.staffDateWrap}>
+                  <TouchableOpacity
+                    style={styles.staffDateButton}
+                    onPress={() => setStaffPlanDate(prev => addDays(prev, -1))}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="chevron-back" size={16} color="#6D5A4D" />
+                  </TouchableOpacity>
+                  <Text style={styles.staffDateText}>{formatMenuDateLabel(staffPlanDate)}</Text>
+                  <TouchableOpacity
+                    style={styles.staffDateButton}
+                    onPress={() => setStaffPlanDate(prev => addDays(prev, 1))}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="chevron-forward" size={16} color="#6D5A4D" />
+                  </TouchableOpacity>
+                </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 {/* 編集ボタン */}
                 <TouchableOpacity
                   style={{ backgroundColor: '#FF8F00', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                  onPress={() => router.push('/attendance')}
+                  onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
                 >
                   <Ionicons name="pencil-outline" size={13} color="#fff" />
                   <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>編集</Text>
@@ -1056,9 +1091,9 @@ export default function MenuScreen() {
                 <TouchableOpacity style={[styles.pickupToggleBtn, { paddingHorizontal: 14, paddingVertical: 8 }]} onPress={() => setShowAllPickup(v => !v)}>
                   <Text style={styles.pickupToggleBtnText}>{showAllPickup ? '自分のみ' : '全員表示'}</Text>
                 </TouchableOpacity>
+                </View>
               </View>
-            </View>
-            {(() => {
+              {(() => {
               let parsedEntries: any[] = [];
               try {
                 if (todayPickup.entries) {
@@ -1069,6 +1104,9 @@ export default function MenuScreen() {
               // 管理者は「稲熊」名義のエントリを表示、スタッフは自分のみ
               const myDisplayName = role === 'admin' ? '稲熊' : name;
               const filteredEntries = showAllPickup ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === myDisplayName);
+              if (parsedEntries.length === 0) {
+                return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>送迎の予定はありません</Text></View>;
+              }
               if (filteredEntries.length === 0) {
                 return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>担当の送迎はありません</Text></View>;
               }
@@ -1099,7 +1137,8 @@ export default function MenuScreen() {
                   </View>
                 );
               });
-            })()}
+              })()}
+            </View>
           </View>
         )}
 
@@ -1107,7 +1146,7 @@ export default function MenuScreen() {
         {(role === 'staff' || role === 'admin') && (todayMemos.length > 0 || adminNotices.length > 0) && (
           <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#5B9BD5', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>今日の連絡</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>連絡</Text>
               <TouchableOpacity style={{ backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }} onPress={() => setWeekMemoVisible(true)}>
                 <Text style={{ color: '#1565C0', fontSize: 11, fontWeight: 'bold' }}>今週を見る</Text>
               </TouchableOpacity>
@@ -1133,12 +1172,14 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.todayPlanSection}>
-            <View style={styles.todayPlanHeader}>
-              <View style={styles.todayPlanHeaderTop}>
+              <View style={styles.todayPlanHeader}>
+              <View style={styles.todayPlanTitleRow}>
                 <View style={styles.todayPlanTitleWrap}>
                   <View style={styles.todayPlanTitleBar} />
                   <Text style={styles.todayPlanTitle}>本日の予定</Text>
                 </View>
+              </View>
+              <View style={styles.todayPlanHeaderTop}>
                 <View style={styles.todayPlanDateWrap}>
                   <TouchableOpacity
                     style={styles.todayPlanDateButton}
@@ -1158,7 +1199,7 @@ export default function MenuScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.todayPlanScheduleHeaderButton}
-                  onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+                  onPress={() => router.push({ pathname: '/schedule', params: { name } } as any)}
                   activeOpacity={0.82}
                 >
                   <Text style={styles.todayPlanScheduleHeaderText}>スケジュール表を表示</Text>
@@ -1249,6 +1290,11 @@ export default function MenuScreen() {
                 decelerationRate="fast"
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.eventPlanScrollInner}
+                scrollEventThrottle={16}
+                onScroll={(e: any) => {
+                  const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                  setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
+                }}
                 onMomentumScrollEnd={(e: any) => {
                   const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
                   setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
@@ -1348,7 +1394,7 @@ export default function MenuScreen() {
         <View style={styles.sectionLabelWrap}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
-            <Text style={styles.sectionLabel}>MENU</Text>
+        <Text style={styles.sectionLabel}>メニュー</Text>
             {/* 有料送迎費承諾のお願いバッジ（userかつ対象者のみ） */}
             {role === 'user' && isPaidTransportMember && (
               <TouchableOpacity
@@ -1922,7 +1968,7 @@ export default function MenuScreen() {
                   ))}
                 </>
               )}
-              {role !== 'admin' && (
+              {role === 'staff' && (
                 <>
                   <View style={styles.drawerItem}>
                     <TouchableOpacity onPress={() => { closeSettings(); router.push('/typing-cert' as any); }} style={{ alignItems: 'center', width: '100%' }}>
@@ -1936,6 +1982,10 @@ export default function MenuScreen() {
                     </TouchableOpacity>
                     <View style={styles.drawerDivider} />
                   </View>
+                </>
+              )}
+              {role !== 'admin' && (
+                <>
                   <View style={styles.drawerItem}>
                     <TouchableOpacity onPress={openPasswordModal} style={{ alignItems: 'center', width: '100%' }}>
                       <Text style={styles.drawerItemText}>パスワード変更</Text>
@@ -2127,6 +2177,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.7)',
     justifyContent: 'center', alignItems: 'center',
   },
+  compactMenuBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    zIndex: 50,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1,
+    borderColor: '#E8D8BF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 4,
+  },
   menuBtnBadge: {
     position: 'absolute', top: -4, right: -4,
     backgroundColor: '#E53935', borderRadius: 8,
@@ -2149,9 +2218,49 @@ const styles = StyleSheet.create({
   },
 
   // ── 今日の送迎先 ──
+  staffTodaySection: {
+    marginHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  staffMenuTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  staffMenuTitle: {
+    fontSize: 21,
+    fontWeight: '900',
+    color: '#333333',
+    fontStyle: 'italic',
+    letterSpacing: 6,
+  },
   pickupSection: { marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
   pickupSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   pickupSectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#5D4037' },
+  staffDateWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 5,
+  },
+  staffDateButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7E6',
+    borderWidth: 1,
+    borderColor: '#FFD69A',
+  },
+  staffDateText: {
+    minWidth: 86,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#6D5A4D',
+  },
   pickupToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 12, borderWidth: 1, borderColor: '#FFCC80' },
   pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#E65100' },
   
@@ -2199,16 +2308,21 @@ const styles = StyleSheet.create({
   todayPlanHeader: {
     marginBottom: 10,
   },
+  todayPlanTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   todayPlanHeaderTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
   },
   todayPlanTitleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexShrink: 1,
+    flexShrink: 0,
   },
   todayPlanTitleBar: {
     width: 4,
@@ -2224,6 +2338,8 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   todayPlanScheduleHeaderButton: {
+    position: 'absolute',
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
