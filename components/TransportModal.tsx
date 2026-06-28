@@ -14,7 +14,7 @@ const STAFF_COLORS = [
   '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
 ];
 
-type Block = { key: string; label: string; count: number; time?: string; type?: 'school' | 'lesson'; nameOnly?: string };
+type Block = { key: string; label: string; count: number; time?: string; type?: 'school' | 'lesson'; nameOnly?: string; kids?: any[] };
 type TripSlot = { tripIndex: number; blockKeys: string[] };
 type StaffEntry = { staffName: string; trips: TripSlot[] };
 type Props = {
@@ -56,6 +56,7 @@ export default function TransportModal({
         nameOnly: school, 
         time, 
         count: (kids as any[]).length, 
+        kids: kids as any[],
         type: 'school' 
       });
     });
@@ -70,6 +71,7 @@ export default function TransportModal({
       nameOnly, 
       time, 
       count: (kids as any[]).length, 
+      kids: kids as any[],
       type: 'lesson' 
     });
   });
@@ -420,9 +422,18 @@ export default function TransportModal({
                           <Text style={styles.countText}>{block.count}名</Text>
                         </View>
                         {isSelected && (
-                          <View style={styles.selectedMark}>
-                            <Text style={styles.selectedMarkText}>選択中</Text>
-                          </View>
+                          <>
+                            <View style={styles.selectedMark}>
+                              <Text style={styles.selectedMarkText}>選択中</Text>
+                            </View>
+                            <View style={styles.blockMemberList}>
+                              {(block.kids || []).map((kid, kidIdx) => (
+                                <Text key={`${block.key}-${kid.id || kid.name || kidIdx}`} style={styles.blockMemberText} numberOfLines={1}>
+                                  {kid.name}{kid.grade ? ` (${kid.grade})` : ''}
+                                </Text>
+                              ))}
+                            </View>
+                          </>
                         )}
                       </TouchableOpacity>
                     );
@@ -592,6 +603,8 @@ const styles = StyleSheet.create({
   countText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },
   selectedMark: { marginTop: 3, backgroundColor: '#FF9800', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
   selectedMarkText: { fontSize: 9, color: '#fff', fontWeight: 'bold' },
+  blockMemberList: { width: '100%', marginTop: 5, paddingTop: 4, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.08)', gap: 2 },
+  blockMemberText: { fontSize: 9, color: COLORS.text, fontWeight: '600', textAlign: 'center' },
   allDoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8 },
   allDoneText: { fontSize: 12, color: '#4CAF50', fontWeight: 'bold' },
 
