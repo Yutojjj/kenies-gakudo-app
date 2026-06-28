@@ -408,17 +408,35 @@ export default function ShiftScreen() {
             {days.map((item, index) => {
               if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
               
-              const isWeekend = new Date(item.dateStr).getDay() === 0 || new Date(item.dateStr).getDay() === 6;
+              const dayOfWeek = new Date(item.dateStr).getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const isPublicHoliday = !!publicHolidays[item.dateStr];
+              const holidayName = publicHolidays[item.dateStr];
               const cellStamp = shiftData[item.dateStr];
 
               return (
                 <TouchableOpacity 
                   key={item.dateStr} 
-                  style={[styles.calCell, cellStamp && styles.calCellActive]}
+                  style={[
+                    styles.calCell,
+                    (dayOfWeek === 0 || isPublicHoliday) && styles.calCellHoliday,
+                    dayOfWeek === 6 && styles.calCellSaturday,
+                    cellStamp && styles.calCellActive,
+                  ]}
                   onPress={() => handleDayPress(item.dateStr)}
                   activeOpacity={0.6}
                 >
-                  <Text style={[styles.calDayText, isWeekend && { color: '#999' }]}>{item.day}</Text>
+                  <Text style={[
+                    styles.calDayText,
+                    dayOfWeek === 0 && styles.calDaySundayText,
+                    dayOfWeek === 6 && styles.calDaySaturdayText,
+                    isPublicHoliday && styles.calDayHolidayText,
+                  ]}>{item.day}</Text>
+                  {holidayName && (
+                    <Text style={styles.holidayNameText} numberOfLines={2} adjustsFontSizeToFit>
+                      {holidayName}
+                    </Text>
+                  )}
                   
                   <View style={styles.cellContent}>
                     {!cellStamp && !isWeekend && !publicHolidays[item.dateStr] && item.dateStr && (
@@ -519,6 +537,11 @@ export default function ShiftScreen() {
                         return (
                           <View key={dIdx} style={[styles.ssDateCell, { width: cellWidth, backgroundColor: bgColor }]}>
                             <Text style={[styles.ssDateText, { color: textColor }]}>{day ? day.day : ''}</Text>
+                            {day && publicHolidays[day.dateStr] && (
+                              <Text style={styles.ssHolidayText} numberOfLines={1} adjustsFontSizeToFit>
+                                {publicHolidays[day.dateStr]}
+                              </Text>
+                            )}
                           </View>
                         );
                       })}
@@ -632,8 +655,14 @@ const styles = StyleSheet.create({
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calCellEmpty: { width: '14.28%', aspectRatio: 0.8 },
   calCell: { width: '14.28%', aspectRatio: 0.8, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  calCellHoliday: { backgroundColor: '#FFF1F1' },
+  calCellSaturday: { backgroundColor: '#F0F8FF' },
   calCellActive: { backgroundColor: '#FAFAFA' },
   calDayText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 4, textAlign: 'center' },
+  calDaySundayText: { color: '#E74C3C' },
+  calDaySaturdayText: { color: '#3498DB' },
+  calDayHolidayText: { color: '#E74C3C' },
+  holidayNameText: { color: '#D64545', fontSize: 8, fontWeight: 'bold', textAlign: 'center', lineHeight: 10, minHeight: 11, marginTop: -2, marginBottom: 1 },
   cellContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   stampBadge: { paddingHorizontal: 4, paddingVertical: 4, borderRadius: 6, width: '100%', alignItems: 'center', justifyContent: 'center' },
   stampBadgeCircle: { backgroundColor: '#E8F5E9' },
@@ -670,6 +699,7 @@ const styles = StyleSheet.create({
   ssHeaderText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
   ssDateCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssDateText: { fontSize: 14, fontWeight: 'bold' },
+  ssHolidayText: { fontSize: 6, fontWeight: 'bold', color: '#D64545', textAlign: 'center', lineHeight: 7, paddingHorizontal: 1 },
   ssNameCell: { backgroundColor: '#FFC0CB', borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 6 },
   ssNameText: { fontSize: 10, fontWeight: 'bold', color: '#333', textAlign: 'center', paddingHorizontal: 2 },
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
