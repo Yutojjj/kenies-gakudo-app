@@ -97,7 +97,7 @@ export default function ScheduleScreen() {
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [newPickupTimeInput, setNewPickupTimeInput] = useState('');
   const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
-  const [addPickupHour, setAddPickupHour] = useState(15);
+  const [addPickupHour, setAddPickupHour] = useState(HOURS[0]);
   const [addPickupMinute, setAddPickupMinute] = useState(0);
   const [addPickupPickerVisible, setAddPickupPickerVisible] = useState(false);
   const [templateSelectMode, setTemplateSelectMode] = useState<'stamping' | 'singleDay' | 'edit'>('stamping');
@@ -109,7 +109,7 @@ export default function ScheduleScreen() {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [timePickerTarget, setTimePickerTarget] = useState<'pickup' | 'lesson'>('pickup');
   const [editingLessonIndex, setEditingLessonIndex] = useState<number>(-1);
-  const [tempHour, setTempHour] = useState(15);
+  const [tempHour, setTempHour] = useState(HOURS[0]);
   const [tempMinute, setTempMinute] = useState(0);
 
   const [lessonAddVisible, setLessonAddVisible] = useState(false);
@@ -704,7 +704,7 @@ export default function ScheduleScreen() {
       const [h, m] = defaultTime.split(':').map(Number);
       setTempHour(h); setTempMinute(m);
     } else {
-      setTempHour(15); setTempMinute(0);
+      setTempHour(HOURS[0]); setTempMinute(MINUTES[0]);
     }
     // 中央の時刻パネルを軽く表示する
     setTimeout(() => setTimePickerVisible(true), 120);
@@ -1405,7 +1405,7 @@ export default function ScheduleScreen() {
               ))}
               
               <TouchableOpacity style={[styles.saveBtn, {marginTop: 16, backgroundColor: '#F0F8FF', borderColor: COLORS.primary, borderWidth: 1}]}
-                                onPress={() => { setTemplateModalVisible(false); setEditingTemplateId(null); setNewLessonName(''); setTempHour(16); setTempMinute(0); setTimeout(() => setLessonAddVisible(true), 300); }}>
+                                onPress={() => { setTemplateModalVisible(false); setEditingTemplateId(null); setNewLessonName(''); setTempHour(HOURS[0]); setTempMinute(MINUTES[0]); setTimeout(() => setLessonAddVisible(true), 300); }}>
                   <Ionicons name="add" size={20} color={COLORS.primary} style={{marginRight: 8}}/>
                   <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>新しい習い事を追加</Text>
               </TouchableOpacity>
