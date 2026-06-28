@@ -431,22 +431,45 @@ export default function ScheduleScreen() {
 
   const buildChangeDesc = (data: Partial<DailyData>, current: Partial<DailyData>): string | null => {
     if (data.pickupTime !== undefined) {
-      return data.pickupTime === null ? 'お迎え時間を削除' : `お迎え時間を${data.pickupTime}に設定`;
+      return data.pickupTime === null ? 'お迎え: お休み' : `お迎え: ${data.pickupTime}`;
     }
     if (data.lessons !== undefined) {
       const oldL = current.lessons || [];
       const newL = data.lessons || [];
       if (newL.length > oldL.length) {
         const added = newL.find(n => !oldL.find(o => o.id === n.id));
-        return added ? `習い事「${added.name}」を追加(${added.time})` : '習い事を追加';
+        return added ? `${added.name}: ${added.time || '追加'}` : '習い事を追加';
       }
       if (newL.length < oldL.length) {
         const removed = oldL.find(o => !newL.find(n => n.id === o.id));
-        return removed ? `習い事「${removed.name}」を削除` : '習い事を削除';
+        return removed ? `${removed.name}: お休み` : '習い事: お休み';
       }
+      const changed = newL.find(n => {
+        const old = oldL.find(o => o.id === n.id);
+        return old && (old.name !== n.name || old.time !== n.time);
+      });
+      if (changed) return `${changed.name}: ${changed.time || '変更'}`;
       return '習い事を変更';
     }
     return null;
+  };
+
+  const buildChangeKey = (data: Partial<DailyData>, current: Partial<DailyData>): string => {
+    if (data.pickupTime !== undefined) return 'pickup';
+    if (data.lessons !== undefined) {
+      const oldL = current.lessons || [];
+      const newL = data.lessons || [];
+      const added = newL.find(n => !oldL.find(o => o.id === n.id));
+      if (added) return `lesson:${added.name || added.id}`;
+      const removed = oldL.find(o => !newL.find(n => n.id === o.id));
+      if (removed) return `lesson:${removed.name || removed.id}`;
+      const changed = newL.find(n => {
+        const old = oldL.find(o => o.id === n.id);
+        return old && (old.name !== n.name || old.time !== n.time);
+      });
+      if (changed) return `lesson:${changed.name || changed.id}`;
+    }
+    return 'schedule';
   };
 
   const saveToFirestore = async (dateStr: string, data: Partial<DailyData>) => {
@@ -503,12 +526,14 @@ export default function ScheduleScreen() {
       }
 
       if (loggedInUser && desc) {
+        const changeKey = buildChangeKey(data, current);
         await addDoc(collection(db, 'scheduleChanges'), {
           date: dateStr,
           userId: parentDocId,
           userName: loggedInUser.name,
           actorRole: loggedInUser.role,
           childName: child.name,
+          changeKey,
           description: desc,
           changedAt: serverTimestamp(),
         });

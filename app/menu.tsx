@@ -213,6 +213,7 @@ export default function MenuScreen() {
   const [noticeVisible, setNoticeVisible] = useState(false);
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
+  const [scheduleChangesCollapsed, setScheduleChangesCollapsed] = useState(false);
   const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
   const [newNotice, setNewNotice] = useState('');
   const [appDialog, setAppDialog] = useState<{
@@ -597,19 +598,44 @@ export default function MenuScreen() {
     const unsubScheduleChanges = onSnapshot(
       query(collection(db, 'scheduleChanges'), where('date', '==', dateStr)),
       snap => {
-        const grouped: Record<string, string[]> = {};
+        const inferChangeKey = (description: string) => {
+          if (description.includes('お迎え')) return 'pickup';
+          const quotedLesson = description.match(/習い事「(.+?)」/);
+          if (quotedLesson?.[1]) return `lesson:${quotedLesson[1]}`;
+          const colonLesson = description.match(/^(.+?):/);
+          if (colonLesson?.[1]) return `lesson:${colonLesson[1].trim()}`;
+          return description;
+        };
+        const getChangedAtMillis = (value: any) => {
+          if (!value) return 0;
+          if (typeof value.toMillis === 'function') return value.toMillis();
+          if (typeof value.seconds === 'number') return value.seconds * 1000;
+          if (value instanceof Date) return value.getTime();
+          return 0;
+        };
+        const latestByChild: Record<string, Record<string, { description: string; changedAt: number }>> = {};
         snap.docs.forEach(changeDoc => {
           const data = changeDoc.data();
           const childName = data.childName || data.kidName || data.name || '名前未設定';
           const description = data.description || '';
           if (!description) return;
-          if (!grouped[childName]) grouped[childName] = [];
-          if (!grouped[childName].includes(description)) grouped[childName].push(description);
+          const changeKey = data.changeKey || inferChangeKey(description);
+          const changedAt = getChangedAtMillis(data.changedAt);
+          if (!latestByChild[childName]) latestByChild[childName] = {};
+          const current = latestByChild[childName][changeKey];
+          if (!current || changedAt >= current.changedAt) {
+            latestByChild[childName][changeKey] = { description, changedAt };
+          }
         });
         setTodayScheduleChanges(
-          Object.entries(grouped)
+          Object.entries(latestByChild)
             .sort(([a], [b]) => a.localeCompare(b, 'ja'))
-            .map(([childName, descriptions]) => ({ childName, descriptions }))
+            .map(([childName, changes]) => ({
+              childName,
+              descriptions: Object.values(changes)
+                .sort((a, b) => a.changedAt - b.changedAt)
+                .map(change => change.description),
+            }))
         );
       }
     );
@@ -1213,21 +1239,25 @@ export default function MenuScreen() {
         {(role === 'staff' || role === 'admin') && todayScheduleChanges.length > 0 && (
           <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#FFB03A', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>予定変更</Text>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingVertical: 2 }} onPress={() => setScheduleChangesCollapsed(prev => !prev)} activeOpacity={0.75}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>予定変更</Text>
+                <Text style={{ marginLeft: 8, fontSize: 12, fontWeight: 'bold', color: '#C2410C' }}>{todayScheduleChanges.length}件</Text>
+                <Ionicons name={scheduleChangesCollapsed ? 'chevron-down' : 'chevron-up'} size={18} color="#C2410C" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
               <TouchableOpacity style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }} onPress={() => router.push('/schedule-changes' as any)}>
                 <Text style={{ color: '#C2410C', fontSize: 11, fontWeight: 'bold' }}>変更履歴を見る</Text>
               </TouchableOpacity>
             </View>
-            {todayScheduleChanges.map((item, i) => (
-              <View key={`${item.childName}-${i}`} style={{ backgroundColor: '#FFF9ED', borderRadius: 12, padding: 12, marginBottom: i === todayScheduleChanges.length - 1 ? 0 : 8, borderWidth: 1, borderColor: '#FFE0A8' }}>
-                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#8A3B12', marginBottom: 5 }}>{item.childName}</Text>
-                {item.descriptions.map((description, descIdx) => (
-                  <Text key={`${item.childName}-${descIdx}`} style={{ fontSize: 13, color: '#424242', lineHeight: 19 }}>
-                    {description}
-                  </Text>
-                ))}
-              </View>
-            ))}
+            {!scheduleChangesCollapsed && todayScheduleChanges.map((item, i) => (
+                <View key={`${item.childName}-${i}`} style={{ backgroundColor: '#FFF9ED', borderRadius: 12, padding: 12, marginBottom: i === todayScheduleChanges.length - 1 ? 0 : 8, borderWidth: 1, borderColor: '#FFE0A8' }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#8A3B12', marginBottom: 5 }}>{item.childName}</Text>
+                  {item.descriptions.map((description, descIdx) => (
+                    <Text key={`${item.childName}-${descIdx}`} style={{ fontSize: 13, color: '#424242', lineHeight: 19 }}>
+                      {description}
+                    </Text>
+                  ))}
+                </View>
+              ))}
           </View>
         )}
 
