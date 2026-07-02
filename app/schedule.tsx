@@ -14,6 +14,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
@@ -1010,8 +1011,10 @@ export default function ScheduleScreen() {
       </View>
 
       <Modal visible={editModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.editModalContent}>
+        <TouchableWithoutFeedback onPress={() => setEditModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.editModalContent}>
             <View style={styles.scheduleSheetHeader}>
               <View style={styles.scheduleDateStepper}>
                 <TouchableOpacity
@@ -1208,16 +1211,20 @@ export default function ScheduleScreen() {
               </TouchableOpacity>
               <View style={{height: 14}} />
             </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal visible={eventModalVisible} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setEventModalVisible(false)}>
           <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
               <View style={styles.editModalContent}>
                   <View style={styles.modalHeader}>
                       <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                          <Ionicons name="star" size={24} color="#DAA520" style={{marginRight: 8}} />
+                  <Ionicons name="star" size={24} color="#00AEB8" style={{marginRight: 8}} />
                           <Text style={styles.modalTitle}>{selectedDateStr} のイベント</Text>
                       </View>
                       <TouchableOpacity onPress={() => setEventModalVisible(false)}>
@@ -1266,13 +1273,17 @@ export default function ScheduleScreen() {
                       </TouchableOpacity>
                   </View>
               </View>
+            </TouchableWithoutFeedback>
           </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* 候補時間追加ピッカー */}
       <Modal visible={addPickupPickerVisible} transparent animationType="fade">
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerContent}>
+        <TouchableWithoutFeedback onPress={() => setAddPickupPickerVisible(false)}>
+          <View style={styles.pickerOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
             <View style={styles.pickerColumns}>
               <ScrollView
@@ -1323,13 +1334,20 @@ export default function ScheduleScreen() {
                 <Text style={styles.pickerConfirmText}>{pickupTimeSaving ? '保存中...' : '保存して入力開始'}</Text>
               </TouchableOpacity>
             </View>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal visible={timePickerVisible} transparent animationType="fade">
-        <View style={styles.pickerOverlay}>
-          <View style={styles.pickerContent}>
+        <TouchableWithoutFeedback onPress={() => {
+          setTimePickerVisible(false);
+          setTimeout(() => setEditModalVisible(true), 300);
+        }}>
+          <View style={styles.pickerOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns}>
               <ScrollView
@@ -1369,13 +1387,17 @@ export default function ScheduleScreen() {
                 <Text style={styles.pickerConfirmText}>決定</Text>
               </TouchableOpacity>
             </View>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal visible={templateModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.templateContent}>
+        <TouchableWithoutFeedback onPress={closeTemplateAndMaybeReturnToEdit}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.templateContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                   {templateSelectMode === 'edit' ? '習い事を編集・削除' : '習い事を選択'}
@@ -1421,12 +1443,16 @@ export default function ScheduleScreen() {
                   <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>新しい習い事を追加</Text>
               </TouchableOpacity>
             </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
       
       <Modal visible={lessonAddVisible} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => { setLessonAddVisible(false); setTimeout(() => setTemplateModalVisible(true), 300); }}>
           <View style={styles.pickerOverlay}>
+            <TouchableWithoutFeedback>
               <View style={styles.pickerContent}>
                   <Text style={styles.pickerTitle}>{editingTemplateId ? '習い事を編集' : '習い事を追加'}</Text>
                   
@@ -1476,7 +1502,9 @@ export default function ScheduleScreen() {
                     </TouchableOpacity>
                   </View>
               </View>
+            </TouchableWithoutFeedback>
           </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <AdminBottomNav active="schedule" />
@@ -1494,7 +1522,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#AEE4F5',
+    backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
   },
@@ -1639,7 +1667,7 @@ const styles = StyleSheet.create({
   },
   eventBadge: { 
     backgroundColor: '#FFFACD', 
-    borderColor: '#DAA520',
+    borderColor: '#00AEB8',
     borderWidth: 1,
     borderRadius: 4, 
     padding: 2, 
@@ -1647,7 +1675,7 @@ const styles = StyleSheet.create({
   },
   eventBadgeText: { 
     fontSize: 8, 
-    color: '#DAA520', 
+    color: '#00AEB8', 
     fontWeight: 'bold', 
     textAlign: 'center' 
   },
@@ -1724,7 +1752,7 @@ const styles = StyleSheet.create({
   },
   bulkInputButtonActive: {
     borderWidth: 2,
-    shadowColor: '#F4B942',
+    shadowColor: '#00AEB8',
     shadowOpacity: 0.18,
     shadowRadius: 6,
     elevation: 3,

@@ -1933,7 +1933,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
 
   // ヘッダー
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037' },
 
@@ -2002,7 +2002,7 @@ const styles = StyleSheet.create({
   uploadFlyerBtnText: { fontWeight: 'bold', fontSize: 13 },
 
   // 詳細画面
-  detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', gap: 8 },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', gap: 8 },
   detailTitle: { fontSize: 17, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   detailCover: { width: '100%', height: 180, backgroundColor: '#EEE' },
 

@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   headerBg: {
-    backgroundColor: THEME_COLOR,
+    backgroundColor: '#FFF8F0',
     paddingTop: Platform.OS === 'android' ? 40 : 20,
     paddingBottom: 60,
     paddingHorizontal: 20,
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#3F302B',
     letterSpacing: 1,
   },
   card: {

@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#AEE4F5',
+    backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
   backBtn: { marginRight: 12 },

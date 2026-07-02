@@ -1,7 +1,7 @@
 export const COLORS = {
-  primary: '#D4AF37',    // ゴールド
-  secondary: '#B8860B',  // ダークゴールド
-  accent: '#F3E5AB',     // シャンパンゴールド
+  primary: '#00AEB8',
+  secondary: '#2D8BE8',
+  accent: '#E8F8FA',
   background: '#FFFFFF', // ピュアホワイト
   surface: '#FAFAFA',    // わずかに色付いた白（カード用）
   white: '#FFFFFF',
@@ -9,8 +9,8 @@ export const COLORS = {
   textLight: '#888888',
   border: '#EAEAEA',
   danger: '#E74C3C',
-  success: '#D4AF37',    // 全体の統一感を出すためサクセスもゴールド系に
-  info: '#B8860B',
+  success: '#2EAD6B',
+  info: '#2D8BE8',
 };
 
 export const Colors = {

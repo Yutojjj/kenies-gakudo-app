@@ -323,7 +323,7 @@ export default function ShiftScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => navigateHome(router)} style={{ marginRight: 12 }}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
@@ -514,7 +514,7 @@ export default function ShiftScreen() {
               <View style={styles.spreadsheet}>
                 
                 <View style={styles.ssRow}>
-                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFE4B5', width: '16%' }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
+                  <View style={[styles.ssHeaderCell, { backgroundColor: '#FFF8F0', width: '16%' }]}><Text style={styles.ssHeaderText}>{currentDate.getMonth() + 1}月</Text></View>
                   {weeks.map((w, i) => {
                     const cellWidth = (i === 0 || i === 6) ? '6%' : '14.4%';
                     return (

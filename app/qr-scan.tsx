@@ -265,7 +265,7 @@ export default function QrScanScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBg}>
         <TouchableOpacity style={styles.resultHeaderBackBtn} onPress={goHome} activeOpacity={0.78}>
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={24} color="#3F302B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>ケーニーズクラブ学童保育</Text>
       </View>
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    backgroundColor: '#AEE4F5',
+    backgroundColor: '#FFF8F0',
   },
   headerBackBtn: {
     width: 42,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   headerBg: {
-    backgroundColor: THEME_COLOR,
+    backgroundColor: '#FFF8F0',
     paddingTop: Platform.OS === 'android' ? 40 : 20,
     paddingBottom: 60,
     paddingHorizontal: 20,
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#3F302B',
     letterSpacing: 1,
   },
   card: {

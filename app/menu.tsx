@@ -122,14 +122,15 @@ type StaffQuickKey =
 const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album'];
 
 const STAFF_COLORS = [
-  '#FF8A65','#FFB74D','#FFD54F','#AED581','#4DB6AC',
-  '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
+  '#00AEB8','#4A90E2','#7E9CF5','#8A63D2','#F06292',
+  '#2EAD6B','#4DB6AC','#5B9BD5','#9B8BB5','#90A4AE',
 ];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
 
 const { width } = Dimensions.get('window');
 const EVENT_PLAN_CARD_HEIGHT = width <= 390 ? 192 : 208;
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 type TodayPlanSummary = {
   pickupTimes: string[];
@@ -365,6 +366,10 @@ export default function MenuScreen() {
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
+  const eventRevealAnim = useRef(new Animated.Value(0)).current;
+  const eventFloatAnim = useRef(new Animated.Value(0)).current;
+  const todayPlanItemAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
+  const quickItemAnims = useRef(Array.from({ length: 24 }, () => new Animated.Value(0))).current;
 
   // ── 認証チェック：AsyncStorageのログイン状態を必ず確認 ──
   useEffect(() => {
@@ -905,13 +910,76 @@ export default function MenuScreen() {
       ])
     ).start();
 
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(eventFloatAnim, { toValue: 1, duration: 2200, useNativeDriver: true }),
+        Animated.timing(eventFloatAnim, { toValue: 0, duration: 2200, useNativeDriver: true }),
+      ])
+    ).start();
+
     Animated.sequence([
       Animated.timing(headerAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.stagger(100, cardAnims.map(a =>
         Animated.spring(a, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 10 })
       )),
+      Animated.spring(eventRevealAnim, { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 7 }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    const quickVisibleCount =
+      role === 'admin'
+        ? adminQuickVisibleKeys.length
+        : role === 'staff'
+          ? staffQuickVisibleKeys.length
+          : 0;
+
+    if (quickVisibleCount <= 0) return;
+
+    quickItemAnims.forEach(anim => anim.setValue(0));
+    Animated.stagger(
+      58,
+      quickItemAnims.slice(0, quickVisibleCount).map(anim =>
+        Animated.spring(anim, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 15,
+          bounciness: 8,
+        })
+      )
+    ).start();
+  }, [role, adminQuickVisibleKeys.length, staffQuickVisibleKeys.length]);
+
+  useEffect(() => {
+    const todayPlanVisibleCount =
+      role === 'user'
+        ? 3
+        : (role === 'admin' || role === 'staff')
+          ? 1 + (todayMemos.length + adminNotices.length > 0 ? 1 : 0) + (todayScheduleChanges.length > 0 ? 1 : 0)
+          : 0;
+
+    if (todayPlanVisibleCount <= 0) return;
+
+    todayPlanItemAnims.forEach(anim => anim.setValue(0));
+    Animated.stagger(
+      70,
+      todayPlanItemAnims.slice(0, todayPlanVisibleCount).map(anim =>
+        Animated.spring(anim, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 14,
+          bounciness: 7,
+        })
+      )
+    ).start();
+  }, [
+    role,
+    scheduleDate,
+    staffPlanDate,
+    todayMemos.length,
+    adminNotices.length,
+    todayScheduleChanges.length,
+  ]);
 
   const openSettings = () => {
     setSettingsVisible(true);
@@ -1173,17 +1241,17 @@ export default function MenuScreen() {
   }[] = [
     { key: 'attendance', label: '出欠一覧', icon: 'people', color: '#F05172', bg: '#FFE1E8', image: QUICK_MENU_IMAGES.attendance, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/attendance') },
     { key: 'todayStatus', label: '本日の登所', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
-    { key: 'pickup', label: '送迎管理', icon: 'car', color: '#FF8F00', bg: '#FFE7BE', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
+    { key: 'pickup', label: '送迎管理', icon: 'car', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
     { key: 'shift', label: 'シフト管理', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'events', label: 'イベント管理', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || '', tab: 'management' } } as any) },
-    { key: 'album', label: 'アルバム', icon: 'image', color: '#F2A100', bg: '#FFE6A8', image: QUICK_MENU_IMAGES.album, cardBg: '#FFF0E8', borderColor: '#FFBE9A', onPress: () => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any) },
+    { key: 'album', label: 'アルバム', icon: 'image', color: '#4A90E2', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.album, cardBg: '#DDF3FF', borderColor: '#8FD1F5', onPress: () => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any) },
     { key: 'schoolTimes', label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', image: QUICK_MENU_IMAGES.schoolTimes, cardBg: '#EFFFFC', borderColor: '#7DDAD6', onPress: () => router.push('/school-times') },
     { key: 'holidays', label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', image: QUICK_MENU_IMAGES.holidays, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push('/holidays-setting') },
     { key: 'lessons', label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', image: QUICK_MENU_IMAGES.lessons, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/lesson-management' as any) },
     { key: 'regularUsers', label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', image: QUICK_MENU_IMAGES.regularUsers, cardBg: '#EAFBF8', borderColor: '#9ADBD0', onPress: () => router.push('/regular-users' as any) },
-    { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', image: QUICK_MENU_IMAGES.gradeChange, cardBg: '#FFF7DF', borderColor: '#F4CF76', onPress: () => setGradeChoiceModalVisible(true) },
-    { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.paidTransport, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
+    { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#2D8BE8', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.gradeChange, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => setGradeChoiceModalVisible(true) },
+    { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.paidTransport, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
     { key: 'shiftPeriod', label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', image: QUICK_MENU_IMAGES.shiftPeriod, cardBg: '#F0F8FF', borderColor: '#B9DFFF', onPress: () => setPeriodModal(true) },
     { key: 'staffHours', label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', image: QUICK_MENU_IMAGES.staffHours, cardBg: '#F1F2FF', borderColor: '#BFC6FF', onPress: () => router.push('/staff-hours' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
@@ -1217,17 +1285,41 @@ export default function MenuScreen() {
   }[] = [
     { key: 'attendance', label: '出欠一覧', icon: 'people', color: '#F05172', bg: '#FFE1E8', image: QUICK_MENU_IMAGES.attendance, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/attendance') },
     { key: 'todayStatus', label: '本日の登所', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
-    { key: 'pickup', label: '送迎管理', icon: 'car', color: '#FF8F00', bg: '#FFE7BE', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
+    { key: 'pickup', label: '送迎管理', icon: 'car', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
     { key: 'events', label: 'イベント', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || 'staff', tab: 'management' } } as any) },
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'shift', label: 'シフト', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
-    { key: 'album', label: 'アルバム', icon: 'image', color: '#F2A100', bg: '#FFE6A8', image: QUICK_MENU_IMAGES.album, cardBg: '#FFF0E8', borderColor: '#FFBE9A', onPress: () => router.push({ pathname: '/album', params: { role: role || 'staff', name: name || '' } } as any) },
+    { key: 'album', label: 'アルバム', icon: 'image', color: '#4A90E2', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.album, cardBg: '#DDF3FF', borderColor: '#8FD1F5', onPress: () => router.push({ pathname: '/album', params: { role: role || 'staff', name: name || '' } } as any) },
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
     { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', image: QUICK_MENU_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: handleLogout },
   ];
   const visibleStaffQuickOptions = staffQuickOptions.filter(item => staffQuickVisibleKeys.includes(item.key));
+
+  const quickItemAnimatedStyle = (index: number) => {
+    const anim = quickItemAnims[index] || quickItemAnims[0];
+    return {
+      opacity: anim,
+      transform: [
+        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) },
+        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
+        { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
+      ],
+    };
+  };
+
+  const todayPlanItemAnimatedStyle = (index: number) => {
+    const anim = todayPlanItemAnims[index] || todayPlanItemAnims[0];
+    return {
+      opacity: anim,
+      transform: [
+        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+        { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+      ],
+    };
+  };
+
   const toggleStaffQuickKey = async (key: StaffQuickKey) => {
     const next = staffQuickVisibleKeys.includes(key)
       ? staffQuickVisibleKeys.filter(item => item !== key)
@@ -1297,9 +1389,9 @@ export default function MenuScreen() {
               borderColor: '#FFCC80',
             }}
           >
-            <Ionicons name="notifications-off-outline" size={22} color="#E65100" />
+            <Ionicons name="notifications-off-outline" size={22} color="#D9534F" />
             <View style={{ flex: 1 }}>
-              <Text style={{ color: '#E65100', fontWeight: 'bold', fontSize: 13 }}>通知がブロックされています</Text>
+              <Text style={{ color: '#D9534F', fontWeight: 'bold', fontSize: 13 }}>通知がブロックされています</Text>
               <Text style={{ color: '#BF360C', fontSize: 11, marginTop: 2 }}>
                 ブラウザのアドレスバー左の🔒から「通知→許可」に変更してください
               </Text>
@@ -1408,16 +1500,25 @@ export default function MenuScreen() {
                 <View style={styles.todayPlanTitleBar} />
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
+              {(role === 'staff' || role === 'admin') && (
+                <TouchableOpacity style={styles.staffSectionMemoBtn} onPress={() => setNoticeVisible(true)} activeOpacity={0.82}>
+                  <Ionicons name="pencil-outline" size={14} color="#7B4E8E" />
+                  <Text style={styles.staffSectionMemoText}>メモを追加</Text>
+                  {(todayMemos.length + adminNotices.length) > 0 && (
+                    <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
+                  )}
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.staffSectionEditBtn}
                 onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
                 activeOpacity={0.82}
               >
-                <Ionicons name="pencil-outline" size={14} color="#A85B00" />
+                <Ionicons name="pencil-outline" size={14} color="#007A82" />
                 <Text style={styles.staffSectionEditText}>編集する</Text>
               </TouchableOpacity>
             </View>
-            <View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#FF8F00', marginTop: 8, marginHorizontal: 0 }]}>
+            <Animated.View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}>
               <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
@@ -1442,13 +1543,13 @@ export default function MenuScreen() {
                 {renderPickupEntryCards(parseTodayPickupEntries(), false)}
                 <Text style={styles.pickupTapHint}>タップで全体表示</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </View>
         )}
 
         {/* ── ⑩ 連絡事項インライン表示（送迎担当の下） ── */}
         {(role === 'staff' || role === 'admin') && (todayMemos.length > 0 || adminNotices.length > 0) && (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#5B9BD5', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
+          <Animated.View style={[{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#5B9BD5', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }, todayPlanItemAnimatedStyle(1)]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>連絡</Text>
               <TouchableOpacity style={{ backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 }} onPress={() => setWeekMemoVisible(true)}>
@@ -1458,7 +1559,7 @@ export default function MenuScreen() {
             {adminNotices.map((n, i) => (
               <View key={n.id} style={{ flexDirection: 'row', marginBottom: 6 }}>
                 <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#FFF3E0', marginRight: 8, alignSelf: 'flex-start' }}>
-                  <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#E65100' }}>{(n as any).posterName || '稲熊'}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#007A82' }}>{(n as any).posterName || '稲熊'}</Text>
                 </View>
                 <Text style={{ fontSize: 13, color: '#424242', flex: 1, lineHeight: 18 }}>{n.content}</Text>
               </View>
@@ -1471,12 +1572,12 @@ export default function MenuScreen() {
                 <Text style={{ fontSize: 13, color: '#424242', flex: 1, lineHeight: 18 }}>{m.memo}</Text>
               </View>
             ))}
-          </View>
+          </Animated.View>
         )}
 
         {/* ── 予定変更インライン表示（連絡の下） ── */}
         {(role === 'staff' || role === 'admin') && todayScheduleChanges.length > 0 && (
-          <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#FFB03A', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }}>
+          <Animated.View style={[{ marginHorizontal: 16, marginBottom: 8, backgroundColor: '#fff', borderRadius: 14, padding: 14, borderLeftWidth: 4, borderLeftColor: '#FFB03A', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 }, todayPlanItemAnimatedStyle((todayMemos.length + adminNotices.length) > 0 ? 2 : 1)]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingVertical: 2 }} onPress={() => setScheduleChangesCollapsed(prev => !prev)} activeOpacity={0.75}>
                 <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#333' }}>予定変更</Text>
@@ -1497,7 +1598,7 @@ export default function MenuScreen() {
                   ))}
                 </View>
               ))}
-          </View>
+          </Animated.View>
         )}
 
         {role === 'user' && unreadMessageItems.length > 0 && (
@@ -1586,8 +1687,8 @@ export default function MenuScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanPickupCard]}
+            <AnimatedTouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanPickupCard, todayPlanItemAnimatedStyle(0)]}
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
@@ -1602,10 +1703,10 @@ export default function MenuScreen() {
               <View style={styles.todayPlanChevron}>
                 <Ionicons name="chevron-forward" size={20} color="#7A6254" />
               </View>
-            </TouchableOpacity>
+            </AnimatedTouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanLessonCard]}
+            <AnimatedTouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanLessonCard, todayPlanItemAnimatedStyle(1)]}
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
@@ -1620,10 +1721,10 @@ export default function MenuScreen() {
               <View style={styles.todayPlanChevron}>
                 <Ionicons name="chevron-forward" size={20} color="#7A6254" />
               </View>
-            </TouchableOpacity>
+            </AnimatedTouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanMemoCard]}
+            <AnimatedTouchableOpacity
+              style={[styles.todayPlanCard, styles.todayPlanMemoCard, todayPlanItemAnimatedStyle(2)]}
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
@@ -1638,7 +1739,7 @@ export default function MenuScreen() {
               <View style={styles.todayPlanChevron}>
                 <Ionicons name="chevron-forward" size={20} color="#7A6254" />
               </View>
-            </TouchableOpacity>
+            </AnimatedTouchableOpacity>
           </View>
         )}
 
@@ -1768,20 +1869,23 @@ export default function MenuScreen() {
         )}
 
         {role !== 'user' && (
-          <>
+          <View>
             {/* ── セクションラベル ── */}
             <View style={styles.sectionLabelWrap}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
                 <Text style={styles.sectionLabel}>クイックメニュー</Text>
               </View>
-              {(role === 'staff' || role === 'admin') && (
-                <TouchableOpacity style={styles.noticeBtn} onPress={() => setNoticeVisible(true)}>
-                  <Ionicons name="pencil-outline" size={14} color="#008C96" />
-                  <Text style={styles.noticeBtnText}>メモを追加</Text>
-                  {(todayMemos.length + adminNotices.length) > 0 && (
-                    <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
-                  )}
+              {role === 'admin' && (
+                <TouchableOpacity style={styles.quickFeatureHeaderAddButton} onPress={() => setAdminQuickEditorVisible(true)} activeOpacity={0.86}>
+                  <Ionicons name="add-circle-outline" size={17} color="#5B5A8F" />
+                  <Text style={styles.quickFeatureHeaderAddText}>候補を追加</Text>
+                </TouchableOpacity>
+              )}
+              {role === 'staff' && (
+                <TouchableOpacity style={styles.quickFeatureHeaderAddButton} onPress={() => setStaffQuickEditorVisible(true)} activeOpacity={0.86}>
+                  <Ionicons name="add-circle-outline" size={17} color="#5B5A8F" />
+                  <Text style={styles.quickFeatureHeaderAddText}>候補を追加</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1790,10 +1894,14 @@ export default function MenuScreen() {
             <View style={styles.grid}>
               {role === 'admin' ? (
             <View style={styles.quickFeatureGrid}>
-              {visibleAdminQuickOptions.map(item => (
-                <TouchableOpacity
+              {visibleAdminQuickOptions.map((item, index) => (
+                <AnimatedTouchableOpacity
                   key={item.key}
-                  style={[styles.quickFeatureCard, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
+                  style={[
+                    styles.quickFeatureCard,
+                    item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg },
+                    quickItemAnimatedStyle(index),
+                  ]}
                   onPress={item.onPress}
                   activeOpacity={0.82}
                 >
@@ -1808,7 +1916,7 @@ export default function MenuScreen() {
                   {item.key === 'messages' && unreadCount > 0 && <View style={styles.quickFeatureBadge}><Text style={styles.quickFeatureBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
                   {item.key === 'survey' && surveyCount > 0 && <View style={styles.quickFeatureBadge}><Text style={styles.quickFeatureBadgeText}>{surveyCount > 99 ? '99+' : surveyCount}</Text></View>}
                   <Ionicons name="chevron-forward" size={20} color="#9A8F86" style={styles.quickFeatureChevron} />
-                </TouchableOpacity>
+                </AnimatedTouchableOpacity>
               ))}
               {visibleAdminQuickOptions.length === 0 && (
                 <View style={styles.quickFeatureEmptyCard}>
@@ -1816,17 +1924,17 @@ export default function MenuScreen() {
                   <Text style={styles.quickFeatureEmptyText}>右下のボタンから追加できます</Text>
                 </View>
               )}
-              <TouchableOpacity style={styles.quickFeatureAddButton} onPress={() => setAdminQuickEditorVisible(true)} activeOpacity={0.86}>
-                <Ionicons name="add-circle-outline" size={18} color="#008C96" />
-                <Text style={styles.quickFeatureAddText}>候補を追加</Text>
-              </TouchableOpacity>
             </View>
               ) : role === 'staff' ? (
             <View style={styles.quickFeatureGrid}>
-              {visibleStaffQuickOptions.map(item => (
-                <TouchableOpacity
+              {visibleStaffQuickOptions.map((item, index) => (
+                <AnimatedTouchableOpacity
                   key={item.key}
-                  style={[styles.quickFeatureCard, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
+                  style={[
+                    styles.quickFeatureCard,
+                    item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg },
+                    quickItemAnimatedStyle(index),
+                  ]}
                   onPress={item.onPress}
                   activeOpacity={0.82}
                 >
@@ -1839,7 +1947,7 @@ export default function MenuScreen() {
                   )}
                   <Text style={styles.quickFeatureText}>{item.label}</Text>
                   <Ionicons name="chevron-forward" size={20} color="#9A8F86" style={styles.quickFeatureChevron} />
-                </TouchableOpacity>
+                </AnimatedTouchableOpacity>
               ))}
               {visibleStaffQuickOptions.length === 0 && (
                 <View style={styles.quickFeatureEmptyCard}>
@@ -1847,10 +1955,6 @@ export default function MenuScreen() {
                   <Text style={styles.quickFeatureEmptyText}>右下のボタンから追加できます</Text>
                 </View>
               )}
-              <TouchableOpacity style={styles.quickFeatureAddButton} onPress={() => setStaffQuickEditorVisible(true)} activeOpacity={0.86}>
-                <Ionicons name="add-circle-outline" size={18} color="#008C96" />
-                <Text style={styles.quickFeatureAddText}>候補を追加</Text>
-              </TouchableOpacity>
             </View>
               ) : (
             <>
@@ -1924,11 +2028,22 @@ export default function MenuScreen() {
             </>
               )}
             </View>
-          </>
+          </View>
         )}
 
         {role === 'user' && (
-          <View style={styles.eventPlanSection}>
+          <Animated.View
+            style={[
+              styles.eventPlanSection,
+              {
+                opacity: eventRevealAnim,
+                transform: [
+                  { translateY: eventRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) },
+                  { scale: eventRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
+                ],
+              },
+            ]}
+          >
             <View style={styles.eventPlanHeader}>
               <View style={styles.eventPlanTitleWrap}>
                 <View style={styles.eventPlanTitleBar} />
@@ -1964,7 +2079,18 @@ export default function MenuScreen() {
                   }}
                 >
                   {visibleMenuEvents.map((event) => (
-                    <View key={event.id} style={styles.eventPlanCard}>
+                    <Animated.View
+                      key={event.id}
+                      style={[
+                        styles.eventPlanCard,
+                        {
+                          transform: [
+                            { translateY: eventFloatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) },
+                            { scale: eventFloatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.006] }) },
+                          ],
+                        },
+                      ]}
+                    >
                       {event.coverImage ? (
                         <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
                       ) : (
@@ -2014,7 +2140,7 @@ export default function MenuScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                    </View>
+                    </Animated.View>
                   ))}
                 </ScrollView>
                 <View style={styles.eventPlanPager}>
@@ -2046,7 +2172,7 @@ export default function MenuScreen() {
                 </View>
               </TouchableOpacity>
             )}
-          </View>
+          </Animated.View>
         )}
 
 
@@ -2055,8 +2181,9 @@ export default function MenuScreen() {
       <AdminBottomNav active="home" />
 
       <Modal visible={pickupAllModalVisible} transparent animationType="fade">
-        <View style={styles.simpleModalBackdrop}>
-          <View style={styles.pickupAllModal}>
+        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setPickupAllModalVisible(false)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.pickupAllModal}>
             <View style={styles.simpleModalHeader}>
               <View>
                 <Text style={styles.simpleModalTitle}>本日の送迎 全体表示</Text>
@@ -2069,8 +2196,9 @@ export default function MenuScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {renderPickupEntryCards(parseTodayPickupEntries(), true)}
             </ScrollView>
-          </View>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={adminShiftMenuVisible} transparent animationType="fade">
@@ -2101,7 +2229,7 @@ export default function MenuScreen() {
               <Text style={styles.simpleModalTitle}>メニュー</Text>
               <Text style={styles.simpleModalSub}>その他の管理機能</Text>
               <TouchableOpacity style={styles.adminActionRow} onPress={() => { setAdminMoreMenuVisible(false); router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any); }}>
-                <Ionicons name="image-outline" size={22} color="#F2A100" />
+                <Ionicons name="image-outline" size={22} color="#4A90E2" />
                 <Text style={styles.adminActionText}>アルバム</Text>
                 <Ionicons name="chevron-forward" size={18} color="#AAA" />
               </TouchableOpacity>
@@ -2116,8 +2244,9 @@ export default function MenuScreen() {
       </Modal>
 
       <Modal visible={adminQuickEditorVisible} transparent animationType="fade">
-        <View style={styles.simpleModalBackdrop}>
-          <View style={styles.quickEditorSheet}>
+        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminQuickEditorVisible(false)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.quickEditorSheet}>
             <View style={styles.simpleModalHeader}>
               <View>
                 <Text style={styles.simpleModalTitle}>クイックメニュー候補</Text>
@@ -2147,13 +2276,15 @@ export default function MenuScreen() {
               })}
               <View style={{ height: 8 }} />
             </ScrollView>
-          </View>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
       </Modal>
 
       <Modal visible={staffQuickEditorVisible} transparent animationType="fade">
-        <View style={styles.simpleModalBackdrop}>
-          <View style={styles.quickEditorSheet}>
+        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setStaffQuickEditorVisible(false)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.quickEditorSheet}>
             <View style={styles.simpleModalHeader}>
               <View>
                 <Text style={styles.simpleModalTitle}>クイックメニュー候補</Text>
@@ -2183,8 +2314,9 @@ export default function MenuScreen() {
               })}
               <View style={{ height: 8 }} />
             </ScrollView>
-          </View>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
       </Modal>
 
       {/* ── 学年一括更新モーダル ── */}
@@ -2226,7 +2358,7 @@ export default function MenuScreen() {
                 <Ionicons name="close" size={26} color="#333" />
               </TouchableOpacity>
             </View>
-            <View style={{ padding:14, backgroundColor:'#FFF8E1', borderBottomWidth:1, borderColor:'#eee' }}>
+          <View style={{ padding:14, backgroundColor:'#EAFBFC', borderBottomWidth:1, borderColor:'#D7EEF0' }}>
               <Text style={{ fontSize:13, color:'#856404' }}>
                 ⚠️ {gradeUpDirection === 'up' ? `以下の${gradeUpPreview.length}名の学年を1つ上げます。小6は「卒業」になります。` : `以下の${gradeUpPreview.length}名の学年を1つ下げます。`}実行前にご確認ください。
               </Text>
@@ -2316,11 +2448,11 @@ export default function MenuScreen() {
             {/* ヘッダー */}
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingHorizontal:20, paddingVertical:16, backgroundColor:'#FFF3E0', borderBottomWidth:1, borderColor:'#FFE0B2' }}>
               <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
-                <View style={{ width:36, height:36, borderRadius:18, backgroundColor:'#FF8F00', alignItems:'center', justifyContent:'center' }}>
+            <View style={{ width:36, height:36, borderRadius:18, backgroundColor:'#00AEB8', alignItems:'center', justifyContent:'center' }}>
                   <Ionicons name="calendar" size={20} color="#fff" />
                 </View>
                 <View>
-                  <Text style={{ fontSize:16, fontWeight:'bold', color:'#E65100' }}>今週の連絡事項</Text>
+              <Text style={{ fontSize:16, fontWeight:'bold', color:'#007A82' }}>今週の連絡事項</Text>
                   <Text style={{ fontSize:11, color:'#BF360C' }}>明日から6日分</Text>
                 </View>
               </View>
@@ -2348,7 +2480,7 @@ export default function MenuScreen() {
                       const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                       const count = (weekMemos[ds] || []).length;
                       const dow = d.getDay();
-                      const dowColor = DOW_COLORS[dow] || { bg: count > 0 ? '#FFF8E1' : '#F5F5F5', text: count > 0 ? '#E65100' : '#666', border: count > 0 ? '#FFCC02' : '#E0E0E0' };
+                      const dowColor = DOW_COLORS[dow] || { bg: count > 0 ? '#EAFBFC' : '#F5F5F5', text: count > 0 ? '#007A82' : '#666', border: count > 0 ? '#94DDE2' : '#E0E0E0' };
                       return (
                         <TouchableOpacity
                           key={ds}
@@ -2371,14 +2503,14 @@ export default function MenuScreen() {
                             {DOW[dow]}
                           </Text>
                           {count > 0 ? (
-                            <View style={{ marginTop:6, backgroundColor:'#FF8F00', borderRadius:10, paddingHorizontal:8, paddingVertical:2 }}>
+                            <View style={{ marginTop:6, backgroundColor:'#00AEB8', borderRadius:10, paddingHorizontal:8, paddingVertical:2 }}>
                               <Text style={{ color:'#fff', fontSize:11, fontWeight:'bold' }}>{count}件</Text>
                             </View>
                           ) : (
                             <Text style={{ marginTop:6, fontSize:10, color:'#BDBDBD' }}>なし</Text>
                           )}
                           {count > 0 && (
-                            <View style={{ position:'absolute', top:8, right:8, width:10, height:10, borderRadius:5, backgroundColor:'#FF8F00' }} />
+                          <View style={{ position:'absolute', top:8, right:8, width:10, height:10, borderRadius:5, backgroundColor:'#00AEB8' }} />
                           )}
                         </TouchableOpacity>
                       );
@@ -2389,19 +2521,19 @@ export default function MenuScreen() {
             ) : (
               <ScrollView style={{ padding:16 }}>
                 <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', marginBottom:16, gap:4 }} onPress={() => setWeekMemoDay(null)}>
-                  <Ionicons name="chevron-back" size={16} color="#FF8F00" />
-                  <Text style={{ color:'#FF8F00', fontWeight:'bold', fontSize:13 }}>カレンダーに戻る</Text>
+                    <Ionicons name="chevron-back" size={16} color="#00AEB8" />
+                    <Text style={{ color:'#00AEB8', fontWeight:'bold', fontSize:13 }}>カレンダーに戻る</Text>
                 </TouchableOpacity>
                 {(() => {
                   const d = new Date(weekMemoDay);
                   const DOW = ['日','月','火','水','木','金','土'];
                   return (
                     <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:16 }}>
-                      <View style={{ width:44, height:44, borderRadius:22, backgroundColor:'#FF8F00', alignItems:'center', justifyContent:'center' }}>
+                <View style={{ width:44, height:44, borderRadius:22, backgroundColor:'#00AEB8', alignItems:'center', justifyContent:'center' }}>
                         <Text style={{ color:'#fff', fontWeight:'bold', fontSize:16 }}>{DOW[d.getDay()]}</Text>
                       </View>
                       <View>
-                        <Text style={{ fontSize:18, fontWeight:'bold', color:'#E65100' }}>{d.getMonth()+1}月{d.getDate()}日</Text>
+                  <Text style={{ fontSize:18, fontWeight:'bold', color:'#007A82' }}>{d.getMonth()+1}月{d.getDate()}日</Text>
                         <Text style={{ fontSize:12, color:'#BCAAA4' }}>{(weekMemos[weekMemoDay] || []).length}件のメモ</Text>
                       </View>
                     </View>
@@ -2414,10 +2546,10 @@ export default function MenuScreen() {
                   </View>
                 ) : (
                   (weekMemos[weekMemoDay] || []).map((m, i) => (
-                    <View key={i} style={{ backgroundColor:'#fff', borderRadius:14, padding:14, marginBottom:10, borderLeftWidth:4, borderLeftColor: m.isAdmin ? '#FF8F00' : '#5B9BD5', shadowColor:'#000', shadowOpacity:0.05, shadowRadius:4, elevation:2 }}>
+                    <View key={i} style={{ backgroundColor:'#fff', borderRadius:14, padding:14, marginBottom:10, borderLeftWidth:4, borderLeftColor: m.isAdmin ? '#00AEB8' : '#5B9BD5', shadowColor:'#000', shadowOpacity:0.05, shadowRadius:4, elevation:2 }}>
                       <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:6 }}>
                         <View style={{ paddingHorizontal:8, paddingVertical:2, borderRadius:8, backgroundColor: m.isAdmin ? '#FFF3E0' : '#E3F2FD' }}>
-                          <Text style={{ fontSize:11, fontWeight:'bold', color: m.isAdmin ? '#E65100' : '#1565C0' }}>
+                        <Text style={{ fontSize:11, fontWeight:'bold', color: m.isAdmin ? '#007A82' : '#1565C0' }}>
                             {m.isAdmin ? '稲熊' : m.kidName}
                           </Text>
                         </View>
@@ -2446,8 +2578,8 @@ export default function MenuScreen() {
             <ScrollView style={{ padding:16 }}>
               {/* 管理者お知らせ */}
               {adminNotices.length > 0 && adminNotices.map(n => (
-                <View key={n.id} style={{ backgroundColor:'#FFF8E1', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#FFB300' }}>
-                  <Text style={{ fontSize:11, fontWeight:'bold', color:'#E65100', marginBottom:4 }}>{(n as any).posterName || '稲熊'}</Text>
+                <View key={n.id} style={{ backgroundColor:'#EAFBFC', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#00AEB8' }}>
+                  <Text style={{ fontSize:11, fontWeight:'bold', color:'#007A82', marginBottom:4 }}>{(n as any).posterName || '稲熊'}</Text>
                   <Text style={{ fontSize:14, color:'#333' }}>{n.content}</Text>
                   {role === 'admin' && (
                     <TouchableOpacity style={{ alignSelf:'flex-end', marginTop:4 }} onPress={async () => {
@@ -2566,7 +2698,7 @@ export default function MenuScreen() {
                   <Text style={{ color:'#7CB342', fontSize:13, fontWeight:'bold' }}>日付を選び直す</Text>
                 </TouchableOpacity>
                 <Text style={{ fontSize:12, color:'#888', marginBottom:4 }}>
-                  投稿者：<Text style={{ fontWeight:'bold', color: role==='admin' ? '#E65100' : '#5B9BD5' }}>{role==='admin' ? '稲熊' : name}</Text>
+                  投稿者：<Text style={{ fontWeight:'bold', color: role==='admin' ? '#007A82' : '#5B9BD5' }}>{role==='admin' ? '稲熊' : name}</Text>
                   {'  '}表示日：<Text style={{ fontWeight:'bold', color:'#7CB342' }}>{scheduleNoticeCalDate}</Text>
                 </Text>
                 <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>お知らせ内容</Text>
@@ -2998,7 +3130,7 @@ const styles = StyleSheet.create({
     minHeight: 82,
     borderRadius: 18,
     borderWidth: 1.2,
-    borderColor: '#FFC76E',
+    borderColor: '#94DDE2',
     backgroundColor: '#FFF2D8',
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -3037,7 +3169,7 @@ const styles = StyleSheet.create({
   },
   quickFeatureGrid: {
     marginHorizontal: 6,
-    marginBottom: 54,
+    marginBottom: 18,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -3125,6 +3257,27 @@ const styles = StyleSheet.create({
   },
   quickFeatureAddText: {
     color: '#008C96',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  quickFeatureHeaderAddButton: {
+    minHeight: 34,
+    borderRadius: 17,
+    backgroundColor: '#F2F0FF',
+    borderWidth: 1.2,
+    borderColor: '#C9C1F6',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  quickFeatureHeaderAddText: {
+    color: '#333333',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -3308,7 +3461,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     fontWeight: '800',
-    color: '#E65100',
+    color: '#007A82',
     marginTop: 3,
   },
 
@@ -3402,10 +3555,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#FFF4DF',
+    backgroundColor: '#EAFBFC',
     borderWidth: 1.3,
-    borderColor: '#F6B45C',
-    paddingHorizontal: 12,
+    borderColor: '#94DDE2',
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 14,
     shadowColor: '#8B7340',
@@ -3414,7 +3567,28 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   staffSectionEditText: {
-    color: '#A85B00',
+    color: '#333333',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  staffSectionMemoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F6EEFA',
+    borderWidth: 1.3,
+    borderColor: '#D7B9E6',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    shadowColor: '#8B7340',
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 2,
+    marginRight: 6,
+  },
+  staffSectionMemoText: {
+    color: '#333333',
     fontSize: 12,
     fontWeight: '900',
   },
@@ -3449,7 +3623,7 @@ const styles = StyleSheet.create({
     color: '#6D5A4D',
   },
   pickupToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 12, borderWidth: 1, borderColor: '#FFCC80' },
-  pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#E65100' },
+  pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#007A82' },
   
   // 新しい送迎UI用スタイル
   staffSection: {
@@ -3486,7 +3660,7 @@ const styles = StyleSheet.create({
 
   // 元の不要スタイル（念のため保持）
   pickupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, marginBottom: 6, backgroundColor: '#F5F5F5' },
-  pickupRowMe: { backgroundColor: '#FFF9E6', borderWidth: 1.5, borderColor: '#FFD54F' },
+  pickupRowMe: { backgroundColor: '#EAFBFC', borderWidth: 1.5, borderColor: '#94DDE2' },
   pickupBlockLabel: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
   pickupStaffBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, backgroundColor: '#E0E0E0' },
   pickupStaffBadgeMe: { backgroundColor: '#5B9BD5' },
@@ -3687,7 +3861,7 @@ const styles = StyleSheet.create({
   todayPlanDecoStar: {
     right: 82,
     top: 14,
-    color: '#F6CA51',
+    color: '#00AEB8',
     fontSize: 18,
     opacity: 0.72,
     transform: [{ rotate: '12deg' }],
@@ -3789,7 +3963,7 @@ const styles = StyleSheet.create({
     width: width - 24,
     height: EVENT_PLAN_CARD_HEIGHT,
     borderRadius: 20,
-    backgroundColor: '#FFF7DF',
+    backgroundColor: '#EAFBFC',
     borderWidth: 1.4,
     borderColor: '#FFD178',
     overflow: 'hidden',
@@ -3813,7 +3987,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 18,
     top: 14,
-    color: '#F6C44D',
+    color: '#00AEB8',
     fontSize: 18,
     opacity: 0.75,
     zIndex: 4,
@@ -3855,7 +4029,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 40,
     top: 34,
-    color: '#F6C44D',
+    color: '#00AEB8',
     fontSize: 26,
     opacity: 0.55,
   },
@@ -3993,7 +4167,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFF7DF',
+    backgroundColor: '#EAFBFC',
     borderWidth: 1.4,
     borderColor: '#FFD178',
     shadowColor: '#8B7340',
@@ -4034,10 +4208,10 @@ const styles = StyleSheet.create({
   noticeBadge: { backgroundColor: '#E53935', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   noticeBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   sectionLabel: {
-    fontSize: 26,
+    fontSize: 21,
     fontWeight: '900',
     color: '#333',
-    letterSpacing: 8,
+    letterSpacing: 2,
     fontStyle: 'italic',
   },
 

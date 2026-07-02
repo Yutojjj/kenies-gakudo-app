@@ -135,7 +135,7 @@ export default function SurveyAnswerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   headerTitle: { fontSize: 17, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   descBox: { backgroundColor: '#FFF8E1', borderRadius: 12, padding: 14, borderLeftWidth: 4, borderLeftColor: COLORS.primary },
   descText: { fontSize: 14, color: '#555', lineHeight: 20 },

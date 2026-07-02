@@ -303,14 +303,14 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
           style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1.5, borderColor: '#AEE4F5', backgroundColor: '#F0F9FF' }}
           onPress={() => openChat({ id: `direct_${myAccountId}`, type: 'direct', name: '稲熊', participants: [ADMIN_ID, myAccountId] })}
         >
-          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#AEE4F5', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFF8F0', justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
             <Ionicons name="star" size={16} color="#5D4037" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontWeight: 'bold', fontSize: 14, color: '#333' }}>稲熊</Text>
             <Text style={{ fontSize: 11, color: '#888' }}>管理者</Text>
           </View>
-          <View style={{ padding: 10, backgroundColor: '#AEE4F5', borderRadius: 10 }}>
+          <View style={{ padding: 10, backgroundColor: '#FFF8F0', borderRadius: 10 }}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color="#5D4037" />
           </View>
         </TouchableOpacity>
@@ -1570,7 +1570,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#AEE4F5',
+    backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
   backBtn: { marginRight: 12 },

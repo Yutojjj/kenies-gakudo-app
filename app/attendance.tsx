@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
@@ -36,8 +36,8 @@ interface Kid {
 type ViewMode = 'attendance' | 'todayStatus' | 'schoolUsers' | 'transport';
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
-const PASTEL_COLORS = ['#FFE4E1', '#E6F2FF', '#F0FFF0', '#F8F0FF', '#FFFFE0', '#FFF5EE'];
-const BG_COLORS = ['#FFE4E1', '#E0FFFF', '#E6E6FA', '#FFFACD', '#F0FFF0', '#F5FFFA', '#FFE4B5', '#F0F8FF'];
+const PASTEL_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8'];
+const BG_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8', '#F6EEF8', '#EEF7F6'];
 
 // 固定の学校順序
 const FIXED_SCHOOL_ORDER = [
@@ -87,6 +87,8 @@ export default function AttendanceScreen() {
   const [futureWeeks, setFutureWeeks] = useState(1); 
   
   const scrollViewRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const preserveScrollRef = useRef<{ anchorKey: string; anchorY: number; scrollY: number } | null>(null);
   const [layouts, setLayouts] = useState<Record<string, number>>({});
 
   const [schoolModalData, setSchoolModalData] = useState<{ date: string, title: string, kids: Kid[] } | null>(null);
@@ -417,6 +419,29 @@ export default function AttendanceScreen() {
     }
   };
 
+  const handleLoadPastWeek = () => {
+    const firstDate = datesToDisplay[0];
+    const anchorKey = `${firstDate.getMonth() + 1}/${firstDate.getDate()}`;
+    preserveScrollRef.current = {
+      anchorKey,
+      anchorY: layouts[anchorKey] || 0,
+      scrollY: scrollYRef.current,
+    };
+    setPastWeeks(prev => prev + 1);
+  };
+
+  useEffect(() => {
+    const target = preserveScrollRef.current;
+    if (!target) return;
+    const nextAnchorY = layouts[target.anchorKey];
+    if (nextAnchorY === undefined) return;
+    const delta = nextAnchorY - target.anchorY;
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
+    });
+    preserveScrollRef.current = null;
+  }, [layouts, pastWeeks]);
+
   const groupedUsersBySchool = useMemo(() => {
     const grouped: Record<string, Kid[]> = {};
     kids.forEach(k => {
@@ -459,8 +484,8 @@ export default function AttendanceScreen() {
             
             let textColorStyle = {};
             if (!isToday) {
-              if (isSaturday) textColorStyle = { color: 'blue' };
-              if (isSunday || isPublicHoliday) textColorStyle = { color: 'red' };
+              if (isSaturday) textColorStyle = { color: '#1E5AA8' };
+              if (isSunday || isPublicHoliday) textColorStyle = { color: '#D32F2F' };
             }
 
             return (
@@ -474,8 +499,14 @@ export default function AttendanceScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView ref={scrollViewRef} style={styles.mainScroll} contentContainerStyle={{ paddingBottom: 100 }}>
-        <TouchableOpacity style={styles.loadMoreBtn} onPress={() => setPastWeeks(prev => prev + 1)}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.mainScroll}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
+      >
+        <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadPastWeek}>
           <Ionicons name="arrow-up-circle-outline" size={20} color={COLORS.primary} />
           <Text style={styles.loadMoreText}>さらに過去の1週間分を表示</Text>
         </TouchableOpacity>
@@ -580,9 +611,9 @@ export default function AttendanceScreen() {
                     return (
                       <>
                         {lesson1Entries.length > 0 && (
-                          <View style={[styles.schoolCard, { backgroundColor: '#F0F8FF' }]}>
+                          <View style={[styles.schoolCard, { backgroundColor: '#EAF8F1' }]}>
                             <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
-                              <Text style={[styles.schoolNameText, { color: '#4682B4' }]}>習い事</Text>
+                              <Text style={styles.schoolNameText}>習い事</Text>
                             </TouchableOpacity>
                             <View style={styles.timeGroupContainer}>
                               {lesson1Entries.map(([lessonKey, kids]) => {
@@ -595,21 +626,21 @@ export default function AttendanceScreen() {
                                       <>
                                         <View style={styles.timeHeaderRow}>
                                           <View>
-                                            <Text style={[styles.timeLabel, { color: '#4682B4', fontWeight: 'bold' }]}>{lessonTime}</Text>
-                                            <Text style={[styles.timeLabel, { color: '#4682B4' }]} numberOfLines={1}>{lessonName}</Text>
+                                            <Text style={[styles.timeLabel, { fontWeight: 'bold' }]}>{lessonTime}</Text>
+                                            <Text style={styles.timeLabel} numberOfLines={1}>{lessonName}</Text>
                                           </View>
-                                          <Text style={[styles.timeCountBadge, { color: '#4682B4' }]}>{kids.length}名</Text>
+                                          <Text style={[styles.timeCountBadge, { color: '#2F7D6D', backgroundColor: '#DDF4EA' }]}>{kids.length}名</Text>
                                         </View>
                                         <View style={styles.kidNamesContainer}>
                                           {kids.map(k => (
-                                            <Text key={k.id} style={[styles.kidNameText, { color: '#4682B4' }]} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
+                                            <Text key={k.id} style={styles.kidNameText} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
                                           ))}
                                         </View>
                                       </>
                                     ) : (
                                       <>
-                                        <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
-                                        <Text style={[styles.timeButtonText, { color: '#4682B4', fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
+                                        <Text style={[styles.timeButtonText, { fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
+                                        <Text style={[styles.timeButtonText, { fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
                                         <Text style={styles.timeCountText}>{kids.length}名</Text>
                                       </>
                                     )}
@@ -671,7 +702,7 @@ export default function AttendanceScreen() {
         })}
 
         <TouchableOpacity style={styles.loadMoreBtn} onPress={() => setFutureWeeks(prev => prev + 1)}>
-          <Ionicons name="arrow-down-circle-outline" size={20} color={COLORS.primary} />
+          <Ionicons name="arrow-down-circle-outline" size={20} color="#7B4E8E" />
           <Text style={styles.loadMoreText}>さらに次の1週間分を表示</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -966,7 +997,7 @@ export default function AttendanceScreen() {
             } catch {}
             const isPH = !!publicHolidays[dateStr];
             const isSun = date.getDay() === 0, isSat = date.getDay() === 6;
-            const bgColor = isToday ? '#FFF9E6' : (isPH||isSun) ? '#FFF0F0' : isSat ? '#F0F6FF' : COLORS.white;
+            const bgColor = isToday ? '#EAFBFC' : (isPH||isSun) ? '#FFF0F0' : isSat ? '#F0F6FF' : COLORS.white;
             const dowColor = (isPH||isSun) ? '#CC0000' : isSat ? '#0055CC' : COLORS.text;
 
             return (
@@ -1050,13 +1081,21 @@ export default function AttendanceScreen() {
           onPress={() => setShowKidNames(!showKidNames)}
           activeOpacity={0.85}
         >
-          <Ionicons name={showKidNames ? "swap-vertical" : "swap-vertical"} size={22} color={COLORS.white} />
+          <View style={styles.fabIconWrap}>
+            <Ionicons name="swap-vertical" size={19} color={COLORS.white} />
+          </View>
+          <View>
+            <Text style={styles.fabText}>表示切替</Text>
+            <Text style={styles.fabSubText}>{showKidNames ? '名前表示中' : '人数表示中'}</Text>
+          </View>
         </TouchableOpacity>
       )}
 
       <Modal visible={!!schoolModalData} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableWithoutFeedback onPress={() => setSchoolModalData(null)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
             {schoolModalData && (
               <>
                 <View style={styles.modalHeader}>
@@ -1088,13 +1127,17 @@ export default function AttendanceScreen() {
                 </ScrollView>
               </>
             )}
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       <Modal visible={!!timeModalData} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <TouchableWithoutFeedback onPress={() => setTimeModalData(null)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
             {timeModalData && (
               <>
                 <View style={styles.modalHeader}>
@@ -1126,8 +1169,10 @@ export default function AttendanceScreen() {
                 </ScrollView>
               </>
             )}
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
       <AdminBottomNav active="attendance" />
     </SafeAreaView>
@@ -1136,46 +1181,46 @@ export default function AttendanceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   
   tabNavigation: { flexDirection: 'row', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
   tabNavBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },
-  tabNavBtnActive: { borderColor: COLORS.primary },
-  tabNavText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
-  tabNavTextActive: { fontSize: 13, fontWeight: 'bold', color: COLORS.primary },
+  tabNavBtnActive: { borderColor: '#007A82' },
+  tabNavText: { fontSize: 13, fontWeight: '800', color: '#6F6A66' },
+  tabNavTextActive: { fontSize: 13, fontWeight: '900', color: '#007A82' },
 
   topNav: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 10 },
   topNavScroll: { paddingHorizontal: 12, alignItems: 'center' },
-  navDateBtn: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, backgroundColor: '#F0F0F0', marginHorizontal: 4 },
-  navDateBtnToday: { backgroundColor: COLORS.primary },
-  navDateText: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight },
+  navDateBtn: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, backgroundColor: '#F3F1EF', marginHorizontal: 4 },
+  navDateBtnToday: { backgroundColor: '#00AEB8' },
+  navDateText: { fontSize: 16, fontWeight: '900', color: '#6F6A66' },
   navDateTextToday: { color: COLORS.white },
   mainScroll: { flex: 1, backgroundColor: '#F8F9FA' },
-  loadMoreBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white, margin: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: COLORS.primary, borderStyle: 'dashed' },
-  loadMoreText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 14, marginLeft: 8 },
+  loadMoreBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white, margin: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#7B4E8E', borderStyle: 'dashed' },
+  loadMoreText: { color: '#7B4E8E', fontWeight: '900', fontSize: 14, marginLeft: 8 },
   daySection: { marginBottom: 32 },
   dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8, flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 6, paddingHorizontal: 8 },
   dayHeaderText: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
   
-  eventBadgeLarge: { backgroundColor: '#20B2AA', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 12 },
+  eventBadgeLarge: { backgroundColor: '#7B4E8E', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 12 },
   eventBadgeTextLarge: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
 
-  totalBadge: { marginLeft: 12, backgroundColor: COLORS.primary + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: COLORS.primary },
-  totalBadgeText: { fontSize: 13, fontWeight: 'bold', color: COLORS.secondary },
+  totalBadge: { marginLeft: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  totalBadgeText: { fontSize: 13, fontWeight: '900', color: COLORS.text },
   schoolsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
   schoolCard: { width: '31.3%', borderRadius: 12, marginHorizontal: '1%', marginBottom: 12, padding: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   schoolNameBtn: { alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   schoolNameText: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   timeGroupContainer: { gap: 8 },
-  timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 3, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+  timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 3, borderWidth: 1, borderColor: '#E7E2DC' },
   timeButtonExpanded: { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 8 },
   timeButtonText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
-  timeCountText: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary },
+  timeCountText: { fontSize: 12, fontWeight: '900', color: COLORS.text },
   timeHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 6 },
-  timeLabel: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight },
-  timeCountBadge: { fontSize: 10, fontWeight: 'bold', color: COLORS.primary, backgroundColor: COLORS.primary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  timeLabel: { fontSize: 11, fontWeight: '900', color: '#5D4037' },
+  timeCountBadge: { fontSize: 10, fontWeight: '900', color: COLORS.text, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   kidNamesContainer: { gap: 3, width: '100%' },
   kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
@@ -1224,6 +1269,45 @@ const styles = StyleSheet.create({
   transportEmptyText: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   todayBadge: { marginTop: 4, backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   todayBadgeText: { fontSize: 10, color: COLORS.white, fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
-  fabActive: { backgroundColor: COLORS.danger },
+  fab: {
+    position: 'absolute',
+    bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14,
+    right: 14,
+    minWidth: 136,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#00AEB8',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 13,
+    shadowColor: '#007A82',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+  },
+  fabActive: { backgroundColor: '#4A90E2', shadowColor: '#2D69A3' },
+  fabIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fabText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  fabSubText: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 13,
+  },
 });

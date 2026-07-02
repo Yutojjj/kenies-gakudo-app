@@ -200,7 +200,7 @@ export default function StaffHoursScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 17, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   monthRow: { flexDirection: 'row', flexWrap: 'wrap', paddingVertical: 8, paddingHorizontal: 12, gap: 6 },

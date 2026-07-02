@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f7ff' },
   center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
-    backgroundColor: '#AEE4F5', flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FFF8F0', flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 14, borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
   backBtn:     { marginRight: 8, padding: 2 },

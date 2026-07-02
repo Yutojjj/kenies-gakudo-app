@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { disableNetwork, enableNetwork } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { CallProvider } from '../contexts/CallContext';
 import { db } from '../firebase';
 import { refreshPushSubscription } from '../utils/setupPushToken';
+import { navigateHome } from '../utils/navigationHome';
 
 
 const PUBLIC_PATHS = ['/', '/index'];
@@ -45,6 +46,25 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const [isOnline, setIsOnline] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const edgeHomePanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      const startX = evt.nativeEvent.pageX - gestureState.dx;
+      return (
+        startX <= 28 &&
+        gestureState.dx > 34 &&
+        Math.abs(gestureState.dy) < 24 &&
+        !PUBLIC_PATHS.includes(pathname)
+      );
+    },
+    onPanResponderRelease: (_evt, gestureState) => {
+      if (gestureState.dx > 90 && Math.abs(gestureState.dy) < 60 && pathname !== '/menu') {
+        navigateHome(router);
+      }
+    },
+  }), [pathname, router]);
 
   useEffect(() => {
     const setupLoggedInPush = async () => {
@@ -118,7 +138,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <CallProvider>
         <AuthGuard>
-          <SafeAreaView style={styles.container}>
+          <SafeAreaView style={styles.container} {...edgeHomePanResponder.panHandlers}>
             {/* オフライン時のバナー */}
             {!isOnline && (
               <View style={{ backgroundColor: '#FF5722', paddingVertical: 6, alignItems: 'center' }}>
