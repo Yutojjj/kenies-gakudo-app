@@ -17,6 +17,7 @@ import SignaturePad from '../components/SignaturePad';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 // ─── ユーティリティ ───────────────────────────────────────────────────
 const customAlert = (title: string, message?: string) => {
@@ -803,7 +804,7 @@ export default function PaidTransportScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>送迎費承諾</Text>
@@ -821,7 +822,7 @@ export default function PaidTransportScreen() {
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>

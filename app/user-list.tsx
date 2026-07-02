@@ -6,6 +6,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 // 学校カード用の薄い背景色リスト
 const BG_COLORS = ['#FFE4E1', '#E0FFFF', '#E6E6FA', '#FFFACD', '#F0FFF0', '#F5FFFA', '#FFE4B5', '#F0F8FF'];
@@ -51,7 +52,7 @@ export default function UserListScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>学校別利用者</Text>

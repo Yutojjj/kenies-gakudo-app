@@ -8,6 +8,7 @@ import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBott
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { navigateHome } from '../utils/navigationHome';
 
 type Staff = { id: string; name: string };
 type AssignedStaff = { name: string; start: string; end: string };
@@ -83,7 +84,7 @@ export default function ShiftViewScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト確認</Text>

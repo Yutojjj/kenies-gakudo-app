@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import AdminBottomNav from '../components/AdminBottomNav';
+import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
@@ -124,6 +124,16 @@ export default function ScheduleScreen() {
   const [memoSaved, setMemoSaved] = useState(false);
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
   const initialEditOpenedRef = useRef(false);
+
+  const goHome = () => {
+    router.replace({
+      pathname: '/menu',
+      params: {
+        role: loggedInUser?.role || 'user',
+        name: loggedInUser?.name || name || '',
+      },
+    } as any);
+  };
 
   const formatScheduleModalDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -832,7 +842,7 @@ export default function ScheduleScreen() {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ fontSize: 16, color: COLORS.textLight }}>スケジュールを管理する児童データがありません。</Text>
-        <TouchableOpacity style={{ marginTop: 20, padding: 12, backgroundColor: COLORS.primary, borderRadius: 8 }} onPress={() => router.back()}>
+        <TouchableOpacity style={{ marginTop: 20, padding: 12, backgroundColor: COLORS.primary, borderRadius: 8 }} onPress={goHome}>
           <Text style={{ color: COLORS.white, fontWeight: 'bold' }}>戻る</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -924,7 +934,7 @@ export default function ScheduleScreen() {
       </View>
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={goHome}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>スケジュール</Text>
@@ -954,7 +964,7 @@ export default function ScheduleScreen() {
         </View>
       )}
 
-      <ScrollView style={styles.scrollArea}>
+      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollAreaContent}>
         <View style={styles.monthSelector}>
           <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthBtn}>
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
@@ -1670,13 +1680,16 @@ const styles = StyleSheet.create({
     color: '#4682B4', 
     textAlign: 'center' 
   },
+  scrollAreaContent: {
+    paddingBottom: ADMIN_BOTTOM_NAV_HEIGHT + 96,
+  },
   fabLesson: { position: 'absolute', bottom: 24, right: 20, width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabLessonImg: { width: '100%', height: '100%' },
   bulkInputBar: {
     position: 'absolute',
     left: 12,
     right: 12,
-    bottom: 12,
+    bottom: ADMIN_BOTTOM_NAV_HEIGHT + 8,
     flexDirection: 'row',
     gap: 10,
     padding: 8,

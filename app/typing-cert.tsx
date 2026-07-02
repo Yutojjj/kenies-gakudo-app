@@ -22,6 +22,7 @@ import {
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 // ─── 型 ────────────────────────────────────────────────────────────────
 type Star = 'kuro' | 'aka' | 'ki';
@@ -328,7 +329,7 @@ export default function TypingCertScreen() {
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigateHome(router)} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>タイピング検定</Text>

@@ -25,6 +25,7 @@ import AdminBottomNav from '../../components/AdminBottomNav';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
 import { useRequireRole } from '../../hooks/useRequireRole';
+import { navigateHome } from '../../utils/navigationHome';
 
 // ── 型 ──────────────────────────────────────────
 type Child = {
@@ -285,7 +286,7 @@ export default function QrCardsScreen() {
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>QRカード発行</Text>

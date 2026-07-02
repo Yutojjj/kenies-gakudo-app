@@ -10,6 +10,7 @@ import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBott
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { navigateHome } from '../utils/navigationHome';
 
 const SHIFT_IMAGES = {
   autoFill: require('../assets/menu/shift_auto.png'),
@@ -517,7 +518,7 @@ export default function ShiftCreateScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => setSettingsVisible(true)} style={[styles.pdfBtn, { backgroundColor: '#78909C' }]}>

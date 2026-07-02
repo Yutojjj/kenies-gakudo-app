@@ -6,6 +6,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 type ShiftRecord = { dateStr: string; start: string; end: string };
 type StaffSummary = {
@@ -97,7 +98,7 @@ export default function StaffHoursScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>スタッフ別合計勤務時間</Text>

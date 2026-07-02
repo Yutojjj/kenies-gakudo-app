@@ -6,6 +6,7 @@ import { Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 const customAlert = (t: string, m?: string) => {
   if (Platform.OS === 'web') window.alert(m ? `${t}\n${m}` : t);
@@ -72,7 +73,7 @@ export default function SurveyAnswerScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 10 }}>
+        <TouchableOpacity onPress={() => navigateHome(router)} style={{ marginRight: 10 }}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{survey.title}</Text>

@@ -8,6 +8,7 @@ import EditablePickerModal from '../../components/EditablePickerModal';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
 import { useRequireRole } from '../../hooks/useRequireRole';
+import { navigateHome } from '../../utils/navigationHome';
 
 const WEEK_DAYS = ['月', '火', '水', '木', '金'] as const;
 type DayType = typeof WEEK_DAYS[number];
@@ -255,7 +256,7 @@ export default function AccountFormScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isEditMode ? 'アカウント編集' : '新規アカウント作成'}</Text>

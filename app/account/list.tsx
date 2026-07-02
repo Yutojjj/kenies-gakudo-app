@@ -8,6 +8,7 @@ import { COLORS } from '../../constants/theme';
 import { useCall } from '../../contexts/CallContext';
 import { db } from '../../firebase';
 import { useRequireRole } from '../../hooks/useRequireRole';
+import { navigateHome } from '../../utils/navigationHome';
 
 export default function AccountManagementScreen() {
   const { verified, checking } = useRequireRole('admin');
@@ -184,7 +185,7 @@ export default function AccountManagementScreen() {
     <SafeAreaView style={styles.container}>
       {/* ── 色合いを豊かにしたヘッダー ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>アカウント管理</Text>

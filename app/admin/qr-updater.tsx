@@ -4,6 +4,7 @@ import { collection, doc, getDocs, writeBatch } from 'firebase/firestore';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../../firebase';
+import { navigateHome } from '../../utils/navigationHome';
 
 // メニュー画面のヘッダーと同じベースカラー
 const THEME_COLOR = '#00C0C7';
@@ -84,7 +85,7 @@ export default function QrUpdaterScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBg}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>QRコード一括更新</Text>

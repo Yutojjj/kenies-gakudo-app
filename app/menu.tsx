@@ -59,6 +59,19 @@ const QUICK_MENU_IMAGES = {
   regularUsers: require('../assets/quick-menu/regular-users.png'),
   account: require('../assets/quick-menu/account.png'),
   paidTransport: require('../assets/quick-menu/paid-transport.png'),
+  schoolTimes: require('../assets/quick-menu/school-times.png'),
+  holidays: require('../assets/quick-menu/holidays.png'),
+  lessons: require('../assets/quick-menu/lessons.png'),
+  gradeChange: require('../assets/quick-menu/grade-change.png'),
+  shiftPeriod: require('../assets/quick-menu/shift-period.png'),
+  staffHours: require('../assets/quick-menu/staff-hours.png'),
+  password: require('../assets/quick-menu/password.png'),
+  survey: require('../assets/quick-menu/survey.png'),
+  typing: require('../assets/quick-menu/typing.png'),
+  qrScan: require('../assets/quick-menu/qr-scan.png'),
+  qrUpdater: require('../assets/quick-menu/qr-updater.png'),
+  logout: require('../assets/quick-menu/logout.png'),
+  scheduleChanges: require('../assets/quick-menu/schedule-changes.png'),
 };
 
 const TODAY_TASK_IMAGES = {
@@ -88,6 +101,7 @@ type AdminQuickKey =
   | 'typing'
   | 'qrScan'
   | 'qrUpdater'
+  | 'scheduleChanges'
   | 'accountList'
   | 'accountCreate';
 
@@ -1122,20 +1136,20 @@ export default function MenuScreen() {
       const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
       if (activeTrips.length === 0) return null;
       return (
-        <View key={`${entry.staffName || 'staff'}-${sIdx}`} style={[styles.staffSection, { borderLeftColor: color, backgroundColor: color + '18', borderRadius: 10, marginBottom: 6 }]}>
+        <View key={`${entry.staffName || 'staff'}-${sIdx}`} style={[styles.staffSection, { borderLeftColor: color, backgroundColor: '#FFFFFF', borderRadius: 10, marginBottom: 6 }]}>
           <View style={styles.staffNameRow}>
             <View style={[styles.staffDot, { backgroundColor: color }]} />
-            <Text style={[styles.staffName, { fontSize: 14 }]}>{entry.staffName}</Text>
+            <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
           </View>
           <View style={[styles.tripsRow, { flexWrap: 'wrap' }]}>
             {activeTrips.map((trip: any, tIdx: number) => (
-              <View key={`${entry.staffName || sIdx}-${tIdx}`} style={[styles.tripSlot, { borderColor: color, backgroundColor: '#fff', borderRadius: 8 }]}>
-                <Text style={[styles.tripLabelText, { color, fontWeight: 'bold' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
+              <View key={`${entry.staffName || sIdx}-${tIdx}`} style={[styles.tripSlot, { borderColor: color, backgroundColor: '#FFFDF9', borderRadius: 8 }]}>
+                <Text style={[styles.tripLabelText, { color: '#5D4037', fontWeight: 'bold', backgroundColor: '#FFF4DE' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
                 <View style={{ flex: 1 }}>
                   {trip.blockKeys.map((bk: string, bkIdx: number) => {
                     const parts = bk.split('_');
                     const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
-                    return <Text key={bk} style={[styles.slotFilledText, { color: STAFF_COLORS[bkIdx % STAFF_COLORS.length] }]} numberOfLines={1}>{label}</Text>;
+                    return <Text key={bk} style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>;
                   })}
                 </View>
               </View>
@@ -1164,19 +1178,20 @@ export default function MenuScreen() {
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'events', label: 'イベント管理', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || '', tab: 'management' } } as any) },
     { key: 'album', label: 'アルバム', icon: 'image', color: '#F2A100', bg: '#FFE6A8', image: QUICK_MENU_IMAGES.album, cardBg: '#FFF0E8', borderColor: '#FFBE9A', onPress: () => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any) },
-    { key: 'schoolTimes', label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', onPress: () => router.push('/school-times') },
-    { key: 'holidays', label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', onPress: () => router.push('/holidays-setting') },
-    { key: 'lessons', label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', onPress: () => router.push('/lesson-management' as any) },
+    { key: 'schoolTimes', label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', image: QUICK_MENU_IMAGES.schoolTimes, cardBg: '#EFFFFC', borderColor: '#7DDAD6', onPress: () => router.push('/school-times') },
+    { key: 'holidays', label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', image: QUICK_MENU_IMAGES.holidays, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push('/holidays-setting') },
+    { key: 'lessons', label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', image: QUICK_MENU_IMAGES.lessons, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/lesson-management' as any) },
     { key: 'regularUsers', label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', image: QUICK_MENU_IMAGES.regularUsers, cardBg: '#EAFBF8', borderColor: '#9ADBD0', onPress: () => router.push('/regular-users' as any) },
-    { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', onPress: () => setGradeChoiceModalVisible(true) },
+    { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', image: QUICK_MENU_IMAGES.gradeChange, cardBg: '#FFF7DF', borderColor: '#F4CF76', onPress: () => setGradeChoiceModalVisible(true) },
     { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.paidTransport, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
-    { key: 'shiftPeriod', label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', onPress: () => setPeriodModal(true) },
-    { key: 'staffHours', label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', onPress: () => router.push('/staff-hours' as any) },
-    { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', onPress: openPasswordModal },
-    { key: 'survey', label: 'アンケート', icon: 'clipboard-outline', color: '#00A176', bg: '#DFF8EF', onPress: () => router.push('/survey' as any) },
-    { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => router.push('/typing-cert' as any) },
-    { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', onPress: () => router.push('/qr-scan' as any) },
-    { key: 'qrUpdater', label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', onPress: () => router.push('/admin/qr-updater' as any) },
+    { key: 'shiftPeriod', label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', image: QUICK_MENU_IMAGES.shiftPeriod, cardBg: '#F0F8FF', borderColor: '#B9DFFF', onPress: () => setPeriodModal(true) },
+    { key: 'staffHours', label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', image: QUICK_MENU_IMAGES.staffHours, cardBg: '#F1F2FF', borderColor: '#BFC6FF', onPress: () => router.push('/staff-hours' as any) },
+    { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
+    { key: 'survey', label: 'アンケート', icon: 'clipboard-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.survey, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push('/survey' as any) },
+    { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
+    { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
+    { key: 'qrUpdater', label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', image: QUICK_MENU_IMAGES.qrUpdater, cardBg: '#EFFFFC', borderColor: '#91D9DE', onPress: () => router.push('/admin/qr-updater' as any) },
+    { key: 'scheduleChanges', label: '変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.scheduleChanges, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
     { key: 'accountList', label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/list') },
     { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/form') },
   ];
@@ -1207,10 +1222,10 @@ export default function MenuScreen() {
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'shift', label: 'シフト', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
     { key: 'album', label: 'アルバム', icon: 'image', color: '#F2A100', bg: '#FFE6A8', image: QUICK_MENU_IMAGES.album, cardBg: '#FFF0E8', borderColor: '#FFBE9A', onPress: () => router.push({ pathname: '/album', params: { role: role || 'staff', name: name || '' } } as any) },
-    { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => router.push('/typing-cert' as any) },
-    { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', onPress: () => router.push('/qr-scan' as any) },
-    { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', onPress: openPasswordModal },
-    { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', onPress: handleLogout },
+    { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
+    { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
+    { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
+    { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', image: QUICK_MENU_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: handleLogout },
   ];
   const visibleStaffQuickOptions = staffQuickOptions.filter(item => staffQuickVisibleKeys.includes(item.key));
   const toggleStaffQuickKey = async (key: StaffQuickKey) => {
@@ -1316,104 +1331,6 @@ export default function MenuScreen() {
           </View>
         )}
 
-        {(role === 'user' || role === 'staff' || role === 'admin') && (
-          <TouchableOpacity onPress={openSettings} style={styles.compactMenuBtn}>
-            <Text style={{ fontSize: 20 }}>☰</Text>
-            {surveyCount > 0 && (
-              <View style={styles.menuBtnBadge}>
-                <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>{surveyCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {role === 'admin' && (
-          <View style={styles.adminTodoSection}>
-            <View style={styles.adminSectionTitleRow}>
-              <View style={styles.todayPlanTitleBar} />
-              <Text style={styles.adminSectionTitle}>今日やること</Text>
-            </View>
-            <View style={styles.adminTodoRow}>
-              {adminTodayChangeCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.adminTodoCard, { borderColor: '#FFB36A', backgroundColor: '#FFF7ED' }]}
-                  onPress={() => router.push('/schedule-changes' as any)}
-                  activeOpacity={0.82}
-                >
-                  <Image source={TODAY_TASK_IMAGES.changes} style={styles.adminTodoImage} resizeMode="contain" />
-                  <Text style={styles.adminTodoCount}>{adminTodayChangeCount}</Text>
-                  <Text style={styles.adminTodoLabel}>出欠変更</Text>
-                </TouchableOpacity>
-              )}
-              {unreadCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.adminTodoCard, { borderColor: '#B9A4FF', backgroundColor: '#F6F2FF' }]}
-                  onPress={() => router.push('/messages' as any)}
-                  activeOpacity={0.82}
-                >
-                  <Image source={TODAY_TASK_IMAGES.messages} style={styles.adminTodoImage} resizeMode="contain" />
-                  <Text style={styles.adminTodoCount}>{unreadCount}</Text>
-                  <Text style={styles.adminTodoLabel}>未読メッセージ</Text>
-                </TouchableOpacity>
-              )}
-              {adminTodayScheduleMemoCount > 0 && (
-                <View style={[styles.adminTodoCard, { borderColor: '#9ED99B', backgroundColor: '#F5FBF0' }]}>
-                  <Image source={TODAY_TASK_IMAGES.memo} style={styles.adminTodoImage} resizeMode="contain" />
-                  <Text style={styles.adminTodoCount}>{adminTodayScheduleMemoCount}</Text>
-                  <Text style={styles.adminTodoLabel}>今日のメモ</Text>
-                </View>
-              )}
-              {adminTodoTotalCount === 0 && (
-                <View style={styles.adminTodoEmptyCard}>
-                  <Ionicons name="checkmark-circle-outline" size={24} color="#00AEB8" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.adminTodoEmptyTitle}>今日やることはありません</Text>
-                    <Text style={styles.adminTodoEmptyText}>出欠変更・未読メッセージ・今日のメモはありません</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {role === 'staff' && (
-          <View style={styles.adminTodoSection}>
-            <View style={styles.adminSectionTitleRow}>
-              <View style={styles.todayPlanTitleBar} />
-              <Text style={styles.adminSectionTitle}>本日の予定</Text>
-            </View>
-            <View style={styles.adminTodoRow}>
-              {adminTodayChangeCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.adminTodoCard, { borderColor: '#FFB36A', backgroundColor: '#FFF7ED' }]}
-                  onPress={() => router.push('/schedule-changes' as any)}
-                  activeOpacity={0.82}
-                >
-                  <Image source={TODAY_TASK_IMAGES.changes} style={styles.adminTodoImage} resizeMode="contain" />
-                  <Text style={styles.adminTodoCount}>{adminTodayChangeCount}</Text>
-                  <Text style={styles.adminTodoLabel}>出欠変更</Text>
-                </TouchableOpacity>
-              )}
-              {adminTodayScheduleMemoCount > 0 && (
-                <View style={[styles.adminTodoCard, { borderColor: '#9ED99B', backgroundColor: '#F5FBF0' }]}>
-                  <Image source={TODAY_TASK_IMAGES.memo} style={styles.adminTodoImage} resizeMode="contain" />
-                  <Text style={styles.adminTodoCount}>{adminTodayScheduleMemoCount}</Text>
-                  <Text style={styles.adminTodoLabel}>今日のメモ</Text>
-                </View>
-              )}
-              {adminTodayChangeCount + adminTodayScheduleMemoCount === 0 && (
-                <View style={styles.adminTodoEmptyCard}>
-                  <Ionicons name="checkmark-circle-outline" size={24} color="#00AEB8" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.adminTodoEmptyTitle}>本日の予定はありません</Text>
-                    <Text style={styles.adminTodoEmptyText}>出欠変更・今日のメモはありません</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
         {/* ── ヘッダー ── */}
         {false && (
           <Animated.View style={{
@@ -1489,7 +1406,7 @@ export default function MenuScreen() {
             <View style={styles.staffMenuTitleWrap}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <View style={styles.todayPlanTitleBar} />
-                <Text style={styles.staffMenuTitle}>送迎担当</Text>
+                <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
               <TouchableOpacity
                 style={styles.staffSectionEditBtn}
@@ -1501,6 +1418,7 @@ export default function MenuScreen() {
               </TouchableOpacity>
             </View>
             <View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#FF8F00', marginTop: 8, marginHorizontal: 0 }]}>
+              <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
                   <TouchableOpacity
@@ -3557,8 +3475,14 @@ const styles = StyleSheet.create({
     width: '47%',
     borderStyle: 'solid'
   },
-  tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1 },
+  tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1, marginBottom: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
+  staffPickupCardTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#4A342B',
+    marginBottom: 8,
+  },
 
   // 元の不要スタイル（念のため保持）
   pickupRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, marginBottom: 6, backgroundColor: '#F5F5F5' },

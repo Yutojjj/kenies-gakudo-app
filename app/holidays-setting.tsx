@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { navigateHome } from '../utils/navigationHome';
 
 type HolidayPeriod = { id: string, name: string, start: string, end: string, color?: string };
 
@@ -160,7 +161,7 @@ export default function HolidaysSettingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>長期休み・祝日設定</Text>

@@ -41,9 +41,27 @@ type MoreItem = {
   onPress: () => void;
 };
 
+const LARGE_MORE_LABELS = ['有料送迎 管理', 'アルバム', '入室QRリーダー', 'タイピング検定', 'アカウント管理'];
+const MEDIUM_MORE_LABELS = ['定期利用者一覧', '習い事一覧', '長期休み設定', '学校別下校時刻', 'シフト入力期間', 'アンケート', 'アカウント作成', '合計勤務時間'];
+const SMALL_MORE_LABELS = ['学年一括変更', 'パスワード変更', 'QRコード一括更新', 'ログアウト'];
+
 const MORE_IMAGES = {
+  schoolTimes: require('../assets/quick-menu/school-times.png'),
+  holidays: require('../assets/quick-menu/holidays.png'),
+  lessons: require('../assets/quick-menu/lessons.png'),
+  regularUsers: require('../assets/quick-menu/regular-users.png'),
+  gradeChange: require('../assets/quick-menu/grade-change.png'),
   account: require('../assets/quick-menu/account.png'),
   paidTransport: require('../assets/quick-menu/paid-transport.png'),
+  shiftPeriod: require('../assets/quick-menu/shift-period.png'),
+  staffHours: require('../assets/quick-menu/staff-hours.png'),
+  password: require('../assets/quick-menu/password.png'),
+  survey: require('../assets/quick-menu/survey.png'),
+  typing: require('../assets/quick-menu/typing.png'),
+  qrScan: require('../assets/quick-menu/qr-scan.png'),
+  qrUpdater: require('../assets/quick-menu/qr-updater.png'),
+  album: require('../assets/quick-menu/album.png'),
+  logout: require('../assets/quick-menu/logout.png'),
 };
 
 const hashPassword = (password: string) => Crypto.SHA256(password).toString();
@@ -104,6 +122,9 @@ export default function AdminMoreScreen() {
 
   const go = (pathname: string, params?: Record<string, string>) => {
     router.push(params ? ({ pathname, params } as any) : (pathname as any));
+  };
+  const goHome = () => {
+    router.replace({ pathname: '/menu', params: { role: 'admin', name: adminName || 'admin' } } as any);
   };
 
   const normalizeDay = (value: string) => {
@@ -233,59 +254,88 @@ export default function AdminMoreScreen() {
   };
 
   const items: MoreItem[] = [
-    { label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', onPress: () => go('/school-times') },
-    { label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', onPress: () => go('/holidays-setting') },
-    { label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', onPress: () => go('/lesson-management') },
-    { label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', onPress: () => go('/regular-users') },
-    { label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', onPress: () => setGradeChoiceVisible(true) },
-    { label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: MORE_IMAGES.paidTransport, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => go('/paid-transport', { role: 'admin', name: adminName || '' }) },
-    { label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', onPress: () => setPeriodVisible(true) },
-    { label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', onPress: () => go('/staff-hours') },
-    { label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', onPress: () => setPasswordVisible(true) },
-    { label: 'アンケート', icon: 'clipboard-outline', color: '#00A176', bg: '#DFF8EF', onPress: () => go('/survey') },
-    { label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => go('/typing-cert') },
-    { label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', onPress: () => go('/qr-scan') },
-    { label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', onPress: () => go('/admin/qr-updater') },
-    { label: 'アルバム', icon: 'image-outline', color: '#F2A100', bg: '#FFF1C8', onPress: () => go('/album', { role: 'admin', name: adminName || '' }) },
-    { label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => go('/account/list') },
-    { label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => go('/account/form') },
-    { label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE6E6', onPress: logout },
+    { label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', image: MORE_IMAGES.schoolTimes, cardBg: '#EFFFFC', borderColor: '#7DDAD6', onPress: () => go('/school-times') },
+    { label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', image: MORE_IMAGES.holidays, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => go('/holidays-setting') },
+    { label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', image: MORE_IMAGES.lessons, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => go('/lesson-management') },
+    { label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', image: MORE_IMAGES.regularUsers, cardBg: '#EAFBF8', borderColor: '#9ADBD0', onPress: () => go('/regular-users') },
+    { label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', image: MORE_IMAGES.gradeChange, cardBg: '#FFF7DF', borderColor: '#F4CF76', onPress: () => setGradeChoiceVisible(true) },
+    { label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: MORE_IMAGES.paidTransport, cardBg: '#FFE3A8', borderColor: '#FFB84D', onPress: () => go('/paid-transport', { role: 'admin', name: adminName || '' }) },
+    { label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', image: MORE_IMAGES.shiftPeriod, cardBg: '#F0F8FF', borderColor: '#B9DFFF', onPress: () => setPeriodVisible(true) },
+    { label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', image: MORE_IMAGES.staffHours, cardBg: '#F1F2FF', borderColor: '#BFC6FF', onPress: () => go('/staff-hours') },
+    { label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: MORE_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: () => setPasswordVisible(true) },
+    { label: 'アンケート', icon: 'clipboard-outline', color: '#00A176', bg: '#DFF8EF', image: MORE_IMAGES.survey, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => go('/survey') },
+    { label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.typing, cardBg: '#FFDDE8', borderColor: '#FF9FBA', onPress: () => go('/typing-cert') },
+    { label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: MORE_IMAGES.qrScan, cardBg: '#E6DDFF', borderColor: '#B7A1FF', onPress: () => go('/qr-scan') },
+    { label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', image: MORE_IMAGES.qrUpdater, cardBg: '#EFFFFC', borderColor: '#91D9DE', onPress: () => go('/admin/qr-updater') },
+    { label: 'アルバム', icon: 'image-outline', color: '#F2A100', bg: '#FFF1C8', image: MORE_IMAGES.album, cardBg: '#FFD8C7', borderColor: '#FFAA82', onPress: () => go('/album', { role: 'admin', name: adminName || '' }) },
+    { label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#FFD8E6', borderColor: '#FF96B8', onPress: () => go('/account/list') },
+    { label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#F3F0FF', borderColor: '#C7B8FF', onPress: () => go('/account/form') },
+    { label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE6E6', image: MORE_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: logout },
   ];
+  const orderItems = (labels: string[]) => labels
+    .map(label => items.find(item => item.label === label))
+    .filter(Boolean) as MoreItem[];
+  const largeItems = orderItems(LARGE_MORE_LABELS);
+  const mediumItems = orderItems(MEDIUM_MORE_LABELS);
+  const smallItems = orderItems(SMALL_MORE_LABELS);
+
+  const renderMoreCard = (item: MoreItem, size: 'large' | 'medium' | 'small') => {
+    const cardSizeStyle = size === 'large' ? styles.largeCard : size === 'medium' ? styles.mediumCard : styles.smallCard;
+    const imageStyle = size === 'large' ? styles.largeCardImage : size === 'medium' ? styles.mediumCardImage : styles.smallCardImage;
+    const textStyle = size === 'large' ? styles.largeCardText : size === 'medium' ? styles.mediumCardText : styles.smallCardText;
+    return (
+      <TouchableOpacity
+        key={item.label}
+        style={[styles.cardBase, cardSizeStyle, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
+        onPress={item.onPress}
+        activeOpacity={0.82}
+      >
+        {item.image ? (
+          <Image source={item.image} style={imageStyle} resizeMode="contain" />
+        ) : (
+          <View style={[styles.iconCircle, { backgroundColor: item.bg }]}>
+            <Ionicons name={item.icon} size={28} color={item.color} />
+          </View>
+        )}
+        <Text style={textStyle} numberOfLines={size === 'small' ? 1 : 2}>{item.label}</Text>
+        <Ionicons name="chevron-forward" size={size === 'small' ? 17 : 18} color="#9A8F86" style={styles.cardChevron} />
+      </TouchableOpacity>
+    );
+  };
 
   if (checking || !verified) return null;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.75}>
+        <TouchableOpacity onPress={goHome} style={styles.backBtn} activeOpacity={0.75}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>その他</Text>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
-          <Ionicons name="sparkles-outline" size={20} color="#F2A100" />
           <Text style={styles.sectionTitle}>管理メニュー</Text>
         </View>
-        <View style={styles.grid}>
-          {items.map(item => (
-            <TouchableOpacity
-              key={item.label}
-              style={[styles.card, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
-              onPress={item.onPress}
-              activeOpacity={0.82}
-            >
-              {item.image ? (
-                <Image source={item.image} style={styles.cardImage} resizeMode="contain" />
-              ) : (
-                <View style={[styles.iconCircle, { backgroundColor: item.bg }]}>
-                  <Ionicons name={item.icon} size={28} color={item.color} />
-                </View>
-              )}
-              <Text style={styles.cardText} numberOfLines={2}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9A8F86" style={styles.cardChevron} />
-            </TouchableOpacity>
-          ))}
+        <View style={styles.prioritySection}>
+          <Text style={styles.priorityTitle}>よく使う機能</Text>
+          <View style={styles.largeGrid}>
+            {largeItems.map(item => renderMoreCard(item, 'large'))}
+          </View>
+        </View>
+
+        <View style={styles.prioritySection}>
+          <Text style={styles.priorityTitle}>設定・一覧</Text>
+          <View style={styles.mediumGrid}>
+            {mediumItems.map(item => renderMoreCard(item, 'medium'))}
+          </View>
+        </View>
+
+        <View style={styles.prioritySection}>
+          <Text style={styles.priorityTitle}>その他の操作</Text>
+          <View style={styles.smallGrid}>
+            {smallItems.map(item => renderMoreCard(item, 'small'))}
+          </View>
         </View>
       </ScrollView>
 
@@ -467,23 +517,35 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#3F302B',
   },
-  grid: {
+  prioritySection: {
+    marginBottom: 16,
+  },
+  priorityTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#7A5A45',
+    marginBottom: 8,
+    paddingLeft: 2,
+  },
+  largeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  mediumGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  card: {
-    width: '31.7%',
-    minHeight: 108,
-    borderRadius: 14,
+  smallGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cardBase: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#F1E3D2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingTop: 9,
-    paddingBottom: 11,
     position: 'relative',
     overflow: 'hidden',
     shadowColor: '#8B7340',
@@ -491,6 +553,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 5,
     elevation: 2,
+  },
+  largeCard: {
+    width: '48.6%',
+    minHeight: 152,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  mediumCard: {
+    width: '31.7%',
+    minHeight: 108,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 9,
+    paddingBottom: 11,
+  },
+  smallCard: {
+    width: '48.6%',
+    minHeight: 66,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 9,
+    paddingRight: 28,
+    paddingVertical: 8,
   },
   iconCircle: {
     width: 50,
@@ -500,17 +592,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 7,
   },
-  cardImage: {
+  largeCardImage: {
+    width: 104,
+    height: 88,
+    marginBottom: 7,
+  },
+  mediumCardImage: {
     width: 70,
     height: 70,
     marginBottom: 2,
   },
-  cardText: {
+  smallCardImage: {
+    width: 44,
+    height: 44,
+    marginRight: 8,
+  },
+  largeCardText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#3F302B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  mediumCardText: {
     fontSize: 12,
     fontWeight: '900',
     color: '#3F302B',
     textAlign: 'center',
     lineHeight: 16,
+  },
+  smallCardText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#3F302B',
   },
   cardChevron: {
     position: 'absolute',

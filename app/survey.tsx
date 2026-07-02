@@ -14,6 +14,7 @@ import {
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { navigateHome } from '../utils/navigationHome';
 
 const customAlert = (title: string, msg?: string) => {
   if (Platform.OS === 'web') window.alert(msg ? `${title}\n${msg}` : title);
@@ -142,7 +143,7 @@ export default function SurveyScreen() {
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigateHome(router)} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>📋 アンケート管理</Text>

@@ -31,6 +31,7 @@ import { useCall } from '../contexts/CallContext';
 import { db, storage } from '../firebase';
 import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
 import { refreshPushSubscription } from '../utils/setupPushToken';
+import { navigateHome } from '../utils/navigationHome';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -910,7 +911,7 @@ export default function MessagesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => navigateHome(router)} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>
@@ -928,7 +929,7 @@ export default function MessagesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => navigateHome(router)} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>
@@ -951,7 +952,7 @@ export default function MessagesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => navigateHome(router)} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>メッセージ</Text>

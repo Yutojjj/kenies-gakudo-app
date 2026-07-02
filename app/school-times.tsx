@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { navigateHome } from '../utils/navigationHome';
 
 const DAYS = ['月', '火', '水', '木', '金'];
 
@@ -211,7 +212,7 @@ export default function SchoolTimesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>学校別下校時刻設定</Text>

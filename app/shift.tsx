@@ -8,6 +8,7 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { navigateHome } from '../utils/navigationHome';
 
 type ShiftType = '✕' | '午前✕' | '午後✕' | '○';
 type Staff = { id: string, name: string };
@@ -324,7 +325,7 @@ export default function ShiftScreen() {
       
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+          <TouchableOpacity onPress={() => navigateHome(router)} style={{ marginRight: 12 }}>
             <Ionicons name="chevron-back" size={24} color="#5D4037" />
           </TouchableOpacity>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#5D4037' }}>シフト提出</Text>

@@ -1,9 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ImageSourcePropType, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
 
 type AdminBottomNavActive = 'home' | 'attendance' | 'schedule' | 'event' | 'messages' | 'shift' | 'menu' | 'album';
@@ -13,6 +12,17 @@ type Props = {
 };
 
 export const ADMIN_BOTTOM_NAV_HEIGHT = Platform.OS === 'ios' ? 90 : 76;
+
+const NAV_IMAGES: Record<AdminBottomNavActive, ImageSourcePropType> = {
+  home: require('../assets/bottom-nav/home.png'),
+  attendance: require('../assets/bottom-nav/attendance.png'),
+  schedule: require('../assets/bottom-nav/schedule.png'),
+  event: require('../assets/bottom-nav/event.png'),
+  messages: require('../assets/bottom-nav/messages.png'),
+  shift: require('../assets/bottom-nav/shift.png'),
+  menu: require('../assets/bottom-nav/menu.png'),
+  album: require('../assets/bottom-nav/album.png'),
+};
 
 export default function AdminBottomNav({ active = 'home' }: Props) {
   const router = useRouter();
@@ -50,56 +60,63 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
   };
 
   const itemColor = (key: AdminBottomNavActive) => active === key ? '#00AEB8' : '#766B64';
+  const renderFace = (key: AdminBottomNavActive) => (
+    <Image
+      source={NAV_IMAGES[key]}
+      style={[styles.faceIcon, active === key && styles.faceIconActive]}
+      resizeMode="contain"
+    />
+  );
 
   return (
     <>
       <View style={styles.navSpacer} />
       <View style={styles.nav}>
         <TouchableOpacity style={styles.item} onPress={goHome} activeOpacity={0.78}>
-          <Ionicons name={active === 'home' ? 'home' : 'home-outline'} size={21} color={itemColor('home')} />
+          {renderFace('home')}
           <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
         </TouchableOpacity>
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
-            <Ionicons name={active === 'schedule' ? 'calendar' : 'calendar-outline'} size={21} color={itemColor('schedule')} />
+            {renderFace('schedule')}
             <Text style={[styles.text, { color: itemColor('schedule') }]}>スケジュール</Text>
           </TouchableOpacity>
         )}
         {(isAdmin || isStaff) && (
           <TouchableOpacity style={styles.item} onPress={() => router.push('/attendance')} activeOpacity={0.78}>
-            <Ionicons name={active === 'attendance' ? 'people' : 'people-outline'} size={21} color={itemColor('attendance')} />
+            {renderFace('attendance')}
             <Text style={[styles.text, { color: itemColor('attendance') }]}>出欠一覧</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.item} onPress={() => router.push(isUser ? ({ pathname: '/event-list', params: { name: adminName || '' } } as any) : ({ pathname: '/year-events', params: { role: isAdmin ? 'admin' : 'staff', tab: 'management' } } as any))} activeOpacity={0.78}>
-          <Ionicons name={active === 'event' ? 'flag' : 'flag-outline'} size={21} color={itemColor('event')} />
+          {renderFace('event')}
           <Text style={[styles.text, { color: itemColor('event') }]}>イベント</Text>
         </TouchableOpacity>
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any)} activeOpacity={0.78}>
-            <Ionicons name={active === 'album' ? 'image' : 'image-outline'} size={21} color={itemColor('album')} />
+            {renderFace('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any)} activeOpacity={0.78}>
-          <Ionicons name={active === 'messages' ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={21} color={itemColor('messages')} />
+          {renderFace('messages')}
           <Text style={[styles.text, { color: itemColor('messages') }]}>メッセージ</Text>
           {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
         </TouchableOpacity>
         {!isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
-            <Ionicons name={active === 'shift' ? 'calendar' : 'calendar-outline'} size={21} color={itemColor('shift')} />
+            {renderFace('shift')}
             <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>
         )}
         {isAdmin ? (
           <TouchableOpacity style={styles.item} onPress={() => router.push('/admin-more' as any)} activeOpacity={0.78}>
-            <Ionicons name={active === 'menu' ? 'grid' : 'grid-outline'} size={21} color={itemColor('menu')} />
+            {renderFace('menu')}
             <Text style={[styles.text, { color: itemColor('menu') }]}>その他</Text>
           </TouchableOpacity>
         ) : !isUser ? (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'staff', name: adminName || '' } } as any)} activeOpacity={0.78}>
-            <Ionicons name={active === 'album' ? 'image' : 'image-outline'} size={21} color={itemColor('album')} />
+            {renderFace('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         ) : null}
@@ -142,6 +159,16 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 9,
     fontWeight: '800',
+  },
+  faceIcon: {
+    width: 28,
+    height: 28,
+    opacity: 0.78,
+  },
+  faceIconActive: {
+    width: 31,
+    height: 31,
+    opacity: 1,
   },
   badge: {
     position: 'absolute',

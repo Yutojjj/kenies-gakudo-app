@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
@@ -26,6 +27,22 @@ export default function QrScanScreen() {
   
   // カメラの向きを管理するステート（初期値は外カメラ）
   const [facing, setFacing] = useState<'back' | 'front'>('back');
+
+  const goHome = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('loggedInUser');
+      const user = raw ? JSON.parse(raw) : {};
+      router.replace({
+        pathname: '/menu',
+        params: {
+          role: user.role || 'admin',
+          name: user.name || '',
+        },
+      } as any);
+    } catch {
+      router.replace('/' as any);
+    }
+  };
 
   useEffect(() => {
     if (id) {
@@ -179,7 +196,7 @@ export default function QrScanScreen() {
       return (
         <SafeAreaView style={styles.centerContainer}>
           <View style={styles.simpleHeader}>
-            <TouchableOpacity style={styles.headerBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+            <TouchableOpacity style={styles.headerBackBtn} onPress={goHome} activeOpacity={0.78}>
               <Ionicons name="chevron-back" size={24} color="#5D4037" />
             </TouchableOpacity>
             <Text style={styles.simpleHeaderTitle}>入室QRリーダー</Text>
@@ -200,7 +217,7 @@ export default function QrScanScreen() {
           barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         />
         <View style={styles.scanHeader}>
-          <TouchableOpacity style={styles.scanHeaderBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.scanHeaderBackBtn} onPress={goHome} activeOpacity={0.78}>
             <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.scanHeaderTitle}>入室QRリーダー</Text>
@@ -247,7 +264,7 @@ export default function QrScanScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBg}>
-        <TouchableOpacity style={styles.resultHeaderBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+        <TouchableOpacity style={styles.resultHeaderBackBtn} onPress={goHome} activeOpacity={0.78}>
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>ケーニーズクラブ学童保育</Text>
