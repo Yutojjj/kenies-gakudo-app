@@ -57,6 +57,8 @@ const QUICK_MENU_IMAGES = {
   events: require('../assets/quick-menu/events.png'),
   album: require('../assets/quick-menu/album.png'),
   regularUsers: require('../assets/quick-menu/regular-users.png'),
+  account: require('../assets/quick-menu/account.png'),
+  paidTransport: require('../assets/quick-menu/paid-transport.png'),
 };
 
 const TODAY_TASK_IMAGES = {
@@ -1167,7 +1169,7 @@ export default function MenuScreen() {
     { key: 'lessons', label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', onPress: () => router.push('/lesson-management' as any) },
     { key: 'regularUsers', label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', image: QUICK_MENU_IMAGES.regularUsers, cardBg: '#EAFBF8', borderColor: '#9ADBD0', onPress: () => router.push('/regular-users' as any) },
     { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', onPress: () => setGradeChoiceModalVisible(true) },
-    { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
+    { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.paidTransport, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
     { key: 'shiftPeriod', label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', onPress: () => setPeriodModal(true) },
     { key: 'staffHours', label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', onPress: () => router.push('/staff-hours' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', onPress: openPasswordModal },
@@ -1175,8 +1177,8 @@ export default function MenuScreen() {
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'qrUpdater', label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', onPress: () => router.push('/admin/qr-updater' as any) },
-    { key: 'accountList', label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => router.push('/account/list') },
-    { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => router.push('/account/form') },
+    { key: 'accountList', label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/list') },
+    { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/form') },
   ];
 
   const visibleAdminQuickOptions = adminQuickOptions.filter(item => adminQuickVisibleKeys.includes(item.key));
@@ -1604,6 +1606,27 @@ export default function MenuScreen() {
                 <Ionicons name="chevron-forward" size={20} color="#7A6254" />
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {role === 'user' && isPaidTransportMember && (
+          <View style={styles.userPaidQuickSection}>
+            <View style={styles.userConfirmTitleRow}>
+              <View style={styles.todayPlanTitleBar} />
+              <Text style={styles.userConfirmTitle}>クイックメニュー</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.userPaidQuickCard}
+              onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
+              activeOpacity={0.84}
+            >
+              <Image source={QUICK_MENU_IMAGES.paidTransport} style={styles.userPaidQuickImage} resizeMode="contain" />
+              <View style={styles.userConfirmTextBox}>
+                <Text style={styles.userConfirmCardTitle}>有料送迎</Text>
+                <Text style={styles.userConfirmMessage} numberOfLines={2}>利用回数や確認書を確認できます</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#7A6254" />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -3006,6 +3029,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
+  userPaidQuickSection: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+  },
   userConfirmTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3047,6 +3075,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 2,
+  },
+  userPaidQuickCard: {
+    minHeight: 82,
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: '#FFC76E',
+    backgroundColor: '#FFF2D8',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#8B7340',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  userPaidQuickImage: {
+    width: 60,
+    height: 60,
+    marginRight: 10,
   },
   userConfirmImage: {
     width: 54,

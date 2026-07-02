@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AdminBottomNav from '../../components/AdminBottomNav';
+import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../../components/AdminBottomNav';
 import { COLORS } from '../../constants/theme';
 import { useCall } from '../../contexts/CallContext';
 import { db } from '../../firebase';
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   badgeUser: { backgroundColor: COLORS.primary },
   badgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
   accountName: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
-  fab: { position: 'absolute', right: 24, bottom: 40, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 },
+  fab: { position: 'absolute', right: 24, bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, backgroundColor: COLORS.primary, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 10, elevation: 6 },
   emptyContainer: { alignItems: 'center', marginTop: 100 },
   emptyText: { color: COLORS.textLight, fontSize: 16, marginTop: 12, fontWeight: 'bold' },
   

@@ -178,6 +178,12 @@ export default function QrScanScreen() {
     if (!permission.granted) {
       return (
         <SafeAreaView style={styles.centerContainer}>
+          <View style={styles.simpleHeader}>
+            <TouchableOpacity style={styles.headerBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+              <Ionicons name="chevron-back" size={24} color="#5D4037" />
+            </TouchableOpacity>
+            <Text style={styles.simpleHeaderTitle}>入室QRリーダー</Text>
+          </View>
           <Text style={{textAlign: 'center', marginBottom: 20}}>カメラの許可が必要です</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={requestPermission}>
             <Text style={styles.retryBtnText}>許可する</Text>
@@ -193,6 +199,12 @@ export default function QrScanScreen() {
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         />
+        <View style={styles.scanHeader}>
+          <TouchableOpacity style={styles.scanHeaderBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+            <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.scanHeaderTitle}>入室QRリーダー</Text>
+        </View>
         <View style={styles.scannerOverlay}>
           {/* カメラ反転ボタン */}
           <TouchableOpacity style={styles.flipBtn} onPress={toggleCameraFacing}>
@@ -227,9 +239,6 @@ export default function QrScanScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/menu')}>
-            <Text style={styles.backBtnText}>戻る</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -238,6 +247,9 @@ export default function QrScanScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBg}>
+        <TouchableOpacity style={styles.resultHeaderBackBtn} onPress={() => router.back()} activeOpacity={0.78}>
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>ケーニーズクラブ学童保育</Text>
       </View>
 
@@ -305,6 +317,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  simpleHeader: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 24 : 8,
+    left: 0,
+    right: 0,
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    backgroundColor: '#AEE4F5',
+  },
+  headerBackBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  simpleHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#5D4037',
+  },
+  scanHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: Platform.OS === 'android' ? 28 : 10,
+    minHeight: Platform.OS === 'android' ? 82 : 64,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.48)',
+    zIndex: 20,
+  },
+  scanHeaderBackBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  scanHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
   headerBg: {
     backgroundColor: THEME_COLOR,
     paddingTop: Platform.OS === 'android' ? 40 : 20,
@@ -312,6 +374,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  resultHeaderBackBtn: {
+    position: 'absolute',
+    left: 14,
+    top: Platform.OS === 'android' ? 34 : 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

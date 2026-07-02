@@ -6,6 +6,8 @@ import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firesto
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  ImageSourcePropType,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -33,7 +35,15 @@ type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   bg: string;
+  image?: ImageSourcePropType;
+  cardBg?: string;
+  borderColor?: string;
   onPress: () => void;
+};
+
+const MORE_IMAGES = {
+  account: require('../assets/quick-menu/account.png'),
+  paidTransport: require('../assets/quick-menu/paid-transport.png'),
 };
 
 const hashPassword = (password: string) => Crypto.SHA256(password).toString();
@@ -228,7 +238,7 @@ export default function AdminMoreScreen() {
     { label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', onPress: () => go('/lesson-management') },
     { label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', onPress: () => go('/regular-users') },
     { label: '学年一括変更', icon: 'trending-up-outline', color: '#FF8F00', bg: '#FFF0D8', onPress: () => setGradeChoiceVisible(true) },
-    { label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', onPress: () => go('/paid-transport', { role: 'admin', name: adminName || '' }) },
+    { label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: MORE_IMAGES.paidTransport, cardBg: '#FFF2D8', borderColor: '#FFC76E', onPress: () => go('/paid-transport', { role: 'admin', name: adminName || '' }) },
     { label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', onPress: () => setPeriodVisible(true) },
     { label: '合計勤務時間', icon: 'bar-chart-outline', color: '#5D6DCE', bg: '#E8EAFF', onPress: () => go('/staff-hours') },
     { label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', onPress: () => setPasswordVisible(true) },
@@ -237,7 +247,8 @@ export default function AdminMoreScreen() {
     { label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', onPress: () => go('/qr-scan') },
     { label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', onPress: () => go('/admin/qr-updater') },
     { label: 'アルバム', icon: 'image-outline', color: '#F2A100', bg: '#FFF1C8', onPress: () => go('/album', { role: 'admin', name: adminName || '' }) },
-    { label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', onPress: () => go('/account/form') },
+    { label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => go('/account/list') },
+    { label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: MORE_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => go('/account/form') },
     { label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE6E6', onPress: logout },
   ];
 
@@ -258,10 +269,19 @@ export default function AdminMoreScreen() {
         </View>
         <View style={styles.grid}>
           {items.map(item => (
-            <TouchableOpacity key={item.label} style={styles.card} onPress={item.onPress} activeOpacity={0.82}>
-              <View style={[styles.iconCircle, { backgroundColor: item.bg }]}>
-                <Ionicons name={item.icon} size={28} color={item.color} />
-              </View>
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.card, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
+              onPress={item.onPress}
+              activeOpacity={0.82}
+            >
+              {item.image ? (
+                <Image source={item.image} style={styles.cardImage} resizeMode="contain" />
+              ) : (
+                <View style={[styles.iconCircle, { backgroundColor: item.bg }]}>
+                  <Ionicons name={item.icon} size={28} color={item.color} />
+                </View>
+              )}
               <Text style={styles.cardText} numberOfLines={2}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={18} color="#9A8F86" style={styles.cardChevron} />
             </TouchableOpacity>
@@ -454,16 +474,18 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '31.7%',
-    minHeight: 96,
-    borderRadius: 12,
+    minHeight: 108,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#F1E3D2',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingVertical: 10,
+    paddingTop: 9,
+    paddingBottom: 11,
     position: 'relative',
+    overflow: 'hidden',
     shadowColor: '#8B7340',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -477,6 +499,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 7,
+  },
+  cardImage: {
+    width: 70,
+    height: 70,
+    marginBottom: 2,
   },
   cardText: {
     fontSize: 12,
