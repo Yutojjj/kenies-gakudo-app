@@ -25,6 +25,7 @@ import {
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View
 } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { useCall } from '../contexts/CallContext';
 import { db, storage } from '../firebase';
@@ -384,12 +385,12 @@ function StaffListSection({ accounts, searchQuery, conversations, openChat, open
 
 export default function MessagesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string; conversationType?: string }>();
+  const params = useLocalSearchParams<{ conversationId?: string; conversationName?: string; conversationType?: string; tab?: string }>();
   const { startCall, callStatus } = useCall();
 
   const [resolvedUser, setResolvedUser] = useState<(UserInfo & { accountId: string }) | null>(null);
   const [view, setView] = useState<'list' | 'chat'>('list');
-  const [msgTab, setMsgTab] = useState<'home' | 'talk'>('home'); // ⑬ 管理者用タブ
+  const [msgTab, setMsgTab] = useState<'home' | 'talk'>('talk'); // ⑬ 管理者用タブ
   const [homeSchool, setHomeSchool] = useState<string | null>(null); // ⑬ ホームタブの学校フィルター
   const [homeMasterSchools, setHomeMasterSchools] = useState<string[]>([]);
   const [homeAllAccounts, setHomeAllAccounts] = useState<any[]>([]);
@@ -441,6 +442,11 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (resolvedUser) refreshPushSubscription(resolvedUser.accountId);
   }, [resolvedUser?.accountId]);
+
+  useEffect(() => {
+    if (params.tab === 'home') setMsgTab('home');
+    if (params.tab === 'talk') setMsgTab('talk');
+  }, [params.tab]);
 
   // ⑬ ホームタブ用データロード（管理者・スタッフ共通）
   useEffect(() => {
@@ -913,6 +919,7 @@ export default function MessagesScreen() {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>読み込み中...</Text>
         </View>
+        <AdminBottomNav active="messages" />
       </SafeAreaView>
     );
   }
@@ -933,6 +940,7 @@ export default function MessagesScreen() {
             <Text style={{ color: '#fff', fontWeight: 'bold' }}>ログインし直す</Text>
           </TouchableOpacity>
         </View>
+        <AdminBottomNav active="messages" />
       </SafeAreaView>
     );
   }
@@ -1402,6 +1410,7 @@ export default function MessagesScreen() {
             </View>
           </View>
         </Modal>
+        <AdminBottomNav active="messages" />
       </SafeAreaView>
     );
   }
@@ -1550,6 +1559,7 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
     </Modal>
+    <AdminBottomNav active="messages" />
     </SafeAreaView>
   );
 }

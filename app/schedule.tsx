@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
@@ -1468,6 +1469,7 @@ export default function ScheduleScreen() {
           </View>
       </Modal>
 
+      <AdminBottomNav active="schedule" />
     </SafeAreaView>
   );
 }

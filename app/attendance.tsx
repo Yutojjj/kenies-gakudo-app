@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -64,7 +65,7 @@ const sortKidsByGrade = (kidsArray: any[]) => {
 
 export default function AttendanceScreen() {
   const router = useRouter();
-  const { dateStr: initialTransportDate } = useLocalSearchParams<{ dateStr?: string }>();
+  const { dateStr: initialTransportDate, view: initialView } = useLocalSearchParams<{ dateStr?: string; view?: string }>();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
   const [userListSearch, setUserListSearch] = useState('');
@@ -89,6 +90,17 @@ export default function AttendanceScreen() {
 
   const [schoolModalData, setSchoolModalData] = useState<{ date: string, title: string, kids: Kid[] } | null>(null);
   const [timeModalData, setTimeModalData] = useState<{ date: string, title: string, subtitle: string, kids: Kid[] } | null>(null);
+
+  useEffect(() => {
+    if (
+      initialView === 'attendance' ||
+      initialView === 'todayStatus' ||
+      initialView === 'schoolUsers' ||
+      initialView === 'transport'
+    ) {
+      setCurrentView(initialView);
+    }
+  }, [initialView]);
 
   useEffect(() => {
     if (!initialTransportDate || initialTransportOpenedRef.current) return;
@@ -1116,6 +1128,7 @@ export default function AttendanceScreen() {
           </View>
         </View>
       </Modal>
+      <AdminBottomNav active="attendance" />
     </SafeAreaView>
   );
 }
@@ -1210,6 +1223,6 @@ const styles = StyleSheet.create({
   transportEmptyText: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   todayBadge: { marginTop: 4, backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   todayBadgeText: { fontSize: 10, color: COLORS.white, fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 28, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fab: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.danger },
 });

@@ -177,67 +177,71 @@ export default function RegularUsersScreen() {
             });
             schoolMap.forEach(arr => arr.sort((a,b) => gradeVal(a.grade) - gradeVal(b.grade)));
             const schools = [...schoolMap.keys()].sort();
-            // 学校を3列グリッドで並べる
+            const columns = [schools.filter((_, i) => i % 2 === 0), schools.filter((_, i) => i % 2 === 1)];
             return (
               <View style={styles.schoolGrid}>
-                {schools.map(school => {
-                  const kids_ = schoolMap.get(school)!;
-                  const isOpen = expandedSchools.has(school);
-                  return (
-                    <View key={school} style={[styles.schoolCard, { backgroundColor: getSchoolColor(school) }]}>
-                      <TouchableOpacity
-                        style={styles.schoolHeader}
-                        onPress={() => {
-                          const next = new Set(expandedSchools);
-                          isOpen ? next.delete(school) : next.add(school);
-                          setExpandedSchools(next);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="school-outline" size={14} color="#333" />
-                        <Text style={styles.schoolHeaderText} numberOfLines={1}>{school}</Text>
-                        <View style={styles.schoolHeaderBadge}>
-                          <Text style={styles.schoolHeaderCount}>{kids_.length}名</Text>
-                        </View>
-                        <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textLight} />
-                      </TouchableOpacity>
+                {columns.map((column, colIdx) => (
+                  <View key={colIdx} style={styles.schoolColumn}>
+                    {column.map(school => {
+                      const kids_ = schoolMap.get(school)!;
+                      const isOpen = expandedSchools.has(school);
+                      return (
+                        <View key={school} style={[styles.schoolCard, { backgroundColor: getSchoolColor(school) }]}>
+                          <TouchableOpacity
+                            style={styles.schoolHeader}
+                            onPress={() => {
+                              const next = new Set(expandedSchools);
+                              isOpen ? next.delete(school) : next.add(school);
+                              setExpandedSchools(next);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="school-outline" size={14} color="#333" />
+                            <Text style={styles.schoolHeaderText} numberOfLines={1}>{school}</Text>
+                            <View style={styles.schoolHeaderBadge}>
+                              <Text style={styles.schoolHeaderCount}>{kids_.length}名</Text>
+                            </View>
+                            <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.textLight} />
+                          </TouchableOpacity>
 
-                      {isOpen && (
-                        <View style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
-                          {kids_.map(kid => {
-                            const activeDays = Object.entries(kid.days).filter(([_, v]) => v).map(([d]) => d);
-                            const count = activeDays.length;
-                            return (
-                              <TouchableOpacity
-                                key={kid.id}
-                                style={styles.kidCard}
-                                onPress={() => { setEditKid(kid); setEditDays({...kid.days}); }}
-                                activeOpacity={0.8}
-                              >
-                                <View style={{ flex:1 }}>
-                                  <Text style={styles.kidSub} numberOfLines={1}>{kid.grade}{kid.parentName ? ' 兄弟' : ''}</Text>
-                                  <Text style={styles.kidName} numberOfLines={1}>{kid.name}</Text>
-                                </View>
-                                <View style={{ alignItems:'flex-end', gap:3 }}>
-                                  <View style={styles.dayBadgesRow}>
-                                    {DOW.map(d => (
-                                      <View key={d} style={[styles.dayBadgeSmall, kid.days[d] && styles.dayBadgeActive]}>
-                                        <Text style={[styles.dayBadgeTextSmall, kid.days[d] && styles.dayBadgeTextActive]}>{d}</Text>
+                          {isOpen && (
+                            <View style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
+                              {kids_.map(kid => {
+                                const activeDays = Object.entries(kid.days).filter(([_, v]) => v).map(([d]) => d);
+                                const count = activeDays.length;
+                                return (
+                                  <TouchableOpacity
+                                    key={kid.id}
+                                    style={styles.kidCard}
+                                    onPress={() => { setEditKid(kid); setEditDays({...kid.days}); }}
+                                    activeOpacity={0.8}
+                                  >
+                                    <View style={{ flex:1 }}>
+                                      <Text style={styles.kidSub} numberOfLines={1}>{kid.grade}{kid.parentName ? ' 兄弟' : ''}</Text>
+                                      <Text style={styles.kidName} numberOfLines={1}>{kid.name}</Text>
+                                    </View>
+                                    <View style={{ alignItems:'flex-end', gap:3 }}>
+                                      <View style={styles.dayBadgesRow}>
+                                        {DOW.map(d => (
+                                          <View key={d} style={[styles.dayBadgeSmall, kid.days[d] && styles.dayBadgeActive]}>
+                                            <Text style={[styles.dayBadgeTextSmall, kid.days[d] && styles.dayBadgeTextActive]}>{d}</Text>
+                                          </View>
+                                        ))}
                                       </View>
-                                    ))}
-                                  </View>
-                                  <View style={styles.countBadge}>
-                                    <Text style={styles.countBadgeText}>週{count}回</Text>
-                                  </View>
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
+                                      <View style={styles.countBadge}>
+                                        <Text style={styles.countBadgeText}>週{count}回</Text>
+                                      </View>
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          )}
                         </View>
-                      )}
-                    </View>
-                  );
-                })}
+                      );
+                    })}
+                  </View>
+                ))}
               </View>
             );
           })()
@@ -308,8 +312,9 @@ const styles = StyleSheet.create({
   countBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border },
   countBtnActive: { backgroundColor: COLORS.secondary, borderColor: COLORS.secondary },
   countBtnText: { fontSize: 11, fontWeight: 'bold', color: COLORS.text },
-  schoolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  schoolCard: { width: '48%', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
+  schoolGrid: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  schoolColumn: { flex: 1, gap: 10 },
+  schoolCard: { width: '100%', alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 16, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
   schoolHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
   schoolHeaderText: { fontSize: 15, fontWeight: 'bold', color: '#222', flex: 1 },
   schoolHeaderBadge: { backgroundColor: '#EEF5FF', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },

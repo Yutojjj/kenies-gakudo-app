@@ -6,6 +6,8 @@ import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
+import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -532,6 +534,7 @@ export default function ShiftCreateScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      <AdminShiftTabs active="create" />
 
       {/* ⑥ 勤務時間サマリーポップアップ */}
       <Modal visible={workSummaryVisible} transparent animationType="fade">
@@ -1234,6 +1237,7 @@ export default function ShiftCreateScreen() {
         </View>
       </Modal>
 
+      <AdminBottomNav active="shift" />
     </SafeAreaView>
   );
 }
@@ -1241,11 +1245,11 @@ export default function ShiftCreateScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
+  header: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
-  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
+  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
   
   monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
@@ -1375,9 +1379,9 @@ const styles = StyleSheet.create({
   
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
-  fabDelete: { position: 'absolute', bottom: 28, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabDelete: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabDeleteText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
-  fabAutoFill: { position: 'absolute', bottom: 108, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fabAutoFill: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 94, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabAutoFillText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
   fabImg: { width: '100%', height: '100%' },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },

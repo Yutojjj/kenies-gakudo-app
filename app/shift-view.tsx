@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
+import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -86,6 +88,7 @@ export default function ShiftViewScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト確認</Text>
       </View>
+      <AdminShiftTabs active="view" />
 
       {/* 月ナビゲーション */}
       <View style={styles.monthSelector}>
@@ -173,14 +176,15 @@ export default function ShiftViewScreen() {
         <Ionicons name={showOnlyMine ? 'people' : 'person'} size={20} color={COLORS.white} />
         <Text style={styles.fabText}>{showOnlyMine ? '全体表示' : '自分のみ'}</Text>
       </TouchableOpacity>
+      <AdminBottomNav active="shift" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
+  header: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#AEE4F5', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
@@ -200,7 +204,7 @@ const styles = StyleSheet.create({
   cellStaffNameMe: { color: '#E65100' },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   cellStaffTimeMe: { color: '#E65100', fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 28, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
+  fab: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
   fabActive: { backgroundColor: COLORS.secondary },
   fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
 });

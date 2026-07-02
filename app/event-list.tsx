@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
@@ -868,6 +869,7 @@ export default function EventListScreen() {
           )}
         </View>
       </Modal>
+      <AdminBottomNav active="event" />
     </SafeAreaView>
   );
 }

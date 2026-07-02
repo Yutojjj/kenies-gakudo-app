@@ -15,6 +15,7 @@ import {
   SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
@@ -1921,6 +1922,7 @@ export default function YearEventsScreen() {
           <Text style={{ color: '#fff', marginTop: 10 }}>アップロード中...</Text>
         </View>
       )}
+      <AdminBottomNav active="event" />
     </SafeAreaView>
   );
 }

@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, onSnapshot, query } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../../components/AdminBottomNav';
 import { COLORS } from '../../constants/theme';
 import { useCall } from '../../contexts/CallContext';
 import { db } from '../../firebase';
@@ -460,6 +461,7 @@ export default function AccountManagementScreen() {
           </View>
         </View>
       </Modal>
+      <AdminBottomNav active="menu" />
     </SafeAreaView>
   );
 }

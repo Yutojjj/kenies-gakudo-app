@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../../components/AdminBottomNav';
 import EditablePickerModal from '../../components/EditablePickerModal';
 import { COLORS } from '../../constants/theme';
 import { db } from '../../firebase';
@@ -443,6 +444,7 @@ export default function AccountFormScreen() {
         onAdd={handlePickerAdd}
         onDelete={handlePickerDelete}
       />
+      <AdminBottomNav active="menu" />
     </SafeAreaView>
   );
 }

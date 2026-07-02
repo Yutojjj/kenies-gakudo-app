@@ -8,6 +8,7 @@ import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverT
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 
@@ -1065,6 +1066,7 @@ export default function AlbumScreen() {
           </View>
         </View>
       </Modal>
+      <AdminBottomNav active="album" />
     </SafeAreaView>
   );
 }

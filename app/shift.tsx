@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
+import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 
@@ -343,6 +345,7 @@ export default function ShiftScreen() {
           <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
         </TouchableOpacity>
       </View>
+      <AdminShiftTabs active="create" />
 
       {/* 種類選択ボタン（インライン3つ） */}
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F8F8F8', borderBottomWidth: 1, borderColor: '#E0E0E0' }}>
@@ -480,6 +483,8 @@ export default function ShiftScreen() {
           </Text>
         </TouchableOpacity>
       )}
+
+      <AdminBottomNav active="shift" />
 
       <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.ssModalContainer}>

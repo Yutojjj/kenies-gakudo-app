@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
@@ -127,6 +128,7 @@ export default function ScheduleChangesScreen() {
           ))}
         </ScrollView>
       )}
+      <AdminBottomNav active="attendance" />
     </SafeAreaView>
   );
 }
