@@ -290,7 +290,7 @@ export default function MenuScreen() {
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
   const [scheduleChangesCollapsed, setScheduleChangesCollapsed] = useState(false);
-  const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any}[]>([]);
+  const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any; audience?: string; startDate?: string; endDate?: string; date?: string}[]>([]);
   const [newNotice, setNewNotice] = useState('');
   const [appDialog, setAppDialog] = useState<{
     visible: boolean;
@@ -306,6 +306,10 @@ export default function MenuScreen() {
   // お知らせ予約投稿用
   const [scheduleNoticeVisible, setScheduleNoticeVisible] = useState(false);
   const [scheduleNoticeCalDate, setScheduleNoticeCalDate] = useState<string>('');
+  const [scheduleNoticeStartDate, setScheduleNoticeStartDate] = useState<string>('');
+  const [scheduleNoticeEndDate, setScheduleNoticeEndDate] = useState<string>('');
+  const [scheduleNoticeDateTarget, setScheduleNoticeDateTarget] = useState<'start' | 'end'>('start');
+  const [scheduleNoticeAudience, setScheduleNoticeAudience] = useState<'staff' | 'user'>('staff');
   const [scheduleNoticeContent, setScheduleNoticeContent] = useState('');
   const [scheduleNoticeCalViewDate, setScheduleNoticeCalViewDate] = useState(new Date());
   const [scheduleNoticeStep, setScheduleNoticeStep] = useState<'calendar' | 'input'>('calendar');
@@ -321,6 +325,22 @@ export default function MenuScreen() {
 
   const showAppConfirm = (title: string, message: string, onConfirm: () => void) => {
     setAppDialog({ visible: true, title, message, confirm: true, onConfirm });
+  };
+
+  const isNoticeVisibleOnDate = (notice: any, dateStr: string, audience: 'staff' | 'user') => {
+    const noticeAudience = notice.audience || 'staff';
+    if (noticeAudience !== audience) return false;
+    const start = notice.startDate || notice.date;
+    const end = notice.endDate || notice.date || start;
+    if (!start) return false;
+    return dateStr >= start && dateStr <= end;
+  };
+
+  const formatNoticePeriodLabel = (notice: any) => {
+    const start = notice.startDate || notice.date;
+    const end = notice.endDate || notice.date || start;
+    if (!start) return '';
+    return start === end ? start : `${start} 〜 ${end}`;
   };
 
   const userDocIdRef = useRef<string>('');
@@ -623,10 +643,11 @@ export default function MenuScreen() {
           }
         }
 
-        const [scheduleSnap, memoSnap, eventSnap, schoolTimesSnap, holidaysDoc] = await Promise.all([
+        const [scheduleSnap, memoSnap, eventSnap, userNoticeSnap, schoolTimesSnap, holidaysDoc] = await Promise.all([
           getDocs(query(collection(db, 'schedules2'), where('parentId', '==', parentId), where('dateStr', '==', dateStr))),
           getDocs(query(collection(db, 'schedule_memos'), where('parentId', '==', parentId), where('dateStr', '==', dateStr))),
           getDocs(query(collection(db, 'events'), where('dateStr', '==', dateStr))),
+          getDocs(collection(db, 'admin_notices')),
           getDocs(collection(db, 'school_times')),
           getDoc(doc(db, 'settings', 'holidays_data')),
         ]);
@@ -672,6 +693,13 @@ export default function MenuScreen() {
         eventSnap.forEach(docSnap => {
           const item = docSnap.data();
           if (item.title) memos.push(`イベント: ${item.title}`);
+        });
+
+        userNoticeSnap.forEach(docSnap => {
+          const item = docSnap.data();
+          if (item.content && isNoticeVisibleOnDate(item, dateStr, 'user')) {
+            memos.push(`お知らせ: ${item.content}`);
+          }
         });
 
         if (!cancelled) {
@@ -764,11 +792,14 @@ export default function MenuScreen() {
       setTodayMemos(combined);
     });
 
-    // 管理者お知らせ
-    const unsubNotices = onSnapshot(
-      query(collection(db, 'admin_notices'), where('date', '==', dateStr)),
-      snap => setAdminNotices(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)))
-    );
+    // 管理者お知らせ（既存の単日お知らせ + 新しい期間お知らせ）
+    const unsubNotices = onSnapshot(collection(db, 'admin_notices'), snap => {
+      const notices = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(notice => isNoticeVisibleOnDate(notice, dateStr, 'staff'))
+        .sort((a, b) => String(a.startDate || a.date || '').localeCompare(String(b.startDate || b.date || '')));
+      setAdminNotices(notices);
+    });
 
     const unsubScheduleChanges = onSnapshot(
       query(collection(db, 'scheduleChanges'), where('date', '==', dateStr)),
@@ -866,13 +897,16 @@ export default function MenuScreen() {
     // 管理者お知らせも週間対応
     const unsubNoticesWeek = onSnapshot(collection(db, 'admin_notices'), snap => {
       setWeekMemos(prev => {
-        const next = { ...prev };
+        const next: Record<string, {kidName: string; memo: string; isAdmin?: boolean}[]> = {};
+        dateStrs.forEach(ds => { next[ds] = [...(prev[ds] || [])].filter(item => !item.isAdmin); });
         snap.docs.forEach(d => {
           const data = d.data();
-          if (!data.date || !data.content) return;
-          if (next[data.date]) {
-            // 既にあれば更新しない（schedules unsubが先に走るため再セット）
-          }
+          if (!data.content) return;
+          dateStrs.forEach(ds => {
+            if (isNoticeVisibleOnDate(data, ds, 'staff')) {
+              next[ds].push({ kidName: data.posterName || '稲熊', memo: data.content, isAdmin: true });
+            }
+          });
         });
         return next;
       });
@@ -919,10 +953,15 @@ export default function MenuScreen() {
 
     Animated.sequence([
       Animated.timing(headerAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.stagger(100, cardAnims.map(a =>
-        Animated.spring(a, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 10 })
-      )),
-      Animated.spring(eventRevealAnim, { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 7 }),
+      Animated.parallel([
+        Animated.stagger(75, cardAnims.map(a =>
+          Animated.spring(a, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 10 })
+        )),
+        Animated.sequence([
+          Animated.delay(180),
+          Animated.spring(eventRevealAnim, { toValue: 1, useNativeDriver: true, speed: 13, bounciness: 7 }),
+        ]),
+      ]),
     ]).start();
   }, []);
 
@@ -2579,7 +2618,10 @@ export default function MenuScreen() {
               {/* 管理者お知らせ */}
               {adminNotices.length > 0 && adminNotices.map(n => (
                 <View key={n.id} style={{ backgroundColor:'#EAFBFC', borderRadius:12, padding:12, marginBottom:8, borderLeftWidth:4, borderLeftColor:'#00AEB8' }}>
-                  <Text style={{ fontSize:11, fontWeight:'bold', color:'#007A82', marginBottom:4 }}>{(n as any).posterName || '稲熊'}</Text>
+                  <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginBottom:4, flexWrap:'wrap' }}>
+                    <Text style={{ fontSize:11, fontWeight:'bold', color:'#007A82' }}>{(n as any).posterName || '稲熊'}</Text>
+                    <Text style={{ fontSize:10, color:'#7A6254', fontWeight:'bold' }}>{formatNoticePeriodLabel(n)}</Text>
+                  </View>
                   <Text style={{ fontSize:14, color:'#333' }}>{n.content}</Text>
                   {role === 'admin' && (
                     <TouchableOpacity style={{ alignSelf:'flex-end', marginTop:4 }} onPress={async () => {
@@ -2606,6 +2648,12 @@ export default function MenuScreen() {
                   style={{ marginTop:16, backgroundColor:'#7CB342', borderRadius:14, padding:16, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:8 }}
                   onPress={() => {
                     setScheduleNoticeContent('');
+                    const todayStr = makeDateStr(new Date());
+                    setScheduleNoticeAudience(role === 'admin' ? 'staff' : 'staff');
+                    setScheduleNoticeStartDate(todayStr);
+                    setScheduleNoticeEndDate(todayStr);
+                    setScheduleNoticeDateTarget('start');
+                    setScheduleNoticeCalDate(todayStr);
                     setScheduleNoticeStep('calendar');
                     setScheduleNoticeCalViewDate(new Date());
                     setScheduleNoticeVisible(true);
@@ -2628,7 +2676,7 @@ export default function MenuScreen() {
             {/* ヘッダー */}
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, backgroundColor:'#F1F8E9', borderBottomWidth:1, borderColor:'#DCEDC8' }}>
               <Text style={{ fontSize:15, fontWeight:'bold', color:'#5D4037' }}>
-                {scheduleNoticeStep === 'calendar' ? '📅 表示する日付を選択' : `📝 ${scheduleNoticeCalDate} のお知らせ内容`}
+                {scheduleNoticeStep === 'calendar' ? '📅 お知らせ期間を選択' : '📝 お知らせ内容'}
               </Text>
               <TouchableOpacity onPress={() => setScheduleNoticeVisible(false)}>
                 <Ionicons name="close-circle" size={28} color="#795548" />
@@ -2638,6 +2686,38 @@ export default function MenuScreen() {
             {scheduleNoticeStep === 'calendar' ? (
               // ── カレンダー選択 ──
               <View style={{ padding:16 }}>
+                {role === 'admin' && (
+                  <View style={{ flexDirection:'row', gap:8, marginBottom:12 }}>
+                    <TouchableOpacity
+                      style={{ flex:1, paddingVertical:11, borderRadius:14, alignItems:'center', backgroundColor: scheduleNoticeAudience === 'staff' ? '#00AEB8' : '#F4F1ED', borderWidth:1, borderColor: scheduleNoticeAudience === 'staff' ? '#00AEB8' : '#E7D8C8' }}
+                      onPress={() => setScheduleNoticeAudience('staff')}
+                    >
+                      <Text style={{ color: scheduleNoticeAudience === 'staff' ? '#fff' : '#5D4037', fontWeight:'bold' }}>スタッフへお知らせ</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex:1, paddingVertical:11, borderRadius:14, alignItems:'center', backgroundColor: scheduleNoticeAudience === 'user' ? '#F59E0B' : '#F4F1ED', borderWidth:1, borderColor: scheduleNoticeAudience === 'user' ? '#F59E0B' : '#E7D8C8' }}
+                      onPress={() => setScheduleNoticeAudience('user')}
+                    >
+                      <Text style={{ color: scheduleNoticeAudience === 'user' ? '#fff' : '#5D4037', fontWeight:'bold' }}>利用者にお知らせ</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <View style={{ flexDirection:'row', gap:8, marginBottom:12 }}>
+                  <TouchableOpacity
+                    style={{ flex:1, paddingVertical:10, borderRadius:12, alignItems:'center', backgroundColor: scheduleNoticeDateTarget === 'start' ? '#EAFBFC' : '#FAFAFA', borderWidth:1.5, borderColor: scheduleNoticeDateTarget === 'start' ? '#00AEB8' : '#E5DED8' }}
+                    onPress={() => setScheduleNoticeDateTarget('start')}
+                  >
+                    <Text style={{ fontSize:11, color:'#7A6254', fontWeight:'bold' }}>開始日</Text>
+                    <Text style={{ fontSize:14, color:'#333', fontWeight:'900' }}>{scheduleNoticeStartDate || '未選択'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex:1, paddingVertical:10, borderRadius:12, alignItems:'center', backgroundColor: scheduleNoticeDateTarget === 'end' ? '#FFF7E8' : '#FAFAFA', borderWidth:1.5, borderColor: scheduleNoticeDateTarget === 'end' ? '#F59E0B' : '#E5DED8' }}
+                    onPress={() => setScheduleNoticeDateTarget('end')}
+                  >
+                    <Text style={{ fontSize:11, color:'#7A6254', fontWeight:'bold' }}>終了日</Text>
+                    <Text style={{ fontSize:14, color:'#333', fontWeight:'900' }}>{scheduleNoticeEndDate || '未選択'}</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
                   <TouchableOpacity onPress={() => setScheduleNoticeCalViewDate(new Date(scheduleNoticeCalViewDate.getFullYear(), scheduleNoticeCalViewDate.getMonth()-1, 1))}>
                     <Ionicons name="chevron-back" size={24} color="#5D4037" />
@@ -2672,14 +2752,31 @@ export default function MenuScreen() {
                         {week.map((day, di) => {
                           if (!day) return <View key={di} style={{ width: '14.2%', height: 36 }} />;
                           const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const isSelected = dateStr === scheduleNoticeCalDate;
+                          const isStart = dateStr === scheduleNoticeStartDate;
+                          const isEnd = dateStr === scheduleNoticeEndDate;
+                          const inRange = !!scheduleNoticeStartDate && !!scheduleNoticeEndDate && dateStr > scheduleNoticeStartDate && dateStr < scheduleNoticeEndDate;
                           return (
                             <TouchableOpacity
                               key={di}
-                              style={{ width: '14.2%', height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#7CB342' : 'transparent', borderRadius: 18 }}
-                              onPress={() => { setScheduleNoticeCalDate(dateStr); setScheduleNoticeStep('input'); }}
+                              style={{ width: '14.2%', height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: isStart ? '#00AEB8' : isEnd ? '#F59E0B' : inRange ? '#FFF4D8' : 'transparent', borderRadius: 18 }}
+                              onPress={() => {
+                                if (scheduleNoticeDateTarget === 'start') {
+                                  setScheduleNoticeStartDate(dateStr);
+                                  if (!scheduleNoticeEndDate || scheduleNoticeEndDate < dateStr) setScheduleNoticeEndDate(dateStr);
+                                  setScheduleNoticeCalDate(dateStr);
+                                  setScheduleNoticeDateTarget('end');
+                                } else {
+                                  if (scheduleNoticeStartDate && dateStr < scheduleNoticeStartDate) {
+                                    setScheduleNoticeEndDate(scheduleNoticeStartDate);
+                                    setScheduleNoticeStartDate(dateStr);
+                                    setScheduleNoticeCalDate(dateStr);
+                                  } else {
+                                    setScheduleNoticeEndDate(dateStr);
+                                  }
+                                }
+                              }}
                             >
-                              <Text style={{ fontSize: 14, fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#fff' : di === 0 ? '#E53935' : di === 6 ? '#1565C0' : '#333' }}>
+                              <Text style={{ fontSize: 14, fontWeight: (isStart || isEnd) ? 'bold' : 'normal', color: (isStart || isEnd) ? '#fff' : di === 0 ? '#E53935' : di === 6 ? '#1565C0' : '#333' }}>
                                 {day}
                               </Text>
                             </TouchableOpacity>
@@ -2689,6 +2786,13 @@ export default function MenuScreen() {
                     ));
                   })()}
                 </View>
+                <TouchableOpacity
+                  style={{ marginTop:14, backgroundColor: scheduleNoticeStartDate && scheduleNoticeEndDate ? '#00AEB8' : '#CCC', borderRadius:14, padding:14, alignItems:'center' }}
+                  disabled={!scheduleNoticeStartDate || !scheduleNoticeEndDate}
+                  onPress={() => setScheduleNoticeStep('input')}
+                >
+                  <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>内容入力へ進む</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               // ── 内容入力 ──
@@ -2699,7 +2803,10 @@ export default function MenuScreen() {
                 </TouchableOpacity>
                 <Text style={{ fontSize:12, color:'#888', marginBottom:4 }}>
                   投稿者：<Text style={{ fontWeight:'bold', color: role==='admin' ? '#007A82' : '#5B9BD5' }}>{role==='admin' ? '稲熊' : name}</Text>
-                  {'  '}表示日：<Text style={{ fontWeight:'bold', color:'#7CB342' }}>{scheduleNoticeCalDate}</Text>
+                  {'  '}宛先：<Text style={{ fontWeight:'bold', color:'#007A82' }}>{scheduleNoticeAudience === 'user' ? '利用者' : 'スタッフ'}</Text>
+                </Text>
+                <Text style={{ fontSize:12, color:'#888', marginBottom:10 }}>
+                  表示期間：<Text style={{ fontWeight:'bold', color:'#7CB342' }}>{scheduleNoticeStartDate} 〜 {scheduleNoticeEndDate}</Text>
                 </Text>
                 <Text style={{ fontSize:13, fontWeight:'bold', color:'#5D4037', marginBottom:8 }}>お知らせ内容</Text>
                 <TextInput
@@ -2715,21 +2822,26 @@ export default function MenuScreen() {
                   style={{ marginTop:12, backgroundColor: scheduleNoticeContent.trim() ? '#7CB342' : '#CCC', borderRadius:12, padding:14, alignItems:'center' }}
                   disabled={!scheduleNoticeContent.trim()}
                   onPress={async () => {
-                    if (!scheduleNoticeContent.trim() || !scheduleNoticeCalDate) return;
+                    if (!scheduleNoticeContent.trim() || !scheduleNoticeStartDate || !scheduleNoticeEndDate) return;
                     const posterName = role === 'admin' ? '稲熊' : name;
                     await addDoc(collection(db, 'admin_notices'), {
                       content: scheduleNoticeContent.trim(),
-                      date: scheduleNoticeCalDate,
+                      date: scheduleNoticeStartDate,
+                      startDate: scheduleNoticeStartDate,
+                      endDate: scheduleNoticeEndDate,
+                      audience: scheduleNoticeAudience,
                       posterName,
                       createdAt: new Date(),
                     });
                     setScheduleNoticeContent('');
                     setScheduleNoticeCalDate('');
+                    setScheduleNoticeStartDate('');
+                    setScheduleNoticeEndDate('');
                     setScheduleNoticeVisible(false);
                     setNewNotice('');
                   }}
                 >
-                  <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>📅 {scheduleNoticeCalDate} に保存する</Text>
+                  <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>📅 この期間で保存する</Text>
                 </TouchableOpacity>
                 <View style={{ height:30 }} />
               </ScrollView>

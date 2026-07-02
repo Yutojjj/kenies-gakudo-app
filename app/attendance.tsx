@@ -38,6 +38,17 @@ type ViewMode = 'attendance' | 'todayStatus' | 'schoolUsers' | 'transport';
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const PASTEL_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8'];
 const BG_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8', '#F6EEF8', '#EEF7F6'];
+const SCHOOL_GRADIENT_COLORS = [
+  '#F7C8CC',
+  '#F9DFC0',
+  '#FFF1C6',
+  '#D9EED1',
+  '#D6E5E8',
+  '#C7DCF7',
+  '#CFE3F1',
+  '#D8D1E8',
+  '#E8C7D8',
+];
 
 // 固定の学校順序
 const FIXED_SCHOOL_ORDER = [
@@ -407,9 +418,36 @@ export default function AttendanceScreen() {
   };
 
   const getCardColor = (str: string) => {
+    const orderedIndex = sortedSchoolNames.indexOf(str);
+    if (orderedIndex >= 0) {
+      const ratio = sortedSchoolNames.length <= 1 ? 0 : orderedIndex / (sortedSchoolNames.length - 1);
+      const colorIndex = Math.round(ratio * (SCHOOL_GRADIENT_COLORS.length - 1));
+      return SCHOOL_GRADIENT_COLORS[colorIndex];
+    }
     let hash = 0;
     for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    return PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
+    return SCHOOL_GRADIENT_COLORS[Math.abs(hash) % SCHOOL_GRADIENT_COLORS.length];
+  };
+
+  const getDateLayoutKey = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const keepAnchorInPlace = (anchorKey: string, nextY: number) => {
+    const target = preserveScrollRef.current;
+    if (!target || target.anchorKey !== anchorKey) return;
+    const delta = nextY - target.anchorY;
+    if (Math.abs(delta) < 20) return;
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
+      }, 50);
+    });
+    preserveScrollRef.current = null;
   };
 
   const scrollToDate = (dateKey: string) => {
@@ -421,7 +459,7 @@ export default function AttendanceScreen() {
 
   const handleLoadPastWeek = () => {
     const firstDate = datesToDisplay[0];
-    const anchorKey = `${firstDate.getMonth() + 1}/${firstDate.getDate()}`;
+    const anchorKey = getDateLayoutKey(firstDate);
     preserveScrollRef.current = {
       anchorKey,
       anchorY: layouts[anchorKey] || 0,
@@ -435,11 +473,7 @@ export default function AttendanceScreen() {
     if (!target) return;
     const nextAnchorY = layouts[target.anchorKey];
     if (nextAnchorY === undefined) return;
-    const delta = nextAnchorY - target.anchorY;
-    requestAnimationFrame(() => {
-      scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
-    });
-    preserveScrollRef.current = null;
+    keepAnchorInPlace(target.anchorKey, nextAnchorY);
   }, [layouts, pastWeeks]);
 
   const groupedUsersBySchool = useMemo(() => {
@@ -475,7 +509,7 @@ export default function AttendanceScreen() {
             const dateStrForHoliday = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const dayOfWeek = d.getDay();
             const dayStr = DAY_NAMES[dayOfWeek];
-            const dateKey = `${m}/${day}`;
+            const dateKey = getDateLayoutKey(d);
             const isToday = d.toDateString() === new Date().toDateString();
             
             const isSaturday = dayOfWeek === 6;
@@ -516,7 +550,8 @@ export default function AttendanceScreen() {
           const day = date.getDate();
           const dayOfWeek = date.getDay();
           const dayStr = DAY_NAMES[dayOfWeek];
-          const dateKey = `${m}/${day}`;
+          const dateKey = getDateLayoutKey(date);
+          const dateLabel = `${m}/${day}`;
           
           const year = date.getFullYear();
           const dateStr = `${year}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -544,11 +579,12 @@ export default function AttendanceScreen() {
 
           return (
             <View 
-              key={index} 
+              key={dateKey} 
               style={styles.daySection} 
               onLayout={(e) => { 
                 const currentY = e.nativeEvent.layout.y;
                 setLayouts(prev => ({ ...prev, [dateKey]: currentY })); 
+                keepAnchorInPlace(dateKey, currentY);
               }}
             >
               <View style={[styles.dayHeaderContainer, Platform.OS === 'web' && ({ position: 'sticky', top: 0, zIndex: 10 } as any)]}>
@@ -564,7 +600,7 @@ export default function AttendanceScreen() {
                     const allKidsInSchool = Object.values(timesMap).flat();
                     return (
                       <View key={schoolName} style={[styles.schoolCard, { backgroundColor: getCardColor(schoolName) }]}>
-                        <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: schoolName, kids: sortKidsByGrade(allKidsInSchool) })}>
+                        <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: schoolName, kids: sortKidsByGrade(allKidsInSchool) })}>
                           <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{schoolName}</Text>
                         </TouchableOpacity>
                         <View style={styles.timeGroupContainer}>
@@ -572,7 +608,7 @@ export default function AttendanceScreen() {
                              const hasManualOverride = kids.some(k => k.isManualOverride);
                              const hasAnyMemo = kids.some(k => k.hasMemo);
                              return (
-                              <TouchableOpacity key={time} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
+                              <TouchableOpacity key={time} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
                                 {showKidNames ? (
                                   <>
                                     <View style={styles.timeHeaderRow}>
@@ -612,7 +648,7 @@ export default function AttendanceScreen() {
                       <>
                         {lesson1Entries.length > 0 && (
                           <View style={[styles.schoolCard, { backgroundColor: '#EAF8F1' }]}>
-                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
+                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
                               <Text style={styles.schoolNameText}>習い事</Text>
                             </TouchableOpacity>
                             <View style={styles.timeGroupContainer}>
@@ -621,7 +657,7 @@ export default function AttendanceScreen() {
                                 const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
                                 const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
                                 return (
-                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
                                     {showKidNames ? (
                                       <>
                                         <View style={styles.timeHeaderRow}>
@@ -652,7 +688,7 @@ export default function AttendanceScreen() {
                         )}
                         {lesson2Entries.length > 0 && (
                           <View style={[styles.schoolCard, { backgroundColor: '#F3E5F5' }]}>
-                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateKey, title: '習い事2', kids: sortKidsByGrade(lesson2Entries.flatMap(([,kids]) => kids)) })}>
+                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事2', kids: sortKidsByGrade(lesson2Entries.flatMap(([,kids]) => kids)) })}>
                               <Text style={[styles.schoolNameText, { color: '#7B1FA2' }]}>習い事2</Text>
                             </TouchableOpacity>
                             <View style={styles.timeGroupContainer}>
@@ -661,7 +697,7 @@ export default function AttendanceScreen() {
                                 const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
                                 const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
                                 return (
-                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateKey, title: '習い事2', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: '習い事2', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
                                     {showKidNames ? (
                                       <>
                                         <View style={styles.timeHeaderRow}>
@@ -765,49 +801,47 @@ export default function AttendanceScreen() {
       });
 
       return (
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 8 }}>
           {sortedSchools.map(school => {
             const schoolKids = grouped[school];
             const bgColor = getCardColor(school);
             return (
-              <View key={school} style={{ backgroundColor: bgColor, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
-                <Text style={{ fontSize: 14, fontWeight: 'bold', color: COLORS.text, marginBottom: 8 }}>{school}</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 }}>
+              <View key={school} style={{ backgroundColor: bgColor, borderRadius: 12, padding: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+                <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.text, marginBottom: 6 }}>{school}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 5 }}>
                   {schoolKids.map(k => {
                     const isArrived = statusType === 'arrived';
                     return (
                       <View key={k.id} style={{ 
                         backgroundColor: isArrived ? '#E8F5E9' : '#FFFFFF', 
-                        paddingHorizontal: 10, 
-                        paddingVertical: 10, 
-                        borderRadius: 12, 
+                        paddingHorizontal: 5, 
+                        paddingVertical: 6, 
+                        borderRadius: 9, 
                         flexDirection: 'row', 
                         alignItems: 'center', 
                         shadowColor: '#000', 
                         shadowOpacity: 0.04, 
                         shadowRadius: 3, 
                         elevation: 1,
-                        borderWidth: 2,
+                        borderWidth: 1,
                         borderColor: isArrived ? '#4CAF50' : '#EEEEEE',
-                        width: '48%'
+                        width: '23.6%'
                       }}>
                         <Ionicons 
                           name={isArrived ? "checkmark-circle" : "person-circle-outline"} 
-                          size={20} 
+                          size={13} 
                           color={isArrived ? "#4CAF50" : COLORS.danger} 
-                          style={{ marginRight: 6 }} 
+                          style={{ marginRight: 3 }} 
                         />
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: 'bold', color: COLORS.text }} numberOfLines={1}>{k.name}</Text>
-                          <Text style={{ fontSize: 10, color: isArrived ? '#4CAF50' : COLORS.textLight, marginTop: 2 }}>
+                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: COLORS.text }} numberOfLines={1}>{k.name}</Text>
+                          <Text style={{ fontSize: 8, color: isArrived ? '#4CAF50' : COLORS.textLight }} numberOfLines={1}>
                             {k.grade}
                           </Text>
                         </View>
                       </View>
                     );
                   })}
-                  {/* 要素が奇数の場合にレイアウト崩れを防ぐためのダミー要素 */}
-                  {schoolKids.length % 2 !== 0 && <View style={{ width: '48%' }} />}
                 </View>
               </View>
             );

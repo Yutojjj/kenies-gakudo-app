@@ -1069,33 +1069,45 @@ export default function ScheduleScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
-                {((children[activeChildIdx]?.pickupTimes || []).length > 0 || !!getCellData(selectedDateStr).pickupTime) && (
-                  <View style={styles.pickupSavedTimes}>
-                    {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
-                      const isActive = getCellData(selectedDateStr).pickupTime === t;
-                      return (
-                        <TouchableOpacity
-                          key={t}
-                          style={[styles.pickupSavedTimeChip, isActive && styles.pickupSavedTimeChipActive]}
-                          onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
-                          activeOpacity={0.82}
-                        >
-                          <Text style={[styles.pickupSavedTimeText, isActive && styles.pickupSavedTimeTextActive]}>{t}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {!!getCellData(selectedDateStr).pickupTime && !(children[activeChildIdx]?.pickupTimes || []).includes(getCellData(selectedDateStr).pickupTime) && (
+                <View style={styles.pickupSavedTimes}>
+                  {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
+                    const isActive = getCellData(selectedDateStr).pickupTime === t;
+                    return (
                       <TouchableOpacity
-                        style={styles.pickupSavedTimeAddChip}
-                        onPress={() => savePickupTimeToAccount(getCellData(selectedDateStr).pickupTime)}
+                        key={t}
+                        style={[styles.pickupSavedTimeChip, isActive && styles.pickupSavedTimeChipActive]}
+                        onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
                         activeOpacity={0.82}
                       >
-                        <Ionicons name="add" size={13} color="#9A5B05" />
-                        <Text style={styles.pickupSavedTimeText}>この時刻を保存</Text>
+                        <Text style={[styles.pickupSavedTimeText, isActive && styles.pickupSavedTimeTextActive]}>{t}</Text>
                       </TouchableOpacity>
-                    )}
-                  </View>
-                )}
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={styles.pickupSavedTimeAddChip}
+                    onPress={() => {
+                      const current = getCellData(selectedDateStr).pickupTime || '15:00';
+                      const [h, m] = current.split(':').map((v: string) => Number(v));
+                      setAddPickupHour(Number.isFinite(h) ? h : HOURS[0]);
+                      setAddPickupMinute(Number.isFinite(m) ? m : 0);
+                      setAddPickupPickerVisible(true);
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <Ionicons name="add-circle-outline" size={14} color="#9A5B05" />
+                    <Text style={styles.pickupSavedTimeText}>候補追加</Text>
+                  </TouchableOpacity>
+                  {!!getCellData(selectedDateStr).pickupTime && !(children[activeChildIdx]?.pickupTimes || []).includes(getCellData(selectedDateStr).pickupTime) && (
+                    <TouchableOpacity
+                      style={styles.pickupSavedTimeAddChip}
+                      onPress={() => savePickupTimeToAccount(getCellData(selectedDateStr).pickupTime)}
+                      activeOpacity={0.82}
+                    >
+                      <Ionicons name="add" size={13} color="#9A5B05" />
+                      <Text style={styles.pickupSavedTimeText}>この時刻を保存</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
               <View style={styles.dayPlanSection}>

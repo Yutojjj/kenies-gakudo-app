@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { disableNetwork, enableNetwork } from 'firebase/firestore';
-import React, { useMemo, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { CallProvider } from '../contexts/CallContext';
@@ -48,6 +48,7 @@ export default function RootLayout() {
   const [isOnline, setIsOnline] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const swipeTranslateX = useRef(new Animated.Value(0)).current;
 
   const edgeHomePanResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {
@@ -59,12 +60,38 @@ export default function RootLayout() {
         !PUBLIC_PATHS.includes(pathname)
       );
     },
+    onPanResponderMove: (_evt, gestureState) => {
+      if (gestureState.dx <= 0) return;
+      swipeTranslateX.setValue(Math.min(gestureState.dx, 190));
+    },
     onPanResponderRelease: (_evt, gestureState) => {
       if (gestureState.dx > 90 && Math.abs(gestureState.dy) < 60 && pathname !== '/menu') {
-        navigateHome(router);
+        Animated.timing(swipeTranslateX, {
+          toValue: 260,
+          duration: 120,
+          useNativeDriver: true,
+        }).start(() => {
+          swipeTranslateX.setValue(0);
+          navigateHome(router);
+        });
+        return;
       }
+      Animated.spring(swipeTranslateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        speed: 18,
+        bounciness: 3,
+      }).start();
     },
-  }), [pathname, router]);
+    onPanResponderTerminate: () => {
+      Animated.spring(swipeTranslateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        speed: 18,
+        bounciness: 3,
+      }).start();
+    },
+  }), [pathname, router, swipeTranslateX]);
 
   useEffect(() => {
     const setupLoggedInPush = async () => {
@@ -139,30 +166,41 @@ export default function RootLayout() {
       <CallProvider>
         <AuthGuard>
           <SafeAreaView style={styles.container} {...edgeHomePanResponder.panHandlers}>
-            {/* オフライン時のバナー */}
-            {!isOnline && (
-              <View style={{ backgroundColor: '#FF5722', paddingVertical: 6, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                  オフライン中 - 接続を確認してください
-                </Text>
+            {!PUBLIC_PATHS.includes(pathname) && pathname !== '/menu' && (
+              <View style={styles.homePreview}>
+                <View style={styles.homePreviewIcon}>
+                  <Text style={styles.homePreviewIconText}>⌂</Text>
+                </View>
+                <Text style={styles.homePreviewTitle}>ホーム</Text>
+                <Text style={styles.homePreviewSub}>右へスワイプで戻る</Text>
               </View>
             )}
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: 'fade',
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="menu" />
-              <Stack.Screen name="attendance" />
-              <Stack.Screen name="album" />
-              <Stack.Screen name="schedule" />
-              <Stack.Screen name="shift" />
-              <Stack.Screen name="event-management" />
-              <Stack.Screen name="messages" />
-              <Stack.Screen name="schedule-changes" />
-            </Stack>
+            <Animated.View style={[styles.screenLayer, { transform: [{ translateX: swipeTranslateX }] }]}>
+              {/* オフライン時のバナー */}
+              {!isOnline && (
+                <View style={{ backgroundColor: '#FF5722', paddingVertical: 6, alignItems: 'center' }}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                    オフライン中 - 接続を確認してください
+                  </Text>
+                </View>
+              )}
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: 'fade',
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="menu" />
+                <Stack.Screen name="attendance" />
+                <Stack.Screen name="album" />
+                <Stack.Screen name="schedule" />
+                <Stack.Screen name="shift" />
+                <Stack.Screen name="event-management" />
+                <Stack.Screen name="messages" />
+                <Stack.Screen name="schedule-changes" />
+              </Stack>
+            </Animated.View>
           </SafeAreaView>
         </AuthGuard>
       </CallProvider>
@@ -173,6 +211,43 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFF8F0',
+  },
+  screenLayer: {
+    flex: 1,
     backgroundColor: COLORS.background,
+  },
+  homePreview: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFF8F0',
+    justifyContent: 'center',
+    paddingLeft: 28,
+  },
+  homePreviewIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F0E1D4',
+    marginBottom: 12,
+  },
+  homePreviewIconText: {
+    fontSize: 30,
+    color: '#00AEB8',
+    fontWeight: '900',
+  },
+  homePreviewTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#3F302B',
+  },
+  homePreviewSub: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8A7A70',
   },
 });
