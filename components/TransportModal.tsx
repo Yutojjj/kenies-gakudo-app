@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
 
 const COLORS = {
@@ -28,6 +28,13 @@ type Props = {
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
+
+const escapeHtml = (value: any) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
 
 export default function TransportModal({
   visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign,
@@ -170,6 +177,223 @@ export default function TransportModal({
     save(updated);
   };
 
+  const getTimelinePrintRows = () => {
+    const assignmentMap = new Map<string, { staffName: string; tripLabel: string }>();
+    staffEntries.forEach((entry) => {
+      if (entry.staffName === '送迎しない') return;
+      entry.trips.forEach((trip, tIdx) => {
+        trip.blockKeys.forEach((blockKey) => {
+          assignmentMap.set(blockKey, {
+            staffName: entry.staffName,
+            tripLabel: TRIP_LABELS[tIdx] || `${tIdx + 1}回目`,
+          });
+        });
+      });
+    });
+
+    return blocks.map((block) => {
+      const assignment = assignmentMap.get(block.key);
+      return {
+        time: block.time || '-',
+        typeLabel: block.type === 'lesson' ? '習い事' : 'お迎え',
+        name: block.nameOnly || block.label,
+        count: block.count,
+        staffName: assignment?.staffName || '未割当',
+        tripLabel: assignment?.tripLabel || '-',
+        kids: (block.kids || []).map((kid: any) => {
+          const grade = kid.grade ? `（${kid.grade}）` : '';
+          return `${kid.name || ''}${grade}`;
+        }).filter(Boolean),
+      };
+    }).sort((a, b) => `${a.time}${a.name}`.localeCompare(`${b.time}${b.name}`));
+  };
+
+  const printTimeline = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('印刷', '印刷はWeb版またはPWA版で利用できます。');
+      return;
+    }
+
+    const browserWindow = (globalThis as any).window;
+    if (!browserWindow?.open) {
+      Alert.alert('印刷', 'この環境では印刷画面を開けませんでした。');
+      return;
+    }
+
+    const rows = getTimelinePrintRows();
+    const rowHtml = rows.length > 0
+      ? rows.map((row) => `
+        <tr>
+          <td class="time">${escapeHtml(row.time)}</td>
+          <td>${escapeHtml(row.typeLabel)}</td>
+          <td class="name">${escapeHtml(row.name)}</td>
+          <td class="count">${escapeHtml(row.count)}名</td>
+          <td>${escapeHtml(row.staffName)}</td>
+          <td>${escapeHtml(row.tripLabel)}</td>
+          <td class="kids">${escapeHtml(row.kids.join('、') || '-')}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="7" class="empty">この日の送迎予定はありません</td></tr>';
+
+    const staffHtml = staffEntries
+      .filter((entry) => entry.staffName !== '送迎しない')
+      .map((entry) => {
+        const shift = shiftStaff.find((s) => s.name === entry.staffName);
+        const trips = entry.trips
+          .map((trip, tIdx) => {
+            const labels = trip.blockKeys
+              .map((blockKey) => {
+                const block = blocks.find((b) => b.key === blockKey);
+                return block ? `${block.time || '-'} ${block.nameOnly || block.label}（${block.count}名）` : '';
+              })
+              .filter(Boolean);
+            return labels.length > 0 ? `${TRIP_LABELS[tIdx] || `${tIdx + 1}回目`}: ${labels.join(' / ')}` : '';
+          })
+          .filter(Boolean);
+        return `
+          <div class="staff-card">
+            <div class="staff-name">${escapeHtml(entry.staffName)}</div>
+            <div class="shift">${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</div>
+            <div class="trips">${escapeHtml(trips.join('　') || '担当なし')}</div>
+          </div>
+        `;
+      }).join('');
+
+    const html = `
+      <!doctype html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(dateLabel)} 送迎全体確認</title>
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: #222;
+              font-family: -apple-system, BlinkMacSystemFont, "Yu Gothic", "Yu Gothic UI", Meiryo, sans-serif;
+              background: #fff;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              border-bottom: 3px solid #56b6c2;
+              padding-bottom: 8px;
+              margin-bottom: 10px;
+            }
+            h1 { font-size: 22px; margin: 0; letter-spacing: 0; }
+            .sub { font-size: 12px; color: #555; }
+            .summary {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 8px;
+              margin-bottom: 10px;
+            }
+            .summary-card {
+              border: 1px solid #d8e8e6;
+              border-radius: 10px;
+              padding: 8px 10px;
+              background: #f7fbfa;
+              font-size: 12px;
+            }
+            .summary-card strong { display: block; font-size: 16px; margin-top: 2px; }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 11px;
+            }
+            th {
+              background: #eef8f7;
+              border: 1px solid #b9dcda;
+              padding: 6px 5px;
+              text-align: left;
+            }
+            td {
+              border: 1px solid #d7e5e3;
+              padding: 6px 5px;
+              vertical-align: top;
+              line-height: 1.35;
+              word-break: break-word;
+            }
+            tr:nth-child(even) td { background: #fbfdfc; }
+            .time { width: 8%; font-size: 13px; font-weight: 700; color: #111; }
+            .name { font-weight: 700; }
+            .count { text-align: center; font-weight: 700; }
+            .kids { font-size: 10px; }
+            .empty { text-align: center; padding: 20px; color: #666; }
+            .staff-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 6px;
+              margin-top: 10px;
+              page-break-inside: avoid;
+            }
+            .staff-card {
+              border: 1px solid #e0e0e0;
+              border-radius: 8px;
+              padding: 6px 8px;
+              min-height: 48px;
+            }
+            .staff-name { font-weight: 700; font-size: 12px; }
+            .shift { color: #555; font-size: 10px; margin-top: 1px; }
+            .trips { font-size: 10px; margin-top: 4px; line-height: 1.35; }
+            @media print {
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>${escapeHtml(dateLabel)} 送迎全体確認</h1>
+              <div class="sub">A4横印刷用</div>
+            </div>
+            <div class="sub">印刷日: ${escapeHtml(new Date().toLocaleString('ja-JP'))}</div>
+          </div>
+          <div class="summary">
+            <div class="summary-card">送迎先<strong>${escapeHtml(blocks.length)}件</strong></div>
+            <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
+            <div class="summary-card">担当スタッフ<strong>${escapeHtml(staffEntries.filter((entry) => entry.staffName !== '送迎しない').length)}名</strong></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:8%">時刻</th>
+                <th style="width:8%">種別</th>
+                <th style="width:16%">行き先</th>
+                <th style="width:7%">人数</th>
+                <th style="width:12%">担当</th>
+                <th style="width:9%">回</th>
+                <th>児童名</th>
+              </tr>
+            </thead>
+            <tbody>${rowHtml}</tbody>
+          </table>
+          <div class="staff-grid">${staffHtml}</div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = browserWindow.open('', '_blank', 'width=1200,height=800');
+    if (!printWindow) {
+      Alert.alert('印刷', '印刷画面を開けませんでした。ポップアップの許可を確認してください。');
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+  };
+
   // ── タイムライン表示ビューのレンダリング ──
   const renderTimelineView = () => {
     const START_HOUR = 11; // 11時から
@@ -297,9 +521,15 @@ export default function TransportModal({
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
               {showTimeline ? (
                 // タイムライン表示中のボタン
-                <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: COLORS.primary }]} onPress={() => setShowTimeline(false)}>
-                  <Text style={[styles.lastWeekBtnText, { color: COLORS.primary }]}>編集に戻る</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
+                    <Ionicons name="print-outline" size={14} color="#fff" />
+                    <Text style={styles.printBtnText}>印刷</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: COLORS.primary }]} onPress={() => setShowTimeline(false)}>
+                    <Text style={[styles.lastWeekBtnText, { color: COLORS.primary }]}>編集に戻る</Text>
+                  </TouchableOpacity>
+                </>
               ) : (
                 // 割り当て編集中のボタン
                 <>
@@ -588,6 +818,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, flex: 1 },
   
   closeBtn: { padding: 4 },
+  printBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#56B6C2' },
+  printBtnText: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
   lastWeekBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: COLORS.primary },
   lastWeekBtnActive: { backgroundColor: COLORS.primary },
   lastWeekBtnText: { fontSize: 11, color: COLORS.primary, fontWeight: 'bold' },
