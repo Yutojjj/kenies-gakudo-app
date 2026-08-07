@@ -304,6 +304,9 @@ export default function TransportModal({
           </div>
         `;
       }).join('');
+    const assignedStaffNames = staffEntries
+      .filter((entry) => entry.staffName !== '送迎しない')
+      .map((entry) => entry.staffName);
 
     const html = `
       <!doctype html>
@@ -354,6 +357,18 @@ export default function TransportModal({
               margin-top: 4px;
               color: #111;
               font-weight: 900;
+            }
+            .summary-staff-title {
+              font-size: 13px;
+              font-weight: 800;
+              color: #222;
+              margin-bottom: 6px;
+            }
+            .summary-staff-names {
+              font-size: 16px;
+              line-height: 1.35;
+              color: #111;
+              font-weight: 800;
             }
             .section-title {
               font-size: 13px;
@@ -516,7 +531,10 @@ export default function TransportModal({
           <div class="summary">
             <div class="summary-card">送迎先<strong>${escapeHtml(blocks.length)}件</strong></div>
             <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
-            <div class="summary-card">担当スタッフ<strong>${escapeHtml(staffEntries.filter((entry) => entry.staffName !== '送迎しない').length)}名</strong></div>
+            <div class="summary-card">
+              <div class="summary-staff-title">担当スタッフ(${escapeHtml(assignedStaffNames.length)}名)</div>
+              <div class="summary-staff-names">${escapeHtml(assignedStaffNames.join('、') || 'なし')}</div>
+            </div>
           </div>
           <div class="timeline">
             <div class="timeline-head">
