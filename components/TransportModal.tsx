@@ -1032,11 +1032,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, flex: 1 },
   
   closeBtn: { padding: 4 },
-  printBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#56B6C2' },
-  printBtnText: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
-  lastWeekBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: COLORS.primary },
+  printBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 88, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#56B6C2' },
+  printBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
+  lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 96, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
   lastWeekBtnActive: { backgroundColor: COLORS.primary },
-  lastWeekBtnText: { fontSize: 11, color: COLORS.primary, fontWeight: 'bold' },
+  lastWeekBtnText: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
   lastWeekBanner: { backgroundColor: '#FFF9C4', padding: 7, alignItems: 'center' },
   lastWeekBannerText: { fontSize: 11, color: '#856404', fontWeight: 'bold' },
 
