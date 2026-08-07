@@ -650,19 +650,52 @@ export default function TransportModal({
       return (offsetMins / 15) * COL_WIDTH;
     };
 
+    const rows = getTimelinePrintRows();
+    const assignedStaffNames = staffEntries
+      .filter((entry) => entry.staffName !== '送迎しない')
+      .map((entry) => entry.staffName);
+    const targetCount = attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0);
+
     return (
-      <View style={{ flex: 1, backgroundColor: '#FFF' }}>
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          <ScrollView horizontal style={{ flex: 1 }} showsHorizontalScrollIndicator={false}>
-            <View style={{ paddingBottom: 20 }}>
-              {/* 時間のヘッダー */}
-              <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: '#CCC', marginLeft: 100 }}>
+      <ScrollView style={styles.overviewScroll} contentContainerStyle={styles.overviewContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.overviewDocumentHeader}>
+          <Text style={styles.overviewDate}>{dateLabel}</Text>
+          <Text style={styles.overviewTitle}>送迎一覧</Text>
+        </View>
+
+        <View style={styles.overviewSummaryRow}>
+          <View style={styles.overviewSummaryCard}>
+            <Text style={styles.overviewSummaryLabel}>送迎先</Text>
+            <Text style={styles.overviewSummaryValue}>{blocks.length}件</Text>
+          </View>
+          <View style={styles.overviewSummaryCard}>
+            <Text style={styles.overviewSummaryLabel}>対象児童</Text>
+            <Text style={styles.overviewSummaryValue}>{targetCount}名</Text>
+          </View>
+          <View style={[styles.overviewSummaryCard, styles.overviewStaffCard]}>
+            <Text style={styles.overviewSummaryLabel}>スタッフ</Text>
+            <View style={styles.overviewStaffRow}>
+              <Text style={styles.overviewSummaryValue}>{assignedStaffNames.length}名</Text>
+              <Text style={styles.overviewStaffNames}>{assignedStaffNames.join('、') || 'なし'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={styles.overviewTimelineFrame}>
+            <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: '#CFE0DF' }}>
+              <View style={styles.overviewTimelineCorner}>
+                <Text style={styles.overviewTimelineCornerText}>担当</Text>
+              </View>
+              <View style={{ flexDirection: 'row', width: TIMELINE_WIDTH }}>
+                {/* 時間のヘッダー */}
                 {timeHeaders.map(h => (
-                  <View key={h} style={{ width: COL_WIDTH * 4, borderLeftWidth: 1, borderColor: '#EEE', paddingLeft: 4 }}>
-                    <Text style={{ fontSize: 11, color: '#888', fontWeight: 'bold' }}>{h}:00</Text>
+                  <View key={h} style={{ width: COL_WIDTH * 4, borderLeftWidth: 1.5, borderColor: '#8FB8B5', paddingLeft: 4 }}>
+                    <Text style={{ fontSize: 11, color: '#333', fontWeight: 'bold' }}>{h}:00</Text>
                   </View>
                 ))}
               </View>
+            </View>
 
               {/* 各スタッフのタイムライン */}
               {staffEntries.map((entry, sIdx) => {
@@ -679,18 +712,18 @@ export default function TransportModal({
                 }
 
                 return (
-                  <View key={sIdx} style={{ flexDirection: 'row', height: ROW_HEIGHT, borderBottomWidth: 1, borderColor: '#EEE' }}>
+                  <View key={sIdx} style={{ flexDirection: 'row', height: ROW_HEIGHT, borderBottomWidth: 1, borderColor: '#EDF2F1' }}>
                     {/* 左側：スタッフ名とシフト時間 */}
-                    <View style={{ width: 100, justifyContent: 'center', paddingLeft: 10, borderRightWidth: 1, borderColor: '#CCC', backgroundColor: '#FAFAFA', zIndex: 2 }}>
+                    <View style={{ width: 100, justifyContent: 'center', paddingLeft: 10, borderRightWidth: 1, borderColor: '#CFE0DF', backgroundColor: '#FBFBFB', zIndex: 2 }}>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#333' }}>{entry.staffName}</Text>
                       <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{shift?.start || '-'} ~ {shift?.end || '-'}</Text>
                     </View>
 
                     {/* 右側：タイムライン領域 */}
                     <View style={{ width: TIMELINE_WIDTH, position: 'relative' }}>
-                      {/* 1時間ごとの背景の縦線 */}
-                      {timeHeaders.map((h, i) => (
-                        <View key={h} style={{ position: 'absolute', left: i * COL_WIDTH * 4, width: COL_WIDTH * 4, height: ROW_HEIGHT, borderLeftWidth: 1, borderColor: '#F5F5F5' }} />
+                      {/* 15分ごとの点線と1時間ごとの実線 */}
+                      {Array.from({ length: (END_HOUR - START_HOUR) * 4 }).map((_, i) => (
+                        <View key={i} style={{ position: 'absolute', left: i * COL_WIDTH, width: COL_WIDTH, height: ROW_HEIGHT, borderLeftWidth: i % 4 === 0 ? 1.5 : 1, borderStyle: i % 4 === 0 ? 'solid' : 'dashed', borderColor: i % 4 === 0 ? '#A7C9C6' : '#D7E1E0' }} />
                       ))}
 
                       {/* シフト時間のハイライト（薄い黄色） */}
@@ -739,10 +772,37 @@ export default function TransportModal({
                   </View>
                 );
               })}
-            </View>
-          </ScrollView>
+          </View>
         </ScrollView>
-      </View>
+
+        <Text style={styles.overviewSectionTitle}>送迎先一覧</Text>
+        <View style={styles.overviewTable}>
+          <View style={[styles.overviewTableRow, styles.overviewTableHeader]}>
+            <Text style={[styles.overviewTableHeadText, styles.overviewTimeCell]}>時刻</Text>
+            <Text style={[styles.overviewTableHeadText, styles.overviewTypeCell]}>種別</Text>
+            <Text style={[styles.overviewTableHeadText, styles.overviewNameCell]}>行き先</Text>
+            <Text style={[styles.overviewTableHeadText, styles.overviewCountCell]}>人数</Text>
+            <Text style={[styles.overviewTableHeadText, styles.overviewStaffCell]}>担当</Text>
+            <Text style={[styles.overviewTableHeadText, styles.overviewKidsCell]}>児童名</Text>
+          </View>
+          {rows.length > 0 ? rows.map((row, index) => {
+            const isSwimming = row.name.includes('スイミング');
+            const rowBackground = isSwimming ? '#E6F9FF' : row.typeLabel === '習い事' ? '#EFF9F2' : '#FFF8E8';
+            return (
+              <View key={`${row.time}_${row.name}_${index}`} style={[styles.overviewTableRow, { backgroundColor: rowBackground }]}>
+                <Text style={[styles.overviewTableText, styles.overviewTimeCell, styles.overviewTimeText]}>{row.time}</Text>
+                <Text style={[styles.overviewTableText, styles.overviewTypeCell, row.typeLabel === '習い事' ? styles.overviewLessonText : styles.overviewPickupText]}>{row.typeLabel}</Text>
+                <Text style={[styles.overviewTableText, styles.overviewNameCell, styles.overviewNameText]}>{row.name}</Text>
+                <Text style={[styles.overviewTableText, styles.overviewCountCell]}>{row.count}名</Text>
+                <Text style={[styles.overviewTableText, styles.overviewStaffCell]}>{row.staffName}</Text>
+                <Text style={[styles.overviewTableText, styles.overviewKidsCell]}>{row.kids.join('、') || '-'}</Text>
+              </View>
+            );
+          }) : (
+            <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
+          )}
+        </View>
+      </ScrollView>
     );
   };
 
@@ -753,7 +813,7 @@ export default function TransportModal({
         <View style={styles.container}>
           {/* ヘッダー */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{showTimeline ? '🕒 全体確認' : `🚗 ${dateLabel}`}</Text>
+            <Text style={styles.headerTitle}>{showTimeline ? `${dateLabel} 送迎一覧` : `🚗 ${dateLabel}`}</Text>
             
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
               {showTimeline ? (
@@ -770,9 +830,9 @@ export default function TransportModal({
               ) : (
                 // 割り当て編集中のボタン
                 <>
-                  <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
-                    <Ionicons name="print-outline" size={14} color="#fff" />
-                    <Text style={styles.printBtnText}>印刷</Text>
+                  <TouchableOpacity style={styles.overviewBtn} onPress={() => setShowTimeline(true)}>
+                    <Ionicons name="list-outline" size={17} color="#fff" />
+                    <Text style={styles.overviewBtnText}>全体表示</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
                     <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
@@ -1058,6 +1118,8 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 4 },
   printBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 88, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#56B6C2' },
   printBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
+  overviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 104, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#5B9BD5' },
+  overviewBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
   lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 96, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
   lastWeekBtnActive: { backgroundColor: COLORS.primary },
   lastWeekBtnText: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
@@ -1065,6 +1127,38 @@ const styles = StyleSheet.create({
   lastWeekBannerText: { fontSize: 11, color: '#856404', fontWeight: 'bold' },
 
   body: { flex: 1, flexDirection: 'row' },
+  overviewScroll: { flex: 1, backgroundColor: '#fff' },
+  overviewContent: { padding: 16, paddingBottom: 30 },
+  overviewDocumentHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 12, borderBottomWidth: 4, borderBottomColor: '#56B6C2', paddingBottom: 9, marginBottom: 10 },
+  overviewDate: { fontSize: 28, lineHeight: 34, fontWeight: '900', color: '#111' },
+  overviewTitle: { fontSize: 21, fontWeight: '800', color: '#222' },
+  overviewSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  overviewSummaryCard: { flex: 1, minHeight: 78, borderWidth: 1, borderColor: '#D8E8E6', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: '#F7FBFA' },
+  overviewStaffCard: { flex: 1.45 },
+  overviewSummaryLabel: { fontSize: 13, color: '#111', fontWeight: '700' },
+  overviewSummaryValue: { fontSize: 28, lineHeight: 32, marginTop: 4, color: '#111', fontWeight: '900' },
+  overviewStaffRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  overviewStaffNames: { flex: 1, fontSize: 15, lineHeight: 20, color: '#111', fontWeight: '800' },
+  overviewTimelineFrame: { borderWidth: 1, borderColor: '#CFE0DF', borderRadius: 10, overflow: 'hidden', marginBottom: 10 },
+  overviewTimelineCorner: { width: 100, justifyContent: 'center', paddingHorizontal: 10, borderRightWidth: 1, borderRightColor: '#CFE0DF', backgroundColor: '#F8FBFA' },
+  overviewTimelineCornerText: { fontSize: 10, color: '#555' },
+  overviewSectionTitle: { fontSize: 14, fontWeight: '800', color: '#222', marginTop: 4, marginBottom: 7 },
+  overviewTable: { borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
+  overviewTableRow: { flexDirection: 'row', minHeight: 40 },
+  overviewTableHeader: { minHeight: 34, backgroundColor: '#EEF8F7' },
+  overviewTableHeadText: { padding: 6, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#B9DCDA', fontSize: 11, fontWeight: '800', color: '#222' },
+  overviewTableText: { padding: 6, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3', fontSize: 11, lineHeight: 16, color: '#222' },
+  overviewTimeCell: { width: '8%' },
+  overviewTypeCell: { width: '9%' },
+  overviewNameCell: { width: '18%' },
+  overviewCountCell: { width: '8%', textAlign: 'center' },
+  overviewStaffCell: { width: '13%' },
+  overviewKidsCell: { flex: 1 },
+  overviewTimeText: { fontSize: 13, fontWeight: '800', color: '#111' },
+  overviewPickupText: { fontSize: 12, fontWeight: '900', color: '#D94B4B' },
+  overviewLessonText: { fontSize: 12, fontWeight: '900', color: '#2577C9' },
+  overviewNameText: { fontWeight: '700' },
+  overviewEmptyText: { padding: 20, textAlign: 'center', color: '#666', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3' },
   rightPanel: { width: 160, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 6 },
   rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#555', textAlign: 'center', marginBottom: 6 },
   blockChip: { borderRadius: 12, padding: 6, marginBottom: 6, borderWidth: 2, alignItems: 'center', width: '47%' },
