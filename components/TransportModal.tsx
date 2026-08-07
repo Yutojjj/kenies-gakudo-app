@@ -260,6 +260,55 @@ export default function TransportModal({
         `;
       }).join('');
 
+    const PRINT_START_HOUR = 11;
+    const PRINT_END_HOUR = 21;
+    const PRINT_SLOT_COUNT = (PRINT_END_HOUR - PRINT_START_HOUR) * 4;
+    const getPrintSlotIndex = (timeStr?: string) => {
+      if (!timeStr) return null;
+      const [hour, minute] = timeStr.split(':').map(Number);
+      if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+      const index = (hour - PRINT_START_HOUR) * 4 + Math.floor(minute / 15);
+      return Math.max(0, Math.min(PRINT_SLOT_COUNT - 1, index));
+    };
+    const timelineHeaderHtml = Array.from({ length: PRINT_SLOT_COUNT }, (_, index) => {
+      const hour = PRINT_START_HOUR + Math.floor(index / 4);
+      const minute = (index % 4) * 15;
+      return `<div class="quarter ${minute === 0 ? 'hour' : ''}">${minute === 0 ? `${hour}:00` : ''}</div>`;
+    }).join('');
+    const timelineStaffHtml = staffEntries
+      .filter((entry) => entry.staffName !== '送迎しない')
+      .map((entry) => {
+        const shift = shiftStaff.find((s) => s.name === entry.staffName);
+        const blockHtml = entry.trips.flatMap((trip, tIdx) => {
+          return trip.blockKeys.map((blockKey) => {
+            const block = blocks.find((b) => b.key === blockKey);
+            const slotIndex = getPrintSlotIndex(block?.time);
+            if (!block || slotIndex === null) return '';
+            const isLesson = block.type === 'lesson';
+            const bg = isLesson ? '#eaf7ef' : '#eef6ff';
+            const border = isLesson ? '#78c28c' : '#79aee8';
+            const label = `${block.time || '-'} ${block.nameOnly || block.label} ${block.count}名`;
+            return `
+              <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; background:${bg}; border-color:${border};">
+                <span>${escapeHtml(TRIP_LABELS[tIdx] || `${tIdx + 1}回目`)}</span>
+                ${escapeHtml(label)}
+              </div>
+            `;
+          });
+        }).join('');
+        return `
+          <div class="timeline-row">
+            <div class="timeline-staff">
+              <strong>${escapeHtml(entry.staffName)}</strong>
+              <span>${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</span>
+            </div>
+            <div class="timeline-track">
+              ${blockHtml || '<div class="timeline-empty">担当なし</div>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+
     const html = `
       <!doctype html>
       <html lang="ja">
@@ -299,6 +348,116 @@ export default function TransportModal({
               font-size: 12px;
             }
             .summary-card strong { display: block; font-size: 16px; margin-top: 2px; }
+            .section-title {
+              font-size: 13px;
+              font-weight: 800;
+              margin: 10px 0 6px;
+            }
+            .timeline {
+              border: 1px solid #cfe0df;
+              border-radius: 10px;
+              overflow: hidden;
+              margin-bottom: 10px;
+              page-break-inside: avoid;
+            }
+            .timeline-head {
+              display: grid;
+              grid-template-columns: 88px 1fr;
+              background: #f8fbfa;
+              border-bottom: 1px solid #cfe0df;
+            }
+            .timeline-corner {
+              padding: 5px 7px;
+              font-size: 10px;
+              color: #555;
+              border-right: 1px solid #cfe0df;
+            }
+            .timeline-hours {
+              display: grid;
+              grid-template-columns: repeat(${PRINT_SLOT_COUNT}, minmax(0, 1fr));
+              min-height: 22px;
+            }
+            .quarter {
+              border-left: 1px dashed #d7e1e0;
+              font-size: 8px;
+              color: #888;
+              padding: 3px 1px;
+            }
+            .quarter.hour {
+              border-left: 1.5px solid #8fb8b5;
+              color: #333;
+              font-weight: 700;
+            }
+            .timeline-row {
+              display: grid;
+              grid-template-columns: 88px 1fr;
+              min-height: 42px;
+              border-bottom: 1px solid #edf2f1;
+            }
+            .timeline-row:last-child { border-bottom: 0; }
+            .timeline-staff {
+              padding: 6px 7px;
+              border-right: 1px solid #cfe0df;
+              background: #fbfbfb;
+            }
+            .timeline-staff strong {
+              display: block;
+              font-size: 11px;
+            }
+            .timeline-staff span {
+              display: block;
+              font-size: 9px;
+              color: #555;
+              margin-top: 2px;
+            }
+            .timeline-track {
+              display: grid;
+              grid-template-columns: repeat(${PRINT_SLOT_COUNT}, minmax(0, 1fr));
+              align-items: stretch;
+              min-height: 42px;
+              background-image:
+                repeating-linear-gradient(
+                  to right,
+                  transparent 0,
+                  transparent calc(2.5% - 1px),
+                  #dbe8e7 calc(2.5% - 1px),
+                  #dbe8e7 2.5%
+                ),
+                repeating-linear-gradient(
+                  to right,
+                  transparent 0,
+                  transparent calc(10% - 1.5px),
+                  #a7c9c6 calc(10% - 1.5px),
+                  #a7c9c6 10%
+                );
+            }
+            .timeline-block {
+              align-self: center;
+              min-height: 30px;
+              border: 1px solid;
+              border-radius: 6px;
+              padding: 3px 4px;
+              font-size: 8px;
+              line-height: 1.25;
+              font-weight: 700;
+              color: #222;
+              overflow: hidden;
+              position: relative;
+              z-index: 1;
+            }
+            .timeline-block span {
+              display: block;
+              font-size: 7px;
+              color: #555;
+              font-weight: 700;
+            }
+            .timeline-empty {
+              grid-column: 1 / -1;
+              align-self: center;
+              padding-left: 8px;
+              font-size: 9px;
+              color: #999;
+            }
             table {
               width: 100%;
               border-collapse: collapse;
@@ -358,6 +517,15 @@ export default function TransportModal({
             <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
             <div class="summary-card">担当スタッフ<strong>${escapeHtml(staffEntries.filter((entry) => entry.staffName !== '送迎しない').length)}名</strong></div>
           </div>
+          <div class="section-title">15分刻みタイムライン</div>
+          <div class="timeline">
+            <div class="timeline-head">
+              <div class="timeline-corner">担当</div>
+              <div class="timeline-hours">${timelineHeaderHtml}</div>
+            </div>
+            ${timelineStaffHtml}
+          </div>
+          <div class="section-title">送迎先一覧</div>
           <table>
             <thead>
               <tr>
