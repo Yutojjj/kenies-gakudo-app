@@ -103,6 +103,7 @@ export default function ScheduleScreen() {
   const [addPickupHour, setAddPickupHour] = useState(HOURS[0]);
   const [addPickupMinute, setAddPickupMinute] = useState(0);
   const [addPickupPickerVisible, setAddPickupPickerVisible] = useState(false);
+  const [deletePickupTimeTarget, setDeletePickupTimeTarget] = useState<string | null>(null);
   const [templateSelectMode, setTemplateSelectMode] = useState<'stamping' | 'singleDay' | 'edit'>('stamping');
   const [editModalVisible, setEditModalVisible] = useState(false);
   
@@ -125,8 +126,41 @@ export default function ScheduleScreen() {
   const memoDataRef = React.useRef<Record<string, string>>({});
   const [memoSaved, setMemoSaved] = useState(false);
   const pickerHapticAtRef = useRef(0);
+  const addPickupHourScrollRef = useRef<any>(null);
+  const addPickupMinuteScrollRef = useRef<any>(null);
+  const timePickerHourScrollRef = useRef<any>(null);
+  const timePickerMinuteScrollRef = useRef<any>(null);
+  const lessonPickerHourScrollRef = useRef<any>(null);
+  const lessonPickerMinuteScrollRef = useRef<any>(null);
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
   const initialEditOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (!addPickupPickerVisible) return;
+    const id = setTimeout(() => {
+      addPickupHourScrollRef.current?.scrollTo?.({ y: getPickerOffset(HOURS, addPickupHour), animated: false });
+      addPickupMinuteScrollRef.current?.scrollTo?.({ y: getPickerOffset(MINUTES, addPickupMinute), animated: false });
+    }, 40);
+    return () => clearTimeout(id);
+  }, [addPickupPickerVisible]);
+
+  useEffect(() => {
+    if (!timePickerVisible) return;
+    const id = setTimeout(() => {
+      timePickerHourScrollRef.current?.scrollTo?.({ y: getPickerOffset(HOURS, tempHour), animated: false });
+      timePickerMinuteScrollRef.current?.scrollTo?.({ y: getPickerOffset(MINUTES, tempMinute), animated: false });
+    }, 40);
+    return () => clearTimeout(id);
+  }, [timePickerVisible]);
+
+  useEffect(() => {
+    if (!lessonAddVisible) return;
+    const id = setTimeout(() => {
+      lessonPickerHourScrollRef.current?.scrollTo?.({ y: getPickerOffset(HOURS, tempHour), animated: false });
+      lessonPickerMinuteScrollRef.current?.scrollTo?.({ y: getPickerOffset(MINUTES, tempMinute), animated: false });
+    }, 40);
+    return () => clearTimeout(id);
+  }, [lessonAddVisible]);
 
   const goHome = () => {
     router.replace({
@@ -753,16 +787,38 @@ export default function ScheduleScreen() {
     triggerPickerHaptic();
   };
 
+  const scrollPickerToValue = (scrollRef: React.MutableRefObject<any>, values: number[], value: number, animated = true) => {
+    scrollRef.current?.scrollTo?.({
+      y: getPickerOffset(values, value),
+      animated,
+    });
+  };
+
+  const settlePickerValue = (
+    values: number[],
+    y: number,
+    currentValue: number,
+    setter: (value: number) => void,
+    scrollRef: React.MutableRefObject<any>,
+  ) => {
+    const nextValue = getPickerValueFromOffset(values, y);
+    applyPickerValue(currentValue, nextValue, setter);
+    requestAnimationFrame(() => scrollPickerToValue(scrollRef, values, nextValue, true));
+  };
+
+  const selectPickerValue = (
+    values: number[],
+    value: number,
+    setter: (value: number) => void,
+    scrollRef: React.MutableRefObject<any>,
+  ) => {
+    setter(value);
+    triggerPickerHaptic();
+    scrollPickerToValue(scrollRef, values, value, true);
+  };
+
   const removeSavedPickupTime = (timeToRemove: string) => {
-    const run = () => removePickupTimeFromAccount(timeToRemove);
-    if (Platform.OS === 'web') {
-      if (window.confirm(`${timeToRemove} を候補から削除しますか？`)) run();
-      return;
-    }
-    Alert.alert('候補を削除', `${timeToRemove} を候補から削除しますか？`, [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: run },
-    ]);
+    setDeletePickupTimeTarget(timeToRemove);
   };
 
   const confirmTime = () => {
@@ -1340,6 +1396,44 @@ export default function ScheduleScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
+      <Modal visible={!!deletePickupTimeTarget} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setDeletePickupTimeTarget(null)}>
+          <View style={styles.deleteConfirmOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.deleteConfirmBox}>
+                <View style={styles.deleteConfirmIcon}>
+                  <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.deleteConfirmTitle}>候補を削除しますか？</Text>
+                <Text style={styles.deleteConfirmMessage}>
+                  {deletePickupTimeTarget} を候補から削除します。
+                </Text>
+                <View style={styles.deleteConfirmActions}>
+                  <TouchableOpacity
+                    style={styles.deleteConfirmCancelBtn}
+                    activeOpacity={0.85}
+                    onPress={() => setDeletePickupTimeTarget(null)}
+                  >
+                    <Text style={styles.deleteConfirmCancelText}>キャンセル</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteConfirmSubmitBtn}
+                    activeOpacity={0.88}
+                    onPress={async () => {
+                      const target = deletePickupTimeTarget;
+                      setDeletePickupTimeTarget(null);
+                      if (target) await removePickupTimeFromAccount(target);
+                    }}
+                  >
+                    <Text style={styles.deleteConfirmSubmitText}>削除</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
       {/* 候補時間追加ピッカー */}
       <Modal visible={addPickupPickerVisible} transparent animationType="fade">
         <TouchableWithoutFeedback onPress={() => setAddPickupPickerVisible(false)}>
@@ -1350,38 +1444,44 @@ export default function ScheduleScreen() {
             <View style={styles.pickerColumns}>
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
+                ref={addPickupHourScrollRef}
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, addPickupHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToAlignment="center"
+                disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
                 onScroll={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
-                onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
-                onScrollEndDrag={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
+                onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, addPickupHour, setAddPickupHour, addPickupHourScrollRef)}
+                onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, addPickupHour, setAddPickupHour, addPickupHourScrollRef)}
               >
                 {HOURS.map(h => (
-                  <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => setAddPickupHour(h)}>
+                  <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => selectPickerValue(HOURS, h, setAddPickupHour, addPickupHourScrollRef)}>
                     <Text style={[styles.pickerItemText, addPickupHour === h && styles.pickerItemTextActive]}>{h}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
               <ScrollView
+                ref={addPickupMinuteScrollRef}
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, addPickupMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToAlignment="center"
+                disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
                 onScroll={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
-                onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
-                onScrollEndDrag={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
+                onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef)}
+                onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef)}
               >
                 {MINUTES.map(m => (
-                  <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => setAddPickupMinute(m)}>
+                  <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => selectPickerValue(MINUTES, m, setAddPickupMinute, addPickupMinuteScrollRef)}>
                     <Text style={[styles.pickerItemText, addPickupMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1427,38 +1527,44 @@ export default function ScheduleScreen() {
             <View style={styles.pickerColumns}>
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
+                ref={timePickerHourScrollRef}
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToAlignment="center"
+                disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
                 onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
-                onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
-                onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, timePickerHourScrollRef)}
+                onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, timePickerHourScrollRef)}
               >
                 {HOURS.map(h => (
-                  <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
+                  <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => selectPickerValue(HOURS, h, setTempHour, timePickerHourScrollRef)}>
                     <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
               <Text style={styles.pickerColon}>:</Text>
               <ScrollView
+                ref={timePickerMinuteScrollRef}
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToAlignment="center"
+                disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
                 onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
-                onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
-                onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, timePickerMinuteScrollRef)}
+                onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, timePickerMinuteScrollRef)}
               >
                 {MINUTES.map(m => (
-                  <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
+                  <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => selectPickerValue(MINUTES, m, setTempMinute, timePickerMinuteScrollRef)}>
                     <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1556,38 +1662,44 @@ export default function ScheduleScreen() {
                   <View style={styles.pickerColumns}>
                     <View pointerEvents="none" style={styles.pickerSelectionFrame} />
                     <ScrollView
+                      ref={lessonPickerHourScrollRef}
                       style={styles.pickerScroll}
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.pickerScrollInner}
                       contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
+                      snapToAlignment="center"
+                      disableIntervalMomentum
                       decelerationRate="fast"
                       scrollEventThrottle={16}
                       onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
-                      onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
-                      onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                      onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, lessonPickerHourScrollRef)}
+                      onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, lessonPickerHourScrollRef)}
                     >
                       {HOURS.map(h => (
-                        <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
+                        <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => selectPickerValue(HOURS, h, setTempHour, lessonPickerHourScrollRef)}>
                           <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
                     <Text style={styles.pickerColon}>:</Text>
                     <ScrollView
+                      ref={lessonPickerMinuteScrollRef}
                       style={styles.pickerScroll}
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.pickerScrollInner}
                       contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
+                      snapToAlignment="center"
+                      disableIntervalMomentum
                       decelerationRate="fast"
                       scrollEventThrottle={16}
                       onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
-                      onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
-                      onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                      onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, lessonPickerMinuteScrollRef)}
+                      onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, lessonPickerMinuteScrollRef)}
                     >
                       {MINUTES.map(m => (
-                        <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
+                        <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => selectPickerValue(MINUTES, m, setTempMinute, lessonPickerMinuteScrollRef)}>
                           <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
                         </TouchableOpacity>
                       ))}
@@ -2532,6 +2644,81 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     fontWeight: 'bold', 
     color: COLORS.white 
+  },
+  deleteConfirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17,24,39,0.42)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  deleteConfirmBox: {
+    width: '100%',
+    maxWidth: 330,
+    borderRadius: 24,
+    backgroundColor: '#FFFDF8',
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE2E2',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  deleteConfirmIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  deleteConfirmTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  deleteConfirmMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4B5563',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  deleteConfirmActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+  },
+  deleteConfirmCancelBtn: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteConfirmCancelText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#4B5563',
+  },
+  deleteConfirmSubmitBtn: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteConfirmSubmitText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   saveBtn: { 
     flexDirection: 'row', 
