@@ -368,8 +368,9 @@ export default function TransportModal({
               border-radius: 10px;
               padding: 9px 14px;
               background: #f7fbfa;
-              font-size: 12px;
-              color: #4b5b5a;
+              font-size: 13px;
+              color: #111;
+              font-weight: 700;
             }
             .summary-card strong {
               display: block;
@@ -565,7 +566,7 @@ export default function TransportModal({
             <div class="summary-card">送迎先<strong>${escapeHtml(blocks.length)}件</strong></div>
             <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
             <div class="summary-card">
-              <div class="summary-staff-title">担当スタッフ</div>
+              <div class="summary-staff-title">スタッフ</div>
               <div class="summary-staff-row">
                 <div class="summary-staff-count">${escapeHtml(assignedStaffNames.length)}名</div>
                 <div class="summary-staff-names">${escapeHtml(assignedStaffNames.join('、') || 'なし')}</div>
