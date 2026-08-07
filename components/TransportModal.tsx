@@ -242,30 +242,6 @@ export default function TransportModal({
       }).join('')
       : '<tr><td colspan="6" class="empty">この日の送迎予定はありません</td></tr>';
 
-    const staffHtml = staffEntries
-      .filter((entry) => entry.staffName !== '送迎しない')
-      .map((entry) => {
-        const shift = shiftStaff.find((s) => s.name === entry.staffName);
-        const trips = entry.trips
-          .map((trip, tIdx) => {
-            const labels = trip.blockKeys
-              .map((blockKey) => {
-                const block = blocks.find((b) => b.key === blockKey);
-                return block ? `${block.time || '-'} ${block.nameOnly || block.label}（${block.count}名）` : '';
-              })
-              .filter(Boolean);
-            return labels.length > 0 ? `${TRIP_LABELS[tIdx] || `${tIdx + 1}回目`}: ${labels.join(' / ')}` : '';
-          })
-          .filter(Boolean);
-        return `
-          <div class="staff-card">
-            <div class="staff-name">${escapeHtml(entry.staffName)}</div>
-            <div class="shift">${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</div>
-            <div class="trips">${escapeHtml(trips.join('　') || '担当なし')}</div>
-          </div>
-        `;
-      }).join('');
-
     const PRINT_START_HOUR = 11;
     const PRINT_END_HOUR = 21;
     const PRINT_SLOT_COUNT = (PRINT_END_HOUR - PRINT_START_HOUR) * 4;
@@ -366,11 +342,19 @@ export default function TransportModal({
             .summary-card {
               border: 1px solid #d8e8e6;
               border-radius: 10px;
-              padding: 8px 10px;
+              padding: 9px 14px;
               background: #f7fbfa;
               font-size: 12px;
+              color: #4b5b5a;
             }
-            .summary-card strong { display: block; font-size: 16px; margin-top: 2px; }
+            .summary-card strong {
+              display: block;
+              font-size: 28px;
+              line-height: 1.05;
+              margin-top: 4px;
+              color: #111;
+              font-weight: 900;
+            }
             .section-title {
               font-size: 13px;
               font-weight: 800;
@@ -528,22 +512,6 @@ export default function TransportModal({
             .count { text-align: center; font-weight: 700; }
             .kids { font-size: 10px; }
             .empty { text-align: center; padding: 20px; color: #666; }
-            .staff-grid {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 6px;
-              margin-top: 10px;
-              page-break-inside: avoid;
-            }
-            .staff-card {
-              border: 1px solid #e0e0e0;
-              border-radius: 8px;
-              padding: 6px 8px;
-              min-height: 48px;
-            }
-            .staff-name { font-weight: 700; font-size: 12px; }
-            .shift { color: #555; font-size: 10px; margin-top: 1px; }
-            .trips { font-size: 10px; margin-top: 4px; line-height: 1.35; }
             @media print {
               .no-print { display: none; }
             }
@@ -579,7 +547,6 @@ export default function TransportModal({
             </thead>
             <tbody>${rowHtml}</tbody>
           </table>
-          <div class="staff-grid">${staffHtml}</div>
           <script>
             window.onload = function() {
               setTimeout(function() {
