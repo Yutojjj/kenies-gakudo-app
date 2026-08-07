@@ -336,14 +336,13 @@ export default function TransportModal({
               background: #fff;
             }
             .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-end;
-              border-bottom: 3px solid #56b6c2;
-              padding-bottom: 8px;
+              border-bottom: 4px solid #56b6c2;
+              padding-bottom: 9px;
               margin-bottom: 10px;
             }
-            h1 { font-size: 22px; margin: 0; letter-spacing: 0; }
+            h1 { font-size: 32px; margin: 0; letter-spacing: 0; font-weight: 900; line-height: 1.15; }
+            .date-strong { color: #111; margin-right: 12px; }
+            .title-tail { font-size: 24px; font-weight: 800; color: #222; }
             .sub { font-size: 12px; color: #555; }
             .summary {
               display: grid;
@@ -520,11 +519,7 @@ export default function TransportModal({
         </head>
         <body>
           <div class="header">
-            <div>
-              <h1>${escapeHtml(dateLabel)} 送迎一覧 全体確認</h1>
-              <div class="sub">A4横印刷用</div>
-            </div>
-            <div class="sub">印刷日: ${escapeHtml(new Date().toLocaleString('ja-JP'))}</div>
+            <h1><span class="date-strong">${escapeHtml(dateLabel)}</span><span class="title-tail">送迎一覧</span></h1>
           </div>
           <div class="summary">
             <div class="summary-card">送迎先<strong>${escapeHtml(blocks.length)}件</strong></div>
