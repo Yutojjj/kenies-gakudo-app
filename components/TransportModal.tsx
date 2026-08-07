@@ -276,6 +276,13 @@ export default function TransportModal({
       const index = (hour - PRINT_START_HOUR) * 4 + Math.floor(minute / 15);
       return Math.max(0, Math.min(PRINT_SLOT_COUNT - 1, index));
     };
+    const getPrintSlotBoundary = (timeStr?: string, mode: 'start' | 'end' = 'start') => {
+      if (!timeStr) return null;
+      const [hour, minute] = timeStr.split(':').map(Number);
+      if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+      const raw = (hour - PRINT_START_HOUR) * 4 + (mode === 'end' ? Math.ceil(minute / 15) : Math.floor(minute / 15));
+      return Math.max(0, Math.min(PRINT_SLOT_COUNT, raw));
+    };
     const timelineHeaderHtml = Array.from({ length: PRINT_SLOT_COUNT }, (_, index) => {
       const hour = PRINT_START_HOUR + Math.floor(index / 4);
       const minute = (index % 4) * 15;
@@ -285,6 +292,11 @@ export default function TransportModal({
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => {
         const shift = shiftStaff.find((s) => s.name === entry.staffName);
+        const shiftStart = getPrintSlotBoundary(shift?.start, 'start');
+        const shiftEnd = getPrintSlotBoundary(shift?.end, 'end');
+        const shiftHtml = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart
+          ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1};"></div>`
+          : '';
         const blockHtml = entry.trips.flatMap((trip, tIdx) => {
           return trip.blockKeys.map((blockKey) => {
             const block = blocks.find((b) => b.key === blockKey);
@@ -310,6 +322,7 @@ export default function TransportModal({
               <span>${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</span>
             </div>
             <div class="timeline-track">
+              ${shiftHtml}
               ${blockHtml || '<div class="timeline-empty">担当なし</div>'}
             </div>
           </div>
@@ -441,7 +454,16 @@ export default function TransportModal({
                   #a7c9c6 10%
                 );
             }
+            .timeline-shift {
+              grid-row: 1;
+              min-height: 42px;
+              background: rgba(255, 244, 172, 0.82);
+              border-left: 1px solid rgba(226, 194, 67, 0.7);
+              border-right: 1px solid rgba(226, 194, 67, 0.7);
+              z-index: 0;
+            }
             .timeline-block {
+              grid-row: 1;
               align-self: center;
               min-height: 30px;
               border: 1px solid;
@@ -453,7 +475,7 @@ export default function TransportModal({
               color: #222;
               overflow: hidden;
               position: relative;
-              z-index: 1;
+              z-index: 2;
             }
             .timeline-block span {
               display: block;
@@ -462,11 +484,13 @@ export default function TransportModal({
               font-weight: 700;
             }
             .timeline-empty {
+              grid-row: 1;
               grid-column: 1 / -1;
               align-self: center;
               padding-left: 8px;
               font-size: 9px;
               color: #999;
+              z-index: 1;
             }
             table {
               width: 100%;
