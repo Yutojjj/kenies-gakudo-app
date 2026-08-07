@@ -753,6 +753,18 @@ export default function ScheduleScreen() {
     triggerPickerHaptic();
   };
 
+  const removeSavedPickupTime = (timeToRemove: string) => {
+    const run = () => removePickupTimeFromAccount(timeToRemove);
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${timeToRemove} を候補から削除しますか？`)) run();
+      return;
+    }
+    Alert.alert('候補を削除', `${timeToRemove} を候補から削除しますか？`, [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: run },
+    ]);
+  };
+
   const confirmTime = () => {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
@@ -1104,14 +1116,21 @@ export default function ScheduleScreen() {
                   {(children[activeChildIdx]?.pickupTimes || []).map((t: string) => {
                     const isActive = getCellData(selectedDateStr).pickupTime === t;
                     return (
-                      <TouchableOpacity
+                      <View
                         key={t}
                         style={[styles.pickupSavedTimeChip, isActive && styles.pickupSavedTimeChipActive]}
-                        onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })}
-                        activeOpacity={0.82}
                       >
-                        <Text style={[styles.pickupSavedTimeText, isActive && styles.pickupSavedTimeTextActive]}>{t}</Text>
-                      </TouchableOpacity>
+                        <TouchableOpacity onPress={() => saveToFirestore(selectedDateStr, { pickupTime: t })} activeOpacity={0.82}>
+                          <Text style={[styles.pickupSavedTimeText, isActive && styles.pickupSavedTimeTextActive]}>{t}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.pickupSavedTimeDeleteBtn, isActive && styles.pickupSavedTimeDeleteBtnActive]}
+                          onPress={() => removeSavedPickupTime(t)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close" size={11} color={isActive ? '#FFFFFF' : '#9A5B05'} />
+                        </TouchableOpacity>
+                      </View>
                     );
                   })}
                   <TouchableOpacity
@@ -1337,6 +1356,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, addPickupHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
+                scrollEventThrottle={16}
+                onScroll={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
                 onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
                 onScrollEndDrag={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
               >
@@ -1354,6 +1375,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, addPickupMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
+                scrollEventThrottle={16}
+                onScroll={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
                 onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
                 onScrollEndDrag={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
               >
@@ -1410,6 +1433,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
+                scrollEventThrottle={16}
+                onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                 onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                 onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
               >
@@ -1427,6 +1452,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
+                scrollEventThrottle={16}
+                onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                 onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                 onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
               >
@@ -1535,6 +1562,8 @@ export default function ScheduleScreen() {
                       contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
                       decelerationRate="fast"
+                      scrollEventThrottle={16}
+                      onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                       onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                       onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                     >
@@ -1552,6 +1581,8 @@ export default function ScheduleScreen() {
                       contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
                       decelerationRate="fast"
+                      scrollEventThrottle={16}
+                      onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                       onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                       onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                     >
@@ -2090,6 +2121,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   pickupSavedTimeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 999,
@@ -2100,6 +2134,17 @@ const styles = StyleSheet.create({
   pickupSavedTimeChipActive: {
     backgroundColor: '#F59E0B',
     borderColor: '#F59E0B',
+  },
+  pickupSavedTimeDeleteBtn: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(154,91,5,0.10)',
+  },
+  pickupSavedTimeDeleteBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.20)',
   },
   pickupSavedTimeAddChip: {
     flexDirection: 'row',
