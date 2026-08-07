@@ -746,8 +746,9 @@ export default function TransportModal({
               ) : (
                 // 割り当て編集中のボタン
                 <>
-                  <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: '#9C27B0' }]} onPress={() => setShowTimeline(true)}>
-                    <Text style={[styles.lastWeekBtnText, { color: '#9C27B0' }]}>全体確認</Text>
+                  <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
+                    <Ionicons name="print-outline" size={14} color="#fff" />
+                    <Text style={styles.printBtnText}>印刷</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
                     <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
