@@ -132,8 +132,15 @@ export default function ScheduleScreen() {
   const timePickerMinuteScrollRef = useRef<any>(null);
   const lessonPickerHourScrollRef = useRef<any>(null);
   const lessonPickerMinuteScrollRef = useRef<any>(null);
+  const pickerSettleTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
   const initialEditOpenedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      Object.values(pickerSettleTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (!addPickupPickerVisible) return;
@@ -794,6 +801,21 @@ export default function ScheduleScreen() {
     });
   };
 
+  const forceSettlePickerValue = (
+    values: number[],
+    y: number,
+    setter: (value: number) => void,
+    scrollRef: React.MutableRefObject<any>,
+    animated = true,
+  ) => {
+    const nextValue = getPickerValueFromOffset(values, y);
+    const targetY = getPickerOffset(values, nextValue);
+    setter(nextValue);
+    if (Math.abs(y - targetY) > 0.5) {
+      scrollRef.current?.scrollTo?.({ y: targetY, animated });
+    }
+  };
+
   const settlePickerValue = (
     values: number[],
     y: number,
@@ -803,7 +825,26 @@ export default function ScheduleScreen() {
   ) => {
     const nextValue = getPickerValueFromOffset(values, y);
     applyPickerValue(currentValue, nextValue, setter);
-    requestAnimationFrame(() => scrollPickerToValue(scrollRef, values, nextValue, true));
+    const targetY = getPickerOffset(values, nextValue);
+    requestAnimationFrame(() => forceSettlePickerValue(values, targetY, setter, scrollRef, true));
+    setTimeout(() => forceSettlePickerValue(values, targetY, setter, scrollRef, true), 80);
+  };
+
+  const handlePickerScroll = (
+    key: string,
+    values: number[],
+    y: number,
+    currentValue: number,
+    setter: (value: number) => void,
+    scrollRef: React.MutableRefObject<any>,
+  ) => {
+    applyPickerValue(currentValue, getPickerValueFromOffset(values, y), setter);
+    if (pickerSettleTimersRef.current[key]) {
+      clearTimeout(pickerSettleTimersRef.current[key]);
+    }
+    pickerSettleTimersRef.current[key] = setTimeout(() => {
+      forceSettlePickerValue(values, y, setter, scrollRef, true);
+    }, 120);
   };
 
   const selectPickerValue = (
@@ -1450,11 +1491,12 @@ export default function ScheduleScreen() {
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, addPickupHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToOffsets={HOURS.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                 snapToAlignment="center"
                 disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
-                onScroll={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
+                onScroll={(event: any) => handlePickerScroll('addPickupHour', HOURS, event.nativeEvent.contentOffset.y, addPickupHour, setAddPickupHour, addPickupHourScrollRef)}
                 onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, addPickupHour, setAddPickupHour, addPickupHourScrollRef)}
                 onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, addPickupHour, setAddPickupHour, addPickupHourScrollRef)}
               >
@@ -1472,11 +1514,12 @@ export default function ScheduleScreen() {
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, addPickupMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToOffsets={MINUTES.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                 snapToAlignment="center"
                 disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
-                onScroll={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
+                onScroll={(event: any) => handlePickerScroll('addPickupMinute', MINUTES, event.nativeEvent.contentOffset.y, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef)}
                 onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef)}
                 onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef)}
               >
@@ -1533,11 +1576,12 @@ export default function ScheduleScreen() {
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToOffsets={HOURS.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                 snapToAlignment="center"
                 disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
-                onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                onScroll={(event: any) => handlePickerScroll('timePickerHour', HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, timePickerHourScrollRef)}
                 onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, timePickerHourScrollRef)}
                 onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, timePickerHourScrollRef)}
               >
@@ -1555,11 +1599,12 @@ export default function ScheduleScreen() {
                 contentContainerStyle={styles.pickerScrollInner}
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
+                snapToOffsets={MINUTES.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                 snapToAlignment="center"
                 disableIntervalMomentum
                 decelerationRate="fast"
                 scrollEventThrottle={16}
-                onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                onScroll={(event: any) => handlePickerScroll('timePickerMinute', MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, timePickerMinuteScrollRef)}
                 onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, timePickerMinuteScrollRef)}
                 onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, timePickerMinuteScrollRef)}
               >
@@ -1668,11 +1713,12 @@ export default function ScheduleScreen() {
                       contentContainerStyle={styles.pickerScrollInner}
                       contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
+                      snapToOffsets={HOURS.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                       snapToAlignment="center"
                       disableIntervalMomentum
                       decelerationRate="fast"
                       scrollEventThrottle={16}
-                      onScroll={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                      onScroll={(event: any) => handlePickerScroll('lessonPickerHour', HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, lessonPickerHourScrollRef)}
                       onMomentumScrollEnd={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, lessonPickerHourScrollRef)}
                       onScrollEndDrag={(event: any) => settlePickerValue(HOURS, event.nativeEvent.contentOffset.y, tempHour, setTempHour, lessonPickerHourScrollRef)}
                     >
@@ -1690,11 +1736,12 @@ export default function ScheduleScreen() {
                       contentContainerStyle={styles.pickerScrollInner}
                       contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
+                      snapToOffsets={MINUTES.map((_, index) => index * PICKER_ITEM_HEIGHT)}
                       snapToAlignment="center"
                       disableIntervalMomentum
                       decelerationRate="fast"
                       scrollEventThrottle={16}
-                      onScroll={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                      onScroll={(event: any) => handlePickerScroll('lessonPickerMinute', MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, lessonPickerMinuteScrollRef)}
                       onMomentumScrollEnd={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, lessonPickerMinuteScrollRef)}
                       onScrollEndDrag={(event: any) => settlePickerValue(MINUTES, event.nativeEvent.contentOffset.y, tempMinute, setTempMinute, lessonPickerMinuteScrollRef)}
                     >
