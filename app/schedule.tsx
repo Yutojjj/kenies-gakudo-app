@@ -722,6 +722,16 @@ export default function ScheduleScreen() {
     setTimeout(() => setTimePickerVisible(true), 120);
   };
 
+  const getPickerOffset = (values: number[], value: number) => {
+    const index = Math.max(0, values.indexOf(value));
+    return index * PICKER_ITEM_HEIGHT;
+  };
+
+  const getPickerValueFromOffset = (values: number[], y: number) => {
+    const index = Math.max(0, Math.min(values.length - 1, Math.round(y / PICKER_ITEM_HEIGHT)));
+    return values[index];
+  };
+
   const confirmTime = () => {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
@@ -1298,11 +1308,16 @@ export default function ScheduleScreen() {
               <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
             <View style={styles.pickerColumns}>
+              <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
-                contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(addPickupHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                contentOffset={{ x: 0, y: getPickerOffset(HOURS, addPickupHour) }}
+                snapToInterval={PICKER_ITEM_HEIGHT}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(event: any) => setAddPickupHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                onScrollEndDrag={(event: any) => setAddPickupHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
               >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => setAddPickupHour(h)}>
@@ -1315,7 +1330,11 @@ export default function ScheduleScreen() {
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
-                contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(addPickupMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                contentOffset={{ x: 0, y: getPickerOffset(MINUTES, addPickupMinute) }}
+                snapToInterval={PICKER_ITEM_HEIGHT}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(event: any) => setAddPickupMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                onScrollEndDrag={(event: any) => setAddPickupMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
               >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => setAddPickupMinute(m)}>
@@ -1362,11 +1381,16 @@ export default function ScheduleScreen() {
               <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns}>
+              <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
-                contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(tempHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
+                snapToInterval={PICKER_ITEM_HEIGHT}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                onScrollEndDrag={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
               >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
@@ -1379,7 +1403,11 @@ export default function ScheduleScreen() {
                 style={styles.pickerScroll}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.pickerScrollInner}
-                contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(tempMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
+                snapToInterval={PICKER_ITEM_HEIGHT}
+                decelerationRate="fast"
+                onMomentumScrollEnd={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                onScrollEndDrag={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
               >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
@@ -1478,11 +1506,16 @@ export default function ScheduleScreen() {
 
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>送迎時間</Text>
                   <View style={styles.pickerColumns}>
+                    <View pointerEvents="none" style={styles.pickerSelectionFrame} />
                     <ScrollView
                       style={styles.pickerScroll}
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.pickerScrollInner}
-                      contentOffset={{ x: 0, y: Math.max(0, HOURS.indexOf(tempHour) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                      contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
+                      snapToInterval={PICKER_ITEM_HEIGHT}
+                      decelerationRate="fast"
+                      onMomentumScrollEnd={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                      onScrollEndDrag={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
                     >
                       {HOURS.map(h => (
                         <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
@@ -1495,7 +1528,11 @@ export default function ScheduleScreen() {
                       style={styles.pickerScroll}
                       showsVerticalScrollIndicator={false}
                       contentContainerStyle={styles.pickerScrollInner}
-                      contentOffset={{ x: 0, y: Math.max(0, MINUTES.indexOf(tempMinute) * PICKER_ITEM_HEIGHT - (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2) }}
+                      contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
+                      snapToInterval={PICKER_ITEM_HEIGHT}
+                      decelerationRate="fast"
+                      onMomentumScrollEnd={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                      onScrollEndDrag={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
                     >
                       {MINUTES.map(m => (
                         <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
@@ -2354,7 +2391,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    height: PICKER_VIEW_HEIGHT
+    height: PICKER_VIEW_HEIGHT,
+    position: 'relative',
+  },
+  pickerSelectionFrame: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: (PICKER_VIEW_HEIGHT - PICKER_ITEM_HEIGHT) / 2,
+    height: PICKER_ITEM_HEIGHT,
+    borderRadius: 14,
+    backgroundColor: '#FFF5D6',
+    borderWidth: 1,
+    borderColor: '#F4D778',
   },
   pickerScroll: { 
     width: 88, 
@@ -2376,7 +2425,7 @@ const styles = StyleSheet.create({
     borderRadius: 12 
   },
   pickerItemActive: { 
-    backgroundColor: '#FFF5D6' 
+    backgroundColor: 'transparent' 
   },
   pickerItemText: { 
     fontSize: 19, 
