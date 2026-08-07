@@ -441,15 +441,7 @@ export default function TransportModal({
             .timeline-shift {
               grid-row: 1;
               min-height: 42px;
-              background:
-                repeating-linear-gradient(
-                  to right,
-                  transparent 0,
-                  transparent calc(2.5% - 1px),
-                  rgba(190, 209, 207, 0.72) calc(2.5% - 1px),
-                  rgba(190, 209, 207, 0.72) 2.5%
-                ),
-                rgba(255, 244, 172, 0.82);
+              background: rgba(255, 244, 172, 0.72);
               border-left: 1px solid rgba(226, 194, 67, 0.7);
               border-right: 1px solid rgba(226, 194, 67, 0.7);
               z-index: 0;
