@@ -178,6 +178,21 @@ export default function TransportModal({
   };
 
   const getTimelinePrintRows = () => {
+    const parseGradeOrder = (grade?: string) => {
+      const text = String(grade || '');
+      const match = text.match(/[1-6１-６一二三四五六]/);
+      if (!match) return 99;
+      const gradeMap: Record<string, number> = {
+        '1': 1, '１': 1, '一': 1,
+        '2': 2, '２': 2, '二': 2,
+        '3': 3, '３': 3, '三': 3,
+        '4': 4, '４': 4, '四': 4,
+        '5': 5, '５': 5, '五': 5,
+        '6': 6, '６': 6, '六': 6,
+      };
+      return gradeMap[match[0]] ?? 99;
+    };
+
     const assignmentMap = new Map<string, { staffName: string; tripLabel: string }>();
     staffEntries.forEach((entry) => {
       if (entry.staffName === '送迎しない') return;
@@ -200,10 +215,16 @@ export default function TransportModal({
         count: block.count,
         staffName: assignment?.staffName || '未割当',
         tripLabel: assignment?.tripLabel || '-',
-        kids: (block.kids || []).map((kid: any) => {
-          const grade = kid.grade ? `（${kid.grade}）` : '';
-          return `${kid.name || ''}${grade}`;
-        }).filter(Boolean),
+        kids: [...(block.kids || [])]
+          .sort((a: any, b: any) => {
+            const gradeDiff = parseGradeOrder(a.grade) - parseGradeOrder(b.grade);
+            if (gradeDiff !== 0) return gradeDiff;
+            return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+          })
+          .map((kid: any) => {
+            const grade = kid.grade ? `（${kid.grade}）` : '';
+            return `${kid.name || ''}${grade}`;
+          }).filter(Boolean),
       };
     }).sort((a, b) => `${a.time}${a.name}`.localeCompare(`${b.time}${b.name}`));
   };
