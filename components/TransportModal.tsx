@@ -223,18 +223,24 @@ export default function TransportModal({
 
     const rows = getTimelinePrintRows();
     const rowHtml = rows.length > 0
-      ? rows.map((row) => `
-        <tr>
+      ? rows.map((row) => {
+        const rowClass = row.name.includes('スイミング')
+          ? 'row-swimming'
+          : row.typeLabel === '習い事'
+            ? 'row-lesson'
+            : 'row-pickup';
+        return `
+        <tr class="${rowClass}">
           <td class="time">${escapeHtml(row.time)}</td>
           <td>${escapeHtml(row.typeLabel)}</td>
           <td class="name">${escapeHtml(row.name)}</td>
           <td class="count">${escapeHtml(row.count)}名</td>
           <td>${escapeHtml(row.staffName)}</td>
-          <td>${escapeHtml(row.tripLabel)}</td>
           <td class="kids">${escapeHtml(row.kids.join('、') || '-')}</td>
         </tr>
-      `).join('')
-      : '<tr><td colspan="7" class="empty">この日の送迎予定はありません</td></tr>';
+      `;
+      }).join('')
+      : '<tr><td colspan="6" class="empty">この日の送迎予定はありません</td></tr>';
 
     const staffHtml = staffEntries
       .filter((entry) => entry.staffName !== '送迎しない')
@@ -284,9 +290,10 @@ export default function TransportModal({
             const block = blocks.find((b) => b.key === blockKey);
             const slotIndex = getPrintSlotIndex(block?.time);
             if (!block || slotIndex === null) return '';
+            const isSwimming = (block.nameOnly || block.label).includes('スイミング');
             const isLesson = block.type === 'lesson';
-            const bg = isLesson ? '#eaf7ef' : '#eef6ff';
-            const border = isLesson ? '#78c28c' : '#79aee8';
+            const bg = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
+            const border = isSwimming ? '#46B8D7' : isLesson ? '#78C28C' : '#F2B760';
             const label = `${block.time || '-'} ${block.nameOnly || block.label} ${block.count}名`;
             return `
               <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; background:${bg}; border-color:${border};">
@@ -318,6 +325,10 @@ export default function TransportModal({
           <style>
             @page { size: A4 landscape; margin: 10mm; }
             * { box-sizing: border-box; }
+            html, body, table, tr, th, td, div {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
             body {
               margin: 0;
               color: #222;
@@ -478,6 +489,9 @@ export default function TransportModal({
               word-break: break-word;
             }
             tr:nth-child(even) td { background: #fbfdfc; }
+            tr.row-pickup td { background: #fff8e8; }
+            tr.row-lesson td { background: #eff9f2; }
+            tr.row-swimming td { background: #e6f9ff; }
             .time { width: 8%; font-size: 13px; font-weight: 700; color: #111; }
             .name { font-weight: 700; }
             .count { text-align: center; font-weight: 700; }
@@ -531,10 +545,9 @@ export default function TransportModal({
               <tr>
                 <th style="width:8%">時刻</th>
                 <th style="width:8%">種別</th>
-                <th style="width:16%">行き先</th>
+                <th style="width:18%">行き先</th>
                 <th style="width:7%">人数</th>
                 <th style="width:12%">担当</th>
-                <th style="width:9%">回</th>
                 <th>児童名</th>
               </tr>
             </thead>
