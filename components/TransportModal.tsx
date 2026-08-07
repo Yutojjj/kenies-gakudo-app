@@ -457,7 +457,15 @@ export default function TransportModal({
             .timeline-shift {
               grid-row: 1;
               min-height: 42px;
-              background: rgba(255, 244, 172, 0.82);
+              background:
+                repeating-linear-gradient(
+                  to right,
+                  transparent 0,
+                  transparent calc(2.5% - 1px),
+                  rgba(190, 209, 207, 0.72) calc(2.5% - 1px),
+                  rgba(190, 209, 207, 0.72) 2.5%
+                ),
+                rgba(255, 244, 172, 0.82);
               border-left: 1px solid rgba(226, 194, 67, 0.7);
               border-right: 1px solid rgba(226, 194, 67, 0.7);
               z-index: 0;
@@ -550,7 +558,6 @@ export default function TransportModal({
             <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
             <div class="summary-card">担当スタッフ<strong>${escapeHtml(staffEntries.filter((entry) => entry.staffName !== '送迎しない').length)}名</strong></div>
           </div>
-          <div class="section-title">15分刻みタイムライン</div>
           <div class="timeline">
             <div class="timeline-head">
               <div class="timeline-corner">担当</div>
