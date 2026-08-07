@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -123,6 +124,7 @@ export default function ScheduleScreen() {
   const [memoData, setMemoData] = useState<Record<string, string>>({}); // key: childId_dateStr
   const memoDataRef = React.useRef<Record<string, string>>({});
   const [memoSaved, setMemoSaved] = useState(false);
+  const pickerHapticAtRef = useRef(0);
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
   const initialEditOpenedRef = useRef(false);
 
@@ -732,6 +734,25 @@ export default function ScheduleScreen() {
     return values[index];
   };
 
+  const triggerPickerHaptic = () => {
+    const now = Date.now();
+    if (now - pickerHapticAtRef.current < 45) return;
+    pickerHapticAtRef.current = now;
+    if (Platform.OS === 'web') {
+      try {
+        (globalThis as any).navigator?.vibrate?.(8);
+      } catch {}
+      return;
+    }
+    Haptics.selectionAsync().catch(() => {});
+  };
+
+  const applyPickerValue = (currentValue: number, nextValue: number, setter: (value: number) => void) => {
+    if (currentValue === nextValue) return;
+    setter(nextValue);
+    triggerPickerHaptic();
+  };
+
   const confirmTime = () => {
     const timeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
     const key = getScheduleKey(selectedDateStr);
@@ -1316,8 +1337,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, addPickupHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
-                onMomentumScrollEnd={(event: any) => setAddPickupHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
-                onScrollEndDrag={(event: any) => setAddPickupHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
+                onScrollEndDrag={(event: any) => applyPickerValue(addPickupHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setAddPickupHour)}
               >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`ah-${h}`} style={[styles.pickerItem, addPickupHour === h && styles.pickerItemActive]} onPress={() => setAddPickupHour(h)}>
@@ -1333,8 +1354,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, addPickupMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
-                onMomentumScrollEnd={(event: any) => setAddPickupMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
-                onScrollEndDrag={(event: any) => setAddPickupMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                onMomentumScrollEnd={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
+                onScrollEndDrag={(event: any) => applyPickerValue(addPickupMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setAddPickupMinute)}
               >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`am-${m}`} style={[styles.pickerItem, addPickupMinute === m && styles.pickerItemActive]} onPress={() => setAddPickupMinute(m)}>
@@ -1389,8 +1410,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
-                onMomentumScrollEnd={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
-                onScrollEndDrag={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
               >
                 {HOURS.map(h => (
                   <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
@@ -1406,8 +1427,8 @@ export default function ScheduleScreen() {
                 contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                 snapToInterval={PICKER_ITEM_HEIGHT}
                 decelerationRate="fast"
-                onMomentumScrollEnd={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
-                onScrollEndDrag={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
               >
                 {MINUTES.map(m => (
                   <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
@@ -1514,8 +1535,8 @@ export default function ScheduleScreen() {
                       contentOffset={{ x: 0, y: getPickerOffset(HOURS, tempHour) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
                       decelerationRate="fast"
-                      onMomentumScrollEnd={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
-                      onScrollEndDrag={(event: any) => setTempHour(getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y))}
+                      onMomentumScrollEnd={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
+                      onScrollEndDrag={(event: any) => applyPickerValue(tempHour, getPickerValueFromOffset(HOURS, event.nativeEvent.contentOffset.y), setTempHour)}
                     >
                       {HOURS.map(h => (
                         <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
@@ -1531,8 +1552,8 @@ export default function ScheduleScreen() {
                       contentOffset={{ x: 0, y: getPickerOffset(MINUTES, tempMinute) }}
                       snapToInterval={PICKER_ITEM_HEIGHT}
                       decelerationRate="fast"
-                      onMomentumScrollEnd={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
-                      onScrollEndDrag={(event: any) => setTempMinute(getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y))}
+                      onMomentumScrollEnd={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
+                      onScrollEndDrag={(event: any) => applyPickerValue(tempMinute, getPickerValueFromOffset(MINUTES, event.nativeEvent.contentOffset.y), setTempMinute)}
                     >
                       {MINUTES.map(m => (
                         <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
