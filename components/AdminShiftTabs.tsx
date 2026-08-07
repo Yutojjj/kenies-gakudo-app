@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 type Props = {
   active: 'view' | 'create';
@@ -31,8 +32,18 @@ export default function AdminShiftTabs({ active }: Props) {
     else router.push('/shift-create' as any);
   };
 
+  const shiftSwipe = useSwipeTabs({
+    tabs: ['view', 'create'],
+    active,
+    onChange: (next) => {
+      if (next === 'view') goView();
+      else goCreate();
+    },
+    edgeGuard: false,
+  });
+
   return (
-    <View style={styles.wrap}>
+    <Animated.View style={[styles.wrap, shiftSwipe.animatedStyle]} {...shiftSwipe.panHandlers}>
       <TouchableOpacity
         style={[styles.tab, active === 'view' && styles.tabActive]}
         onPress={goView}
@@ -49,7 +60,7 @@ export default function AdminShiftTabs({ active }: Props) {
         <Ionicons name="create-outline" size={17} color={active === 'create' ? '#FFFFFF' : '#2D8BE8'} />
         <Text style={[styles.tabText, active === 'create' && styles.tabTextActive]}>{role === 'staff' ? '提出する' : '作成する'}</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 

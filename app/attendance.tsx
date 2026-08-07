@@ -3,12 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, PanResponder, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Animated, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -1079,28 +1080,11 @@ export default function AttendanceScreen() {
   };
 
   const attendanceTabOrder: ViewMode[] = ['attendance', 'todayStatus', 'schoolUsers', 'transport'];
-  const moveAttendanceTabBySwipe = (direction: 'prev' | 'next') => {
-    const currentIndex = attendanceTabOrder.indexOf(currentView);
-    if (currentIndex < 0) return;
-    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    const nextView = attendanceTabOrder[nextIndex];
-    if (nextView) setCurrentView(nextView);
-  };
-
-  const attendanceTabPanResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      const startX = evt.nativeEvent.pageX - gestureState.dx;
-      return (
-        startX > 32 &&
-        Math.abs(gestureState.dx) > 44 &&
-        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.45
-      );
-    },
-    onPanResponderRelease: (_evt, gestureState) => {
-      if (Math.abs(gestureState.dx) < 72 || Math.abs(gestureState.dx) < Math.abs(gestureState.dy) * 1.45) return;
-      moveAttendanceTabBySwipe(gestureState.dx < 0 ? 'next' : 'prev');
-    },
-  }), [currentView]);
+  const attendanceSwipe = useSwipeTabs({
+    tabs: attendanceTabOrder,
+    active: currentView,
+    onChange: setCurrentView,
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1128,12 +1112,12 @@ export default function AttendanceScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabSwipeArea} {...attendanceTabPanResponder.panHandlers}>
+      <Animated.View style={[styles.tabSwipeArea, attendanceSwipe.animatedStyle]} {...attendanceSwipe.panHandlers}>
         {currentView === 'attendance' && renderAttendanceView()}
         {currentView === 'todayStatus' && renderTodayStatusView()}
         {currentView === 'schoolUsers' && renderSchoolUsersView()}
         {currentView === 'transport' && renderTransportView()}
-      </View>
+      </Animated.View>
 
       {currentView === 'attendance' && (
         <TouchableOpacity

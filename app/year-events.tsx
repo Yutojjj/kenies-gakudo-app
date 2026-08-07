@@ -11,7 +11,7 @@ import {
 } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Image, Modal, Platform,
+  ActivityIndicator, Animated, Image, Modal, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
@@ -20,6 +20,7 @@ import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { navigateHome } from '../utils/navigationHome';
+import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 // ─── ユーティリティ ────────────────────────────────────────────
 const customAlert = (title: string, msg?: string) => {
@@ -1430,7 +1431,17 @@ export default function YearEventsScreen() {
   );
 
   // ─── メインレンダリング ───────────────────────────────────
+  const eventMainTabs: MainTab[] = (isAdmin || role === 'staff')
+    ? ['year', 'vacation', 'management']
+    : ['year', 'vacation'];
+  const eventMainSwipe = useSwipeTabs({
+    tabs: eventMainTabs,
+    active: mainTab,
+    onChange: setMainTab,
+  });
+
   if (checking || !verified) return null;
+
   return (
     <SafeAreaView style={styles.container}>
       {/* ヘッダー */}
@@ -1456,6 +1467,7 @@ export default function YearEventsScreen() {
         )}
       </View>
 
+      <Animated.View style={[{ flex: 1 }, eventMainSwipe.animatedStyle]} {...eventMainSwipe.panHandlers}>
       {/* ── 年行事タブ ── */}
       {mainTab === 'year' && (
         <View style={{ flex: 1 }}>
@@ -1923,6 +1935,7 @@ export default function YearEventsScreen() {
           <Text style={{ color: '#fff', marginTop: 10 }}>アップロード中...</Text>
         </View>
       )}
+      </Animated.View>
       <AdminBottomNav active="event" />
     </SafeAreaView>
   );

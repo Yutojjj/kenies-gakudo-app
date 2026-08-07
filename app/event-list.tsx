@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   Modal,
   Platform,
@@ -23,6 +24,7 @@ import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { navigateHome } from '../utils/navigationHome';
+import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') window.alert(message ? `${title}\n${message}` : title);
@@ -424,6 +426,12 @@ export default function EventListScreen() {
     );
   };
 
+  const eventListSwipe = useSwipeTabs({
+    tabs: ['register', 'detail'],
+    active: tab,
+    onChange: setTab,
+  });
+
   if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></SafeAreaView>;
   if (checking || !verified) return null;
 
@@ -453,6 +461,7 @@ export default function EventListScreen() {
         </TouchableOpacity>
       </View>
 
+      <Animated.View style={[{ flex: 1 }, eventListSwipe.animatedStyle]} {...eventListSwipe.panHandlers}>
       {/* ══ 参加登録タブ ══════════════════════════════════════ */}
       {tab === 'register' && (() => {
         // カレンダー生成
@@ -743,6 +752,7 @@ export default function EventListScreen() {
           )}
         </View>
       )}
+      </Animated.View>
 
       {/* ══ イベント詳細モーダル ═══════════════════════════════ */}
       <Modal visible={detailOpen} animationType="slide">

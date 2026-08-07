@@ -18,6 +18,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -32,6 +33,7 @@ import { db, storage } from '../firebase';
 import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
 import { refreshPushSubscription } from '../utils/setupPushToken';
 import { navigateHome } from '../utils/navigationHome';
+import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -907,6 +909,12 @@ export default function MessagesScreen() {
   const canChat = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowChat !== false);
   const canCall = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowCall !== false);
 
+  const messageSwipe = useSwipeTabs({
+    tabs: (isAdmin || resolvedUser?.role === 'staff') ? ['home', 'talk'] : ['talk'],
+    active: msgTab,
+    onChange: setMsgTab,
+  });
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -981,6 +989,7 @@ export default function MessagesScreen() {
           </View>
         )}
 
+        <Animated.View style={[{ flex: 1 }, messageSwipe.animatedStyle]} {...messageSwipe.panHandlers}>
         {/* ⑫⑬ ホームタブ */}
         {(isAdmin || resolvedUser?.role === 'staff') && msgTab === 'home' ? (
           <ScrollView style={{ flex: 1 }}>
@@ -1146,6 +1155,7 @@ export default function MessagesScreen() {
           })}
           </ScrollView>
         )} {/* ⑬ isAdmin && msgTab === 'home' の三項演算子終了 */}
+        </Animated.View>
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}
         <Modal visible={createGroupModalVisible} transparent={true} animationType="slide">
