@@ -18,7 +18,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -27,13 +26,13 @@ import {
   TouchableOpacity, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { useCall } from '../contexts/CallContext';
 import { db, storage } from '../firebase';
 import { sendPushNotification, sendPushNotificationToAll } from '../utils/sendPushNotification';
 import { refreshPushSubscription } from '../utils/setupPushToken';
 import { navigateHome } from '../utils/navigationHome';
-import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 type UserInfo = { role: string; name: string; accountId?: string };
 type ConvDoc = {
@@ -909,11 +908,7 @@ export default function MessagesScreen() {
   const canChat = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowChat !== false);
   const canCall = isAdmin || isDirect || (isGroup && activeConv?.settings?.allowCall !== false);
 
-  const messageSwipe = useSwipeTabs({
-    tabs: (isAdmin || resolvedUser?.role === 'staff') ? ['home', 'talk'] : ['talk'],
-    active: msgTab,
-    onChange: setMsgTab,
-  });
+  const messageTabs = ((isAdmin || resolvedUser?.role === 'staff') ? ['home', 'talk'] : ['talk']) as ('home' | 'talk')[];
 
   if (loading) {
     return (
@@ -989,9 +984,14 @@ export default function MessagesScreen() {
           </View>
         )}
 
-        <Animated.View style={[{ flex: 1 }, messageSwipe.animatedStyle]} {...messageSwipe.panHandlers}>
+        <SwipeTabPager
+          tabs={messageTabs}
+          active={msgTab}
+          onChange={setMsgTab}
+          renderTab={(currentTab) => (
+            <>
         {/* ⑫⑬ ホームタブ */}
-        {(isAdmin || resolvedUser?.role === 'staff') && msgTab === 'home' ? (
+        {(isAdmin || resolvedUser?.role === 'staff') && currentTab === 'home' ? (
           <ScrollView style={{ flex: 1 }}>
             {/* スタッフ専用: スタッフ一覧のみ（利用者とのトークは不可） */}
             {!isAdmin && (
@@ -1155,7 +1155,9 @@ export default function MessagesScreen() {
           })}
           </ScrollView>
         )} {/* ⑬ isAdmin && msgTab === 'home' の三項演算子終了 */}
-        </Animated.View>
+            </>
+          )}
+        />
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}
         <Modal visible={createGroupModalVisible} transparent={true} animationType="slide">

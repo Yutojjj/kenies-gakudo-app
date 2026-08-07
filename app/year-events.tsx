@@ -11,16 +11,16 @@ import {
 } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Animated, Image, Modal, Platform,
+  ActivityIndicator, Image, Modal, Platform,
   SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { navigateHome } from '../utils/navigationHome';
-import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 // ─── ユーティリティ ────────────────────────────────────────────
 const customAlert = (title: string, msg?: string) => {
@@ -1434,11 +1434,6 @@ export default function YearEventsScreen() {
   const eventMainTabs: MainTab[] = (isAdmin || role === 'staff')
     ? ['year', 'vacation', 'management']
     : ['year', 'vacation'];
-  const eventMainSwipe = useSwipeTabs({
-    tabs: eventMainTabs,
-    active: mainTab,
-    onChange: setMainTab,
-  });
 
   if (checking || !verified) return null;
 
@@ -1467,9 +1462,14 @@ export default function YearEventsScreen() {
         )}
       </View>
 
-      <Animated.View style={[{ flex: 1 }, eventMainSwipe.animatedStyle]} {...eventMainSwipe.panHandlers}>
+      <SwipeTabPager
+        tabs={eventMainTabs}
+        active={mainTab}
+        onChange={setMainTab}
+        renderTab={(currentTab) => (
+          <>
       {/* ── 年行事タブ ── */}
-      {mainTab === 'year' && (
+      {currentTab === 'year' && (
         <View style={{ flex: 1 }}>
           {/* 学期ジャンプボタン */}
           <View style={styles.termJumpRow}>
@@ -1506,7 +1506,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── 長期休みタブ ── */}
-      {mainTab === 'vacation' && (
+      {currentTab === 'vacation' && (
         <View style={{ flex: 1 }}>
           {/* 休み種別タブ */}
           <View style={styles.vacTabRow}>
@@ -1547,7 +1547,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── イベント管理タブ ── */}
-      {mainTab === 'management' && (isAdmin || role === 'staff') && (
+      {currentTab === 'management' && (isAdmin || role === 'staff') && (
         <View style={{ flex: 1 }}>
           {/* 月ナビ */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
@@ -1889,6 +1889,9 @@ export default function YearEventsScreen() {
           </Modal>
         </View>
       )}
+          </>
+        )}
+      />
 
       {/* 詳細モーダル */}
       {DetailModal}
@@ -1935,7 +1938,6 @@ export default function YearEventsScreen() {
           <Text style={{ color: '#fff', marginTop: 10 }}>アップロード中...</Text>
         </View>
       )}
-      </Animated.View>
       <AdminBottomNav active="event" />
     </SafeAreaView>
   );
