@@ -215,7 +215,8 @@ export default function TransportModal({
     }
 
     const browserWindow = (globalThis as any).window;
-    if (!browserWindow?.open) {
+    const browserDocument = (globalThis as any).document;
+    if (!browserWindow || !browserDocument?.createElement) {
       Alert.alert('印刷', 'この環境では印刷画面を開けませんでした。');
       return;
     }
@@ -264,7 +265,7 @@ export default function TransportModal({
       <html lang="ja">
         <head>
           <meta charset="utf-8" />
-          <title>${escapeHtml(dateLabel)} 送迎全体確認</title>
+          <title>${escapeHtml(dateLabel)} 送迎一覧 全体確認</title>
           <style>
             @page { size: A4 landscape; margin: 10mm; }
             * { box-sizing: border-box; }
@@ -347,7 +348,7 @@ export default function TransportModal({
         <body>
           <div class="header">
             <div>
-              <h1>${escapeHtml(dateLabel)} 送迎全体確認</h1>
+              <h1>${escapeHtml(dateLabel)} 送迎一覧 全体確認</h1>
               <div class="sub">A4横印刷用</div>
             </div>
             <div class="sub">印刷日: ${escapeHtml(new Date().toLocaleString('ja-JP'))}</div>
@@ -383,15 +384,27 @@ export default function TransportModal({
       </html>
     `;
 
-    const printWindow = browserWindow.open('', '_blank', 'width=1200,height=800');
-    if (!printWindow) {
-      Alert.alert('印刷', '印刷画面を開けませんでした。ポップアップの許可を確認してください。');
-      return;
+    const oldIframe = browserDocument.getElementById('transport-print-iframe');
+    if (oldIframe?.parentNode) {
+      oldIframe.parentNode.removeChild(oldIframe);
     }
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
+
+    const iframe = browserDocument.createElement('iframe');
+    iframe.id = 'transport-print-iframe';
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;visibility:hidden;right:0;bottom:0;';
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 1000);
+      }, 300);
+    };
+    browserDocument.body.appendChild(iframe);
+    iframe.srcdoc = html;
   };
 
   // ── タイムライン表示ビューのレンダリング ──
