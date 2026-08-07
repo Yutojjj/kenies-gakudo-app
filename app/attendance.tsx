@@ -3,13 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
+import SwipeTabPager from '../components/SwipeTabPager';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
-import { useSwipeTabs } from '../utils/useSwipeTabs';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -1080,11 +1080,12 @@ export default function AttendanceScreen() {
   };
 
   const attendanceTabOrder: ViewMode[] = ['attendance', 'todayStatus', 'schoolUsers', 'transport'];
-  const attendanceSwipe = useSwipeTabs({
-    tabs: attendanceTabOrder,
-    active: currentView,
-    onChange: setCurrentView,
-  });
+  const renderAttendanceTab = (tab: ViewMode) => {
+    if (tab === 'attendance') return renderAttendanceView();
+    if (tab === 'todayStatus') return renderTodayStatusView();
+    if (tab === 'schoolUsers') return renderSchoolUsersView();
+    return renderTransportView();
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1112,12 +1113,12 @@ export default function AttendanceScreen() {
         </TouchableOpacity>
       </View>
 
-      <Animated.View style={[styles.tabSwipeArea, attendanceSwipe.animatedStyle]} {...attendanceSwipe.panHandlers}>
-        {currentView === 'attendance' && renderAttendanceView()}
-        {currentView === 'todayStatus' && renderTodayStatusView()}
-        {currentView === 'schoolUsers' && renderSchoolUsersView()}
-        {currentView === 'transport' && renderTransportView()}
-      </Animated.View>
+      <SwipeTabPager
+        tabs={attendanceTabOrder}
+        active={currentView}
+        onChange={setCurrentView}
+        renderTab={renderAttendanceTab}
+      />
 
       {currentView === 'attendance' && (
         <TouchableOpacity
