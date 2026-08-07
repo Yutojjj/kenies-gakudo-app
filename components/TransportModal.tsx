@@ -383,7 +383,19 @@ export default function TransportModal({
               font-size: 13px;
               font-weight: 800;
               color: #222;
-              margin-bottom: 6px;
+              margin-bottom: 5px;
+            }
+            .summary-staff-row {
+              display: flex;
+              align-items: center;
+              gap: 14px;
+            }
+            .summary-staff-count {
+              flex: 0 0 auto;
+              font-size: 28px;
+              line-height: 1;
+              color: #111;
+              font-weight: 900;
             }
             .summary-staff-names {
               font-size: 16px;
@@ -553,8 +565,11 @@ export default function TransportModal({
             <div class="summary-card">送迎先<strong>${escapeHtml(blocks.length)}件</strong></div>
             <div class="summary-card">対象児童<strong>${escapeHtml(attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0))}名</strong></div>
             <div class="summary-card">
-              <div class="summary-staff-title">担当スタッフ(${escapeHtml(assignedStaffNames.length)}名)</div>
-              <div class="summary-staff-names">${escapeHtml(assignedStaffNames.join('、') || 'なし')}</div>
+              <div class="summary-staff-title">担当スタッフ</div>
+              <div class="summary-staff-row">
+                <div class="summary-staff-count">${escapeHtml(assignedStaffNames.length)}名</div>
+                <div class="summary-staff-names">${escapeHtml(assignedStaffNames.join('、') || 'なし')}</div>
+              </div>
             </div>
           </div>
           <div class="timeline">
