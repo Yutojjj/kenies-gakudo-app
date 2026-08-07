@@ -253,7 +253,7 @@ export default function TransportModal({
         return `
         <tr class="${rowClass}">
           <td class="time">${escapeHtml(row.time)}</td>
-          <td>${escapeHtml(row.typeLabel)}</td>
+          <td class="type-cell ${row.typeLabel === '習い事' ? 'type-lesson' : 'type-pickup'}">${escapeHtml(row.typeLabel)}</td>
           <td class="name">${escapeHtml(row.name)}</td>
           <td class="count">${escapeHtml(row.count)}名</td>
           <td>${escapeHtml(row.staffName)}</td>
@@ -549,6 +549,9 @@ export default function TransportModal({
             tr.row-lesson td { background: #eff9f2; }
             tr.row-swimming td { background: #e6f9ff; }
             .time { width: 8%; font-size: 13px; font-weight: 700; color: #111; }
+            .type-cell { font-size: 12px; font-weight: 900; }
+            .type-pickup { color: #D94B4B; }
+            .type-lesson { color: #2577C9; }
             .name { font-weight: 700; }
             .count { text-align: center; font-weight: 700; }
             .kids { font-size: 10px; }
