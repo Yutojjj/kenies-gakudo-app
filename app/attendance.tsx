@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Modal, PanResponder, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
@@ -1078,6 +1078,30 @@ export default function AttendanceScreen() {
     );
   };
 
+  const attendanceTabOrder: ViewMode[] = ['attendance', 'todayStatus', 'schoolUsers', 'transport'];
+  const moveAttendanceTabBySwipe = (direction: 'prev' | 'next') => {
+    const currentIndex = attendanceTabOrder.indexOf(currentView);
+    if (currentIndex < 0) return;
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+    const nextView = attendanceTabOrder[nextIndex];
+    if (nextView) setCurrentView(nextView);
+  };
+
+  const attendanceTabPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      const startX = evt.nativeEvent.pageX - gestureState.dx;
+      return (
+        startX > 32 &&
+        Math.abs(gestureState.dx) > 44 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.45
+      );
+    },
+    onPanResponderRelease: (_evt, gestureState) => {
+      if (Math.abs(gestureState.dx) < 72 || Math.abs(gestureState.dx) < Math.abs(gestureState.dy) * 1.45) return;
+      moveAttendanceTabBySwipe(gestureState.dx < 0 ? 'next' : 'prev');
+    },
+  }), [currentView]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -1104,10 +1128,12 @@ export default function AttendanceScreen() {
         </TouchableOpacity>
       </View>
 
-      {currentView === 'attendance' && renderAttendanceView()}
-      {currentView === 'todayStatus' && renderTodayStatusView()}
-      {currentView === 'schoolUsers' && renderSchoolUsersView()}
-      {currentView === 'transport' && renderTransportView()}
+      <View style={styles.tabSwipeArea} {...attendanceTabPanResponder.panHandlers}>
+        {currentView === 'attendance' && renderAttendanceView()}
+        {currentView === 'todayStatus' && renderTodayStatusView()}
+        {currentView === 'schoolUsers' && renderSchoolUsersView()}
+        {currentView === 'transport' && renderTransportView()}
+      </View>
 
       {currentView === 'attendance' && (
         <TouchableOpacity
@@ -1224,6 +1250,7 @@ const styles = StyleSheet.create({
   tabNavBtnActive: { borderColor: '#007A82' },
   tabNavText: { fontSize: 13, fontWeight: '800', color: '#6F6A66' },
   tabNavTextActive: { fontSize: 13, fontWeight: '900', color: '#007A82' },
+  tabSwipeArea: { flex: 1 },
 
   topNav: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 10 },
   topNavScroll: { paddingHorizontal: 12, alignItems: 'center' },
