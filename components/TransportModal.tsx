@@ -229,6 +229,40 @@ export default function TransportModal({
     }).sort((a, b) => `${a.time}${a.name}`.localeCompare(`${b.time}${b.name}`));
   };
 
+  const getRoomStaffCounts = (startHour: number, endHour: number) => {
+    const slotCount = (endHour - startHour) * 4;
+    const getSlotBoundary = (timeStr?: string, roundUp = false) => {
+      if (!timeStr) return null;
+      const [hour, minute] = timeStr.split(':').map(Number);
+      if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+      const raw = (hour - startHour) * 4 + (roundUp ? Math.ceil(minute / 15) : Math.floor(minute / 15));
+      return Math.max(0, Math.min(slotCount, raw));
+    };
+
+    return Array.from({ length: slotCount }, (_, slotIndex) => {
+      return staffEntries.filter((entry) => {
+        if (entry.staffName === '送迎しない') return false;
+
+        const shift = shiftStaff.find((staff) => staff.name === entry.staffName);
+        const shiftStart = getSlotBoundary(shift?.start);
+        const shiftEnd = getSlotBoundary(shift?.end, true);
+        if (shiftStart === null || shiftEnd === null || slotIndex < shiftStart || slotIndex >= shiftEnd) {
+          return false;
+        }
+
+        const isOnTransport = entry.trips.some((trip) => trip.blockKeys.some((blockKey) => {
+          const block = blocks.find((item) => item.key === blockKey);
+          const transportStart = getSlotBoundary(block?.time);
+          if (transportStart === null) return false;
+          // タイムライン上の送迎枠と同じ45分間を外出扱いにする。
+          return slotIndex >= transportStart && slotIndex < transportStart + 3;
+        }));
+
+        return !isOnTransport;
+      }).length;
+    });
+  };
+
   const printTimeline = () => {
     if (Platform.OS !== 'web') {
       Alert.alert('印刷', '印刷はWeb版またはPWA版で利用できます。');
@@ -325,6 +359,13 @@ export default function TransportModal({
           </div>
         `;
       }).join('');
+    const roomStaffCounts = getRoomStaffCounts(PRINT_START_HOUR, PRINT_END_HOUR);
+    const roomStaffHtml = roomStaffCounts.map((count, index) => {
+      const hour = PRINT_START_HOUR + Math.floor(index / 4);
+      const minute = (index % 4) * 15;
+      const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      return `<div class="room-count-cell" title="${time} ${count}名"><strong>${count}</strong><span>名</span></div>`;
+    }).join('');
     const assignedStaffNames = staffEntries
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => entry.staffName);
@@ -525,6 +566,47 @@ export default function TransportModal({
               color: #999;
               z-index: 1;
             }
+            .room-count-row {
+              min-height: 34px;
+              background: #f5f0fb;
+              border-top: 2px solid #9a7ac1;
+            }
+            .room-count-label {
+              display: flex;
+              align-items: center;
+              padding: 5px 7px;
+              border-right: 1px solid #cfe0df;
+              background: #eee5f7;
+              font-size: 10px;
+              font-weight: 900;
+              color: #352b40;
+            }
+            .room-count-track {
+              display: grid;
+              grid-template-columns: repeat(${PRINT_SLOT_COUNT}, minmax(0, 1fr));
+              min-height: 34px;
+            }
+            .room-count-cell {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 1px;
+              border-left: 1px dashed #cbbddd;
+              color: #2d2436;
+              background: rgba(255, 255, 255, 0.35);
+            }
+            .room-count-cell:nth-child(4n + 1) {
+              border-left: 1.5px solid #9174b5;
+            }
+            .room-count-cell strong {
+              font-size: 12px;
+              line-height: 1;
+              font-weight: 900;
+            }
+            .room-count-cell span {
+              font-size: 7px;
+              font-weight: 700;
+            }
             table {
               width: 100%;
               border-collapse: collapse;
@@ -582,6 +664,10 @@ export default function TransportModal({
               <div class="timeline-hours">${timelineHeaderHtml}</div>
             </div>
             ${timelineStaffHtml}
+            <div class="timeline-row room-count-row">
+              <div class="room-count-label">室内スタッフ</div>
+              <div class="room-count-track">${roomStaffHtml}</div>
+            </div>
           </div>
           <div class="section-title">送迎先一覧</div>
           <table>
@@ -655,6 +741,7 @@ export default function TransportModal({
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => entry.staffName);
     const targetCount = attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0);
+    const roomStaffCounts = getRoomStaffCounts(START_HOUR, END_HOUR);
 
     return (
       <ScrollView style={styles.overviewScroll} contentContainerStyle={styles.overviewContent} showsVerticalScrollIndicator={false}>
@@ -772,6 +859,26 @@ export default function TransportModal({
                   </View>
                 );
               })}
+              <View style={styles.overviewRoomCountRow}>
+                <View style={styles.overviewRoomCountLabel}>
+                  <Text style={styles.overviewRoomCountLabelText}>室内スタッフ</Text>
+                </View>
+                <View style={{ width: TIMELINE_WIDTH, flexDirection: 'row' }}>
+                  {roomStaffCounts.map((count, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.overviewRoomCountCell,
+                        { width: COL_WIDTH },
+                        index % 4 === 0 && styles.overviewRoomCountHourCell,
+                      ]}
+                    >
+                      <Text style={styles.overviewRoomCountValue}>{count}</Text>
+                      <Text style={styles.overviewRoomCountUnit}>名</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
           </View>
         </ScrollView>
 
@@ -1142,6 +1249,13 @@ const styles = StyleSheet.create({
   overviewTimelineFrame: { borderWidth: 1, borderColor: '#CFE0DF', borderRadius: 10, overflow: 'hidden', marginBottom: 10 },
   overviewTimelineCorner: { width: 100, justifyContent: 'center', paddingHorizontal: 10, borderRightWidth: 1, borderRightColor: '#CFE0DF', backgroundColor: '#F8FBFA' },
   overviewTimelineCornerText: { fontSize: 10, color: '#555' },
+  overviewRoomCountRow: { flexDirection: 'row', minHeight: 42, borderTopWidth: 2, borderTopColor: '#9A7AC1', backgroundColor: '#F5F0FB' },
+  overviewRoomCountLabel: { width: 100, justifyContent: 'center', paddingHorizontal: 10, borderRightWidth: 1, borderRightColor: '#CFE0DF', backgroundColor: '#EEE5F7' },
+  overviewRoomCountLabelText: { fontSize: 11, fontWeight: '900', color: '#352B40' },
+  overviewRoomCountCell: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderStyle: 'dashed', borderLeftColor: '#CBBBDD', backgroundColor: 'rgba(255,255,255,0.35)' },
+  overviewRoomCountHourCell: { borderLeftWidth: 1.5, borderStyle: 'solid', borderLeftColor: '#9174B5' },
+  overviewRoomCountValue: { fontSize: 13, lineHeight: 16, fontWeight: '900', color: '#2D2436' },
+  overviewRoomCountUnit: { fontSize: 7, fontWeight: '700', color: '#2D2436', marginLeft: 1 },
   overviewSectionTitle: { fontSize: 14, fontWeight: '800', color: '#222', marginTop: 4, marginBottom: 7 },
   overviewTable: { borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
   overviewTableRow: { flexDirection: 'row', minHeight: 40 },
