@@ -410,7 +410,7 @@ export default function TransportModal({
           <meta charset="utf-8" />
           <title>${escapeHtml(dateLabel)} 送迎一覧 全体確認</title>
           <style>
-            @page { size: A4 landscape; margin: 10mm; }
+            @page { size: A4 landscape; margin: 6mm; }
             * { box-sizing: border-box; }
             html, body, table, tr, th, td, div {
               -webkit-print-color-adjust: exact;
@@ -423,71 +423,71 @@ export default function TransportModal({
               background: #fff;
             }
             .header {
-              border-bottom: 4px solid #56b6c2;
-              padding-bottom: 9px;
-              margin-bottom: 10px;
+              border-bottom: 3px solid #56b6c2;
+              padding-bottom: 4px;
+              margin-bottom: 6px;
             }
-            h1 { font-size: 32px; margin: 0; letter-spacing: 0; font-weight: 900; line-height: 1.15; }
-            .date-strong { color: #111; margin-right: 12px; }
-            .title-tail { font-size: 24px; font-weight: 800; color: #222; }
+            h1 { font-size: 23px; margin: 0; letter-spacing: 0; font-weight: 900; line-height: 1.1; }
+            .date-strong { color: #111; margin-right: 8px; }
+            .title-tail { font-size: 18px; font-weight: 800; color: #222; }
             .sub { font-size: 12px; color: #555; }
             .summary {
               display: grid;
               grid-template-columns: repeat(3, 1fr);
-              gap: 8px;
-              margin-bottom: 10px;
+              gap: 6px;
+              margin-bottom: 6px;
             }
             .summary-card {
               border: 1px solid #d8e8e6;
-              border-radius: 10px;
-              padding: 9px 14px;
+              border-radius: 7px;
+              padding: 5px 9px;
               background: #f7fbfa;
-              font-size: 13px;
+              font-size: 10px;
               color: #111;
               font-weight: 700;
             }
             .summary-card strong {
               display: block;
-              font-size: 28px;
-              line-height: 1.05;
-              margin-top: 4px;
+              font-size: 20px;
+              line-height: 1;
+              margin-top: 2px;
               color: #111;
               font-weight: 900;
             }
             .summary-staff-title {
-              font-size: 13px;
+              font-size: 10px;
               font-weight: 800;
               color: #222;
-              margin-bottom: 5px;
+              margin-bottom: 2px;
             }
             .summary-staff-row {
               display: flex;
               align-items: center;
-              gap: 14px;
+              gap: 8px;
             }
             .summary-staff-count {
               flex: 0 0 auto;
-              font-size: 28px;
+              font-size: 20px;
               line-height: 1;
               color: #111;
               font-weight: 900;
             }
             .summary-staff-names {
-              font-size: 16px;
-              line-height: 1.35;
+              font-size: 11px;
+              line-height: 1.2;
               color: #111;
               font-weight: 800;
             }
             .section-title {
-              font-size: 13px;
+              font-size: 11px;
               font-weight: 800;
-              margin: 10px 0 6px;
+              margin: 5px 0 3px;
             }
             .timeline {
               border: 1px solid #cfe0df;
               border-radius: 10px;
               overflow: hidden;
-              margin-bottom: 10px;
+              margin-bottom: 6px;
               page-break-inside: avoid;
             }
             .timeline-head {
@@ -682,6 +682,7 @@ export default function TransportModal({
             .destination-empty { border: 1px solid #d7e5e3; }
             @media print {
               .no-print { display: none; }
+              body { zoom: 0.92; }
             }
           </style>
         </head>
