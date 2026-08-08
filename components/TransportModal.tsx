@@ -860,6 +860,14 @@ export default function TransportModal({
           </View>
         </View>
 
+        <Text style={styles.overviewSectionTitle}>送迎先一覧</Text>
+        {rows.length > 0 ? (
+          renderOverviewDestinationTable(rows, 0)
+        ) : (
+          <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
+        )}
+
+        <Text style={styles.overviewSectionTitle}>スタッフ時間表</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.overviewTimelineFrame}>
             <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: '#CFE0DF' }}>
@@ -960,13 +968,6 @@ export default function TransportModal({
               </View>
           </View>
         </ScrollView>
-
-        <Text style={styles.overviewSectionTitle}>送迎先一覧</Text>
-        {rows.length > 0 ? (
-          renderOverviewDestinationTable(rows, 0)
-        ) : (
-          <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
-        )}
       </ScrollView>
     );
   };
