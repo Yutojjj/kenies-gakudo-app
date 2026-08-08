@@ -13,6 +13,14 @@ const STAFF_COLORS = [
   '#FF8A65','#FFB74D','#FFD54F','#AED581','#4DB6AC',
   '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
 ];
+const LAST_WEEK_CARD_COLORS = [
+  { background: '#FFF8F1', border: '#EF8A6B' },
+  { background: '#F2F8FF', border: '#4B9FE1' },
+  { background: '#F2FAF4', border: '#55A879' },
+  { background: '#FFFBEF', border: '#D9A52D' },
+  { background: '#FFF4F7', border: '#D66C96' },
+  { background: '#F2FAF9', border: '#58A7A0' },
+];
 
 type Block = { key: string; label: string; count: number; time?: string; type?: 'school' | 'lesson'; nameOnly?: string; kids?: any[] };
 type TripSlot = { tripIndex: number; blockKeys: string[] };
@@ -1228,12 +1236,12 @@ export default function TransportModal({
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
         <View style={{ width: '100%', maxHeight: '80%', backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden' }}>
           {/* ヘッダー */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#EDE7F6', borderBottomWidth: 1, borderColor: '#D1C4E9' }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#4A148C' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#F7FBFA', borderBottomWidth: 1, borderColor: '#CFE4E2' }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#222222' }}>
               {lastWeekDate.getMonth()+1}/{lastWeekDate.getDate()}（{DOW_JP[lastWeekDate.getDay()]}）の送迎担当
             </Text>
-            <TouchableOpacity onPress={() => setLastWeekModalVisible(false)}>
-              <Ionicons name="close-circle" size={28} color="#9C27B0" />
+            <TouchableOpacity onPress={() => setLastWeekModalVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CFE4E2' }}>
+              <Ionicons name="close" size={24} color="#333333" />
             </TouchableOpacity>
           </View>
 
@@ -1249,15 +1257,17 @@ export default function TransportModal({
           ) : (
             <ScrollView style={{ padding: 16 }}>
               {lastWeekEntries.map((entry, idx) => (
-                <View key={entry.staffName} style={{ marginBottom: 14, padding: 12, backgroundColor: '#F3E5F5', borderRadius: 12, borderLeftWidth: 4, borderLeftColor: STAFF_COLORS[idx % STAFF_COLORS.length] }}>
-                  <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#4A148C', marginBottom: 8 }}>{entry.staffName}</Text>
+                <View key={entry.staffName} style={{ marginBottom: 10, padding: 12, backgroundColor: LAST_WEEK_CARD_COLORS[idx % LAST_WEEK_CARD_COLORS.length].background, borderRadius: 12, borderWidth: 1, borderColor: '#E4E7E8', borderLeftWidth: 5, borderLeftColor: LAST_WEEK_CARD_COLORS[idx % LAST_WEEK_CARD_COLORS.length].border }}>
+                  <Text style={{ fontWeight: '900', fontSize: 15, color: '#222222', marginBottom: 8 }}>{entry.staffName}</Text>
                   {entry.trips.map((trip, tIdx) => (
                     trip.blockKeys.length > 0 ? (
-                      <View key={tIdx} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 12, color: '#7B1FA2', fontWeight: 'bold', width: 40 }}>{TRIP_LABELS[tIdx] || `${tIdx+1}回`}</Text>
+                      <View key={tIdx} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 5, borderTopWidth: tIdx > 0 ? 1 : 0, borderTopColor: 'rgba(0,0,0,0.07)' }}>
+                        <View style={{ minWidth: 48, marginRight: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7, backgroundColor: '#E4F4F3', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 11, color: '#276D70', fontWeight: '900' }}>{TRIP_LABELS[tIdx] || `${tIdx+1}回`}</Text>
+                        </View>
                         <View style={{ flex: 1 }}>
                           {trip.blockKeys.map((bk: string) => (
-                            <Text key={bk} style={{ fontSize: 13, color: '#555' }}>• {bk.replace(/_/g, ' ')}</Text>
+                            <Text key={bk} style={{ fontSize: 13, lineHeight: 19, color: '#222222', fontWeight: '700' }}>• {bk.replace(/_/g, ' ')}</Text>
                           ))}
                         </View>
                       </View>
