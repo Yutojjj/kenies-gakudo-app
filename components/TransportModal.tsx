@@ -789,12 +789,6 @@ export default function TransportModal({
       .map((entry) => entry.staffName);
     const targetCount = attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0);
     const roomStaffCounts = getRoomStaffCounts(START_HOUR, END_HOUR);
-    const destinationSplitIndex = Math.ceil(rows.length / 2);
-    const destinationColumns = [
-      rows.slice(0, destinationSplitIndex),
-      rows.slice(destinationSplitIndex),
-    ];
-
     const getScreenTimelineLayout = (entry: StaffEntry) => {
       const items = entry.trips.flatMap((trip, tripIndex) => trip.blockKeys.map((blockKey) => {
         const block = blocks.find((item) => item.key === blockKey);
@@ -969,9 +963,7 @@ export default function TransportModal({
 
         <Text style={styles.overviewSectionTitle}>送迎先一覧</Text>
         {rows.length > 0 ? (
-          <View style={styles.overviewDestinationColumns}>
-            {destinationColumns.map(renderOverviewDestinationTable)}
-          </View>
+          renderOverviewDestinationTable(rows, 0)
         ) : (
           <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
         )}
@@ -1325,8 +1317,7 @@ const styles = StyleSheet.create({
   overviewRoomCountValue: { fontSize: 13, lineHeight: 16, fontWeight: '900', color: '#2D2436' },
   overviewRoomCountUnit: { fontSize: 7, fontWeight: '700', color: '#2D2436', marginLeft: 1 },
   overviewSectionTitle: { fontSize: 14, fontWeight: '800', color: '#222', marginTop: 4, marginBottom: 7 },
-  overviewDestinationColumns: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
-  overviewTable: { flex: 1, borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
+  overviewTable: { width: '100%', borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
   overviewTableRow: { flexDirection: 'row', minHeight: 27 },
   overviewTableHeader: { minHeight: 26, backgroundColor: '#EEF8F7' },
   overviewTableHeadText: { padding: 4, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#B9DCDA', fontSize: 9, fontWeight: '800', color: '#222' },
