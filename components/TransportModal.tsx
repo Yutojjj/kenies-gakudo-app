@@ -1056,10 +1056,9 @@ export default function TransportModal({
                                 <View style={{ flex: 1 }}>
                                   {trip.blockKeys.map((bk) => {
                                     const blk = blocks.find(b => b.key === bk);
-                                    const bkIdx = blk ? blocks.indexOf(blk) : 0;
-                                    const bkColor = STAFF_COLORS[bkIdx % STAFF_COLORS.length];
+                                    const nameColor = blk?.type === 'lesson' ? '#2577C9' : '#111111';
                                     return blk ? (
-                                      <Text key={bk} style={[styles.slotFilledText, { color: bkColor }]} numberOfLines={1}>
+                                      <Text key={bk} style={[styles.slotFilledText, { color: nameColor }]} numberOfLines={1}>
                                         {blk.label}（{blk.count}名）
                                       </Text>
                                     ) : null;
@@ -1099,6 +1098,7 @@ export default function TransportModal({
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                   {blocks.map((block, bIdx) => {
                     const bColor = STAFF_COLORS[bIdx % STAFF_COLORS.length];
+                    const nameColor = block.type === 'lesson' ? '#2577C9' : '#111111';
                     const isAssigned = assignedBlockKeys.has(block.key);
                     const isSelected = selectedBlock?.key === block.key;
                     if (isAssigned) return null;
@@ -1113,7 +1113,7 @@ export default function TransportModal({
                         onPress={() => setSelectedBlock(isSelected ? null : block)}
                         activeOpacity={0.75}
                       >
-                        <Text style={[styles.blockChipText, { color: bColor }]}>{block.label}</Text>
+                        <Text style={[styles.blockChipText, { color: nameColor }]}>{block.label}</Text>
                         <View style={[styles.countBadge, { backgroundColor: bColor }]}>
                           <Text style={styles.countText}>{block.count}名</Text>
                         </View>
@@ -1165,9 +1165,10 @@ export default function TransportModal({
                   {trip.blockKeys.map((bk, bki) => {
                     const blk = blocks.find(b => b.key === bk);
                     const bkColor = blk ? STAFF_COLORS[blocks.indexOf(blk) % STAFF_COLORS.length] : '#aaa';
+                    const nameColor = blk?.type === 'lesson' ? '#2577C9' : '#111111';
                     return (
                       <View key={bk} style={[styles.detailRow, { borderLeftColor: bkColor }]}>
-                        <Text style={[styles.detailRowText, { color: bkColor }]}>
+                        <Text style={[styles.detailRowText, { color: nameColor }]}>
                           {blk ? `${blk.label}（${blk.count}名）` : bk}
                         </Text>
                         <View style={styles.detailRowActions}>
