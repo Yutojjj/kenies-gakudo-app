@@ -25,6 +25,8 @@ type Props = {
   assignments: Record<string, any>;
   onAssign: (dateStr: string, blockKey: string, staffName: string) => Promise<void>;
   publicHolidays: Record<string, string>;
+  initialMode?: 'edit' | 'overview';
+  readOnly?: boolean;
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
@@ -38,6 +40,7 @@ const escapeHtml = (value: any) => String(value ?? '')
 
 export default function TransportModal({
   visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign,
+  initialMode = 'edit', readOnly = false,
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -91,7 +94,7 @@ export default function TransportModal({
   useEffect(() => {
     if (!visible) return;
     setSelectedBlock(null);
-    setShowTimeline(false); // モーダルを開き直した時は常に編集モードから開始
+    setShowTimeline(initialMode === 'overview');
     
     // シフト作成画面で出勤が確定しているメンバーの名前リスト ＋ 「送迎しない」
     const shiftNames = shiftStaff.map(s => s.name);
@@ -120,7 +123,7 @@ export default function TransportModal({
     });
 
     setStaffEntries(syncedEntries);
-  }, [visible, shiftStaff, assignments]);
+  }, [visible, shiftStaff, assignments, initialMode]);
 
   const save = async (entries: StaffEntry[]) => {
     setStaffEntries(entries);
@@ -980,9 +983,11 @@ export default function TransportModal({
                     <Ionicons name="print-outline" size={14} color="#fff" />
                     <Text style={styles.printBtnText}>印刷</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: COLORS.primary }]} onPress={() => setShowTimeline(false)}>
-                    <Text style={[styles.lastWeekBtnText, { color: COLORS.primary }]}>編集に戻る</Text>
-                  </TouchableOpacity>
+                  {!readOnly && (
+                    <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: COLORS.primary }]} onPress={() => setShowTimeline(false)}>
+                      <Text style={[styles.lastWeekBtnText, { color: COLORS.primary }]}>編集に戻る</Text>
+                    </TouchableOpacity>
+                  )}
                 </>
               ) : (
                 // 割り当て編集中のボタン
