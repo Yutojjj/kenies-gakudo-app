@@ -15,6 +15,7 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import SignaturePad from '../components/SignaturePad';
 import TransportModal from '../components/TransportModal';
 import { db, storage } from '../firebase';
+import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getNotificationState, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
@@ -287,15 +288,10 @@ export default function MenuScreen() {
   const [signModalVisible, setSignModalVisible] = useState(false);
   const [showAllPickup, setShowAllPickup] = useState(false);
   const [pickupAllModalVisible, setPickupAllModalVisible] = useState(false);
-  const [pickupOverviewLoading, setPickupOverviewLoading] = useState(false);
-  const [pickupOverviewAttendance, setPickupOverviewAttendance] = useState<{
-    schools: Record<string, Record<string, any[]>>;
-    lessons: Record<string, any[]>;
-    totalCount: number;
-  }>({ schools: {}, lessons: {}, totalCount: 0 });
-  const [pickupOverviewShiftStaff, setPickupOverviewShiftStaff] = useState<any[]>([]);
-  const [pickupOverviewStaffNames, setPickupOverviewStaffNames] = useState<string[]>([]);
-  const [pickupOverviewPublicHolidays, setPickupOverviewPublicHolidays] = useState<Record<string, string>>({});
+  const [pickupDetailModalVisible, setPickupDetailModalVisible] = useState(false);
+  const [pickupOverviewData, setPickupOverviewData] = useState<TransportOverviewData | null>(null);
+  const [pickupOverviewAction, setPickupOverviewAction] = useState<'view' | 'print'>('view');
+  const [pickupOverviewLoadingAction, setPickupOverviewLoadingAction] = useState<'view' | 'print' | null>(null);
   const [noticeVisible, setNoticeVisible] = useState(false);
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
@@ -1239,135 +1235,20 @@ export default function MenuScreen() {
     return [];
   };
 
-  const openPickupOverview = async () => {
-    if (pickupOverviewLoading) return;
-    setPickupOverviewLoading(true);
-    const dateStr = makeDateStr(staffPlanDate);
+  const openPickupOverviewAction = async (action: 'view' | 'print') => {
+    if (pickupOverviewLoadingAction) return;
+    setPickupOverviewLoadingAction(action);
     try {
-      const [accountSnap, scheduleSnap, schoolTimeSnap, lessonSnap, shiftSnap, holidaySnap, publicHolidayResult] = await Promise.all([
-        getDocs(collection(db, 'accounts')),
-        getDocs(collection(db, 'schedules2')),
-        getDocs(collection(db, 'school_times')),
-        getDocs(collection(db, 'lessons')),
-        getDoc(doc(db, 'assigned_shifts', dateStr)),
-        getDoc(doc(db, 'settings', 'holidays_data')),
-        fetch('https://holidays-jp.github.io/api/v1/date.json')
-          .then(response => response.ok ? response.json() : {})
-          .catch(() => ({})),
-      ]);
-
-      const shiftStaff = shiftSnap.exists() ? (shiftSnap.data().staff || []) : [];
-      const scheduleMap: Record<string, any> = {};
-      scheduleSnap.forEach(scheduleDoc => {
-        const item = scheduleDoc.data();
-        if (item.childId && item.dateStr) scheduleMap[`${item.childId}_${item.dateStr}`] = item;
-      });
-      const schoolTimes: Record<string, any> = {};
-      schoolTimeSnap.forEach(timeDoc => { schoolTimes[timeDoc.id] = timeDoc.data(); });
-      const regularLessons = lessonSnap.docs.map(lessonDoc => ({ id: lessonDoc.id, ...lessonDoc.data() } as any));
-      const holidayPeriods = holidaySnap.exists() ? (holidaySnap.data().periods || []) : [];
-      const publicHolidays = publicHolidayResult as Record<string, string>;
-
-      const children: any[] = [];
-      const staffNames: string[] = [];
-      accountSnap.forEach(accountDoc => {
-        const data = accountDoc.data();
-        const parentId = accountDoc.id;
-        if ((data.role === 'staff' || data.role === 'admin') && data.name) staffNames.push(data.name);
-
-        if (data.role === 'staff' && data.hasChild) {
-          if (Array.isArray(data.staffChildren) && data.staffChildren.length > 0) {
-            data.staffChildren.forEach((child: any, index: number) => children.push({
-              id: `${parentId}_${child.id || `staffchild_${index}`}`,
-              name: child.name,
-              school: child.school || '',
-              grade: child.grade || '',
-              usageType: '定期利用',
-              days: { 月: true, 火: true, 水: true, 木: true, 金: true },
-              isStaffChild: true,
-              parentName: data.name,
-            }));
-          } else if (data.childName) {
-            children.push({
-              id: `${parentId}_staffchild_0`, name: data.childName,
-              school: data.childSchool || '', grade: data.childGrade || '',
-              usageType: '定期利用', days: { 月: true, 火: true, 水: true, 木: true, 金: true },
-              isStaffChild: true, parentName: data.name,
-            });
-          }
-        } else if (data.role === 'user') {
-          if (data.school) children.push({
-            id: parentId, name: data.name, school: data.school, grade: data.grade,
-            usageType: data.usageType || '定期利用', days: data.days || {},
-          });
-          if (Array.isArray(data.siblings)) data.siblings.forEach((sibling: any, index: number) => {
-            if (!sibling.school) return;
-            children.push({
-              id: sibling.id || `${parentId}_sib_${index}`, name: sibling.name,
-              school: sibling.school, grade: sibling.grade,
-              usageType: sibling.usageType || '定期利用', days: sibling.days || {},
-            });
-          });
-        }
-      });
-
-      const selectedDate = new Date(`${dateStr}T00:00:00`);
-      const dayName = DAY_NAMES[selectedDate.getDay()];
-      const isHolidayPeriod = holidayPeriods.some((period: any) => dateStr >= period.start && dateStr <= period.end);
-      const isPublicHoliday = !!publicHolidays[dateStr];
-      const schools: Record<string, Record<string, any[]>> = {};
-      const lessons: Record<string, any[]> = {};
-      let totalCount = 0;
-
-      children.forEach(child => {
-        const override = scheduleMap[`${child.id}_${dateStr}`];
-        let pickupTime: string | null = null;
-        if (override && override.pickupTime !== undefined) {
-          pickupTime = override.pickupTime;
-        } else if (!isHolidayPeriod && !isPublicHoliday && dayName !== '日' && dayName !== '土') {
-          if (child.isStaffChild) {
-            if (shiftStaff.some((staff: any) => staff.name === child.parentName)) {
-              pickupTime = schoolTimes[child.school]?.[child.grade]?.[dayName] || null;
-            }
-          } else if (child.usageType === '定期利用' && child.days?.[dayName]) {
-            pickupTime = schoolTimes[child.school]?.[child.grade]?.[dayName] || null;
-          } else if (child.usageType !== '定期利用' && override) {
-            pickupTime = override.pickupTime || schoolTimes[child.school]?.[child.grade]?.[dayName] || null;
-          }
-        }
-
-        if (pickupTime) {
-          totalCount += 1;
-          if (!schools[child.school]) schools[child.school] = {};
-          if (!schools[child.school][pickupTime]) schools[child.school][pickupTime] = [];
-          schools[child.school][pickupTime].push(child);
-        }
-
-        const overrideLessons = Array.isArray(override?.lessons)
-          ? override.lessons
-          : override?.lesson ? [override.lesson] : [];
-        const regularLesson = regularLessons.find((lesson: any) => lesson.childId === child.id && lesson.dayOfWeek === dayName);
-        const childLessons = overrideLessons.length > 0
-          ? overrideLessons
-          : regularLesson ? [{ name: regularLesson.lessonName, time: regularLesson.lessonTime }] : [];
-        childLessons.forEach((lesson: any) => {
-          if (!lesson?.name || !lesson?.time) return;
-          const key = `${lesson.time} ${lesson.name}`;
-          if (!lessons[key]) lessons[key] = [];
-          lessons[key].push(child);
-        });
-      });
-
-      setPickupOverviewAttendance({ schools, lessons, totalCount });
-      setPickupOverviewShiftStaff(shiftStaff);
-      setPickupOverviewStaffNames(Array.from(new Set(staffNames)));
-      setPickupOverviewPublicHolidays(publicHolidays);
-      setPickupAllModalVisible(true);
+      const overviewData = await loadTransportOverview(makeDateStr(staffPlanDate));
+      setPickupOverviewData(overviewData);
+      setPickupOverviewAction(action);
+      setPickupAllModalVisible(false);
+      setPickupDetailModalVisible(true);
     } catch (error) {
       console.error('送迎全体表示の読み込みに失敗しました', error);
-      showAppAlert('読み込みエラー', '送迎の全体表示を開けませんでした。');
+      showAppAlert('読み込みエラー', '送迎情報を読み込めませんでした。');
     } finally {
-      setPickupOverviewLoading(false);
+      setPickupOverviewLoadingAction(null);
     }
   };
 
@@ -1720,9 +1601,9 @@ export default function MenuScreen() {
                   <Text style={styles.staffSectionEditText}>編集する</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={openPickupOverview} activeOpacity={0.88} disabled={pickupOverviewLoading}>
+              <TouchableOpacity onPress={() => setPickupAllModalVisible(true)} activeOpacity={0.88}>
                 {renderPickupEntryCards(parseTodayPickupEntries(), false)}
-                <Text style={styles.pickupTapHint}>{pickupOverviewLoading ? '全体表示を読み込み中…' : 'タップで全体表示'}</Text>
+                <Text style={styles.pickupTapHint}>タップで全体表示</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>
@@ -2361,19 +2242,67 @@ export default function MenuScreen() {
 
       <AdminBottomNav active="home" />
 
-      <TransportModal
-        visible={pickupAllModalVisible}
-        dateStr={makeDateStr(staffPlanDate)}
-        onClose={() => setPickupAllModalVisible(false)}
-        attendance={pickupOverviewAttendance}
-        shiftStaff={pickupOverviewShiftStaff}
-        allStaffList={pickupOverviewStaffNames}
-        assignments={todayPickup}
-        onAssign={async () => {}}
-        publicHolidays={pickupOverviewPublicHolidays}
-        initialMode="overview"
-        readOnly
-      />
+      <Modal visible={pickupAllModalVisible} transparent animationType="fade">
+        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setPickupAllModalVisible(false)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.pickupAllModal}>
+              <View style={styles.simpleModalHeader}>
+                <View>
+                  <Text style={styles.simpleModalTitle}>本日の送迎 全体表示</Text>
+                  <Text style={styles.simpleModalSub}>{formatMenuDateLabel(staffPlanDate)}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setPickupAllModalVisible(false)} style={styles.simpleModalClose}>
+                  <Ionicons name="close" size={24} color="#5F4B42" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.pickupModalActions}>
+                <TouchableOpacity
+                  style={[styles.pickupModalActionBtn, styles.pickupModalOverviewBtn]}
+                  onPress={() => openPickupOverviewAction('view')}
+                  disabled={pickupOverviewLoadingAction !== null}
+                  activeOpacity={0.82}
+                >
+                  {pickupOverviewLoadingAction === 'view'
+                    ? <ActivityIndicator size="small" color="#2D8BE8" />
+                    : <Ionicons name="grid-outline" size={17} color="#2D8BE8" />}
+                  <Text style={styles.pickupModalOverviewText}>全体表示</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.pickupModalActionBtn, styles.pickupModalPrintBtn]}
+                  onPress={() => openPickupOverviewAction('print')}
+                  disabled={pickupOverviewLoadingAction !== null}
+                  activeOpacity={0.82}
+                >
+                  {pickupOverviewLoadingAction === 'print'
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Ionicons name="print-outline" size={17} color="#fff" />}
+                  <Text style={styles.pickupModalPrintText}>印刷</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {renderPickupEntryCards(parseTodayPickupEntries(), true)}
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      {pickupOverviewData && (
+        <TransportModal
+          visible={pickupDetailModalVisible}
+          dateStr={makeDateStr(staffPlanDate)}
+          onClose={() => setPickupDetailModalVisible(false)}
+          attendance={pickupOverviewData.attendance}
+          shiftStaff={pickupOverviewData.shiftStaff}
+          allStaffList={pickupOverviewData.staffNames}
+          assignments={todayPickup}
+          onAssign={async () => {}}
+          publicHolidays={pickupOverviewData.publicHolidays}
+          initialMode="overview"
+          readOnly
+          autoPrintOnOpen={pickupOverviewAction === 'print'}
+        />
+      )}
 
       <Modal visible={adminShiftMenuVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminShiftMenuVisible(false)}>
@@ -3638,6 +3567,40 @@ const styles = StyleSheet.create({
     borderColor: '#F0DEC0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pickupModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  pickupModalActionBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  pickupModalOverviewBtn: {
+    backgroundColor: '#F2F8FF',
+    borderWidth: 1.5,
+    borderColor: '#8CC4F5',
+  },
+  pickupModalOverviewText: {
+    color: '#245E96',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  pickupModalPrintBtn: {
+    backgroundColor: '#36A9B5',
+    borderWidth: 1.5,
+    borderColor: '#36A9B5',
+  },
+  pickupModalPrintText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
   },
   quickEditorSheet: {
     width: '100%',

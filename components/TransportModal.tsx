@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
 
@@ -27,6 +27,7 @@ type Props = {
   publicHolidays: Record<string, string>;
   initialMode?: 'edit' | 'overview';
   readOnly?: boolean;
+  autoPrintOnOpen?: boolean;
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
@@ -40,7 +41,7 @@ const escapeHtml = (value: any) => String(value ?? '')
 
 export default function TransportModal({
   visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign,
-  initialMode = 'edit', readOnly = false,
+  initialMode = 'edit', readOnly = false, autoPrintOnOpen = false,
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -50,6 +51,7 @@ export default function TransportModal({
   const [lastWeekLoading, setLastWeekLoading] = useState(false);
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
+  const autoPrintTriggeredRef = useRef(false);
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -750,6 +752,17 @@ export default function TransportModal({
     browserDocument.body.appendChild(iframe);
     iframe.srcdoc = html;
   };
+
+  useEffect(() => {
+    if (!visible) {
+      autoPrintTriggeredRef.current = false;
+      return;
+    }
+    if (!autoPrintOnOpen || !showTimeline || autoPrintTriggeredRef.current) return;
+    autoPrintTriggeredRef.current = true;
+    const timer = setTimeout(() => printTimeline(), 350);
+    return () => clearTimeout(timer);
+  }, [visible, autoPrintOnOpen, showTimeline, dateStr]);
 
   // ── タイムライン表示ビューのレンダリング ──
   const renderTimelineView = () => {
