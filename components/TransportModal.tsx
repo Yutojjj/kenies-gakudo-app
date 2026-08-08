@@ -773,6 +773,57 @@ export default function TransportModal({
       .map((entry) => entry.staffName);
     const targetCount = attendance.totalCount || rows.reduce((sum, row) => sum + row.count, 0);
     const roomStaffCounts = getRoomStaffCounts(START_HOUR, END_HOUR);
+    const destinationSplitIndex = Math.ceil(rows.length / 2);
+    const destinationColumns = [
+      rows.slice(0, destinationSplitIndex),
+      rows.slice(destinationSplitIndex),
+    ];
+
+    const getScreenTimelineLayout = (entry: StaffEntry) => {
+      const items = entry.trips.flatMap((trip, tripIndex) => trip.blockKeys.map((blockKey) => {
+        const block = blocks.find((item) => item.key === blockKey);
+        const offset = getOffsetLeft(block?.time);
+        if (!block || offset === null) return null;
+        const slotIndex = Math.max(0, Math.floor(offset / COL_WIDTH));
+        return { block, tripIndex, slotIndex, lane: 0 };
+      }).filter(Boolean) as { block: Block; tripIndex: number; slotIndex: number; lane: number }[])
+        .sort((a, b) => a.slotIndex - b.slotIndex);
+      const laneEnds: number[] = [];
+      items.forEach((item) => {
+        let lane = laneEnds.findIndex((endSlot) => endSlot <= item.slotIndex);
+        if (lane < 0) lane = laneEnds.length;
+        item.lane = lane;
+        laneEnds[lane] = item.slotIndex + 3;
+      });
+      return { items, laneCount: Math.max(1, laneEnds.length) };
+    };
+
+    const renderOverviewDestinationTable = (targetRows: typeof rows, columnIndex: number) => (
+      <View key={columnIndex} style={styles.overviewTable}>
+        <View style={[styles.overviewTableRow, styles.overviewTableHeader]}>
+          <Text style={[styles.overviewTableHeadText, styles.overviewTimeCell]}>時刻</Text>
+          <Text style={[styles.overviewTableHeadText, styles.overviewTypeCell]}>種別</Text>
+          <Text style={[styles.overviewTableHeadText, styles.overviewNameCell]}>行き先</Text>
+          <Text style={[styles.overviewTableHeadText, styles.overviewCountCell]}>人数</Text>
+          <Text style={[styles.overviewTableHeadText, styles.overviewStaffCell]}>担当</Text>
+          <Text style={[styles.overviewTableHeadText, styles.overviewKidsCell]}>児童名</Text>
+        </View>
+        {targetRows.map((row, index) => {
+          const isSwimming = row.name.includes('スイミング');
+          const rowBackground = isSwimming ? '#E6F9FF' : row.typeLabel === '習い事' ? '#EFF9F2' : '#FFF8E8';
+          return (
+            <View key={`${columnIndex}_${row.time}_${row.name}_${index}`} style={[styles.overviewTableRow, { backgroundColor: rowBackground }]}>
+              <Text style={[styles.overviewTableText, styles.overviewTimeCell, styles.overviewTimeText]}>{row.time}</Text>
+              <Text style={[styles.overviewTableText, styles.overviewTypeCell, row.typeLabel === '習い事' ? styles.overviewLessonText : styles.overviewPickupText]}>{row.typeLabel}</Text>
+              <Text style={[styles.overviewTableText, styles.overviewNameCell, styles.overviewNameText]}>{row.name}</Text>
+              <Text style={[styles.overviewTableText, styles.overviewCountCell]}>{row.count}名</Text>
+              <Text style={[styles.overviewTableText, styles.overviewStaffCell]}>{row.staffName}</Text>
+              <Text style={[styles.overviewTableText, styles.overviewKidsCell]}>{row.kids.join('、') || '-'}</Text>
+            </View>
+          );
+        })}
+      </View>
+    );
 
     return (
       <ScrollView style={styles.overviewScroll} contentContainerStyle={styles.overviewContent} showsVerticalScrollIndicator={false}>
@@ -820,6 +871,8 @@ export default function TransportModal({
                 if (entry.staffName === '送迎しない') return null;
 
                 const shift = shiftStaff.find(s => s.name === entry.staffName);
+                const timelineLayout = getScreenTimelineLayout(entry);
+                const rowHeight = Math.max(42, timelineLayout.laneCount * 27);
                 const startX = getOffsetLeft(shift?.start);
                 const endX = getOffsetLeft(shift?.end);
                 let shiftLeft = 0;
@@ -830,7 +883,7 @@ export default function TransportModal({
                 }
 
                 return (
-                  <View key={sIdx} style={{ flexDirection: 'row', height: ROW_HEIGHT, borderBottomWidth: 1, borderColor: '#EDF2F1' }}>
+                  <View key={sIdx} style={{ flexDirection: 'row', height: rowHeight, borderBottomWidth: 1, borderColor: '#EDF2F1' }}>
                     {/* 左側：スタッフ名とシフト時間 */}
                     <View style={{ width: 100, justifyContent: 'center', paddingLeft: 10, borderRightWidth: 1, borderColor: '#CFE0DF', backgroundColor: '#FBFBFB', zIndex: 2 }}>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#333' }}>{entry.staffName}</Text>
@@ -841,48 +894,33 @@ export default function TransportModal({
                     <View style={{ width: TIMELINE_WIDTH, position: 'relative' }}>
                       {/* 15分ごとの点線と1時間ごとの実線 */}
                       {Array.from({ length: (END_HOUR - START_HOUR) * 4 }).map((_, i) => (
-                        <View key={i} style={{ position: 'absolute', left: i * COL_WIDTH, width: COL_WIDTH, height: ROW_HEIGHT, borderLeftWidth: i % 4 === 0 ? 1.5 : 1, borderStyle: i % 4 === 0 ? 'solid' : 'dashed', borderColor: i % 4 === 0 ? '#A7C9C6' : '#D7E1E0' }} />
+                        <View key={i} style={{ position: 'absolute', left: i * COL_WIDTH, width: COL_WIDTH, height: rowHeight, borderLeftWidth: i % 4 === 0 ? 1.5 : 1, borderStyle: i % 4 === 0 ? 'solid' : 'dashed', borderColor: i % 4 === 0 ? '#A7C9C6' : '#D7E1E0' }} />
                       ))}
 
                       {/* シフト時間のハイライト（薄い黄色） */}
                       {shiftWidth > 0 && (
-                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: ROW_HEIGHT, backgroundColor: '#FFF9C4', opacity: 0.6 }} />
+                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: '#FFF4AC', opacity: 0.72 }} />
                       )}
 
-                      {/* 送迎のブロック（青・緑） */}
-                      {entry.trips.map((trip, tIdx) => {
-                        if (trip.blockKeys.length === 0) return null;
-                        
-                        let minOffset = 9999;
-                        let type = 'school';
-                        let labels: string[] = [];
-                        
-                        trip.blockKeys.forEach(bk => {
-                          const blk = blocks.find(b => b.key === bk);
-                          if (blk && blk.time) {
-                            const offset = getOffsetLeft(blk.time);
-                            if (offset !== null && offset < minOffset) minOffset = offset;
-                            if (blk.type === 'lesson') type = 'lesson';
-                            labels.push(`${blk.nameOnly} ${blk.time}(${blk.count}名)`);
-                          }
-                        });
-
-                        if (minOffset === 9999) return null;
-                        minOffset = Math.max(0, minOffset);
-
-                        const bgColor = type === 'school' ? '#E3F2FD' : '#E8F5E9';
-                        const borderColor = type === 'school' ? '#64B5F6' : '#81C784';
-
+                      {/* 印刷と同じく、重なる送迎は上下の段へ分けて表示 */}
+                      {timelineLayout.items.map(({ block, tripIndex, slotIndex, lane }, blockIndex) => {
+                        const isSwimming = (block.nameOnly || block.label).includes('スイミング');
+                        const isLesson = block.type === 'lesson';
+                        const bgColor = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
+                        const borderColor = isSwimming ? '#46B8D7' : isLesson ? '#78C28C' : '#F2B760';
                         return (
-                          <View key={tIdx} style={{
-                            position: 'absolute', left: minOffset, top: 6, height: ROW_HEIGHT - 12,
-                            width: COL_WIDTH * 3.5, // 約50分枠
+                          <View key={`${block.key}_${blockIndex}`} style={{
+                            position: 'absolute', left: slotIndex * COL_WIDTH, top: lane * 27 + 2, height: 23,
+                            width: COL_WIDTH * 3,
                             backgroundColor: bgColor, borderWidth: 1, borderColor, borderRadius: 6,
-                            padding: 4, justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, elevation: 1
+                            paddingHorizontal: 4, paddingVertical: 2, justifyContent: 'center', zIndex: 2,
                           }}>
-                             <Text style={{ fontSize: 9, lineHeight: 12, color: '#333', fontWeight: 'bold' }} numberOfLines={3} adjustsFontSizeToFit>
-                               {labels.join('\n')}
-                             </Text>
+                            <Text style={{ fontSize: 7, lineHeight: 8, color: '#555', fontWeight: '700' }} numberOfLines={1}>
+                              {TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`}
+                            </Text>
+                            <Text style={{ fontSize: 8, lineHeight: 9, color: '#222', fontWeight: '800' }} numberOfLines={1} adjustsFontSizeToFit>
+                              {block.time || '-'} {block.nameOnly || block.label} {block.count}名
+                            </Text>
                           </View>
                         );
                       })}
@@ -914,32 +952,13 @@ export default function TransportModal({
         </ScrollView>
 
         <Text style={styles.overviewSectionTitle}>送迎先一覧</Text>
-        <View style={styles.overviewTable}>
-          <View style={[styles.overviewTableRow, styles.overviewTableHeader]}>
-            <Text style={[styles.overviewTableHeadText, styles.overviewTimeCell]}>時刻</Text>
-            <Text style={[styles.overviewTableHeadText, styles.overviewTypeCell]}>種別</Text>
-            <Text style={[styles.overviewTableHeadText, styles.overviewNameCell]}>行き先</Text>
-            <Text style={[styles.overviewTableHeadText, styles.overviewCountCell]}>人数</Text>
-            <Text style={[styles.overviewTableHeadText, styles.overviewStaffCell]}>担当</Text>
-            <Text style={[styles.overviewTableHeadText, styles.overviewKidsCell]}>児童名</Text>
+        {rows.length > 0 ? (
+          <View style={styles.overviewDestinationColumns}>
+            {destinationColumns.map(renderOverviewDestinationTable)}
           </View>
-          {rows.length > 0 ? rows.map((row, index) => {
-            const isSwimming = row.name.includes('スイミング');
-            const rowBackground = isSwimming ? '#E6F9FF' : row.typeLabel === '習い事' ? '#EFF9F2' : '#FFF8E8';
-            return (
-              <View key={`${row.time}_${row.name}_${index}`} style={[styles.overviewTableRow, { backgroundColor: rowBackground }]}>
-                <Text style={[styles.overviewTableText, styles.overviewTimeCell, styles.overviewTimeText]}>{row.time}</Text>
-                <Text style={[styles.overviewTableText, styles.overviewTypeCell, row.typeLabel === '習い事' ? styles.overviewLessonText : styles.overviewPickupText]}>{row.typeLabel}</Text>
-                <Text style={[styles.overviewTableText, styles.overviewNameCell, styles.overviewNameText]}>{row.name}</Text>
-                <Text style={[styles.overviewTableText, styles.overviewCountCell]}>{row.count}名</Text>
-                <Text style={[styles.overviewTableText, styles.overviewStaffCell]}>{row.staffName}</Text>
-                <Text style={[styles.overviewTableText, styles.overviewKidsCell]}>{row.kids.join('、') || '-'}</Text>
-              </View>
-            );
-          }) : (
-            <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
-          )}
-        </View>
+        ) : (
+          <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
+        )}
       </ScrollView>
     );
   };
@@ -1288,20 +1307,21 @@ const styles = StyleSheet.create({
   overviewRoomCountValue: { fontSize: 13, lineHeight: 16, fontWeight: '900', color: '#2D2436' },
   overviewRoomCountUnit: { fontSize: 7, fontWeight: '700', color: '#2D2436', marginLeft: 1 },
   overviewSectionTitle: { fontSize: 14, fontWeight: '800', color: '#222', marginTop: 4, marginBottom: 7 },
-  overviewTable: { borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
-  overviewTableRow: { flexDirection: 'row', minHeight: 40 },
-  overviewTableHeader: { minHeight: 34, backgroundColor: '#EEF8F7' },
-  overviewTableHeadText: { padding: 6, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#B9DCDA', fontSize: 11, fontWeight: '800', color: '#222' },
-  overviewTableText: { padding: 6, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3', fontSize: 11, lineHeight: 16, color: '#222' },
-  overviewTimeCell: { width: '8%' },
-  overviewTypeCell: { width: '9%' },
-  overviewNameCell: { width: '18%' },
-  overviewCountCell: { width: '8%', textAlign: 'center' },
-  overviewStaffCell: { width: '13%' },
+  overviewDestinationColumns: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  overviewTable: { flex: 1, borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
+  overviewTableRow: { flexDirection: 'row', minHeight: 27 },
+  overviewTableHeader: { minHeight: 26, backgroundColor: '#EEF8F7' },
+  overviewTableHeadText: { padding: 4, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#B9DCDA', fontSize: 9, fontWeight: '800', color: '#222' },
+  overviewTableText: { padding: 4, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3', fontSize: 9, lineHeight: 12, color: '#222' },
+  overviewTimeCell: { width: '10%' },
+  overviewTypeCell: { width: '11%' },
+  overviewNameCell: { width: '20%' },
+  overviewCountCell: { width: '9%', textAlign: 'center' },
+  overviewStaffCell: { width: '14%' },
   overviewKidsCell: { flex: 1 },
-  overviewTimeText: { fontSize: 13, fontWeight: '800', color: '#111' },
-  overviewPickupText: { fontSize: 12, fontWeight: '900', color: '#D94B4B' },
-  overviewLessonText: { fontSize: 12, fontWeight: '900', color: '#2577C9' },
+  overviewTimeText: { fontSize: 10, fontWeight: '800', color: '#111' },
+  overviewPickupText: { fontSize: 9, fontWeight: '900', color: '#D94B4B' },
+  overviewLessonText: { fontSize: 9, fontWeight: '900', color: '#2577C9' },
   overviewNameText: { fontWeight: '700' },
   overviewEmptyText: { padding: 20, textAlign: 'center', color: '#666', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3' },
   rightPanel: { width: 160, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 6 },
