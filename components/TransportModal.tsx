@@ -252,6 +252,7 @@ export default function TransportModal({
 
         const isOnTransport = entry.trips.some((trip) => trip.blockKeys.some((blockKey) => {
           const block = blocks.find((item) => item.key === blockKey);
+          if ((block?.nameOnly || block?.label || '').includes('スイミング')) return false;
           const transportStart = getSlotBoundary(block?.time);
           if (transportStart === null) return false;
           // タイムライン上の送迎枠と同じ45分間を外出扱いにする。
