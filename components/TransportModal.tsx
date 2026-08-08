@@ -278,8 +278,7 @@ export default function TransportModal({
     }
 
     const rows = getTimelinePrintRows();
-    const rowHtml = rows.length > 0
-      ? rows.map((row) => {
+    const renderPrintRows = (targetRows: typeof rows) => targetRows.map((row) => {
         const rowClass = row.name.includes('スイミング')
           ? 'row-swimming'
           : row.typeLabel === '習い事'
@@ -295,8 +294,29 @@ export default function TransportModal({
           <td class="kids">${escapeHtml(row.kids.join('、') || '-')}</td>
         </tr>
       `;
-      }).join('')
-      : '<tr><td colspan="6" class="empty">この日の送迎予定はありません</td></tr>';
+      }).join('');
+    const renderDestinationTable = (targetRows: typeof rows) => `
+      <table>
+        <thead>
+          <tr>
+            <th style="width:10%">時刻</th>
+            <th style="width:11%">種別</th>
+            <th style="width:20%">行き先</th>
+            <th style="width:9%">人数</th>
+            <th style="width:14%">担当</th>
+            <th>児童名</th>
+          </tr>
+        </thead>
+        <tbody>${renderPrintRows(targetRows)}</tbody>
+      </table>
+    `;
+    const destinationSplitIndex = Math.ceil(rows.length / 2);
+    const destinationTablesHtml = rows.length > 0
+      ? `<div class="destination-grid">
+          ${renderDestinationTable(rows.slice(0, destinationSplitIndex))}
+          ${renderDestinationTable(rows.slice(destinationSplitIndex))}
+        </div>`
+      : '<div class="empty destination-empty">この日の送迎予定はありません</div>';
 
     const PRINT_START_HOUR = 11;
     const PRINT_END_HOUR = 21;
@@ -326,34 +346,46 @@ export default function TransportModal({
         const shift = shiftStaff.find((s) => s.name === entry.staffName);
         const shiftStart = getPrintSlotBoundary(shift?.start, 'start');
         const shiftEnd = getPrintSlotBoundary(shift?.end, 'end');
-        const shiftHtml = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart
-          ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1};"></div>`
-          : '';
-        const blockHtml = entry.trips.flatMap((trip, tIdx) => {
+        const timelineBlocks = entry.trips.flatMap((trip, tIdx) => {
           return trip.blockKeys.map((blockKey) => {
             const block = blocks.find((b) => b.key === blockKey);
             const slotIndex = getPrintSlotIndex(block?.time);
-            if (!block || slotIndex === null) return '';
+            if (!block || slotIndex === null) return null;
+            return { block, slotIndex, tripIndex: tIdx, lane: 0 };
+          }).filter(Boolean) as { block: Block; slotIndex: number; tripIndex: number; lane: number }[];
+        }).sort((a, b) => a.slotIndex - b.slotIndex);
+        const laneEnds: number[] = [];
+        timelineBlocks.forEach((item) => {
+          let lane = laneEnds.findIndex((endSlot) => endSlot <= item.slotIndex);
+          if (lane < 0) lane = laneEnds.length;
+          item.lane = lane;
+          laneEnds[lane] = item.slotIndex + 3;
+        });
+        const laneCount = Math.max(1, laneEnds.length);
+        const rowHeight = Math.max(42, laneCount * 27);
+        const shiftHtml = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart
+          ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1}; grid-row: 1 / span ${laneCount};"></div>`
+          : '';
+        const blockHtml = timelineBlocks.map(({ block, slotIndex, tripIndex, lane }) => {
             const isSwimming = (block.nameOnly || block.label).includes('スイミング');
             const isLesson = block.type === 'lesson';
             const bg = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
             const border = isSwimming ? '#46B8D7' : isLesson ? '#78C28C' : '#F2B760';
             const label = `${block.time || '-'} ${block.nameOnly || block.label} ${block.count}名`;
             return `
-              <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; background:${bg}; border-color:${border};">
-                <span>${escapeHtml(TRIP_LABELS[tIdx] || `${tIdx + 1}回目`)}</span>
+              <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; grid-row: ${lane + 1}; background:${bg}; border-color:${border};">
+                <span>${escapeHtml(TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`)}</span>
                 ${escapeHtml(label)}
               </div>
             `;
-          });
         }).join('');
         return `
-          <div class="timeline-row">
+          <div class="timeline-row" style="min-height:${rowHeight}px">
             <div class="timeline-staff">
               <strong>${escapeHtml(entry.staffName)}</strong>
               <span>${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</span>
             </div>
-            <div class="timeline-track">
+            <div class="timeline-track" style="grid-template-rows:repeat(${laneCount}, minmax(27px, auto)); min-height:${rowHeight}px">
               ${shiftHtml}
               ${blockHtml || '<div class="timeline-empty">担当なし</div>'}
             </div>
@@ -538,14 +570,14 @@ export default function TransportModal({
               z-index: 0;
             }
             .timeline-block {
-              grid-row: 1;
-              align-self: center;
-              min-height: 30px;
+              align-self: stretch;
+              min-height: 23px;
+              margin: 2px 0;
               border: 1px solid;
               border-radius: 6px;
-              padding: 3px 4px;
-              font-size: 8px;
-              line-height: 1.25;
+              padding: 2px 4px;
+              font-size: 7.5px;
+              line-height: 1.15;
               font-weight: 700;
               color: #222;
               overflow: hidden;
@@ -612,33 +644,42 @@ export default function TransportModal({
               width: 100%;
               border-collapse: collapse;
               table-layout: fixed;
-              font-size: 11px;
+              font-size: 9px;
+            }
+            .destination-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 8px;
+              align-items: start;
+              page-break-inside: avoid;
             }
             th {
               background: #eef8f7;
               border: 1px solid #b9dcda;
-              padding: 6px 5px;
+              padding: 4px 3px;
               text-align: left;
+              font-size: 9px;
             }
             td {
               border: 1px solid #d7e5e3;
-              padding: 6px 5px;
+              padding: 4px 3px;
               vertical-align: top;
-              line-height: 1.35;
+              line-height: 1.25;
               word-break: break-word;
             }
             tr:nth-child(even) td { background: #fbfdfc; }
             tr.row-pickup td { background: #fff8e8; }
             tr.row-lesson td { background: #eff9f2; }
             tr.row-swimming td { background: #e6f9ff; }
-            .time { width: 8%; font-size: 13px; font-weight: 700; color: #111; }
-            .type-cell { font-size: 12px; font-weight: 900; }
+            .time { font-size: 10px; font-weight: 800; color: #111; }
+            .type-cell { font-size: 9px; font-weight: 900; }
             .type-pickup { color: #D94B4B; }
             .type-lesson { color: #2577C9; }
             .name { font-weight: 700; }
             .count { text-align: center; font-weight: 700; }
-            .kids { font-size: 10px; }
+            .kids { font-size: 8px; }
             .empty { text-align: center; padding: 20px; color: #666; }
+            .destination-empty { border: 1px solid #d7e5e3; }
             @media print {
               .no-print { display: none; }
             }
@@ -671,19 +712,7 @@ export default function TransportModal({
             </div>
           </div>
           <div class="section-title">送迎先一覧</div>
-          <table>
-            <thead>
-              <tr>
-                <th style="width:8%">時刻</th>
-                <th style="width:8%">種別</th>
-                <th style="width:18%">行き先</th>
-                <th style="width:7%">人数</th>
-                <th style="width:12%">担当</th>
-                <th>児童名</th>
-              </tr>
-            </thead>
-            <tbody>${rowHtml}</tbody>
-          </table>
+          ${destinationTablesHtml}
           <script>
             window.onload = function() {
               setTimeout(function() {
