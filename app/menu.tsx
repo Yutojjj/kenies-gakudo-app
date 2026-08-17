@@ -1255,6 +1255,29 @@ export default function MenuScreen() {
   const renderPickupEntryCards = (parsedEntries: any[], showAll = false) => {
     const myDisplayName = role === 'admin' ? '稲熊' : name;
     const filteredEntries = showAll ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === myDisplayName);
+    const customBlockMap = new Map<string, any>();
+    try {
+      const customBlocks = todayPickup.customBlocks
+        ? JSON.parse(String(todayPickup.customBlocks))
+        : [];
+      if (Array.isArray(customBlocks)) {
+        customBlocks.forEach((block: any) => {
+          if (block?.id) customBlockMap.set(String(block.id), block);
+        });
+      }
+    } catch {}
+
+    const getBlockLabel = (blockKey: string) => {
+      const customBlock = customBlockMap.get(blockKey);
+      if (customBlock) {
+        return `${customBlock.time || ''} ${customBlock.destination || '追加した送迎先'}`.trim();
+      }
+      if (blockKey.startsWith('custom_')) return '追加した送迎先';
+      const parts = blockKey.split('_');
+      return parts.length > 1
+        ? `${parts.slice(0, -1).join('_')} ${parts[parts.length - 1]}`
+        : blockKey;
+    };
     if (parsedEntries.length === 0) {
       return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>送迎の予定はありません</Text></View>;
     }
@@ -1277,8 +1300,7 @@ export default function MenuScreen() {
                 <Text style={[styles.tripLabelText, { color: '#5D4037', fontWeight: 'bold', backgroundColor: '#FFF4DE' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
                 <View style={{ flex: 1 }}>
                   {trip.blockKeys.map((bk: string, bkIdx: number) => {
-                    const parts = bk.split('_');
-                    const label = parts.slice(0, -1).join('_') + ' ' + parts[parts.length - 1];
+                    const label = getBlockLabel(bk);
                     return <Text key={bk} style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>;
                   })}
                 </View>
