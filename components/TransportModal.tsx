@@ -212,6 +212,15 @@ export default function TransportModal({
     setCustomBlockError('');
   };
 
+  const updateCustomTimeFromScroll = (
+    values: number[],
+    y: number,
+    setter: (value: number) => void,
+  ) => {
+    const index = Math.max(0, Math.min(values.length - 1, Math.round(y / CUSTOM_TIME_ITEM_HEIGHT)));
+    setter(values[index]);
+  };
+
   const selectCustomTimeValue = (
     values: number[],
     value: number,
@@ -1475,6 +1484,12 @@ export default function TransportModal({
                 decelerationRate="fast"
                 disableIntervalMomentum
                 nestedScrollEnabled
+                scrollEventThrottle={16}
+                onScroll={event => updateCustomTimeFromScroll(
+                  CUSTOM_TIME_HOURS,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomHour,
+                )}
                 onMomentumScrollEnd={event => settleCustomTimeWheel(
                   CUSTOM_TIME_HOURS,
                   event.nativeEvent.contentOffset.y,
@@ -1511,6 +1526,12 @@ export default function TransportModal({
                 decelerationRate="fast"
                 disableIntervalMomentum
                 nestedScrollEnabled
+                scrollEventThrottle={16}
+                onScroll={event => updateCustomTimeFromScroll(
+                  CUSTOM_TIME_MINUTES,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomMinute,
+                )}
                 onMomentumScrollEnd={event => settleCustomTimeWheel(
                   CUSTOM_TIME_MINUTES,
                   event.nativeEvent.contentOffset.y,
