@@ -1295,20 +1295,12 @@ export default function TransportModal({
                         onPress={() => {
                           if (!isAssigned) setSelectedBlock(isSelected ? null : block);
                         }}
+                        onLongPress={() => {
+                          if (customBlock) setCustomBlockToDelete(customBlock);
+                        }}
+                        delayLongPress={550}
                         activeOpacity={0.75}
                       >
-                        {customBlock && (
-                          <TouchableOpacity
-                            style={styles.customBlockDeleteBtn}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              setCustomBlockToDelete(customBlock);
-                            }}
-                            accessibilityLabel={`${block.nameOnly || block.label}を削除`}
-                          >
-                            <Ionicons name="trash-outline" size={15} color="#C94B4B" />
-                          </TouchableOpacity>
-                        )}
                         <Text style={[styles.blockChipText, { color: nameColor }]}>{block.label}</Text>
                         <View style={[styles.countBadge, { backgroundColor: bColor }]}>
                           <Text style={styles.countText}>{block.count}名</Text>
@@ -1843,7 +1835,6 @@ const styles = StyleSheet.create({
   customBlockCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
   customBlockSaveBtn: { flex: 1.5, minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#36A9B5' },
   customBlockSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
-  customBlockDeleteBtn: { position: 'absolute', top: 3, right: 3, width: 28, height: 28, borderRadius: 14, zIndex: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#F1B8B8' },
   customBlockAssignedText: { marginTop: 3, fontSize: 9, fontWeight: '800', color: '#647375' },
   customDeleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   customDeletePanel: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 20, backgroundColor: '#FFFFFF', alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
