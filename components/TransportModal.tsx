@@ -82,6 +82,7 @@ export default function TransportModal({
   const [customBlockError, setCustomBlockError] = useState('');
   const [customBlockToDelete, setCustomBlockToDelete] = useState<CustomTransportBlock | null>(null);
   const [locallyAssignedBlockKeys, setLocallyAssignedBlockKeys] = useState<Set<string>>(new Set());
+  const [defaultShiftTimes, setDefaultShiftTimes] = useState<Record<string, { start: string; end: string }>>({});
   const customHourScrollRef = useRef<ScrollView>(null);
   const customMinuteScrollRef = useRef<ScrollView>(null);
   const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +96,35 @@ export default function TransportModal({
   useEffect(() => {
     setLocallyAssignedBlockKeys(new Set());
   }, [dateStr, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    getDoc(doc(db, 'settings', 'autoFillSettings')).then(snapshot => {
+      const defaults: Record<string, { start: string; end: string }> = {};
+      const settings = snapshot.data()?.staffSettings;
+      if (Array.isArray(settings)) {
+        settings.forEach((staff: any) => {
+          const name = String(staff?.name || '').trim();
+          if (name && staff?.start && staff?.end) {
+            defaults[name] = { start: String(staff.start), end: String(staff.end) };
+          }
+        });
+      }
+      setDefaultShiftTimes(defaults);
+    }).catch(() => setDefaultShiftTimes({}));
+  }, [visible]);
+
+  const getStaffShift = (staffName: string) => {
+    const normalizedName = String(staffName || '').replace(/\s/g, '');
+    const daily = shiftStaff.find(shift => String(shift?.name || '').replace(/\s/g, '') === normalizedName) as any;
+    const fallbackEntry = Object.entries(defaultShiftTimes).find(([name]) => name.replace(/\s/g, '') === normalizedName)?.[1];
+    if (!daily && !fallbackEntry) return null;
+    return {
+      name: staffName,
+      start: String(daily?.start || daily?.startTime || fallbackEntry?.start || ''),
+      end: String(daily?.end || daily?.endTime || fallbackEntry?.end || ''),
+    };
+  };
 
   // ブロック生成（時間順、種類や時間情報を分離）
   const blocks: Block[] = [];
@@ -443,7 +473,7 @@ export default function TransportModal({
       return staffEntries.filter((entry) => {
         if (entry.staffName === '送迎しない') return false;
 
-        const shift = shiftStaff.find((staff) => staff.name === entry.staffName);
+        const shift = getStaffShift(entry.staffName);
         const shiftStart = getSlotBoundary(shift?.start);
         const shiftEnd = getSlotBoundary(shift?.end, true);
         if (shiftStart === null || shiftEnd === null || slotIndex < shiftStart || slotIndex >= shiftEnd) {
@@ -543,7 +573,7 @@ export default function TransportModal({
     const timelineStaffHtml = staffEntries
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => {
-        const shift = shiftStaff.find((s) => s.name === entry.staffName);
+        const shift = getStaffShift(entry.staffName);
         const shiftStart = getPrintSlotBoundary(shift?.start, 'start');
         const shiftEnd = getPrintSlotBoundary(shift?.end, 'end');
         const timelineBlocks = entry.trips.flatMap((trip, tIdx) => {
@@ -1083,7 +1113,7 @@ export default function TransportModal({
               {staffEntries.map((entry, sIdx) => {
                 if (entry.staffName === '送迎しない') return null;
 
-                const shift = shiftStaff.find(s => s.name === entry.staffName);
+                const shift = getStaffShift(entry.staffName);
                 const timelineLayout = getScreenTimelineLayout(entry);
                 const rowHeight = Math.max(42, timelineLayout.laneCount * 27);
                 const startX = getOffsetLeft(shift?.start);
@@ -1219,7 +1249,7 @@ export default function TransportModal({
                 {staffEntries.map((entry, sIdx) => {
                   const isNoTransport = entry.staffName === '送迎しない';
                   const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[sIdx % STAFF_COLORS.length];
-                  const staffShift = isNoTransport ? null : shiftStaff.find(shift => shift.name === entry.staffName);
+                  const staffShift = isNoTransport ? null : getStaffShift(entry.staffName);
                   
                   return (
                     <View key={entry.staffName} style={[styles.staffSection, { borderLeftColor: color }]}>
