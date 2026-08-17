@@ -1281,9 +1281,8 @@ export default function TransportModal({
                     const nameColor = block.type === 'lesson' ? '#2577C9' : '#111111';
                     const isAssigned = assignedBlockKeys.has(block.key);
                     const customBlock = customBlocks.find(item => item.id === block.key);
-                    const isCustom = !!customBlock;
                     const isSelected = selectedBlock?.key === block.key;
-                    if (isAssigned && !isCustom) return null;
+                    if (isAssigned) return null;
                     return (
                       <TouchableOpacity
                         key={block.key}
@@ -1305,7 +1304,6 @@ export default function TransportModal({
                         <View style={[styles.countBadge, { backgroundColor: bColor }]}>
                           <Text style={styles.countText}>{block.count}名</Text>
                         </View>
-                        {isAssigned && isCustom && <Text style={styles.customBlockAssignedText}>割当済み</Text>}
                         {isSelected && (
                           <>
                             <View style={styles.selectedMark}>
@@ -1835,7 +1833,6 @@ const styles = StyleSheet.create({
   customBlockCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
   customBlockSaveBtn: { flex: 1.5, minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#36A9B5' },
   customBlockSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
-  customBlockAssignedText: { marginTop: 3, fontSize: 9, fontWeight: '800', color: '#647375' },
   customDeleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   customDeletePanel: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 20, backgroundColor: '#FFFFFF', alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   customDeleteIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F0', marginBottom: 10 },
