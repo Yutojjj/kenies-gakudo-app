@@ -990,8 +990,7 @@ export default function AttendanceScreen() {
 
   const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
     const docRef = doc(db, 'pickup_assignments', dateStr);
-    const current = pickupAssignments[dateStr] || {};
-    await setDoc(docRef, { ...current, [blockKey]: staffName }, { merge: true });
+    await setDoc(docRef, { [blockKey]: staffName }, { merge: true });
   };
 
   const renderTransportView = () => {
