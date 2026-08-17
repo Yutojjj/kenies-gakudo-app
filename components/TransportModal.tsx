@@ -1219,12 +1219,16 @@ export default function TransportModal({
                 {staffEntries.map((entry, sIdx) => {
                   const isNoTransport = entry.staffName === '送迎しない';
                   const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[sIdx % STAFF_COLORS.length];
+                  const staffShift = isNoTransport ? null : shiftStaff.find(shift => shift.name === entry.staffName);
                   
                   return (
                     <View key={entry.staffName} style={[styles.staffSection, { borderLeftColor: color }]}>
                       <View style={styles.staffNameRow}>
                         <View style={[styles.staffDot, { backgroundColor: color }]} />
                         <Text style={[styles.staffName, isNoTransport && { color: '#757575' }]}>{entry.staffName}</Text>
+                        {staffShift?.start && staffShift?.end && (
+                          <Text style={styles.staffShiftTime}>{staffShift.start} - {staffShift.end}</Text>
+                        )}
                       </View>
 
                       <View style={styles.tripsRow}>
@@ -1795,6 +1799,7 @@ const styles = StyleSheet.create({
   staffNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   staffDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   staffName: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  staffShiftTime: { marginLeft: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F1F6F6', fontSize: 11, fontWeight: '800', color: '#46585B' },
   tripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tripSlot: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#CCC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, minWidth: 80 },
   tripSlotSelectable: { borderColor: '#FF9800', borderStyle: 'solid', backgroundColor: '#FFF8E1' },
