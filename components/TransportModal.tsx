@@ -507,6 +507,11 @@ export default function TransportModal({
       return;
     }
 
+    const now = Date.now();
+    const printLockedUntil = Number(browserWindow.__transportPrintLockedUntil || 0);
+    if (printLockedUntil > now) return;
+    browserWindow.__transportPrintLockedUntil = now + 8000;
+
     const rows = getTimelinePrintRows();
     const renderPrintRows = (targetRows: typeof rows) => targetRows.map((row) => {
         const rowClass = row.name.includes('スイミング')
