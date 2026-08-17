@@ -46,6 +46,10 @@ type Props = {
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
+const CUSTOM_TIME_HOURS = Array.from({ length: 14 }, (_, index) => index + 7);
+const CUSTOM_TIME_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
+const CUSTOM_TIME_ITEM_HEIGHT = 41;
+const CUSTOM_TIME_VIEW_HEIGHT = 132;
 
 const escapeHtml = (value: any) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -70,12 +74,14 @@ export default function TransportModal({
   const [customBlocks, setCustomBlocks] = useState<CustomTransportBlock[]>([]);
   const [customBlockModalVisible, setCustomBlockModalVisible] = useState(false);
   const [customDestination, setCustomDestination] = useState('');
-  const [customHour, setCustomHour] = useState('');
-  const [customMinute, setCustomMinute] = useState('00');
+  const [customHour, setCustomHour] = useState(7);
+  const [customMinute, setCustomMinute] = useState(0);
   const [customMemberInput, setCustomMemberInput] = useState('');
   const [customMembers, setCustomMembers] = useState<string[]>([]);
   const [customTransportType, setCustomTransportType] = useState<'school' | 'lesson'>('lesson');
   const [customBlockError, setCustomBlockError] = useState('');
+  const customHourScrollRef = useRef<ScrollView>(null);
+  const customMinuteScrollRef = useRef<ScrollView>(null);
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -177,8 +183,8 @@ export default function TransportModal({
 
   const resetCustomBlockForm = () => {
     setCustomDestination('');
-    setCustomHour('');
-    setCustomMinute('00');
+    setCustomHour(7);
+    setCustomMinute(0);
     setCustomMemberInput('');
     setCustomMembers([]);
     setCustomTransportType('lesson');
@@ -188,6 +194,34 @@ export default function TransportModal({
   const openCustomBlockForm = () => {
     resetCustomBlockForm();
     setCustomBlockModalVisible(true);
+    setTimeout(() => {
+      customHourScrollRef.current?.scrollTo({ y: 0, animated: false });
+      customMinuteScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }, 80);
+  };
+
+  const settleCustomTimeWheel = (
+    values: number[],
+    y: number,
+    setter: (value: number) => void,
+    scrollRef: React.RefObject<ScrollView | null>,
+  ) => {
+    const index = Math.max(0, Math.min(values.length - 1, Math.round(y / CUSTOM_TIME_ITEM_HEIGHT)));
+    setter(values[index]);
+    scrollRef.current?.scrollTo({ y: index * CUSTOM_TIME_ITEM_HEIGHT, animated: true });
+    setCustomBlockError('');
+  };
+
+  const selectCustomTimeValue = (
+    values: number[],
+    value: number,
+    setter: (value: number) => void,
+    scrollRef: React.RefObject<ScrollView | null>,
+  ) => {
+    const index = values.indexOf(value);
+    setter(value);
+    if (index >= 0) scrollRef.current?.scrollTo({ y: index * CUSTOM_TIME_ITEM_HEIGHT, animated: true });
+    setCustomBlockError('');
   };
 
   const addCustomMember = () => {
@@ -201,26 +235,23 @@ export default function TransportModal({
   const saveCustomBlock = async () => {
     const destination = customDestination.trim();
     const pendingMember = customMemberInput.trim();
-    const members = Array.from(new Set([...customMembers, ...(pendingMember ? [pendingMember] : [])]));
-    const hour = Number(customHour);
-    const minute = Number(customMinute);
+    const members = Array.from(new Set([
+      ...customMembers,
+      ...(pendingMember ? [pendingMember] : []),
+    ]));
     if (!destination) {
       setCustomBlockError('送迎先を入力してください');
       return;
     }
-    if (!/^\d{1,2}$/.test(customHour) || !/^\d{1,2}$/.test(customMinute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-      setCustomBlockError('時刻を正しく入力してください');
-      return;
-    }
     if (members.length === 0) {
-      setCustomBlockError('メンバーを1名以上入力してください');
+      setCustomBlockError('メンバーの名前を入力してください');
       return;
     }
 
     const nextBlock: CustomTransportBlock = {
       id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       destination,
-      time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      time: `${String(customHour).padStart(2, '0')}:${String(customMinute).padStart(2, '0')}`,
       members,
       type: customTransportType,
     };
@@ -1417,31 +1448,84 @@ export default function TransportModal({
               style={styles.customBlockInput}
               value={customDestination}
               onChangeText={(value) => { setCustomDestination(value); setCustomBlockError(''); }}
-              placeholder="例：交流センター"
+              placeholder="例：サッカー"
               placeholderTextColor="#999999"
             />
 
             <Text style={styles.customBlockLabel}>時刻</Text>
-            <View style={styles.customTimeRow}>
-              <TextInput
-                style={styles.customTimeInput}
-                value={customHour}
-                onChangeText={(value) => { setCustomHour(value.replace(/\D/g, '').slice(0, 2)); setCustomBlockError(''); }}
-                placeholder="16"
-                placeholderTextColor="#999999"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-              <Text style={styles.customTimeColon}>:</Text>
-              <TextInput
-                style={styles.customTimeInput}
-                value={customMinute}
-                onChangeText={(value) => { setCustomMinute(value.replace(/\D/g, '').slice(0, 2)); setCustomBlockError(''); }}
-                placeholder="00"
-                placeholderTextColor="#999999"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
+            <View style={styles.customPickerColumns}>
+              <View style={styles.customPickerSelectionFrame} pointerEvents="none" />
+              <ScrollView
+                ref={customHourScrollRef}
+                style={styles.customPickerScroll}
+                contentContainerStyle={styles.customPickerScrollInner}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
+                snapToOffsets={CUSTOM_TIME_HOURS.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
+                decelerationRate="fast"
+                disableIntervalMomentum
+                nestedScrollEnabled
+                onMomentumScrollEnd={event => settleCustomTimeWheel(
+                  CUSTOM_TIME_HOURS,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomHour,
+                  customHourScrollRef,
+                )}
+                onScrollEndDrag={event => settleCustomTimeWheel(
+                  CUSTOM_TIME_HOURS,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomHour,
+                  customHourScrollRef,
+                )}
+              >
+                {CUSTOM_TIME_HOURS.map(hour => (
+                  <TouchableOpacity
+                    key={hour}
+                    style={styles.customPickerItem}
+                    onPress={() => selectCustomTimeValue(CUSTOM_TIME_HOURS, hour, setCustomHour, customHourScrollRef)}
+                  >
+                    <Text style={[styles.customPickerItemText, customHour === hour && styles.customPickerItemTextActive]}>
+                      {String(hour).padStart(2, '0')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={styles.customPickerColon}>:</Text>
+              <ScrollView
+                ref={customMinuteScrollRef}
+                style={styles.customPickerScroll}
+                contentContainerStyle={styles.customPickerScrollInner}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
+                snapToOffsets={CUSTOM_TIME_MINUTES.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
+                decelerationRate="fast"
+                disableIntervalMomentum
+                nestedScrollEnabled
+                onMomentumScrollEnd={event => settleCustomTimeWheel(
+                  CUSTOM_TIME_MINUTES,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomMinute,
+                  customMinuteScrollRef,
+                )}
+                onScrollEndDrag={event => settleCustomTimeWheel(
+                  CUSTOM_TIME_MINUTES,
+                  event.nativeEvent.contentOffset.y,
+                  setCustomMinute,
+                  customMinuteScrollRef,
+                )}
+              >
+                {CUSTOM_TIME_MINUTES.map(minute => (
+                  <TouchableOpacity
+                    key={minute}
+                    style={styles.customPickerItem}
+                    onPress={() => selectCustomTimeValue(CUSTOM_TIME_MINUTES, minute, setCustomMinute, customMinuteScrollRef)}
+                  >
+                    <Text style={[styles.customPickerItemText, customMinute === minute && styles.customPickerItemTextActive]}>
+                      {String(minute).padStart(2, '0')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             <Text style={styles.customBlockLabel}>メンバー</Text>
@@ -1605,9 +1689,14 @@ const styles = StyleSheet.create({
   customTypePickupText: { color: '#C95035' },
   customTypeLessonText: { color: '#2577C9' },
   customBlockInput: { minHeight: 44, borderWidth: 1.5, borderColor: '#CCD9DA', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#FAFCFC', fontSize: 14, fontWeight: '700', color: '#222222' },
-  customTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  customTimeInput: { width: 76, minHeight: 46, borderWidth: 1.5, borderColor: '#8CCDD1', borderRadius: 10, backgroundColor: '#F4FBFB', textAlign: 'center', fontSize: 20, fontWeight: '900', color: '#222222' },
-  customTimeColon: { fontSize: 22, fontWeight: '900', color: '#444444' },
+  customPickerColumns: { position: 'relative', height: CUSTOM_TIME_VIEW_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, overflow: 'hidden' },
+  customPickerSelectionFrame: { position: 'absolute', left: '16%', right: '16%', top: (CUSTOM_TIME_VIEW_HEIGHT - CUSTOM_TIME_ITEM_HEIGHT) / 2, height: CUSTOM_TIME_ITEM_HEIGHT, borderRadius: 10, backgroundColor: '#E9F7F7', borderWidth: 1.5, borderColor: '#79C7CC' },
+  customPickerScroll: { width: 82, height: CUSTOM_TIME_VIEW_HEIGHT, zIndex: 1 },
+  customPickerScrollInner: { paddingVertical: (CUSTOM_TIME_VIEW_HEIGHT - CUSTOM_TIME_ITEM_HEIGHT) / 2 },
+  customPickerColon: { zIndex: 2, fontSize: 23, fontWeight: '900', color: '#333333' },
+  customPickerItem: { height: CUSTOM_TIME_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  customPickerItemText: { fontSize: 17, fontWeight: '700', color: '#92999B' },
+  customPickerItemTextActive: { fontSize: 22, fontWeight: '900', color: '#222222' },
   customMemberInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   customMemberInput: { flex: 1 },
   customMemberAddBtn: { minHeight: 44, paddingHorizontal: 13, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#36A9B5' },
