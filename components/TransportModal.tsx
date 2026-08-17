@@ -80,6 +80,7 @@ export default function TransportModal({
   const [customMembers, setCustomMembers] = useState<string[]>([]);
   const [customTransportType, setCustomTransportType] = useState<'school' | 'lesson'>('lesson');
   const [customBlockError, setCustomBlockError] = useState('');
+  const [customBlockToDelete, setCustomBlockToDelete] = useState<CustomTransportBlock | null>(null);
   const customHourScrollRef = useRef<ScrollView>(null);
   const customMinuteScrollRef = useRef<ScrollView>(null);
   const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -288,6 +289,25 @@ export default function TransportModal({
     await onAssign(dateStr, 'customBlocks', JSON.stringify(nextBlocks));
     setCustomBlockModalVisible(false);
     resetCustomBlockForm();
+  };
+
+  const deleteCustomBlock = async () => {
+    if (!customBlockToDelete) return;
+    const blockId = customBlockToDelete.id;
+    const nextBlocks = customBlocks.filter(block => block.id !== blockId);
+    const nextEntries = staffEntries.map(entry => ({
+      ...entry,
+      trips: entry.trips.map(trip => ({
+        ...trip,
+        blockKeys: trip.blockKeys.filter(blockKey => blockKey !== blockId),
+      })),
+    }));
+
+    setCustomBlocks(nextBlocks);
+    setSelectedBlock(current => current?.key === blockId ? null : current);
+    setCustomBlockToDelete(null);
+    await onAssign(dateStr, 'customBlocks', JSON.stringify(nextBlocks));
+    await save(nextEntries);
   };
 
   // 先週の同日データをFirestoreから取得してポップアップ表示
@@ -1253,9 +1273,6 @@ export default function TransportModal({
               <View style={styles.rightPanel}>
                 <View style={styles.rightTitleRow}>
                   <Text style={styles.rightTitle}>送迎先</Text>
-                  <TouchableOpacity style={styles.addCustomBlockBtn} onPress={openCustomBlockForm} activeOpacity={0.78}>
-                    <Ionicons name="add" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
                 <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
@@ -1263,8 +1280,10 @@ export default function TransportModal({
                     const bColor = STAFF_COLORS[bIdx % STAFF_COLORS.length];
                     const nameColor = block.type === 'lesson' ? '#2577C9' : '#111111';
                     const isAssigned = assignedBlockKeys.has(block.key);
+                    const customBlock = customBlocks.find(item => item.id === block.key);
+                    const isCustom = !!customBlock;
                     const isSelected = selectedBlock?.key === block.key;
-                    if (isAssigned) return null;
+                    if (isAssigned && !isCustom) return null;
                     return (
                       <TouchableOpacity
                         key={block.key}
@@ -1273,13 +1292,28 @@ export default function TransportModal({
                           { borderColor: bColor, backgroundColor: bColor + '22' },
                           isSelected && { borderWidth: 3, backgroundColor: bColor + '44' },
                         ]}
-                        onPress={() => setSelectedBlock(isSelected ? null : block)}
+                        onPress={() => {
+                          if (!isAssigned) setSelectedBlock(isSelected ? null : block);
+                        }}
                         activeOpacity={0.75}
                       >
+                        {customBlock && (
+                          <TouchableOpacity
+                            style={styles.customBlockDeleteBtn}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              setCustomBlockToDelete(customBlock);
+                            }}
+                            accessibilityLabel={`${block.nameOnly || block.label}を削除`}
+                          >
+                            <Ionicons name="trash-outline" size={15} color="#C94B4B" />
+                          </TouchableOpacity>
+                        )}
                         <Text style={[styles.blockChipText, { color: nameColor }]}>{block.label}</Text>
                         <View style={[styles.countBadge, { backgroundColor: bColor }]}>
                           <Text style={styles.countText}>{block.count}名</Text>
                         </View>
+                        {isAssigned && isCustom && <Text style={styles.customBlockAssignedText}>割当済み</Text>}
                         {isSelected && (
                           <>
                             <View style={styles.selectedMark}>
@@ -1297,6 +1331,17 @@ export default function TransportModal({
                       </TouchableOpacity>
                     );
                   })}
+                  <TouchableOpacity
+                    style={styles.addCustomBlockTile}
+                    onPress={openCustomBlockForm}
+                    activeOpacity={0.72}
+                    accessibilityLabel="送迎先を追加"
+                  >
+                    <View style={styles.addCustomBlockTileIcon}>
+                      <Ionicons name="add" size={20} color="#278E98" />
+                    </View>
+                    <Text style={styles.addCustomBlockTileText}>追加</Text>
+                  </TouchableOpacity>
                   </View>
                   {[...assignedBlockKeys].length === blocks.length && blocks.length > 0 && (
                     <View style={{ alignItems: 'center', marginTop: 8 }}>
@@ -1635,6 +1680,30 @@ export default function TransportModal({
         </View>
       </View>
     </Modal>
+
+    <Modal visible={!!customBlockToDelete} transparent animationType="fade" onRequestClose={() => setCustomBlockToDelete(null)}>
+      <View style={styles.customDeleteOverlay}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomBlockToDelete(null)} />
+        <View style={styles.customDeletePanel}>
+          <View style={styles.customDeleteIcon}>
+            <Ionicons name="trash-outline" size={24} color="#C94B4B" />
+          </View>
+          <Text style={styles.customDeleteTitle}>送迎先を削除しますか？</Text>
+          <Text style={styles.customDeleteDescription}>
+            {customBlockToDelete?.time} {customBlockToDelete?.destination}
+          </Text>
+          <Text style={styles.customDeleteNote}>担当に割り当て済みの場合は、担当からも削除されます。</Text>
+          <View style={styles.customDeleteActions}>
+            <TouchableOpacity style={styles.customDeleteCancelBtn} onPress={() => setCustomBlockToDelete(null)}>
+              <Text style={styles.customDeleteCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.customDeleteConfirmBtn} onPress={deleteCustomBlock}>
+              <Text style={styles.customDeleteConfirmText}>削除する</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
     </>
   );
 }
@@ -1699,7 +1768,9 @@ const styles = StyleSheet.create({
   rightPanel: { width: 160, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 6 },
   rightTitleRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 6, position: 'relative' },
   rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#333333', textAlign: 'center' },
-  addCustomBlockBtn: { position: 'absolute', right: 0, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#36A9B5', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 3 },
+  addCustomBlockTile: { width: '47%', minHeight: 82, marginBottom: 6, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', borderColor: '#72C3C8', backgroundColor: '#F3FBFB', alignItems: 'center', justifyContent: 'center', padding: 6 },
+  addCustomBlockTileIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DDF3F3', marginBottom: 4 },
+  addCustomBlockTileText: { fontSize: 12, fontWeight: '900', color: '#276F75' },
   blockChip: { borderRadius: 12, padding: 6, marginBottom: 6, borderWidth: 2, alignItems: 'center', width: '47%' },
   blockChipText: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   countBadge: { marginTop: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
@@ -1772,4 +1843,17 @@ const styles = StyleSheet.create({
   customBlockCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
   customBlockSaveBtn: { flex: 1.5, minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#36A9B5' },
   customBlockSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
+  customBlockDeleteBtn: { position: 'absolute', top: 3, right: 3, width: 28, height: 28, borderRadius: 14, zIndex: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#F1B8B8' },
+  customBlockAssignedText: { marginTop: 3, fontSize: 9, fontWeight: '800', color: '#647375' },
+  customDeleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  customDeletePanel: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 20, backgroundColor: '#FFFFFF', alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  customDeleteIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F0', marginBottom: 10 },
+  customDeleteTitle: { fontSize: 17, fontWeight: '900', color: '#222222' },
+  customDeleteDescription: { marginTop: 8, fontSize: 14, fontWeight: '800', color: '#333333', textAlign: 'center' },
+  customDeleteNote: { marginTop: 8, fontSize: 11, lineHeight: 17, fontWeight: '600', color: '#6F7779', textAlign: 'center' },
+  customDeleteActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 18 },
+  customDeleteCancelBtn: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F5', borderWidth: 1, borderColor: '#D8DFDF' },
+  customDeleteCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
+  customDeleteConfirmBtn: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D95B5B' },
+  customDeleteConfirmText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
 });
