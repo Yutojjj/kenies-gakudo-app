@@ -1259,7 +1259,7 @@ export default function ScheduleScreen() {
 
               <View style={styles.dayPlanSection}>
                 <View style={styles.dayPlanHeader}>
-                  <Text style={styles.dayPlanTitle}>この日の予定</Text>
+                  <Text style={styles.dayPlanTitle}>習い事</Text>
                   <TouchableOpacity style={styles.dayAddBtn} onPress={() => {
                     setEditModalVisible(false);
                     setReturnToEdit(true);
@@ -1267,7 +1267,7 @@ export default function ScheduleScreen() {
                     setTimeout(() => setTemplateModalVisible(true), 300);
                   }}>
                     <Ionicons name="add" size={15} color="#2F80ED" />
-                    <Text style={styles.dayAddBtnText}>追加</Text>
+                    <Text style={styles.dayAddBtnText}>習い事を追加</Text>
                   </TouchableOpacity>
                 </View>
 

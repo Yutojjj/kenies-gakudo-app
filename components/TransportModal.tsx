@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
 
 const COLORS = {
@@ -25,6 +25,13 @@ const LAST_WEEK_CARD_COLORS = [
 type Block = { key: string; label: string; count: number; time?: string; type?: 'school' | 'lesson'; nameOnly?: string; kids?: any[] };
 type TripSlot = { tripIndex: number; blockKeys: string[] };
 type StaffEntry = { staffName: string; trips: TripSlot[] };
+type CustomTransportBlock = {
+  id: string;
+  destination: string;
+  time: string;
+  members: string[];
+  type: 'school' | 'lesson';
+};
 type Props = {
   visible: boolean; dateStr: string; onClose: () => void;
   attendance: { schools: Record<string, Record<string, any[]>>; lessons: Record<string, any[]>; totalCount: number };
@@ -60,6 +67,15 @@ export default function TransportModal({
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
   const autoPrintTriggeredRef = useRef(false);
+  const [customBlocks, setCustomBlocks] = useState<CustomTransportBlock[]>([]);
+  const [customBlockModalVisible, setCustomBlockModalVisible] = useState(false);
+  const [customDestination, setCustomDestination] = useState('');
+  const [customHour, setCustomHour] = useState('');
+  const [customMinute, setCustomMinute] = useState('00');
+  const [customMemberInput, setCustomMemberInput] = useState('');
+  const [customMembers, setCustomMembers] = useState<string[]>([]);
+  const [customTransportType, setCustomTransportType] = useState<'school' | 'lesson'>('lesson');
+  const [customBlockError, setCustomBlockError] = useState('');
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -95,6 +111,17 @@ export default function TransportModal({
       type: 'lesson' 
     });
   });
+  customBlocks.forEach((customBlock) => {
+    blocks.push({
+      key: customBlock.id,
+      label: `${customBlock.time} ${customBlock.destination}`,
+      nameOnly: customBlock.destination,
+      time: customBlock.time,
+      count: customBlock.members.length,
+      kids: customBlock.members.map((member, index) => ({ id: `${customBlock.id}_${index}`, name: member })),
+      type: customBlock.type,
+    });
+  });
   blocks.sort((a, b) => {
     const ta = a.time || '';
     const tb = b.time || '';
@@ -105,6 +132,14 @@ export default function TransportModal({
     if (!visible) return;
     setSelectedBlock(null);
     setShowTimeline(initialMode === 'overview');
+    try {
+      const parsedCustomBlocks = assignments?.customBlocks
+        ? JSON.parse(String(assignments.customBlocks))
+        : [];
+      setCustomBlocks(Array.isArray(parsedCustomBlocks) ? parsedCustomBlocks : []);
+    } catch {
+      setCustomBlocks([]);
+    }
     
     // シフト作成画面で出勤が確定しているメンバーの名前リスト ＋ 「送迎しない」
     const shiftNames = shiftStaff.map(s => s.name);
@@ -138,6 +173,62 @@ export default function TransportModal({
   const save = async (entries: StaffEntry[]) => {
     setStaffEntries(entries);
     await onAssign(dateStr, 'entries', JSON.stringify({ entries }));
+  };
+
+  const resetCustomBlockForm = () => {
+    setCustomDestination('');
+    setCustomHour('');
+    setCustomMinute('00');
+    setCustomMemberInput('');
+    setCustomMembers([]);
+    setCustomTransportType('lesson');
+    setCustomBlockError('');
+  };
+
+  const openCustomBlockForm = () => {
+    resetCustomBlockForm();
+    setCustomBlockModalVisible(true);
+  };
+
+  const addCustomMember = () => {
+    const member = customMemberInput.trim();
+    if (!member) return;
+    setCustomMembers(current => current.includes(member) ? current : [...current, member]);
+    setCustomMemberInput('');
+    setCustomBlockError('');
+  };
+
+  const saveCustomBlock = async () => {
+    const destination = customDestination.trim();
+    const pendingMember = customMemberInput.trim();
+    const members = Array.from(new Set([...customMembers, ...(pendingMember ? [pendingMember] : [])]));
+    const hour = Number(customHour);
+    const minute = Number(customMinute);
+    if (!destination) {
+      setCustomBlockError('送迎先を入力してください');
+      return;
+    }
+    if (!/^\d{1,2}$/.test(customHour) || !/^\d{1,2}$/.test(customMinute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      setCustomBlockError('時刻を正しく入力してください');
+      return;
+    }
+    if (members.length === 0) {
+      setCustomBlockError('メンバーを1名以上入力してください');
+      return;
+    }
+
+    const nextBlock: CustomTransportBlock = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      destination,
+      time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      members,
+      type: customTransportType,
+    };
+    const nextBlocks = [...customBlocks, nextBlock];
+    setCustomBlocks(nextBlocks);
+    await onAssign(dateStr, 'customBlocks', JSON.stringify(nextBlocks));
+    setCustomBlockModalVisible(false);
+    resetCustomBlockForm();
   };
 
   // 先週の同日データをFirestoreから取得してポップアップ表示
@@ -1101,7 +1192,12 @@ export default function TransportModal({
 
               {/* 右：送迎先（編集モード） */}
               <View style={styles.rightPanel}>
-                <Text style={styles.rightTitle}>送迎先</Text>
+                <View style={styles.rightTitleRow}>
+                  <Text style={styles.rightTitle}>送迎先</Text>
+                  <TouchableOpacity style={styles.addCustomBlockBtn} onPress={openCustomBlockForm} activeOpacity={0.78}>
+                    <Ionicons name="add" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
                 <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                   {blocks.map((block, bIdx) => {
@@ -1284,6 +1380,115 @@ export default function TransportModal({
         </View>
       </View>
     </Modal>
+
+    {/* イレギュラー送迎先の追加 */}
+    <Modal visible={customBlockModalVisible} transparent animationType="fade">
+      <TouchableOpacity style={styles.customBlockOverlay} activeOpacity={1} onPress={() => setCustomBlockModalVisible(false)}>
+        <View style={styles.customBlockPanel} onStartShouldSetResponder={() => true}>
+          <View style={styles.customBlockHeader}>
+            <View>
+              <Text style={styles.customBlockTitle}>送迎先を追加</Text>
+              <Text style={styles.customBlockSub}>その日だけの送迎予定を登録します</Text>
+            </View>
+            <TouchableOpacity style={styles.customBlockCloseBtn} onPress={() => setCustomBlockModalVisible(false)}>
+              <Ionicons name="close" size={22} color="#333333" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.customBlockLabel}>種類</Text>
+            <View style={styles.customTypeRow}>
+              <TouchableOpacity
+                style={[styles.customTypeBtn, customTransportType === 'school' && styles.customTypePickupActive]}
+                onPress={() => setCustomTransportType('school')}
+              >
+                <Text style={[styles.customTypeText, customTransportType === 'school' && styles.customTypePickupText]}>お迎え</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.customTypeBtn, customTransportType === 'lesson' && styles.customTypeLessonActive]}
+                onPress={() => setCustomTransportType('lesson')}
+              >
+                <Text style={[styles.customTypeText, customTransportType === 'lesson' && styles.customTypeLessonText]}>習い事</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.customBlockLabel}>送迎先</Text>
+            <TextInput
+              style={styles.customBlockInput}
+              value={customDestination}
+              onChangeText={(value) => { setCustomDestination(value); setCustomBlockError(''); }}
+              placeholder="例：交流センター"
+              placeholderTextColor="#999999"
+            />
+
+            <Text style={styles.customBlockLabel}>時刻</Text>
+            <View style={styles.customTimeRow}>
+              <TextInput
+                style={styles.customTimeInput}
+                value={customHour}
+                onChangeText={(value) => { setCustomHour(value.replace(/\D/g, '').slice(0, 2)); setCustomBlockError(''); }}
+                placeholder="16"
+                placeholderTextColor="#999999"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              <Text style={styles.customTimeColon}>:</Text>
+              <TextInput
+                style={styles.customTimeInput}
+                value={customMinute}
+                onChangeText={(value) => { setCustomMinute(value.replace(/\D/g, '').slice(0, 2)); setCustomBlockError(''); }}
+                placeholder="00"
+                placeholderTextColor="#999999"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+
+            <Text style={styles.customBlockLabel}>メンバー</Text>
+            <View style={styles.customMemberInputRow}>
+              <TextInput
+                style={[styles.customBlockInput, styles.customMemberInput]}
+                value={customMemberInput}
+                onChangeText={(value) => { setCustomMemberInput(value); setCustomBlockError(''); }}
+                placeholder="名前を入力"
+                placeholderTextColor="#999999"
+                returnKeyType="done"
+                onSubmitEditing={addCustomMember}
+              />
+              <TouchableOpacity style={styles.customMemberAddBtn} onPress={addCustomMember}>
+                <Ionicons name="add" size={18} color="#FFFFFF" />
+                <Text style={styles.customMemberAddText}>追加</Text>
+              </TouchableOpacity>
+            </View>
+
+            {customMembers.length > 0 && (
+              <View style={styles.customMemberChips}>
+                {customMembers.map(member => (
+                  <View key={member} style={styles.customMemberChip}>
+                    <Text style={styles.customMemberChipText}>{member}</Text>
+                    <TouchableOpacity onPress={() => setCustomMembers(current => current.filter(item => item !== member))}>
+                      <Ionicons name="close-circle" size={17} color="#708388" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {!!customBlockError && <Text style={styles.customBlockError}>{customBlockError}</Text>}
+          </ScrollView>
+
+          <View style={styles.customBlockActions}>
+            <TouchableOpacity style={styles.customBlockCancelBtn} onPress={() => setCustomBlockModalVisible(false)}>
+              <Text style={styles.customBlockCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.customBlockSaveBtn} onPress={saveCustomBlock}>
+              <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.customBlockSaveText}>送迎先を追加</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
     </>
   );
 }
@@ -1346,7 +1551,9 @@ const styles = StyleSheet.create({
   overviewNameText: { fontWeight: '700' },
   overviewEmptyText: { padding: 20, textAlign: 'center', color: '#666', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#D7E5E3' },
   rightPanel: { width: 160, backgroundColor: '#fff', borderLeftWidth: 1, borderColor: COLORS.border, padding: 6 },
-  rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#555', textAlign: 'center', marginBottom: 6 },
+  rightTitleRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 6, position: 'relative' },
+  rightTitle: { fontSize: 12, fontWeight: 'bold', color: '#333333', textAlign: 'center' },
+  addCustomBlockBtn: { position: 'absolute', right: 0, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#36A9B5', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 3 },
   blockChip: { borderRadius: 12, padding: 6, marginBottom: 6, borderWidth: 2, alignItems: 'center', width: '47%' },
   blockChipText: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   countBadge: { marginTop: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
@@ -1383,4 +1590,35 @@ const styles = StyleSheet.create({
   detailActionBtn: { padding: 4 },
   detailCloseBtn: { marginTop: 14, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   detailCloseBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  customBlockOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  customBlockPanel: { width: '100%', maxWidth: 520, maxHeight: '88%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 12 },
+  customBlockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  customBlockTitle: { fontSize: 18, fontWeight: '900', color: '#222222' },
+  customBlockSub: { marginTop: 3, fontSize: 11, fontWeight: '600', color: '#6D777A' },
+  customBlockCloseBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5F7F7', borderWidth: 1, borderColor: '#DDE4E4' },
+  customBlockLabel: { marginTop: 10, marginBottom: 6, fontSize: 12, fontWeight: '900', color: '#333333' },
+  customTypeRow: { flexDirection: 'row', gap: 8 },
+  customTypeBtn: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F7F8', borderWidth: 1.5, borderColor: '#D9DEE1' },
+  customTypePickupActive: { backgroundColor: '#FFF2EC', borderColor: '#EF8A6B' },
+  customTypeLessonActive: { backgroundColor: '#EDF6FF', borderColor: '#5B9BD5' },
+  customTypeText: { fontSize: 13, fontWeight: '800', color: '#555555' },
+  customTypePickupText: { color: '#C95035' },
+  customTypeLessonText: { color: '#2577C9' },
+  customBlockInput: { minHeight: 44, borderWidth: 1.5, borderColor: '#CCD9DA', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#FAFCFC', fontSize: 14, fontWeight: '700', color: '#222222' },
+  customTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customTimeInput: { width: 76, minHeight: 46, borderWidth: 1.5, borderColor: '#8CCDD1', borderRadius: 10, backgroundColor: '#F4FBFB', textAlign: 'center', fontSize: 20, fontWeight: '900', color: '#222222' },
+  customTimeColon: { fontSize: 22, fontWeight: '900', color: '#444444' },
+  customMemberInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customMemberInput: { flex: 1 },
+  customMemberAddBtn: { minHeight: 44, paddingHorizontal: 13, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#36A9B5' },
+  customMemberAddText: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
+  customMemberChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 10 },
+  customMemberChip: { minHeight: 32, paddingLeft: 10, paddingRight: 6, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EDF6F5', borderWidth: 1, borderColor: '#BFDAD7' },
+  customMemberChipText: { fontSize: 12, fontWeight: '800', color: '#263638' },
+  customBlockError: { marginTop: 10, fontSize: 12, fontWeight: '800', color: '#D44747' },
+  customBlockActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  customBlockCancelBtn: { flex: 1, minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F5', borderWidth: 1, borderColor: '#D8DFDF' },
+  customBlockCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
+  customBlockSaveBtn: { flex: 1.5, minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#36A9B5' },
+  customBlockSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
 });
