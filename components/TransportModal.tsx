@@ -82,6 +82,8 @@ export default function TransportModal({
   const [customBlockError, setCustomBlockError] = useState('');
   const customHourScrollRef = useRef<ScrollView>(null);
   const customMinuteScrollRef = useRef<ScrollView>(null);
+  const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customMinuteSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -208,7 +210,10 @@ export default function TransportModal({
   ) => {
     const index = Math.max(0, Math.min(values.length - 1, Math.round(y / CUSTOM_TIME_ITEM_HEIGHT)));
     setter(values[index]);
-    scrollRef.current?.scrollTo({ y: index * CUSTOM_TIME_ITEM_HEIGHT, animated: true });
+    const targetY = index * CUSTOM_TIME_ITEM_HEIGHT;
+    if (Math.abs(y - targetY) > 0.5) {
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }
     setCustomBlockError('');
   };
 
@@ -219,6 +224,20 @@ export default function TransportModal({
   ) => {
     const index = Math.max(0, Math.min(values.length - 1, Math.round(y / CUSTOM_TIME_ITEM_HEIGHT)));
     setter(values[index]);
+  };
+
+  const scheduleCustomTimeSnap = (
+    values: number[],
+    y: number,
+    setter: (value: number) => void,
+    scrollRef: React.RefObject<ScrollView | null>,
+    timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  ) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      settleCustomTimeWheel(values, y, setter, scrollRef);
+      timerRef.current = null;
+    }, 120);
   };
 
   const selectCustomTimeValue = (
@@ -1485,11 +1504,17 @@ export default function TransportModal({
                 disableIntervalMomentum
                 nestedScrollEnabled
                 scrollEventThrottle={16}
-                onScroll={event => updateCustomTimeFromScroll(
-                  CUSTOM_TIME_HOURS,
-                  event.nativeEvent.contentOffset.y,
-                  setCustomHour,
-                )}
+                onScroll={event => {
+                  const y = event.nativeEvent.contentOffset.y;
+                  updateCustomTimeFromScroll(CUSTOM_TIME_HOURS, y, setCustomHour);
+                  scheduleCustomTimeSnap(
+                    CUSTOM_TIME_HOURS,
+                    y,
+                    setCustomHour,
+                    customHourScrollRef,
+                    customHourSnapTimerRef,
+                  );
+                }}
                 onMomentumScrollEnd={event => settleCustomTimeWheel(
                   CUSTOM_TIME_HOURS,
                   event.nativeEvent.contentOffset.y,
@@ -1527,11 +1552,17 @@ export default function TransportModal({
                 disableIntervalMomentum
                 nestedScrollEnabled
                 scrollEventThrottle={16}
-                onScroll={event => updateCustomTimeFromScroll(
-                  CUSTOM_TIME_MINUTES,
-                  event.nativeEvent.contentOffset.y,
-                  setCustomMinute,
-                )}
+                onScroll={event => {
+                  const y = event.nativeEvent.contentOffset.y;
+                  updateCustomTimeFromScroll(CUSTOM_TIME_MINUTES, y, setCustomMinute);
+                  scheduleCustomTimeSnap(
+                    CUSTOM_TIME_MINUTES,
+                    y,
+                    setCustomMinute,
+                    customMinuteScrollRef,
+                    customMinuteSnapTimerRef,
+                  );
+                }}
                 onMomentumScrollEnd={event => settleCustomTimeWheel(
                   CUSTOM_TIME_MINUTES,
                   event.nativeEvent.contentOffset.y,
