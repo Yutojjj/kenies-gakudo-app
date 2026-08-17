@@ -81,6 +81,7 @@ export default function TransportModal({
   const [customTransportType, setCustomTransportType] = useState<'school' | 'lesson'>('lesson');
   const [customBlockError, setCustomBlockError] = useState('');
   const [customBlockToDelete, setCustomBlockToDelete] = useState<CustomTransportBlock | null>(null);
+  const [locallyAssignedBlockKeys, setLocallyAssignedBlockKeys] = useState<Set<string>>(new Set());
   const customHourScrollRef = useRef<ScrollView>(null);
   const customMinuteScrollRef = useRef<ScrollView>(null);
   const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -90,6 +91,10 @@ export default function TransportModal({
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
   const lastWeekDate = new Date(date);
   lastWeekDate.setDate(date.getDate() - 7);
+
+  useEffect(() => {
+    setLocallyAssignedBlockKeys(new Set());
+  }, [dateStr, visible]);
 
   // ブロック生成（時間順、種類や時間情報を分離）
   const blocks: Block[] = [];
@@ -272,11 +277,6 @@ export default function TransportModal({
       setCustomBlockError('送迎先を入力してください');
       return;
     }
-    if (members.length === 0) {
-      setCustomBlockError('メンバーの名前を入力してください');
-      return;
-    }
-
     const nextBlock: CustomTransportBlock = {
       id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       destination,
@@ -305,6 +305,11 @@ export default function TransportModal({
 
     setCustomBlocks(nextBlocks);
     setSelectedBlock(current => current?.key === blockId ? null : current);
+    setLocallyAssignedBlockKeys(current => {
+      const next = new Set(current);
+      next.delete(blockId);
+      return next;
+    });
     setCustomBlockToDelete(null);
     await onAssign(dateStr, 'customBlocks', JSON.stringify(nextBlocks));
     await save(nextEntries);
@@ -331,7 +336,10 @@ export default function TransportModal({
   };
 
   // 担当済みブロックkeyのセット
-  const assignedBlockKeys = new Set(staffEntries.flatMap(e => e.trips.flatMap(t => t.blockKeys)));
+  const assignedBlockKeys = new Set([
+    ...staffEntries.flatMap(e => e.trips.flatMap(t => t.blockKeys)),
+    ...locallyAssignedBlockKeys,
+  ]);
 
   // スタッフのスロットにブロックを追加（空きスロットに入れる、なければ新規追加）
   const assignBlockToStaff = (sIdx: number, tIdx: number | null, blockKey: string) => {
@@ -344,6 +352,7 @@ export default function TransportModal({
       }
       return { ...e, trips: [...e.trips, { tripIndex: e.trips.length, blockKeys: [blockKey] }] };
     });
+    setLocallyAssignedBlockKeys(current => new Set([...current, blockKey]));
     save(updated);
     setSelectedBlock(null);
   };
@@ -357,6 +366,14 @@ export default function TransportModal({
       }
       return { ...e, trips: e.trips.map((t, ti) => ti !== tIdx ? t : { ...t, blockKeys: newKeys }) };
     });
+    const remainsAssigned = updated.some(entry => entry.trips.some(trip => trip.blockKeys.includes(blockKey)));
+    if (!remainsAssigned) {
+      setLocallyAssignedBlockKeys(current => {
+        const next = new Set(current);
+        next.delete(blockKey);
+        return next;
+      });
+    }
     save(updated);
   };
 
@@ -1625,13 +1642,13 @@ export default function TransportModal({
               </ScrollView>
             </View>
 
-            <Text style={styles.customBlockLabel}>メンバー</Text>
+            <Text style={styles.customBlockLabel}>メンバー（任意）</Text>
             <View style={styles.customMemberInputRow}>
               <TextInput
                 style={[styles.customBlockInput, styles.customMemberInput]}
                 value={customMemberInput}
                 onChangeText={(value) => { setCustomMemberInput(value); setCustomBlockError(''); }}
-                placeholder="名前を入力"
+                placeholder="必要な場合のみ名前を入力"
                 placeholderTextColor="#999999"
                 returnKeyType="done"
                 onSubmitEditing={addCustomMember}
