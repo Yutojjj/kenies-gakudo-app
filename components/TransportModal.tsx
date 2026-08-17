@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
 
 const COLORS = {
@@ -1413,9 +1413,19 @@ export default function TransportModal({
     </Modal>
 
     {/* イレギュラー送迎先の追加 */}
-    <Modal visible={customBlockModalVisible} transparent animationType="fade">
-      <TouchableOpacity style={styles.customBlockOverlay} activeOpacity={1} onPress={() => setCustomBlockModalVisible(false)}>
-        <View style={styles.customBlockPanel} onStartShouldSetResponder={() => true}>
+    <Modal
+      visible={customBlockModalVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setCustomBlockModalVisible(false)}
+    >
+      <View style={styles.customBlockOverlay}>
+        <Pressable
+          style={StyleSheet.absoluteFillObject}
+          onPress={() => setCustomBlockModalVisible(false)}
+          accessibilityLabel="閉じる"
+        />
+        <View style={styles.customBlockPanel}>
           <View style={styles.customBlockHeader}>
             <View>
               <Text style={styles.customBlockTitle}>送迎先を追加</Text>
@@ -1571,7 +1581,7 @@ export default function TransportModal({
             </TouchableOpacity>
           </View>
         </View>
-      </TouchableOpacity>
+      </View>
     </Modal>
     </>
   );
