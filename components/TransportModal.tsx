@@ -944,13 +944,6 @@ export default function TransportModal({
           </div>
           <div class="section-title">送迎先一覧</div>
           ${destinationTablesHtml}
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-              }, 250);
-            };
-          </script>
         </body>
       </html>
     `;
@@ -963,7 +956,10 @@ export default function TransportModal({
     const iframe = browserDocument.createElement('iframe');
     iframe.id = 'transport-print-iframe';
     iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;visibility:hidden;right:0;bottom:0;';
+    let printStarted = false;
     iframe.onload = () => {
+      if (printStarted) return;
+      printStarted = true;
       setTimeout(() => {
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
@@ -974,8 +970,8 @@ export default function TransportModal({
         }, 1000);
       }, 300);
     };
-    browserDocument.body.appendChild(iframe);
     iframe.srcdoc = html;
+    browserDocument.body.appendChild(iframe);
   };
 
   useEffect(() => {
