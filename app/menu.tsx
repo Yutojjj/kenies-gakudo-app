@@ -1241,23 +1241,34 @@ export default function MenuScreen() {
 
   const openPickupOverviewAction = async (action: 'view' | 'print') => {
     if (pickupOverviewLoadingAction) return;
-    if (action === 'view' && showAllPickup) {
-      setShowAllPickup(false);
-      return;
-    }
     setPickupOverviewLoadingAction(action);
     try {
       const overviewData = await loadTransportOverview(makeDateStr(staffPlanDate));
       setPickupOverviewData(overviewData);
       setPickupOverviewAction(action);
-      if (action === 'view') {
-        setShowAllPickup(true);
-      } else {
-        setPickupDetailModalVisible(true);
-      }
+      setPickupDetailModalVisible(true);
     } catch (error) {
       console.error('送迎全体表示の読み込みに失敗しました', error);
       showAppAlert('読み込みエラー', '送迎情報を読み込めませんでした。');
+    } finally {
+      setPickupOverviewLoadingAction(null);
+    }
+  };
+
+  const togglePickupInlineOverview = async () => {
+    if (pickupOverviewLoadingAction) return;
+    if (showAllPickup) {
+      setShowAllPickup(false);
+      return;
+    }
+    setPickupOverviewLoadingAction('view');
+    try {
+      const overviewData = await loadTransportOverview(makeDateStr(staffPlanDate));
+      setPickupOverviewData(overviewData);
+      setShowAllPickup(true);
+    } catch (error) {
+      console.error('送迎メンバーの読み込みに失敗しました', error);
+      showAppAlert('読み込みエラー', '送迎メンバーを読み込めませんでした。');
     } finally {
       setPickupOverviewLoadingAction(null);
     }
@@ -1665,8 +1676,8 @@ export default function MenuScreen() {
                 >
                   {pickupOverviewLoadingAction === 'view'
                     ? <ActivityIndicator size="small" color="#245E96" />
-                    : <Ionicons name={showAllPickup ? 'chevron-up' : 'grid-outline'} size={17} color="#245E96" />}
-                  <Text style={styles.pickupInlineOverviewText}>{showAllPickup ? '折りたたむ' : '全体表示'}</Text>
+                    : <Ionicons name="grid-outline" size={17} color="#245E96" />}
+                  <Text style={styles.pickupInlineOverviewText}>全体表示</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.pickupInlineActionBtn, styles.pickupInlinePrintBtn]}
@@ -1681,6 +1692,17 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               </View>
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
+              <TouchableOpacity
+                style={styles.pickupExpandToggle}
+                onPress={togglePickupInlineOverview}
+                disabled={pickupOverviewLoadingAction !== null}
+                activeOpacity={0.78}
+              >
+                {pickupOverviewLoadingAction === 'view'
+                  ? <ActivityIndicator size="small" color="#007A82" />
+                  : <Ionicons name={showAllPickup ? 'chevron-up' : 'chevron-down'} size={17} color="#007A82" />}
+                <Text style={styles.pickupExpandToggleText}>{showAllPickup ? '折りたたむ' : '全体を見る'}</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         )}
@@ -3738,6 +3760,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
+  },
+  pickupExpandToggle: {
+    minHeight: 40,
+    marginTop: 3,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#F2FBFA',
+    borderWidth: 1,
+    borderColor: '#B8DFDC',
+  },
+  pickupExpandToggleText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#007A82',
   },
 
   // ── ヘッダー ──
