@@ -14,14 +14,14 @@ type Props = {
 export const ADMIN_BOTTOM_NAV_HEIGHT = Platform.OS === 'ios' ? 90 : 76;
 
 const NAV_IMAGES: Record<AdminBottomNavActive, ImageSourcePropType> = {
-  home: require('../assets/bottom-nav/home.png'),
-  attendance: require('../assets/bottom-nav/attendance.png'),
-  schedule: require('../assets/bottom-nav/schedule.png'),
-  event: require('../assets/bottom-nav/event.png'),
-  messages: require('../assets/bottom-nav/messages.png'),
-  shift: require('../assets/bottom-nav/shift.png'),
-  menu: require('../assets/bottom-nav/menu.png'),
-  album: require('../assets/bottom-nav/album.png'),
+  home: require('../assets/bottom-nav-v2/home.png'),
+  attendance: require('../assets/bottom-nav-v2/attendance.png'),
+  schedule: require('../assets/bottom-nav-v2/schedule.png'),
+  event: require('../assets/bottom-nav-v2/event.png'),
+  messages: require('../assets/bottom-nav-v2/messages.png'),
+  shift: require('../assets/bottom-nav-v2/shift.png'),
+  menu: require('../assets/bottom-nav-v2/menu.png'),
+  album: require('../assets/bottom-nav-v2/album.png'),
 };
 
 export default function AdminBottomNav({ active = 'home' }: Props) {
@@ -60,12 +60,11 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
   };
 
   const itemColor = (key: AdminBottomNavActive) => active === key ? '#00AEB8' : '#766B64';
-  const renderFace = (key: AdminBottomNavActive) => (
-    <Image
-      source={NAV_IMAGES[key]}
-      style={[styles.faceIcon, active === key && styles.faceIconActive]}
-      resizeMode="contain"
-    />
+  const renderIcon = (key: AdminBottomNavActive) => (
+    <View style={[styles.iconFrame, active === key && styles.iconFrameActive]}>
+      <Image source={NAV_IMAGES[key]} style={styles.navIcon} resizeMode="contain" />
+      {active === key && <View style={styles.activeMark} />}
+    </View>
   );
 
   return (
@@ -73,50 +72,50 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
       <View style={styles.navSpacer} />
       <View style={styles.nav}>
         <TouchableOpacity style={styles.item} onPress={goHome} activeOpacity={0.78}>
-          {renderFace('home')}
+          {renderIcon('home')}
           <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
         </TouchableOpacity>
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
-            {renderFace('schedule')}
+            {renderIcon('schedule')}
             <Text style={[styles.text, { color: itemColor('schedule') }]}>スケジュール</Text>
           </TouchableOpacity>
         )}
         {(isAdmin || isStaff) && (
           <TouchableOpacity style={styles.item} onPress={() => router.push('/attendance')} activeOpacity={0.78}>
-            {renderFace('attendance')}
+            {renderIcon('attendance')}
             <Text style={[styles.text, { color: itemColor('attendance') }]}>出欠一覧</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.item} onPress={() => router.push(isUser ? ({ pathname: '/event-list', params: { name: adminName || '' } } as any) : ({ pathname: '/year-events', params: { role: isAdmin ? 'admin' : 'staff', tab: 'management' } } as any))} activeOpacity={0.78}>
-          {renderFace('event')}
+          {renderIcon('event')}
           <Text style={[styles.text, { color: itemColor('event') }]}>イベント</Text>
         </TouchableOpacity>
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any)} activeOpacity={0.78}>
-            {renderFace('album')}
+            {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any)} activeOpacity={0.78}>
-          {renderFace('messages')}
+          {renderIcon('messages')}
           <Text style={[styles.text, { color: itemColor('messages') }]}>メッセージ</Text>
           {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
         </TouchableOpacity>
         {!isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
-            {renderFace('shift')}
+            {renderIcon('shift')}
             <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>
         )}
         {isAdmin ? (
           <TouchableOpacity style={styles.item} onPress={() => router.push('/admin-more' as any)} activeOpacity={0.78}>
-            {renderFace('menu')}
+            {renderIcon('menu')}
             <Text style={[styles.text, { color: itemColor('menu') }]}>その他</Text>
           </TouchableOpacity>
         ) : !isUser ? (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'staff', name: adminName || '' } } as any)} activeOpacity={0.78}>
-            {renderFace('album')}
+            {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         ) : null}
@@ -160,15 +159,27 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
   },
-  faceIcon: {
-    width: 28,
-    height: 28,
-    opacity: 0.78,
+  iconFrame: {
+    width: 38,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  faceIconActive: {
-    width: 31,
-    height: 31,
-    opacity: 1,
+  iconFrameActive: {
+    backgroundColor: '#E7F8F6',
+  },
+  navIcon: {
+    width: 32,
+    height: 32,
+  },
+  activeMark: {
+    position: 'absolute',
+    bottom: -1,
+    width: 16,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#00AEB8',
   },
   badge: {
     position: 'absolute',
