@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../../components/AdminBottomNav';
 import EditablePickerModal from '../../components/EditablePickerModal';
 import { COLORS } from '../../constants/theme';
@@ -58,6 +58,7 @@ export default function AccountFormScreen() {
   const [nicknameKana, setNicknameKana] = useState('');
   const [empType, setEmpType] = useState('アルバイト');
   const [skills, setSkills] = useState({ drive: false, program: false, child: false });
+  const [showInShiftTable, setShowInShiftTable] = useState(true);
 
   const [staffChildren, setStaffChildren] = useState<any[]>([]);
 
@@ -114,6 +115,7 @@ export default function AccountFormScreen() {
           if (data.role === 'staff') {
             setEmpType(data.empType || 'アルバイト');
             setSkills(data.skills || { drive: false, program: false, child: false });
+            setShowInShiftTable(data.showInShiftTable !== false);
             
             const loadedStaffChildren = data.staffChildren || [];
             if (loadedStaffChildren.length === 0 && data.childName) {
@@ -168,7 +170,7 @@ export default function AccountFormScreen() {
       let accountData: any = {
         name, nicknameKana, updatedAt: serverTimestamp(),
         ...(role === 'staff' ? { 
-          empType, skills,
+          empType, skills, showInShiftTable,
           hasChild: skills.child,
           // ★ ④ 保存時にIDの抜け漏れがないように補完
           staffChildren: skills.child ? staffChildren.map((c, i) => ({...c, id: c.id || `temp_staffchild_${i}`})) : [] 
@@ -287,6 +289,20 @@ export default function AccountFormScreen() {
                   <Text style={[styles.radioText, empType === type && styles.radioTextActive]}>{type}</Text>
                 </TouchableOpacity>
               ))}
+            </View>
+
+            <View style={styles.shiftVisibilityCard}>
+              <View style={styles.shiftVisibilityTextWrap}>
+                <Text style={styles.shiftVisibilityTitle}>シフト表に表示</Text>
+                <Text style={styles.shiftVisibilityDescription}>オフにするとシフト表とPDFに表示されません</Text>
+              </View>
+              <Switch
+                value={showInShiftTable}
+                onValueChange={setShowInShiftTable}
+                trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
+                thumbColor={showInShiftTable ? '#158F87' : '#F5F5F5'}
+                accessibilityLabel="シフト表に表示"
+              />
             </View>
 
             <Text style={styles.label}><Ionicons name="options-outline" size={16} /> スキル・条件 (タップで選択)</Text>
@@ -473,6 +489,10 @@ const styles = StyleSheet.create({
   radioBtnActive: { borderColor: COLORS.primary, backgroundColor: COLORS.accent + '20' },
   radioText: { fontSize: 14, color: COLORS.textLight, fontWeight: 'bold' },
   radioTextActive: { color: COLORS.primary },
+  shiftVisibilityCard: { marginTop: 16, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CFE1DF', backgroundColor: '#F5FBFA', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  shiftVisibilityTextWrap: { flex: 1 },
+  shiftVisibilityTitle: { fontSize: 14, fontWeight: '900', color: '#263638' },
+  shiftVisibilityDescription: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#68777A' },
   skillsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   skillBtn: { width: '31%', aspectRatio: 1, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, alignItems: 'center', justifyContent: 'center', padding: 8 },
   skillBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },

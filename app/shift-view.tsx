@@ -47,7 +47,9 @@ export default function ShiftViewScreen() {
       .then(r => r.json()).then(setPublicHolidays).catch(() => {});
 
     getDocs(query(collection(db, 'accounts'), where('role', '==', 'staff')))
-      .then(snap => setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name }))));
+      .then(snap => setAllStaff(snap.docs
+        .filter(d => d.data().showInShiftTable !== false)
+        .map(d => ({ id: d.id, name: d.data().name }))));
 
     const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), snap => {
       const data: Record<string, AssignedStaff[]> = {};
@@ -136,7 +138,8 @@ export default function ShiftViewScreen() {
             if (isSunday || isPublicHoliday) dateColor = 'red';
             else if (isSaturday) dateColor = 'blue';
 
-            const assignedList = assignedShifts[item.dateStr] || [];
+            const visibleStaffNames = new Set(allStaff.map(staff => staff.name));
+            const assignedList = (assignedShifts[item.dateStr] || []).filter(shift => visibleStaffNames.has(shift.name));
             const myShift = assignedList.find(s => s.name === myName);
             const cellBg = myShift ? '#F3FBF6' : hPeriod?.color || COLORS.white;
 

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../../components/AdminBottomNav';
 import { COLORS } from '../../constants/theme';
 import { useCall } from '../../contexts/CallContext';
@@ -106,6 +106,17 @@ export default function AccountManagementScreen() {
   };
 
   const handleEdit = (id: string) => { setSelectedAccount(null); router.push({ pathname: '/account/form', params: { id } }); };
+
+  const handleShiftVisibilityChange = async (account: any, value: boolean) => {
+    const updated = { ...account, showInShiftTable: value };
+    setSelectedAccount(updated);
+    try {
+      await updateDoc(doc(db, 'accounts', account.id), { showInShiftTable: value });
+    } catch (error) {
+      setSelectedAccount(account);
+      Alert.alert('エラー', 'シフト表の表示設定を更新できませんでした。');
+    }
+  };
 
   const toggleFilterArray = (currentArray: string[], value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
     if (currentArray.includes(value)) {
@@ -308,6 +319,18 @@ export default function AccountManagementScreen() {
                     <>
                       <View style={styles.detailRow}><Ionicons name="business-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>雇用形態:</Text><Text style={styles.detailData}>{selectedAccount.empType}</Text></View>
                       <View style={styles.detailRow}><Ionicons name="options-outline" size={16} color={COLORS.textLight} style={styles.detailIcon}/><Text style={styles.detailTitle}>スキル:</Text><Text style={styles.detailData}>{getSkillsText(selectedAccount.skills)}</Text></View>
+                      <View style={styles.shiftVisibilityRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.shiftVisibilityTitle}>シフト表に表示</Text>
+                          <Text style={styles.shiftVisibilityDescription}>オフにすると画面とPDFから非表示</Text>
+                        </View>
+                        <Switch
+                          value={selectedAccount.showInShiftTable !== false}
+                          onValueChange={(value) => handleShiftVisibilityChange(selectedAccount, value)}
+                          trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
+                          thumbColor={selectedAccount.showInShiftTable !== false ? '#158F87' : '#F5F5F5'}
+                        />
+                      </View>
                       
                       {selectedAccount.hasChild && (selectedAccount.staffChildren || selectedAccount.childName) && (
                         <View style={styles.detailRow}>
@@ -561,6 +584,9 @@ const styles = StyleSheet.create({
   authValue: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
   modalDetails: { marginBottom: 24 },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderColor: '#F0F0F0' },
+  shiftVisibilityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: '#F3FAF9', borderWidth: 1, borderColor: '#CFE1DF' },
+  shiftVisibilityTitle: { fontSize: 14, fontWeight: '900', color: '#263638' },
+  shiftVisibilityDescription: { marginTop: 3, fontSize: 11, color: '#68777A' },
   detailIcon: { marginRight: 8, marginTop: 2 },
   detailTitle: { width: 80, fontSize: 14, color: COLORS.textLight, fontWeight: 'bold', marginTop: 2 },
   detailData: { flex: 1, fontSize: 16, color: COLORS.text, fontWeight: 'bold', marginBottom: 4 },

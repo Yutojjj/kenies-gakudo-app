@@ -108,7 +108,9 @@ export default function ShiftCreateScreen() {
       try {
         const q = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(q);
-        const staffList = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
+        const staffList = snap.docs
+          .filter(d => d.data().showInShiftTable !== false)
+          .map(d => ({ id: d.id, name: d.data().name }));
         setAllStaff(staffList);
 
         // autoFillSettings初期化（Firestoreの保存データをマージ）
@@ -392,7 +394,7 @@ export default function ShiftCreateScreen() {
       });
 
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        @page { size: A4 portrait; margin: 7mm; }
+        @page { size: A4 portrait; margin: 5mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
@@ -401,9 +403,6 @@ export default function ShiftCreateScreen() {
           print-color-adjust: exact;
           color-adjust: exact;
         }
-        .title-bar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-        .title { font-size: 11px; font-weight: bold; }
-        .sub { font-size: 6.5px; color: #888; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         td { border: 0.5px solid #AAAAAA; vertical-align: middle; text-align: center; }
 
@@ -424,11 +423,11 @@ export default function ShiftCreateScreen() {
         .c-name { background-color: #FFB6C1 !important; font-weight: bold; font-size: 7px;
           padding: 1px 2px; height: 20px; white-space: nowrap; overflow: hidden; }
 
-        .c-shift       { height: 20px; font-size: 8px; padding: 1px;
+        .c-shift       { height: 20px; font-size: 9.5px; padding: 1px;
                          background-color: #FFFFFF !important;
                          white-space: nowrap; overflow: hidden; }
         .c-shift-empty { background-color: #F0F0F0 !important; }
-        .c-assigned    { background-color: #FFD700 !important; font-weight: bold; color: #333; font-size: 8.5px; }
+        .c-assigned    { background-color: #FFD700 !important; font-weight: 900; color: #111; font-size: 10px; }
         .c-off         { background-color: #D0D0D0 !important; color: #444; font-size: 9px; }
         .c-col-sun     { background-color: #FFD9D9 !important; }
         .c-col-sat     { background-color: #CCE4FF !important; }
@@ -436,10 +435,6 @@ export default function ShiftCreateScreen() {
         .legend { margin-top: 5px; font-size: 6.5px; color: #444; display: flex; gap: 10px; align-items: center; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
-        <div class="title-bar">
-          <span class="title">シフト表　${year}年 ${month}月</span>
-          <span class="sub">出力日: ${new Date().toLocaleDateString('ja-JP')}</span>
-        </div>
         <table>
           <colgroup>
             <col style="width:18px"/>

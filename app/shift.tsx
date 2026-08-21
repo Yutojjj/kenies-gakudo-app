@@ -133,7 +133,9 @@ export default function ShiftScreen() {
 
         const qStaff = query(collection(db, 'accounts'), where('role', '==', 'staff'));
         const snap = await getDocs(qStaff);
-        setAllStaff(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+        setAllStaff(snap.docs
+          .filter(d => d.data().showInShiftTable !== false)
+          .map(d => ({ id: d.id, name: d.data().name })));
 
         // shiftsの全件読み込み（onSnapshot→getDocs）
         const allShiftsSnap = await getDocs(collection(db, 'shifts2'));
