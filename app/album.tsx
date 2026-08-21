@@ -477,10 +477,12 @@ export default function AlbumScreen() {
     }
 
     return ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'] as any,
+      mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
+      selectionLimit: 0,
       quality: 0.6,
       videoMaxDuration: 180,
+      presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
     });
   };
 
@@ -1000,9 +1002,8 @@ export default function AlbumScreen() {
                         ]}>{cell.day}</Text>
                         {cell.dailyMediaCount > 0 && (
                           <View style={styles.albumCalendarDailyBadge}>
-                            <Text style={styles.albumCalendarBadgeText}>
-                              日常写真 <Text style={styles.albumCalendarBadgeCount}>{cell.dailyMediaCount}件</Text>
-                            </Text>
+                            <Text style={styles.albumCalendarBadgeText}>日常写真</Text>
+                            <Text style={styles.albumCalendarBadgeCount}>{cell.dailyMediaCount}件</Text>
                           </View>
                         )}
                         {cell.eventTitles.slice(0, 1).map(eventTitle => (
@@ -1604,11 +1605,11 @@ const styles = StyleSheet.create({
   albumCalendarDay: { color: '#B7B7B7', fontSize: 14, fontWeight: '500' },
   albumCalendarDayManageable: { color: '#555555', fontWeight: '700' },
   albumCalendarDayWithMedia: { color: '#222222', fontWeight: '800' },
-  albumCalendarDailyBadge: { marginTop: 4, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 5, backgroundColor: '#FCE8EE' },
-  albumCalendarEventBadge: { marginTop: 4, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 5, backgroundColor: '#FFF3C9' },
-  albumCalendarBadgeText: { color: '#4A4141', fontSize: 9, lineHeight: 12, fontWeight: 'bold', flexShrink: 1 },
-  albumCalendarBadgeCount: { color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800' },
-  albumCalendarEventCount: { marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800' },
+  albumCalendarDailyBadge: { marginTop: 4, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 5, backgroundColor: '#FCE8EE', alignItems: 'center' },
+  albumCalendarEventBadge: { marginTop: 4, paddingHorizontal: 4, paddingVertical: 3, borderRadius: 5, backgroundColor: '#FFF3C9', alignItems: 'center' },
+  albumCalendarBadgeText: { width: '100%', color: '#4A4141', fontSize: 9, lineHeight: 12, fontWeight: 'bold', flexShrink: 1, textAlign: 'center' },
+  albumCalendarBadgeCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },
+  albumCalendarEventCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },
   albumCalendarMore: { marginTop: 1, color: '#8A8A8A', fontSize: 9 },
   calendarEmptyText: { marginTop: 20, color: COLORS.textLight, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
   addDateSelectionBanner: { alignSelf: 'center', marginTop: 8, marginBottom: 2, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, backgroundColor: '#DFF4F4', borderWidth: 1, borderColor: '#9FD7D9' },

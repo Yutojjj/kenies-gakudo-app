@@ -194,8 +194,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFF7D8',
-    borderWidth: 3,
-    borderColor: '#E8D79B',
+    borderWidth: 1,
+    borderColor: '#E6DDBA',
     shadowColor: '#7A6034',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   centerHomeIconFrameActive: {
     backgroundColor: '#DFF7F3',
-    borderColor: '#83D3CB',
+    borderColor: '#A9DDD8',
   },
   centerHomeIcon: {
     width: 52,

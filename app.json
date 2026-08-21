@@ -12,6 +12,12 @@
           "cameraPermission": "QRコードをスキャンするためにカメラを使用します。"
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "アルバムへ写真や動画を追加するために写真ライブラリを使用します。"
+        }
+      ],
       "expo-video"
     ],
     "web": {
