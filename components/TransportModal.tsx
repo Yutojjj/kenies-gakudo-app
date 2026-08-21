@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 
@@ -71,6 +71,8 @@ export default function TransportModal({
   const [lastWeekLoading, setLastWeekLoading] = useState(false);
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
+  const [timelineZoomVisible, setTimelineZoomVisible] = useState(false);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const autoPrintTriggeredRef = useRef(false);
   const [customBlocks, setCustomBlocks] = useState<CustomTransportBlock[]>([]);
   const [customBlockModalVisible, setCustomBlockModalVisible] = useState(false);
@@ -96,6 +98,7 @@ export default function TransportModal({
 
   useEffect(() => {
     setLocallyAssignedBlockKeys(new Set());
+    if (!visible) setTimelineZoomVisible(false);
   }, [dateStr, visible]);
 
   useEffect(() => {
@@ -1067,7 +1070,103 @@ export default function TransportModal({
       </View>
     );
 
+    const landscapeWidth = Math.max(windowWidth, windowHeight);
+    const landscapeHeight = Math.min(windowWidth, windowHeight);
+    const expandedLabelWidth = 88;
+    const expandedColWidth = Math.max(14, (landscapeWidth - expandedLabelWidth - 28) / ((END_HOUR - START_HOUR) * 4));
+    const expandedTimelineWidth = expandedColWidth * (END_HOUR - START_HOUR) * 4;
+    const isPortraitViewport = windowHeight > windowWidth;
+
+    const renderExpandedTimelineBoard = () => (
+      <View style={[styles.zoomTimelineFrame, { width: expandedLabelWidth + expandedTimelineWidth }]}>
+        <View style={styles.zoomTimelineHeaderRow}>
+          <View style={[styles.zoomTimelineLabel, { width: expandedLabelWidth }]}>
+            <Text style={styles.zoomTimelineCornerText}>担当</Text>
+          </View>
+          <View style={{ width: expandedTimelineWidth, flexDirection: 'row' }}>
+            {timeHeaders.map(hour => (
+              <View key={hour} style={[styles.zoomTimelineHour, { width: expandedColWidth * 4 }]}>
+                <Text style={styles.zoomTimelineHourText}>{hour}:00</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {staffEntries.map((entry, staffIndex) => {
+          if (entry.staffName === '送迎しない') return null;
+          const shift = getStaffShift(entry.staffName);
+          const layout = getScreenTimelineLayout(entry);
+          const rowHeight = Math.max(42, layout.laneCount * 27);
+          const toLeft = (time?: string) => {
+            if (!time) return null;
+            const [hour, minute] = time.split(':').map(Number);
+            return (((hour - START_HOUR) * 60 + minute) / 15) * expandedColWidth;
+          };
+          const shiftStart = toLeft(shift?.start);
+          const shiftEnd = toLeft(shift?.end);
+          const shiftLeft = shiftStart === null ? 0 : Math.max(0, shiftStart);
+          const shiftWidth = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart ? shiftEnd - shiftLeft : 0;
+
+          return (
+            <View key={`${entry.staffName}_${staffIndex}`} style={[styles.zoomTimelineStaffRow, { height: rowHeight }]}>
+              <View style={[styles.zoomTimelineLabel, { width: expandedLabelWidth, height: rowHeight }]}>
+                <Text style={styles.zoomTimelineStaffName}>{entry.staffName}</Text>
+                <Text style={styles.zoomTimelineShiftText}>{shift?.start || '-'} ~ {shift?.end || '-'}</Text>
+              </View>
+              <View style={{ width: expandedTimelineWidth, height: rowHeight, position: 'relative' }}>
+                {Array.from({ length: (END_HOUR - START_HOUR) * 4 }).map((_, slotIndex) => (
+                  <View key={slotIndex} style={[styles.zoomTimelineGridCell, {
+                    left: slotIndex * expandedColWidth,
+                    width: expandedColWidth,
+                    height: rowHeight,
+                    borderLeftWidth: slotIndex % 4 === 0 ? 1.5 : 1,
+                    borderStyle: slotIndex % 4 === 0 ? 'solid' : 'dashed',
+                    borderColor: slotIndex % 4 === 0 ? '#A7C9C6' : '#D7E1E0',
+                  }]} />
+                ))}
+                {shiftWidth > 0 && <View style={[styles.zoomTimelineShift, { left: shiftLeft, width: shiftWidth, height: rowHeight }]} />}
+                {layout.items.map(({ block, tripIndex, slotIndex, lane }, blockIndex) => {
+                  const isSwimming = (block.nameOnly || block.label).includes('スイミング');
+                  const isLesson = block.type === 'lesson';
+                  const backgroundColor = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
+                  const borderColor = isSwimming ? '#46B8D7' : isLesson ? '#78C28C' : '#F2B760';
+                  return (
+                    <View key={`${block.key}_${blockIndex}`} style={[styles.zoomTimelineBlock, {
+                      left: slotIndex * expandedColWidth,
+                      top: lane * 27 + 2,
+                      width: expandedColWidth * 3,
+                      backgroundColor,
+                      borderColor,
+                    }]}>
+                      <Text style={styles.zoomTimelineBlockTrip} numberOfLines={1}>{TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`}</Text>
+                      <Text style={styles.zoomTimelineBlockText} numberOfLines={1} adjustsFontSizeToFit>
+                        {block.time || '-'} {block.nameOnly || block.label} {block.count}名
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+
+        <View style={styles.zoomTimelineRoomRow}>
+          <View style={[styles.zoomTimelineRoomLabel, { width: expandedLabelWidth }]}>
+            <Text style={styles.zoomTimelineRoomLabelText}>室内スタッフ</Text>
+          </View>
+          <View style={{ width: expandedTimelineWidth, flexDirection: 'row' }}>
+            {roomStaffCounts.map((count, index) => (
+              <View key={index} style={[styles.zoomTimelineRoomCell, { width: expandedColWidth }, index % 4 === 0 && styles.overviewRoomCountHourCell]}>
+                <Text style={styles.zoomTimelineRoomValue}>{count}<Text style={styles.zoomTimelineRoomUnit}>名</Text></Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+
     return (
+      <>
       <ScrollView style={styles.overviewScroll} contentContainerStyle={styles.overviewContent} showsVerticalScrollIndicator={false}>
         <View style={styles.overviewDocumentHeader}>
           <Text style={styles.overviewDate}>{dateLabel}</Text>
@@ -1099,7 +1198,14 @@ export default function TransportModal({
           <Text style={styles.overviewEmptyText}>この日の送迎予定はありません</Text>
         )}
 
-        <Text style={styles.overviewSectionTitle}>スタッフ時間表</Text>
+        <View style={styles.overviewTimelineTitleRow}>
+          <Text style={styles.overviewSectionTitle}>スタッフ時間表</Text>
+          <TouchableOpacity style={styles.overviewZoomButton} onPress={() => setTimelineZoomVisible(true)}>
+            <Ionicons name="expand-outline" size={14} color="#247A82" />
+            <Text style={styles.overviewZoomButtonText}>横画面で拡大</Text>
+          </TouchableOpacity>
+        </View>
+        <Pressable onPress={() => setTimelineZoomVisible(true)}>
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={styles.overviewTimelineFrame}>
             <View style={{ flexDirection: 'row', height: 30, borderBottomWidth: 1, borderColor: '#CFE0DF' }}>
@@ -1200,7 +1306,44 @@ export default function TransportModal({
               </View>
           </View>
         </ScrollView>
+        </Pressable>
       </ScrollView>
+
+      <Modal
+        visible={timelineZoomVisible}
+        transparent
+        animationType="fade"
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        onRequestClose={() => setTimelineZoomVisible(false)}
+      >
+        <View style={styles.timelineZoomOverlay}>
+          <View style={[
+            styles.timelineZoomViewport,
+            isPortraitViewport
+              ? { width: landscapeWidth, height: landscapeHeight, transform: [{ rotate: '90deg' }] }
+              : { width: windowWidth, height: windowHeight },
+          ]}>
+            <View style={styles.timelineZoomHeader}>
+              <View>
+                <Text style={styles.timelineZoomTitle}>スタッフ時間表</Text>
+                <Text style={styles.timelineZoomDate}>{dateLabel}</Text>
+              </View>
+              <TouchableOpacity style={styles.timelineZoomClose} onPress={() => setTimelineZoomVisible(false)}>
+                <Ionicons name="close" size={26} color="#222222" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.timelineZoomScroll}
+              contentContainerStyle={styles.timelineZoomScrollContent}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+            >
+              {renderExpandedTimelineBoard()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      </>
     );
   };
 
@@ -1825,6 +1968,37 @@ const styles = StyleSheet.create({
   overviewRoomCountValue: { fontSize: 13, lineHeight: 16, fontWeight: '900', color: '#2D2436' },
   overviewRoomCountUnit: { fontSize: 7, fontWeight: '700', color: '#2D2436', marginLeft: 1 },
   overviewSectionTitle: { fontSize: 14, fontWeight: '800', color: '#222', marginTop: 4, marginBottom: 7 },
+  overviewTimelineTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: 7 },
+  overviewZoomButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#9FD5D8' },
+  overviewZoomButtonText: { fontSize: 11, fontWeight: '900', color: '#247A82' },
+  timelineZoomOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.78)' },
+  timelineZoomViewport: { overflow: 'hidden', backgroundColor: '#FFFFFF' },
+  timelineZoomHeader: { height: 54, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FBFA', borderBottomWidth: 1, borderBottomColor: '#CFE0DF' },
+  timelineZoomTitle: { fontSize: 16, fontWeight: '900', color: '#1E2425' },
+  timelineZoomDate: { marginTop: 2, fontSize: 10, fontWeight: '700', color: '#657174' },
+  timelineZoomClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D4DFDE' },
+  timelineZoomScroll: { flex: 1 },
+  timelineZoomScrollContent: { padding: 12, alignItems: 'center', justifyContent: 'center', flexGrow: 1 },
+  zoomTimelineFrame: { borderWidth: 1, borderColor: '#BBD6D3', borderRadius: 9, overflow: 'hidden', backgroundColor: '#FFFFFF' },
+  zoomTimelineHeaderRow: { height: 30, flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#CFE0DF' },
+  zoomTimelineLabel: { paddingHorizontal: 7, justifyContent: 'center', backgroundColor: '#FBFBFB', borderRightWidth: 1, borderRightColor: '#CFE0DF', zIndex: 2 },
+  zoomTimelineCornerText: { fontSize: 9, fontWeight: '800', color: '#555555' },
+  zoomTimelineHour: { alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1.5, borderLeftColor: '#8FB8B5' },
+  zoomTimelineHourText: { width: '100%', textAlign: 'center', fontSize: 10, fontWeight: '900', color: '#272727' },
+  zoomTimelineStaffRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#EDF2F1' },
+  zoomTimelineStaffName: { fontSize: 11, fontWeight: '900', color: '#272727' },
+  zoomTimelineShiftText: { marginTop: 2, fontSize: 8, fontWeight: '700', color: '#737B7D' },
+  zoomTimelineGridCell: { position: 'absolute', top: 0 },
+  zoomTimelineShift: { position: 'absolute', top: 0, backgroundColor: '#FFF4AC', opacity: 0.72 },
+  zoomTimelineBlock: { position: 'absolute', height: 23, borderWidth: 1, borderRadius: 5, paddingHorizontal: 3, paddingVertical: 2, justifyContent: 'center', zIndex: 2 },
+  zoomTimelineBlockTrip: { fontSize: 6, lineHeight: 7, fontWeight: '700', color: '#555555' },
+  zoomTimelineBlockText: { fontSize: 7, lineHeight: 8, fontWeight: '900', color: '#222222' },
+  zoomTimelineRoomRow: { minHeight: 38, flexDirection: 'row', borderTopWidth: 2, borderTopColor: '#9A7AC1', backgroundColor: '#F5F0FB' },
+  zoomTimelineRoomLabel: { justifyContent: 'center', paddingHorizontal: 7, borderRightWidth: 1, borderRightColor: '#CFE0DF', backgroundColor: '#EEE5F7' },
+  zoomTimelineRoomLabelText: { fontSize: 9, fontWeight: '900', color: '#352B40' },
+  zoomTimelineRoomCell: { minHeight: 38, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderStyle: 'dashed', borderLeftColor: '#CBBBDD' },
+  zoomTimelineRoomValue: { fontSize: 10, lineHeight: 12, fontWeight: '900', color: '#2D2436' },
+  zoomTimelineRoomUnit: { fontSize: 6, fontWeight: '700', color: '#2D2436' },
   overviewTable: { width: '100%', borderLeftWidth: 1, borderTopWidth: 1, borderColor: '#B9DCDA' },
   overviewTableRow: { flexDirection: 'row', minHeight: 27 },
   overviewTableHeader: { minHeight: 26, backgroundColor: '#EEF8F7' },
