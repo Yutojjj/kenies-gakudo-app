@@ -6,18 +6,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { navigateHome } from '../utils/navigationHome';
-
-const SHIFT_IMAGES = {
-  autoFill: require('../assets/menu/shift_auto.png'),
-  delete:   require('../assets/menu/shift_delete.png'),
-};
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
@@ -157,6 +152,9 @@ export default function ShiftCreateScreen() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'dow'|'staff'|'order'>('dow');
   const [pdfOrder, setPdfOrder] = useState<string[]>([]);
+  const [settingTimeTarget, setSettingTimeTarget] = useState<{ staffIndex: number; field: 'start' | 'end' } | null>(null);
+  const [settingTimeHour, setSettingTimeHour] = useState(14);
+  const [settingTimeMinute, setSettingTimeMinute] = useState(0);
   // 自動入力設定（Firestoreに保存）
   const [autoFillSettings, setAutoFillSettings] = useState<{
     staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
@@ -231,31 +229,45 @@ export default function ShiftCreateScreen() {
           .filter(d => d.data().showInShiftTable !== false)
           .map(d => ({ id: d.id, name: d.data().name }));
         setAllStaff(staffList);
-        setStaffListLoaded(true);
 
-        // autoFillSettings初期化（Firestoreの保存データをマージ）
-        getDoc(doc(db, 'settings', 'autoFillSettings')).then(settingSnap => {
-          const saved = settingSnap.exists() ? settingSnap.data() : {};
-          const savedStaff: any[] = saved.staffSettings || [];
-          const merged = staffList.map((s, i) => {
-            const found = savedStaff.find((x: any) => x.name === s.name);
-            if (found) return found;
-            return {
-              name: s.name,
-              start: s.name === '稲熊' ? '11:00' : '14:00',
-              end:   s.name === '稲熊' ? '20:00' : '18:30',
-              priority: i + 1,
-              enabled: true,
-            };
-          });
-          const savedPdfOrder = saved.pdfOrder || [];
-          if (savedPdfOrder.length > 0) setPdfOrder(savedPdfOrder);
-          setAutoFillSettings({
-            staffSettings: merged,
-            dayMaxCount: saved.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
-            pdfOrder: savedPdfOrder,
-          });
-        });
+        // Firebaseの保存順を基準にし、新しいスタッフだけ末尾へ補完する
+        const settingRef = doc(db, 'settings', 'autoFillSettings');
+        const settingSnap = await getDoc(settingRef);
+        const saved = settingSnap.exists() ? settingSnap.data() : {};
+        const savedStaff: any[] = Array.isArray(saved.staffSettings) ? saved.staffSettings : [];
+        const merged = staffList
+          .map((staff, index) => {
+            const found = savedStaff.find((item: any) => item.name === staff.name);
+            return found
+              ? {
+                  name: staff.name,
+                  start: found.start || '14:00',
+                  end: found.end || '18:30',
+                  priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
+                  enabled: found.enabled !== false,
+                }
+              : {
+                  name: staff.name,
+                  start: staff.name === '稲熊' ? '11:00' : '14:00',
+                  end: staff.name === '稲熊' ? '20:00' : '18:30',
+                  priority: savedStaff.length + index + 1,
+                  enabled: true,
+                };
+          })
+          .sort((a, b) => a.priority - b.priority)
+          .map((item, index) => ({ ...item, priority: index + 1 }));
+        const staffNames = staffList.map(staff => staff.name);
+        const savedPdfOrder = Array.isArray(saved.pdfOrder) ? saved.pdfOrder.filter((name: string) => staffNames.includes(name)) : [];
+        const normalizedPdfOrder = [...savedPdfOrder, ...staffNames.filter(name => !savedPdfOrder.includes(name))];
+        const normalizedSettings = {
+          staffSettings: merged,
+          dayMaxCount: saved.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
+          pdfOrder: normalizedPdfOrder,
+        };
+        setPdfOrder(normalizedPdfOrder);
+        setAutoFillSettings(normalizedSettings);
+        await setDoc(settingRef, { ...normalizedSettings, updatedAt: new Date() }, { merge: true });
+        setStaffListLoaded(true);
       } catch (e) {
         console.warn('スタッフ取得失敗', e);
         setStaffListLoaded(true);
@@ -684,7 +696,103 @@ export default function ShiftCreateScreen() {
 
   const saveAutoFillSettings = async (settings: typeof autoFillSettings) => {
     setAutoFillSettings(settings);
-    await setDoc(doc(db, 'settings', 'autoFillSettings'), settings);
+    if (settings.pdfOrder) setPdfOrder(settings.pdfOrder);
+    await setDoc(doc(db, 'settings', 'autoFillSettings'), { ...settings, updatedAt: new Date() }, { merge: true });
+  };
+
+  const openSettingTimePicker = (staffIndex: number, field: 'start' | 'end') => {
+    const value = autoFillSettings.staffSettings[staffIndex]?.[field] || (field === 'start' ? '14:00' : '18:30');
+    const [hour, minute] = value.split(':').map(Number);
+    setSettingTimeHour(Number.isFinite(hour) ? hour : 14);
+    setSettingTimeMinute(Number.isFinite(minute) ? minute : 0);
+    setSettingTimeTarget({ staffIndex, field });
+  };
+
+  const saveSettingTime = async () => {
+    if (!settingTimeTarget) return;
+    const value = `${String(settingTimeHour).padStart(2, '0')}:${String(settingTimeMinute).padStart(2, '0')}`;
+    const nextStaffSettings = autoFillSettings.staffSettings.map((staff, index) =>
+      index === settingTimeTarget.staffIndex ? { ...staff, [settingTimeTarget.field]: value } : staff
+    );
+    await saveAutoFillSettings({ ...autoFillSettings, staffSettings: nextStaffSettings });
+    setSettingTimeTarget(null);
+  };
+
+  const deleteCurrentMonthShifts = async () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm(`${year}年${month + 1}月のシフトを全て削除しますか？`)
+      : await new Promise<boolean>(resolve => Alert.alert('確認', `${year}年${month + 1}月のシフトを全て削除しますか？`, [
+          { text: 'キャンセル', onPress: () => resolve(false) },
+          { text: '削除', style: 'destructive', onPress: () => resolve(true) },
+        ]));
+    if (!confirmed) return;
+    setLoading(true);
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (assignedShifts[dateStr] && assignedShifts[dateStr].length > 0) {
+        await deleteDoc(doc(db, 'assigned_shifts', dateStr));
+        count++;
+      }
+    }
+    setLoading(false);
+    if (Platform.OS === 'web') window.alert(`${count}日分のシフトを削除しました`);
+    else Alert.alert('完了', `${count}日分のシフトを削除しました`);
+  };
+
+  const autoFillCurrentMonth = async () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let updatedCount = 0;
+    const ok = Platform.OS === 'web'
+      ? window.confirm(`${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`)
+      : await new Promise<boolean>(resolve => Alert.alert('一括自動入力', `${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`, [
+          { text: 'キャンセル', onPress: () => resolve(false) },
+          { text: '実行', onPress: () => resolve(true) },
+        ]));
+    if (!ok) return;
+    setLoading(true);
+    try {
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, month, d);
+        const dow = date.getDay();
+        if (dow === 0 || dow === 6) continue;
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        if (publicHolidays[dateStr]) continue;
+        const already = assignedShifts[dateStr] || [];
+        const assignedNames = [...already.map((s: any) => s.name)];
+        const newEntries: { name: string; start: string; end: string }[] = [...already];
+        const dowName = ['日','月','火','水','木','金','土'][date.getDay()] as '月'|'火'|'水'|'木'|'金';
+        const maxCount = (autoFillSettings.dayMaxCount as any)[dowName] ?? 3;
+        const sortedSettings = [...autoFillSettings.staffSettings]
+          .filter(s => s.enabled)
+          .sort((a, b) => a.priority - b.priority);
+        for (const setting of sortedSettings) {
+          if (assignedNames.includes(setting.name)) continue;
+          const req = requests[`${(setting.name || '').trim()}_${dateStr}`];
+          if (req === '✕' || req === '午前✕' || req === '午後✕') continue;
+          const isInaguma = setting.name === '稲熊';
+          const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
+          if (!isInaguma && othersCount >= maxCount) continue;
+          newEntries.push({ name: setting.name, start: setting.start, end: setting.end });
+          assignedNames.push(setting.name);
+        }
+        if (newEntries.length === already.length) continue;
+        await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() }, { merge: true });
+        updatedCount++;
+      }
+      if (Platform.OS === 'web') window.alert(`完了: ${updatedCount}日分を自動入力しました`);
+      else Alert.alert('完了', `${updatedCount}日分を自動入力しました`);
+    } catch (e) {
+      if (Platform.OS === 'web') window.alert('エラー: 一部保存に失敗しました');
+      else Alert.alert('エラー', '一部保存に失敗しました');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (checking || !verified) return null;
@@ -775,10 +883,20 @@ export default function ShiftCreateScreen() {
           <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
-          <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={16} color={COLORS.primary} style={{marginRight: 4}} />
-          <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
-        </TouchableOpacity>
+        <View style={styles.monthActionRow}>
+          <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
+            <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={15} color={COLORS.primary} />
+            <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.monthAutoFillBtn} onPress={autoFillCurrentMonth} disabled={loading}>
+            {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="flash-outline" size={15} color="#FFFFFF" />}
+            <Text style={styles.monthActionText}>自動入力</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.monthDeleteBtn} onPress={deleteCurrentMonthShifts} disabled={loading}>
+            <Ionicons name="trash-outline" size={15} color="#B93E48" />
+            <Text style={styles.monthDeleteText}>削除</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={{ paddingHorizontal: 8 }}>
@@ -841,98 +959,6 @@ export default function ShiftCreateScreen() {
           })}
         </View>
       </ScrollView>
-
-      {/* 一括削除FAB（右下）*/}
-      <TouchableOpacity
-        style={styles.fabDelete}
-        onPress={async () => {
-          const year = currentDate.getFullYear();
-          const month = currentDate.getMonth();
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-          const confirmed = Platform.OS === 'web'
-            ? window.confirm(`${year}年${month + 1}月のシフトを全て削除しますか？`)
-            : await new Promise<boolean>(resolve => Alert.alert('確認', `${year}年${month + 1}月のシフトを全て削除しますか？`, [
-                { text: 'キャンセル', onPress: () => resolve(false) },
-                { text: '削除', style: 'destructive', onPress: () => resolve(true) }
-              ]));
-          if (!confirmed) return;
-          setLoading(true);
-          let count = 0;
-          for (let d = 1; d <= daysInMonth; d++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            if (assignedShifts[dateStr] && assignedShifts[dateStr].length > 0) {
-              await deleteDoc(doc(db, 'assigned_shifts', dateStr));
-              count++;
-            }
-          }
-          setLoading(false);
-          if (Platform.OS === 'web') window.alert(`${count}日分のシフトを削除しました`);
-          else Alert.alert('完了', `${count}日分のシフトを削除しました`);
-        }}
-        activeOpacity={0.85}
-      >
-        <Image source={SHIFT_IMAGES.delete} style={styles.fabImg} resizeMode="cover" />
-      </TouchableOpacity>
-
-      {/* 自動入力FAB（左下）- 当月全日一括 */}
-      <TouchableOpacity
-        style={styles.fabAutoFill}
-        onPress={async () => {
-          const year = currentDate.getFullYear();
-          const month = currentDate.getMonth();
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-          let updatedCount = 0;
-          const ok = Platform.OS === 'web'
-            ? window.confirm(`${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`)
-            : await new Promise<boolean>(resolve => Alert.alert('一括自動入力', `${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`, [
-                { text: 'キャンセル', onPress: () => resolve(false) },
-                { text: '実行', onPress: () => resolve(true) }
-              ]));
-          if (!ok) return;
-          setLoading(true);
-          try {
-            for (let d = 1; d <= daysInMonth; d++) {
-              const date = new Date(year, month, d);
-              const dow = date.getDay();
-              if (dow === 0 || dow === 6) continue;
-              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-              if (publicHolidays[dateStr]) continue;
-              const already = assignedShifts[dateStr] || [];
-              const assignedNames = [...already.map((s: any) => s.name)];
-              const newEntries: { name: string; start: string; end: string }[] = [...already];
-              const dowName = ['日','月','火','水','木','金','土'][new Date(year, month, d).getDay()] as '月'|'火'|'水'|'木'|'金';
-              const maxCount = (autoFillSettings.dayMaxCount as any)[dowName] ?? 3;
-              const sortedSettings = [...autoFillSettings.staffSettings]
-                .filter(s => s.enabled)
-                .sort((a, b) => a.priority - b.priority);
-              for (const setting of sortedSettings) {
-                if (assignedNames.includes(setting.name)) continue;
-                const req = requests[`${(setting.name||'').trim()}_${dateStr}`];
-                if (req === '✕' || req === '午前✕' || req === '午後✕') continue;
-                const isInaguma = setting.name === '稲熊';
-                const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
-                if (!isInaguma && othersCount >= maxCount) continue;
-                newEntries.push({ name: setting.name, start: setting.start, end: setting.end });
-                assignedNames.push(setting.name);
-              }
-              if (newEntries.length === already.length) continue;
-              await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() }, { merge: true });
-              updatedCount++;
-            }
-            if (Platform.OS === 'web') window.alert(`完了: ${updatedCount}日分を自動入力しました`);
-            else Alert.alert('完了', `${updatedCount}日分を自動入力しました`);
-          } catch (e) {
-            if (Platform.OS === 'web') window.alert('エラー: 一部保存に失敗しました');
-            else Alert.alert('エラー', '一部保存に失敗しました');
-          } finally { setLoading(false); }
-        }}
-        activeOpacity={0.85}
-      >
-        {loading
-          ? <ActivityIndicator size="small" color={COLORS.white} style={{ position: 'absolute', zIndex: 10 }} />
-          : null}
-        <Image source={SHIFT_IMAGES.autoFill} style={[styles.fabImg, loading && { opacity: 0.5 }]} resizeMode="cover" />
-      </TouchableOpacity>
 
       {/* ==========================================
           ★ 1画面完全フィットシフト表 (土日幅縮小版)
@@ -1373,29 +1399,19 @@ export default function ShiftCreateScreen() {
                   <View style={{ flex:1 }}>
                     <View style={{ flexDirection:'row', gap:4, alignItems:'center' }}>
                       <Text style={styles.settingTimeLabel}>開始</Text>
-                      <TextInput
+                      <TouchableOpacity
                         style={styles.settingTimeInput}
-                        value={s.start}
-                        onChangeText={v => {
-                          const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, start:v} : x);
-                          setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
-                        }}
-                        placeholder="14:00"
-                        placeholderTextColor="#bbb"
-                        keyboardType="numbers-and-punctuation"
-                      />
+                        onPress={() => openSettingTimePicker(idx, 'start')}
+                      >
+                        <Text style={styles.settingTimeValue}>{s.start}</Text>
+                      </TouchableOpacity>
                       <Text style={styles.settingTimeLabel}>終了</Text>
-                      <TextInput
+                      <TouchableOpacity
                         style={styles.settingTimeInput}
-                        value={s.end}
-                        onChangeText={v => {
-                          const arr = autoFillSettings.staffSettings.map((x,i) => i===idx ? {...x, end:v} : x);
-                          setAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
-                        }}
-                        placeholder="18:30"
-                        placeholderTextColor="#bbb"
-                        keyboardType="numbers-and-punctuation"
-                      />
+                        onPress={() => openSettingTimePicker(idx, 'end')}
+                      >
+                        <Text style={styles.settingTimeValue}>{s.end}</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 </View>
@@ -1425,6 +1441,7 @@ export default function ShiftCreateScreen() {
                         const arr = [...pdfOrder];
                         [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
                         setPdfOrder(arr);
+                        saveAutoFillSettings({ ...autoFillSettings, pdfOrder: arr });
                       }}
                     ><Ionicons name="chevron-up" size={14} color="#555" /></TouchableOpacity>
                     <TouchableOpacity
@@ -1434,6 +1451,7 @@ export default function ShiftCreateScreen() {
                         const arr = [...pdfOrder];
                         [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
                         setPdfOrder(arr);
+                        saveAutoFillSettings({ ...autoFillSettings, pdfOrder: arr });
                       }}
                     ><Ionicons name="chevron-down" size={14} color="#555" /></TouchableOpacity>
                   </View>
@@ -1452,6 +1470,51 @@ export default function ShiftCreateScreen() {
               </>}
               <View style={{ height:40 }} />
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!settingTimeTarget} transparent animationType="fade">
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerContent, styles.settingTimePickerPanel]}>
+            <View style={styles.settingTimePickerHeader}>
+              <View>
+                <Text style={styles.settingTimePickerTitle}>
+                  {settingTimeTarget ? autoFillSettings.staffSettings[settingTimeTarget.staffIndex]?.name : ''}
+                </Text>
+                <Text style={styles.settingTimePickerSub}>
+                  {settingTimeTarget?.field === 'start' ? '開始時間を選択' : '終了時間を選択'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.settingTimePickerClose} onPress={() => setSettingTimeTarget(null)}>
+                <Ionicons name="close" size={24} color="#333333" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.settingTimeWheelRow} nativeID="ui-time-wheel-auto-fill-setting">
+              <ShiftTimeWheel
+                values={HOURS}
+                value={settingTimeHour}
+                visible={!!settingTimeTarget}
+                onChange={setSettingTimeHour}
+              />
+              <Text style={styles.drumColon}>:</Text>
+              <ShiftTimeWheel
+                values={MINUTES}
+                value={settingTimeMinute}
+                visible={!!settingTimeTarget}
+                onChange={setSettingTimeMinute}
+              />
+            </View>
+
+            <View style={styles.settingTimePickerActions}>
+              <TouchableOpacity style={styles.settingTimeCancelBtn} onPress={() => setSettingTimeTarget(null)}>
+                <Text style={styles.settingTimeCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.settingTimeSaveBtn} onPress={saveSettingTime}>
+                <Text style={styles.settingTimeSaveText}>この時刻に設定</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1479,11 +1542,16 @@ const styles = StyleSheet.create({
   workSummaryPeriodBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E1CDBD' },
   workSummaryPeriodText: { minWidth: 130, textAlign: 'center', fontSize: 16, fontWeight: '900', color: '#3F302B' },
   
-  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
-  
-  toggleTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E0FFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#AFEEEE' },
+
+  monthActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 'auto' },
+  toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },
   toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
+  monthAutoFillBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#36A9B5', borderWidth: 1, borderColor: '#258C96' },
+  monthDeleteBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
+  monthActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  monthDeleteText: { color: '#B93E48', fontSize: 12, fontWeight: '900' },
 
   calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold' },
@@ -1587,7 +1655,19 @@ const styles = StyleSheet.create({
   settingEnabledBtnOn: { backgroundColor: '#4CAF50' },
   settingStaffName: { fontSize: 13, fontWeight: 'bold', color: '#333', width: 50 },
   settingTimeLabel: { fontSize: 10, color: '#888' },
-  settingTimeInput: { borderWidth: 1, borderColor: '#CCC', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontSize: 12, width: 56, textAlign: 'center', color: '#333' },
+  settingTimeInput: { width: 62, minHeight: 34, borderWidth: 1, borderColor: '#BCC9CC', borderRadius: 8, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  settingTimeValue: { fontSize: 13, fontWeight: '800', textAlign: 'center', color: '#263238' },
+  settingTimePickerPanel: { maxWidth: 340, padding: 16 },
+  settingTimePickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  settingTimePickerTitle: { fontSize: 17, fontWeight: '900', color: '#222222' },
+  settingTimePickerSub: { marginTop: 3, fontSize: 12, fontWeight: '700', color: '#697578' },
+  settingTimePickerClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F5F5', borderWidth: 1, borderColor: '#DCE3E3' },
+  settingTimeWheelRow: { width: 170, height: SHIFT_WHEEL_VIEW_HEIGHT, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  settingTimePickerActions: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  settingTimeCancelBtn: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F4', borderWidth: 1, borderColor: '#D9DEDF' },
+  settingTimeCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
+  settingTimeSaveBtn: { flex: 1.4, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#36A9B5' },
+  settingTimeSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   modalBtn: { flex: 1, padding: 14, alignItems: 'center', borderRadius: 8 },
 
   // ★ 1画面完全フィット(土日細い版・時間表示改行対応)のスタイル
@@ -1615,11 +1695,6 @@ const styles = StyleSheet.create({
   
   ssDataCell: { borderWidth: 1, borderColor: '#666', justifyContent: 'center', alignItems: 'center', paddingVertical: 4 },
   ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
-  fabDelete: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
-  fabDeleteText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
-  fabAutoFill: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 94, right: 16, width: 160, height: 68, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
-  fabAutoFillText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
-  fabImg: { width: '100%', height: '100%' },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   autoFillBtnText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
 })
