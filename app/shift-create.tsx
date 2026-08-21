@@ -420,7 +420,7 @@ export default function ShiftCreateScreen() {
         .c-date-sun   { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-date-sat   { background-color: #CCE4FF !important; color: #0055CC; }
 
-        .c-name { background-color: #FFB6C1 !important; font-weight: bold; font-size: 7px;
+        .c-name { background-color: #FFB6C1 !important; font-weight: 900; font-size: 8.5px;
           padding: 1px 2px; height: 20px; white-space: nowrap; overflow: hidden; }
 
         .c-shift       { height: 20px; font-size: 9.5px; padding: 1px;
