@@ -164,7 +164,7 @@ export default function ShiftCreateScreen() {
     staffSettings: [],
     dayMaxCount: { '月':3, '火':3, '水':3, '木':3, '金':3 },
   });
-  const [eventsData, setEventsData] = useState<Record<string, string>>({});
+  const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
 
@@ -290,8 +290,15 @@ export default function ShiftCreateScreen() {
       }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
       const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
-        const eData: Record<string, string> = {};
-        snap.forEach(d => { eData[d.id] = d.data().title; });
+        const eData: Record<string, string[]> = {};
+        snap.forEach(d => {
+          const data = d.data();
+          const dateKey = String(data.dateStr || data.dateKey || d.id);
+          const title = String(data.title || '').trim();
+          if (!dateKey || !title) return;
+          if (!eData[dateKey]) eData[dateKey] = [];
+          if (!eData[dateKey].includes(title)) eData[dateKey].push(title);
+        });
         setEventsData(eData);
       }, (e) => console.warn('events リスナーエラー', e));
 
@@ -814,7 +821,10 @@ export default function ShiftCreateScreen() {
                 
                 {isEventDay && (
                   <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText} numberOfLines={1}>{eventsData[item.dateStr]}</Text>
+                    <Ionicons name="calendar-outline" size={10} color="#7A4B00" />
+                    <Text style={styles.eventBadgeText} numberOfLines={2}>
+                      イベント {eventsData[item.dateStr].join('・')}
+                    </Text>
                   </View>
                 )}
 
@@ -1055,6 +1065,18 @@ export default function ShiftCreateScreen() {
             </View>
 
             <ScrollView style={{ flex: 1, padding: 20 }}>
+
+              {eventsData[selectedDateStr]?.length > 0 && (
+                <View style={styles.dayEventCard}>
+                  <View style={styles.dayEventTitleRow}>
+                    <Ionicons name="calendar" size={18} color="#A76500" />
+                    <Text style={styles.dayEventLabel}>イベント予定</Text>
+                  </View>
+                  {eventsData[selectedDateStr].map((title, index) => (
+                    <Text key={`${title}-${index}`} style={styles.dayEventTitle}>・{title}</Text>
+                  ))}
+                </View>
+              )}
 
               {/* ⑬ 決定したシフト（最上位に表示） */}
               <Text style={[styles.sectionTitle, { borderColor: COLORS.accent, marginBottom: 8 }]}>決定したシフト</Text>
@@ -1479,8 +1501,12 @@ const styles = StyleSheet.create({
   cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   
-  eventBadge: { backgroundColor: '#20B2AA', borderRadius: 4, padding: 2, marginTop: 2 },
-  eventBadgeText: { fontSize: 8, color: COLORS.white, fontWeight: 'bold', textAlign: 'center' },
+  eventBadge: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 3, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
+  eventBadgeText: { flex: 1, fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
+  dayEventCard: { marginBottom: 18, padding: 14, borderRadius: 10, backgroundColor: '#FFF8DF', borderWidth: 1, borderColor: '#EBCB73' },
+  dayEventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
+  dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },
+  dayEventTitle: { fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#27211B' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: COLORS.white, height: '85%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },

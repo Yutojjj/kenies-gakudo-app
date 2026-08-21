@@ -554,6 +554,8 @@ export default function YearEventsScreen() {
   const [mgmtTitle, setMgmtTitle] = useState('');
   const [mgmtDesc, setMgmtDesc] = useState('');
   const [mgmtDeadlineDate, setMgmtDeadlineDate] = useState('');
+  const [deadlineCalendarVisible, setDeadlineCalendarVisible] = useState(false);
+  const [deadlineCalendarDate, setDeadlineCalendarDate] = useState(new Date());
   const [mgmtExtName, setMgmtExtName] = useState('');
   const [mgmtExtSchool, setMgmtExtSchool] = useState('');
   const [mgmtExtGrade, setMgmtExtGrade] = useState('');
@@ -886,6 +888,23 @@ export default function YearEventsScreen() {
     for (let i = 1; i <= mgmtDaysInMonth(y, m); i++)
       days.push({ day: i, dateStr: `${y}-${String(m+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
     return days;
+  };
+  const deadlineGenerateDays = () => {
+    const y = deadlineCalendarDate.getFullYear(), m = deadlineCalendarDate.getMonth();
+    const days = [];
+    for (let i = 0; i < mgmtFirstDay(y, m); i++) days.push(null);
+    for (let i = 1; i <= mgmtDaysInMonth(y, m); i++)
+      days.push({ day: i, dateStr: `${y}-${String(m + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}` });
+    return days;
+  };
+  const openDeadlineCalendar = () => {
+    const source = mgmtDeadlineDate || mgmtSelectedDate;
+    const [year, month] = source.split('-').map(Number);
+    const base = Number.isFinite(year) && Number.isFinite(month)
+      ? new Date(year, month - 1, 1)
+      : new Date();
+    setDeadlineCalendarDate(base);
+    setDeadlineCalendarVisible(true);
   };
   const mgmtOpenModal = (dateStr: string) => {
     setMgmtSelectedDate(dateStr);
@@ -1677,8 +1696,19 @@ export default function YearEventsScreen() {
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
                         value={mgmtTitle} onChangeText={setMgmtTitle} placeholder="イベントタイトル" placeholderTextColor="#C0C0C0" />
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>参加締め切り日</Text>
-                      <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 10, fontSize: 14 }}
-                        value={mgmtDeadlineDate} onChangeText={setMgmtDeadlineDate} placeholder="例: 2026-07-10（空欄ならしめきりなし）" placeholderTextColor="#C0C0C0" />
+                      <TouchableOpacity
+                        style={{ minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1.5, borderColor: '#B9D9DC', backgroundColor: '#F7FCFC', borderRadius: 9, paddingHorizontal: 12, marginBottom: 10 }}
+                        onPress={openDeadlineCalendar}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Ionicons name="calendar-outline" size={20} color="#287F86" />
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: mgmtDeadlineDate ? '#222' : '#777' }}>
+                            {mgmtDeadlineDate || 'しめきりなし'}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#607D80" />
+                      </TouchableOpacity>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>説明</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 70 }}
                         value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
@@ -1892,6 +1922,102 @@ export default function YearEventsScreen() {
           </>
         )}
       />
+
+      {/* 参加締め切り日カレンダー */}
+      <Modal visible={deadlineCalendarVisible} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setDeadlineCalendarVisible(false)}
+          />
+          <View style={{ width: '100%', maxWidth: 440, backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderColor: '#EEE4DA' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 17, fontWeight: '900', color: '#332B27' }}>参加締め切り日を選択</Text>
+                <Text style={{ marginTop: 3, fontSize: 12, fontWeight: '700', color: '#9A5D37' }}>
+                  イベント当日: {mgmtSelectedDate}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5D6CA' }}
+                onPress={() => setDeadlineCalendarVisible(false)}
+              >
+                <Ionicons name="close" size={25} color="#4A3A34" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3FAFA', borderWidth: 1, borderColor: '#B9D9DC' }}
+                onPress={() => setDeadlineCalendarDate(new Date(deadlineCalendarDate.getFullYear(), deadlineCalendarDate.getMonth() - 1, 1))}
+              >
+                <Ionicons name="chevron-back" size={22} color="#287F86" />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#222' }}>
+                {deadlineCalendarDate.getFullYear()}年 {deadlineCalendarDate.getMonth() + 1}月
+              </Text>
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3FAFA', borderWidth: 1, borderColor: '#B9D9DC' }}
+                onPress={() => setDeadlineCalendarDate(new Date(deadlineCalendarDate.getFullYear(), deadlineCalendarDate.getMonth() + 1, 1))}
+              >
+                <Ionicons name="chevron-forward" size={22} color="#287F86" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                  <Text key={day} style={{ width: '14.28%', textAlign: 'center', fontSize: 12, fontWeight: '900', color: index === 0 ? '#E04444' : index === 6 ? '#2879C7' : '#555' }}>{day}</Text>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {deadlineGenerateDays().map((item, index) => {
+                  if (!item) return <View key={`deadline-empty-${index}`} style={{ width: '14.28%', minHeight: 54, padding: 2 }} />;
+                  const isEventDay = item.dateStr === mgmtSelectedDate;
+                  const isSelected = item.dateStr === mgmtDeadlineDate;
+                  const dow = new Date(`${item.dateStr}T00:00:00`).getDay();
+                  const isHoliday = !!mgmtPublicHolidays[item.dateStr];
+                  const dateColor = dow === 0 || isHoliday ? '#D93636' : dow === 6 ? '#236EB5' : '#222';
+                  return (
+                    <TouchableOpacity
+                      key={item.dateStr}
+                      style={{ width: '14.28%', minHeight: 54, padding: 2 }}
+                      onPress={() => {
+                        setMgmtDeadlineDate(item.dateStr);
+                        setDeadlineCalendarVisible(false);
+                      }}
+                    >
+                      <View style={{ flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: isSelected ? 2 : 1, borderColor: isSelected ? '#148A92' : isEventDay ? '#F09A67' : '#ECECEC', backgroundColor: isSelected ? '#DDF5F3' : isEventDay ? '#FFF0E6' : '#FFF' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: isSelected ? '#086D73' : dateColor }}>{item.day}</Text>
+                        {isEventDay && <Text style={{ marginTop: 2, fontSize: 8, fontWeight: '900', color: '#B94F20' }}>イベント当日</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8, padding: 14, borderTopWidth: 1, borderColor: '#EEEEEE' }}>
+              <TouchableOpacity
+                style={{ flex: 1, minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2F2F2' }}
+                onPress={() => {
+                  setMgmtDeadlineDate('');
+                  setDeadlineCalendarVisible(false);
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#555' }}>締め切りなし</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CCCCCC' }}
+                onPress={() => setDeadlineCalendarVisible(false)}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#444' }}>閉じる</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* 詳細モーダル */}
       {DetailModal}
