@@ -1131,7 +1131,7 @@ export default function ScheduleScreen() {
           <Ionicons name="car-outline" size={18} color="#A05B00" />
           <View style={{ flex: 1 }}>
             <Text style={styles.bulkInputTitle}>お迎え</Text>
-            <Text style={styles.bulkInputSubText}>{isPickupStampingMode && activePickupTime ? `${activePickupTime} を入力中` : '時刻を保存して入力'}</Text>
+            <Text style={styles.bulkInputSubText}>{isPickupStampingMode && activePickupTime ? `${activePickupTime} を入力中` : 'かんたん入力'}</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1147,7 +1147,7 @@ export default function ScheduleScreen() {
           <Ionicons name="musical-notes-outline" size={18} color="#2C70B8" />
           <View style={{ flex: 1 }}>
             <Text style={styles.bulkInputTitle}>習い事</Text>
-            <Text style={styles.bulkInputSubText}>{isStampingMode && activeTemplate ? `${activeTemplate.name} を入力中` : '名前と時間を保存して入力'}</Text>
+            <Text style={styles.bulkInputSubText}>{isStampingMode && activeTemplate ? `${activeTemplate.name} を入力中` : 'かんたん入力'}</Text>
           </View>
         </TouchableOpacity>
       </View>
