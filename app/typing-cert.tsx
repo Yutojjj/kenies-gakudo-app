@@ -17,7 +17,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert, Modal, Platform, SafeAreaView, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
-  ActivityIndicator, FlatList,
+  ActivityIndicator, FlatList, useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import SwipeTabPager from '../components/SwipeTabPager';
@@ -103,6 +103,8 @@ function SectionHeader({ title }: { title: string }) {
 export default function TypingCertScreen() {
   const { verified, checking } = useRequireRole(['admin', 'staff']);
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const useCustomNumberPad = screenWidth <= 768;
 
   // ── タブ
   const [tab, setTab] = useState<TypingTab>('create');
@@ -123,6 +125,7 @@ export default function TypingCertScreen() {
   const [stageCount, setStageCount] = useState(8);
   const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
   const stageInputRefs = useRef<(TextInput | null)[]>([]);
+  const [activeStageInput, setActiveStageInput] = useState<number | null>(null);
   const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
 
@@ -196,6 +199,19 @@ export default function TypingCertScreen() {
     return { avg, wpm: Math.round(avg * 60) };
   };
   const wpmResult = calcWPM();
+
+  const pressCustomNumberKey = (key: string) => {
+    if (activeStageInput === null) return;
+    setStageVals(prev => {
+      const next = [...prev];
+      const current = next[activeStageInput] || '';
+      if (key === 'clear') next[activeStageInput] = '';
+      else if (key === 'backspace') next[activeStageInput] = current.slice(0, -1);
+      else if (key === '.') next[activeStageInput] = current.includes('.') ? current : current ? `${current}.` : '0.';
+      else if (current.length < 7) next[activeStageInput] = current === '0' ? key : `${current}${key}`;
+      return next;
+    });
+  };
 
   // ── 印刷ページを開く（aタグclickでポップアップブロック回避）
   const openPrintPage = (params: Record<string, string>) => {
@@ -450,37 +466,50 @@ export default function TypingCertScreen() {
             <View style={styles.stageGrid}>
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
-                  <TextInput
-                    ref={ref => { stageInputRefs.current[i] = ref; }}
-                    style={styles.stageInput}
-                    value={v}
-                    onChangeText={val => {
-                      const next = [...stageVals];
-                      next[i] = val.replace(/,/g, '.');
-                      setStageVals(next);
-                    }}
-                    keyboardType="decimal-pad"
-                    inputMode="decimal"
-                    placeholder="1.23"
-                    placeholderTextColor="#bbb"
-                  />
+                  {useCustomNumberPad ? (
+                    <TouchableOpacity
+                      style={styles.stageInput}
+                      onPress={() => setActiveStageInput(i)}
+                      activeOpacity={0.72}
+                      accessibilityLabel={`ステージ${i + 1}の数値を入力`}
+                    >
+                      <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '1.23'}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TextInput
+                      ref={ref => { stageInputRefs.current[i] = ref; }}
+                      style={styles.stageInput}
+                      value={v}
+                      onChangeText={val => {
+                        const next = [...stageVals];
+                        next[i] = val.replace(/,/g, '.');
+                        setStageVals(next);
+                      }}
+                      keyboardType="decimal-pad"
+                      inputMode="decimal"
+                      placeholder="1.23"
+                      placeholderTextColor="#bbb"
+                    />
+                  )}
                   <View style={styles.stageAssistRow}>
                     <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
-                    <TouchableOpacity
-                      style={styles.decimalKey}
-                      accessibilityLabel={`ステージ${i + 1}に小数点を入力`}
-                      onPress={() => {
-                        if (!v.includes('.')) {
-                          const next = [...stageVals];
-                          next[i] = v ? `${v}.` : '0.';
-                          setStageVals(next);
-                        }
-                        setTimeout(() => stageInputRefs.current[i]?.focus(), 0);
-                      }}
-                      activeOpacity={0.72}
-                    >
-                      <Text style={styles.decimalKeyText}>.</Text>
-                    </TouchableOpacity>
+                    {!useCustomNumberPad && (
+                      <TouchableOpacity
+                        style={styles.decimalKey}
+                        accessibilityLabel={`ステージ${i + 1}に小数点を入力`}
+                        onPress={() => {
+                          if (!v.includes('.')) {
+                            const next = [...stageVals];
+                            next[i] = v ? `${v}.` : '0.';
+                            setStageVals(next);
+                          }
+                          setTimeout(() => stageInputRefs.current[i]?.focus(), 0);
+                        }}
+                        activeOpacity={0.72}
+                      >
+                        <Text style={styles.decimalKeyText}>.</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               ))}
@@ -878,6 +907,49 @@ export default function TypingCertScreen() {
         </Modal>
       )}
 
+      <Modal
+        visible={useCustomNumberPad && activeStageInput !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setActiveStageInput(null)}
+      >
+        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} onPress={() => setActiveStageInput(null)}>
+          <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} onPress={event => event.stopPropagation()}>
+            <View style={styles.numberPadHeader}>
+              <View>
+                <Text style={styles.numberPadTitle}>
+                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}`}
+                </Text>
+                <Text style={styles.numberPadValue}>
+                  {activeStageInput === null ? '0' : stageVals[activeStageInput] || '0'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.numberPadClear} onPress={() => pressCustomNumberKey('clear')} activeOpacity={0.72}>
+                <Text style={styles.numberPadClearText}>クリア</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.numberPadGrid}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map(key => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.numberPadKey, key === '.' && styles.numberPadDecimalKey]}
+                  onPress={() => pressCustomNumberKey(key)}
+                  activeOpacity={0.68}
+                  accessibilityLabel={key === 'backspace' ? '一文字削除' : key === '.' ? '小数点' : key}
+                >
+                  {key === 'backspace'
+                    ? <Ionicons name="backspace-outline" size={25} color="#355B66" />
+                    : <Text style={styles.numberPadKeyText}>{key}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.numberPadDone} onPress={() => setActiveStageInput(null)} activeOpacity={0.78}>
+              <Text style={styles.numberPadDoneText}>完了</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
         <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setPickerTarget(null)}>
@@ -1000,12 +1072,35 @@ const styles = StyleSheet.create({
   stageCell: { alignItems: 'center', minWidth: 72 },
   stageInput: {
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 7, padding: 8,
-    fontSize: 14, textAlign: 'center', width: 72, backgroundColor: '#fff', color: '#1e3a5f',
+    fontSize: 14, textAlign: 'center', width: 72, minHeight: 38, backgroundColor: '#fff', color: '#1e3a5f',
+    alignItems: 'center', justifyContent: 'center',
   },
+  stageInputValue: { fontSize: 14, fontWeight: '800', color: '#1E3A5F' },
+  stageInputPlaceholder: { fontSize: 14, color: '#BBBBBB' },
   stageAssistRow: { width: 72, minHeight: 28, marginTop: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stageLabel:  { fontSize: 10, color: '#94a3b8' },
   decimalKey: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#E6F3FA', borderWidth: 1, borderColor: '#A7CFE8', alignItems: 'center', justifyContent: 'center' },
   decimalKeyText: { color: '#185F8F', fontSize: 20, fontWeight: '900', lineHeight: 21 },
+  numberPadBackdrop: { flex: 1, backgroundColor: 'rgba(24,35,40,0.38)', justifyContent: 'flex-end' },
+  numberPadSheet: {
+    width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: '#FFFDF9',
+    borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 16, paddingTop: 15, paddingBottom: 22,
+    shadowColor: '#243A40', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 12,
+  },
+  numberPadHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, marginBottom: 10 },
+  numberPadTitle: { fontSize: 12, fontWeight: '800', color: '#647B82', marginBottom: 2 },
+  numberPadValue: { fontSize: 28, fontWeight: '900', color: '#223C44' },
+  numberPadClear: { minHeight: 38, borderRadius: 10, backgroundColor: '#F4ECE8', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  numberPadClearText: { fontSize: 13, fontWeight: '900', color: '#8A554D' },
+  numberPadGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  numberPadKey: {
+    width: '31.7%', height: 54, borderRadius: 13, backgroundColor: '#EFF7F8', borderWidth: 1, borderColor: '#C8E0E3',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  numberPadDecimalKey: { backgroundColor: '#E2F3F5', borderColor: '#A9D7DB' },
+  numberPadKeyText: { fontSize: 23, fontWeight: '900', color: '#284952' },
+  numberPadDone: { height: 50, borderRadius: 13, backgroundColor: '#00AEB8', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  numberPadDoneText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
   wpmResult:   { backgroundColor: '#eff6ff', borderRadius: 8, padding: 10, marginTop: 8 },
   wpmResultText: { fontSize: 14, color: '#1d4ed8', fontWeight: '600' },
   resultBtn: {
