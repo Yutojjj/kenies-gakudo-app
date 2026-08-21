@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
+import { playUiSound } from '../utils/uiSounds';
 
 const COLORS = {
   primary: '#5B9BD5', white: '#FFFFFF', text: '#333333',
@@ -256,10 +257,14 @@ export default function TransportModal({
   const updateCustomTimeFromScroll = (
     values: number[],
     y: number,
+    currentValue: number,
     setter: (value: number) => void,
   ) => {
     const index = Math.max(0, Math.min(values.length - 1, Math.round(y / CUSTOM_TIME_ITEM_HEIGHT)));
-    setter(values[index]);
+    const nextValue = values[index];
+    if (nextValue === currentValue) return;
+    setter(nextValue);
+    playUiSound('tick');
   };
 
   const scheduleCustomTimeSnap = (
@@ -284,6 +289,7 @@ export default function TransportModal({
   ) => {
     const index = values.indexOf(value);
     setter(value);
+    playUiSound('tick');
     if (index >= 0) scrollRef.current?.scrollTo({ y: index * CUSTOM_TIME_ITEM_HEIGHT, animated: true });
     setCustomBlockError('');
   };
@@ -1418,9 +1424,18 @@ export default function TransportModal({
                     const nameColor = blk?.type === 'lesson' ? '#2577C9' : '#111111';
                     return (
                       <View key={bk} style={[styles.detailRow, { borderLeftColor: bkColor }]}>
-                        <Text style={[styles.detailRowText, { color: nameColor }]}>
-                          {blk ? `${blk.label}（${blk.count}名）` : bk}
-                        </Text>
+                        <View style={styles.detailRowContent}>
+                          <Text style={[styles.detailRowText, { color: nameColor }]}>
+                            {blk ? `${blk.label}（${blk.count}名）` : bk}
+                          </Text>
+                          {blk && (blk.kids || []).length > 0 && (
+                            <Text style={styles.detailMemberNames}>
+                              {(blk.kids || [])
+                                .map((kid: any) => `${kid.name || '名前未登録'}${kid.grade ? `（${kid.grade}）` : ''}`)
+                                .join('、')}
+                            </Text>
+                          )}
+                        </View>
                         <View style={styles.detailRowActions}>
                           {bki > 0 && (
                             <TouchableOpacity
@@ -1578,7 +1593,7 @@ export default function TransportModal({
             />
 
             <Text style={styles.customBlockLabel}>時刻</Text>
-            <View style={styles.customPickerColumns}>
+            <View style={styles.customPickerColumns} nativeID="ui-time-wheel-transport">
               <View style={styles.customPickerSelectionFrame} pointerEvents="none" />
               <ScrollView
                 ref={customHourScrollRef}
@@ -1593,7 +1608,7 @@ export default function TransportModal({
                 scrollEventThrottle={16}
                 onScroll={event => {
                   const y = event.nativeEvent.contentOffset.y;
-                  updateCustomTimeFromScroll(CUSTOM_TIME_HOURS, y, setCustomHour);
+                  updateCustomTimeFromScroll(CUSTOM_TIME_HOURS, y, customHour, setCustomHour);
                   scheduleCustomTimeSnap(
                     CUSTOM_TIME_HOURS,
                     y,
@@ -1641,7 +1656,7 @@ export default function TransportModal({
                 scrollEventThrottle={16}
                 onScroll={event => {
                   const y = event.nativeEvent.contentOffset.y;
-                  updateCustomTimeFromScroll(CUSTOM_TIME_MINUTES, y, setCustomMinute);
+                  updateCustomTimeFromScroll(CUSTOM_TIME_MINUTES, y, customMinute, setCustomMinute);
                   scheduleCustomTimeSnap(
                     CUSTOM_TIME_MINUTES,
                     y,
@@ -1845,7 +1860,9 @@ const styles = StyleSheet.create({
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   detailTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
   detailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, borderLeftWidth: 4, borderRadius: 8, backgroundColor: '#F8F8F8', marginBottom: 6 },
-  detailRowText: { flex: 1, fontSize: 13, fontWeight: 'bold' },
+  detailRowContent: { flex: 1, minWidth: 0, paddingRight: 8 },
+  detailRowText: { fontSize: 13, fontWeight: 'bold' },
+  detailMemberNames: { marginTop: 5, fontSize: 12, lineHeight: 18, fontWeight: '700', color: '#3F3A37' },
   detailRowActions: { flexDirection: 'row', gap: 6 },
   detailActionBtn: { padding: 4 },
   detailCloseBtn: { marginTop: 14, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },

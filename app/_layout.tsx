@@ -9,6 +9,7 @@ import { CallProvider } from '../contexts/CallContext';
 import { db } from '../firebase';
 import { refreshPushSubscription } from '../utils/setupPushToken';
 import { navigateHome } from '../utils/navigationHome';
+import { installGlobalUiSounds } from '../utils/uiSounds';
 
 
 const PUBLIC_PATHS = ['/', '/index'];
@@ -49,6 +50,8 @@ export default function RootLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const swipeTranslateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => installGlobalUiSounds(), []);
 
   const edgeHomePanResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {

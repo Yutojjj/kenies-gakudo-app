@@ -22,6 +22,7 @@ import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBott
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
+import { playUiSound } from '../utils/uiSounds';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -779,6 +780,7 @@ export default function ScheduleScreen() {
     const now = Date.now();
     if (now - pickerHapticAtRef.current < 45) return;
     pickerHapticAtRef.current = now;
+    playUiSound('tick');
     if (Platform.OS === 'web') {
       try {
         (globalThis as any).navigator?.vibrate?.(8);
@@ -1482,7 +1484,7 @@ export default function ScheduleScreen() {
             <TouchableWithoutFeedback>
               <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
-            <View style={styles.pickerColumns}>
+            <View style={styles.pickerColumns} nativeID="ui-time-wheel-pickup-option">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
                 ref={addPickupHourScrollRef}
@@ -1567,7 +1569,7 @@ export default function ScheduleScreen() {
             <TouchableWithoutFeedback>
               <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
-            <View style={styles.pickerColumns}>
+            <View style={styles.pickerColumns} nativeID="ui-time-wheel-schedule">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
               <ScrollView
                 ref={timePickerHourScrollRef}
@@ -1704,7 +1706,7 @@ export default function ScheduleScreen() {
                   />
 
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>送迎時間</Text>
-                  <View style={styles.pickerColumns}>
+                  <View style={styles.pickerColumns} nativeID="ui-time-wheel-bulk">
                     <View pointerEvents="none" style={styles.pickerSelectionFrame} />
                     <ScrollView
                       ref={lessonPickerHourScrollRef}

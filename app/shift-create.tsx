@@ -11,6 +11,7 @@ import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBott
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { playUiSound } from '../utils/uiSounds';
 import { navigateHome } from '../utils/navigationHome';
 
 const SHIFT_IMAGES = {
@@ -51,6 +52,7 @@ function ShiftTimeWheel({
     if (index === lastIndexRef.current) return;
     lastIndexRef.current = index;
     onChange(values[index]);
+    playUiSound('tick');
     if (vibrate && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
   };
 
@@ -75,7 +77,7 @@ function ShiftTimeWheel({
   }, [value, visible, values]);
 
   return (
-    <View style={styles.shiftWheelWrap}>
+    <View style={styles.shiftWheelWrap} nativeID="ui-time-wheel-shift">
       <View style={styles.shiftWheelSelection} pointerEvents="none" />
       <ScrollView
         ref={scrollRef}

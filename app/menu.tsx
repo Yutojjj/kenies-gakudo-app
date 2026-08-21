@@ -287,7 +287,6 @@ export default function MenuScreen() {
   const [isPaidTransportMember, setIsPaidTransportMember] = useState(false);
   const [signModalVisible, setSignModalVisible] = useState(false);
   const [showAllPickup, setShowAllPickup] = useState(false);
-  const [pickupAllModalVisible, setPickupAllModalVisible] = useState(false);
   const [pickupDetailModalVisible, setPickupDetailModalVisible] = useState(false);
   const [pickupOverviewData, setPickupOverviewData] = useState<TransportOverviewData | null>(null);
   const [pickupOverviewAction, setPickupOverviewAction] = useState<'view' | 'print'>('view');
@@ -297,6 +296,11 @@ export default function MenuScreen() {
   const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
   const [scheduleChangesCollapsed, setScheduleChangesCollapsed] = useState(false);
   const [adminNotices, setAdminNotices] = useState<{id: string; content: string; createdAt: any; audience?: string; startDate?: string; endDate?: string; date?: string}[]>([]);
+
+  useEffect(() => {
+    setShowAllPickup(false);
+    setPickupOverviewData(null);
+  }, [staffPlanDate]);
   const [newNotice, setNewNotice] = useState('');
   const [appDialog, setAppDialog] = useState<{
     visible: boolean;
@@ -1237,13 +1241,20 @@ export default function MenuScreen() {
 
   const openPickupOverviewAction = async (action: 'view' | 'print') => {
     if (pickupOverviewLoadingAction) return;
+    if (action === 'view' && showAllPickup) {
+      setShowAllPickup(false);
+      return;
+    }
     setPickupOverviewLoadingAction(action);
     try {
       const overviewData = await loadTransportOverview(makeDateStr(staffPlanDate));
       setPickupOverviewData(overviewData);
       setPickupOverviewAction(action);
-      setPickupAllModalVisible(false);
-      setPickupDetailModalVisible(true);
+      if (action === 'view') {
+        setShowAllPickup(true);
+      } else {
+        setPickupDetailModalVisible(true);
+      }
     } catch (error) {
       console.error('送迎全体表示の読み込みに失敗しました', error);
       showAppAlert('読み込みエラー', '送迎情報を読み込めませんでした。');
@@ -1278,6 +1289,20 @@ export default function MenuScreen() {
         ? `${parts.slice(0, -1).join('_')} ${parts[parts.length - 1]}`
         : blockKey;
     };
+    const getBlockMembers = (blockKey: string) => {
+      const customBlock = customBlockMap.get(blockKey);
+      if (customBlock) return Array.isArray(customBlock.members) ? customBlock.members : [];
+      if (!pickupOverviewData) return [];
+
+      for (const [school, times] of Object.entries(pickupOverviewData.attendance.schools || {})) {
+        for (const [time, kids] of Object.entries(times || {})) {
+          if (`${school}_${time}` !== blockKey) continue;
+          return (kids || []).map((kid: any) => `${kid.name || '名前未登録'}${kid.grade ? `（${kid.grade}）` : ''}`);
+        }
+      }
+      const lessonKids = pickupOverviewData.attendance.lessons?.[blockKey] || [];
+      return lessonKids.map((kid: any) => `${kid.name || '名前未登録'}${kid.grade ? `（${kid.grade}）` : ''}`);
+    };
     if (parsedEntries.length === 0) {
       return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>送迎の予定はありません</Text></View>;
     }
@@ -1301,7 +1326,15 @@ export default function MenuScreen() {
                 <View style={{ flex: 1 }}>
                   {trip.blockKeys.map((bk: string, bkIdx: number) => {
                     const label = getBlockLabel(bk);
-                    return <Text key={bk} style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>;
+                    const members = showAll ? getBlockMembers(bk) : [];
+                    return (
+                      <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
+                        <Text style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>
+                        {members.length > 0 && (
+                          <Text style={styles.pickupMemberNames}>{members.join('、')}</Text>
+                        )}
+                      </View>
+                    );
                   })}
                 </View>
               </View>
@@ -1623,10 +1656,31 @@ export default function MenuScreen() {
                   <Text style={styles.staffSectionEditText}>編集する</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => setPickupAllModalVisible(true)} activeOpacity={0.88}>
-                {renderPickupEntryCards(parseTodayPickupEntries(), false)}
-                <Text style={styles.pickupTapHint}>タップで全体表示</Text>
-              </TouchableOpacity>
+              <View style={styles.pickupInlineActions}>
+                <TouchableOpacity
+                  style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
+                  onPress={() => openPickupOverviewAction('view')}
+                  disabled={pickupOverviewLoadingAction !== null}
+                  activeOpacity={0.82}
+                >
+                  {pickupOverviewLoadingAction === 'view'
+                    ? <ActivityIndicator size="small" color="#245E96" />
+                    : <Ionicons name={showAllPickup ? 'chevron-up' : 'grid-outline'} size={17} color="#245E96" />}
+                  <Text style={styles.pickupInlineOverviewText}>{showAllPickup ? '折りたたむ' : '全体表示'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.pickupInlineActionBtn, styles.pickupInlinePrintBtn]}
+                  onPress={() => openPickupOverviewAction('print')}
+                  disabled={pickupOverviewLoadingAction !== null}
+                  activeOpacity={0.82}
+                >
+                  {pickupOverviewLoadingAction === 'print'
+                    ? <ActivityIndicator size="small" color="#FFFFFF" />
+                    : <Ionicons name="print-outline" size={17} color="#FFFFFF" />}
+                  <Text style={styles.pickupInlinePrintText}>印刷</Text>
+                </TouchableOpacity>
+              </View>
+              {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
             </Animated.View>
           </View>
         )}
@@ -2263,51 +2317,6 @@ export default function MenuScreen() {
       </ScrollView>
 
       <AdminBottomNav active="home" />
-
-      <Modal visible={pickupAllModalVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setPickupAllModalVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.pickupAllModal}>
-              <View style={styles.simpleModalHeader}>
-                <View>
-                  <Text style={styles.simpleModalTitle}>本日の送迎 全体表示</Text>
-                  <Text style={styles.simpleModalSub}>{formatMenuDateLabel(staffPlanDate)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => setPickupAllModalVisible(false)} style={styles.simpleModalClose}>
-                  <Ionicons name="close" size={24} color="#5F4B42" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.pickupModalActions}>
-                <TouchableOpacity
-                  style={[styles.pickupModalActionBtn, styles.pickupModalOverviewBtn]}
-                  onPress={() => openPickupOverviewAction('view')}
-                  disabled={pickupOverviewLoadingAction !== null}
-                  activeOpacity={0.82}
-                >
-                  {pickupOverviewLoadingAction === 'view'
-                    ? <ActivityIndicator size="small" color="#2D8BE8" />
-                    : <Ionicons name="grid-outline" size={17} color="#2D8BE8" />}
-                  <Text style={styles.pickupModalOverviewText}>全体表示</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.pickupModalActionBtn, styles.pickupModalPrintBtn]}
-                  onPress={() => openPickupOverviewAction('print')}
-                  disabled={pickupOverviewLoadingAction !== null}
-                  activeOpacity={0.82}
-                >
-                  {pickupOverviewLoadingAction === 'print'
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Ionicons name="print-outline" size={17} color="#fff" />}
-                  <Text style={styles.pickupModalPrintText}>印刷</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {renderPickupEntryCards(parseTodayPickupEntries(), true)}
-              </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
 
       {pickupOverviewData && (
         <TransportModal
@@ -3696,6 +3705,40 @@ const styles = StyleSheet.create({
     color: '#007A82',
     marginTop: 3,
   },
+  pickupInlineActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  pickupInlineActionBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  pickupInlineOverviewBtn: {
+    backgroundColor: '#F2F8FF',
+    borderWidth: 1.5,
+    borderColor: '#8CC4F5',
+  },
+  pickupInlineOverviewText: {
+    color: '#245E96',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  pickupInlinePrintBtn: {
+    backgroundColor: '#36A9B5',
+    borderWidth: 1.5,
+    borderColor: '#258C96',
+  },
+  pickupInlinePrintText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
 
   // ── ヘッダー ──
   headerBg: {
@@ -3891,6 +3934,8 @@ const styles = StyleSheet.create({
   },
   tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1, marginBottom: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
+  pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
+  pickupMemberNames: { marginTop: 2, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',
