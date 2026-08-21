@@ -44,6 +44,8 @@ type CalendarEvent = {
   hidden?: boolean;
 };
 
+type AlbumPickerMedia = 'images' | 'videos';
+
 const getMediaType = (item: any): 'image' | 'video' => {
   if (item?.mediaType === 'video') return 'video';
   const value = `${item?.mimeType || ''} ${item?.storagePath || ''} ${item?.uri || ''}`.toLowerCase();
@@ -307,6 +309,8 @@ export default function AlbumScreen() {
   const [newEventCalendarVisible, setNewEventCalendarVisible] = useState(false);
   const [newEventDate, setNewEventDate] = useState(new Date());
   const [addToExistingModalVisible, setAddToExistingModalVisible] = useState(false);
+  const [existingEventMediaModalVisible, setExistingEventMediaModalVisible] = useState(false);
+  const [selectedExistingEvent, setSelectedExistingEvent] = useState<AlbumEvent | null>(null);
   
   const [albumPhotos, setAlbumPhotos] = useState<Record<string, AlbumMedia[]>>({});
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
@@ -465,7 +469,7 @@ export default function AlbumScreen() {
     });
   };
 
-  const launchAlbumMediaPicker = async () => {
+  const launchAlbumMediaPicker = async (mediaType: AlbumPickerMedia) => {
     // Web/PWAではユーザーのタップから直接ファイル選択を開く必要がある。
     // 権限確認を先に待つと、特にiOS Safariで選択画面が遮断されることがある。
     if (Platform.OS !== 'web') {
@@ -477,7 +481,7 @@ export default function AlbumScreen() {
     }
 
     return ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: [mediaType],
       allowsMultipleSelection: true,
       selectionLimit: 0,
       quality: 0.6,
@@ -493,11 +497,13 @@ export default function AlbumScreen() {
     setNewEventCalendarVisible(false);
     setEventModalVisible(false);
     setAddToExistingModalVisible(false);
+    setExistingEventMediaModalVisible(false);
+    setSelectedExistingEvent(null);
     setAddTargetDate(null);
   };
 
-  const pickImages = async (targetTitle: string, targetKey: string) => {
-    const result = await launchAlbumMediaPicker();
+  const pickImages = async (targetTitle: string, targetKey: string, mediaType: AlbumPickerMedia = 'images') => {
+    const result = await launchAlbumMediaPicker(mediaType);
     if (!result) return;
 
     if (!result.canceled) {
@@ -584,8 +590,8 @@ export default function AlbumScreen() {
     return code;
   };
 
-  const uploadPhotosToCategory = async (category: string): Promise<number> => {
-    const result = await launchAlbumMediaPicker();
+  const uploadPhotosToCategory = async (category: string, mediaType: AlbumPickerMedia): Promise<number> => {
+    const result = await launchAlbumMediaPicker(mediaType);
     if (!result || result.canceled) return 0;
 
     closeAddFlow();
@@ -605,14 +611,14 @@ export default function AlbumScreen() {
     return count;
   };
 
-  const handleCreateEvent = async () => {
+  const handleCreateEvent = async (mediaType: AlbumPickerMedia) => {
     if (!eventNameInput.trim()) return Alert.alert('エラー', 'イベント名を入力してください');
     const eventCode = generateEventCode();
     const dateStr = getLocalDateString(newEventDate);
     const eventCategory = `EVENT_${eventNameInput.trim()}_${dateStr}`;
     
     try {
-      const uploaded = await uploadPhotosToCategory(eventCategory);
+      const uploaded = await uploadPhotosToCategory(eventCategory, mediaType);
       if (uploaded > 0) {
         await addDoc(collection(db, 'album_events2'), {
           name: `${eventNameInput.trim()}_${dateStr}`,
@@ -633,9 +639,9 @@ export default function AlbumScreen() {
     }
   };
 
-  const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
+  const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}, mediaType: AlbumPickerMedia) => {
     try {
-      const uploaded = await uploadPhotosToCategory(ev.category);
+      const uploaded = await uploadPhotosToCategory(ev.category, mediaType);
       if (uploaded > 0) {
         if (Platform.OS === 'web') window.alert(`追加完了\n「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
         else Alert.alert('追加完了', `「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
@@ -1279,17 +1285,34 @@ export default function AlbumScreen() {
               style={[styles.albumAddChoice, styles.albumAddChoiceDaily]}
               onPress={() => {
                 if (addTargetDate) {
-                  pickImages(formatAlbumDate(addTargetDate), addTargetDate);
+                  pickImages(formatAlbumDate(addTargetDate), addTargetDate, 'images');
                   return;
                 }
                 setPastDate(new Date(viewYear, viewMonth - 1, 1));
                 setCalendarModalVisible(true);
               }}
             >
-              <Ionicons name="calendar-outline" size={26} color="#23767A" />
+              <Ionicons name="images-outline" size={26} color="#23767A" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.albumAddChoiceTitle}>日常写真を追加</Text>
-                <Text style={styles.albumAddChoiceCaption}>この日の写真・動画として追加</Text>
+                <Text style={styles.albumAddChoiceTitle}>写真を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>端末の写真一覧から選択</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.albumAddChoice, styles.albumAddChoiceVideo]}
+              onPress={() => {
+                if (addTargetDate) {
+                  pickImages(formatAlbumDate(addTargetDate), addTargetDate, 'videos');
+                  return;
+                }
+                setPastDate(new Date(viewYear, viewMonth - 1, 1));
+                setCalendarModalVisible(true);
+              }}
+            >
+              <Ionicons name="videocam-outline" size={26} color="#B05A72" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.albumAddChoiceTitle}>動画を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>端末の動画一覧から選択</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1382,7 +1405,14 @@ export default function AlbumScreen() {
             <Text style={{ marginBottom: 16, color: COLORS.textLight, fontSize: 12 }}>
               ※ 保存名: {eventNameInput.trim() || 'イベント名'}_{getLocalDateString(newEventDate)}
             </Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateEvent}><Text style={styles.primaryBtnText}>作成して写真を選択</Text></TouchableOpacity>
+            <View style={styles.albumMediaActionRow}>
+              <TouchableOpacity style={[styles.primaryBtn, styles.albumMediaActionButton]} onPress={() => handleCreateEvent('images')}>
+                <Text style={styles.primaryBtnText}>写真を選択</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryBtn, styles.albumMediaActionButton, styles.albumVideoActionButton]} onPress={() => handleCreateEvent('videos')}>
+                <Text style={styles.primaryBtnText}>動画を選択</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1400,7 +1430,10 @@ export default function AlbumScreen() {
               <ScrollView>
                 {albumEvents.map(ev => (
                   <TouchableOpacity key={ev.id} style={{ padding: 16, borderBottomWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center' }}
-                    onPress={() => handleAddToExistingEvent(ev)}>
+                    onPress={() => {
+                      setSelectedExistingEvent(ev);
+                      setExistingEventMediaModalVisible(true);
+                    }}>
                     <Ionicons name="images-outline" size={24} color={COLORS.primary} style={{ marginRight: 12 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text }}>{ev.name}</Text>
@@ -1541,6 +1574,39 @@ export default function AlbumScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={existingEventMediaModalVisible} transparent animationType="fade" onRequestClose={() => setExistingEventMediaModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setExistingEventMediaModalVisible(false)}>
+          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedExistingEvent?.name || 'イベントアルバム'}に追加</Text>
+              <TouchableOpacity onPress={() => setExistingEventMediaModalVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.albumAddChoice, styles.albumAddChoiceDaily]}
+              onPress={() => selectedExistingEvent && handleAddToExistingEvent(selectedExistingEvent, 'images')}
+            >
+              <Ionicons name="images-outline" size={26} color="#23767A" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.albumAddChoiceTitle}>写真を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>端末の写真一覧から選択</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.albumAddChoice, styles.albumAddChoiceVideo]}
+              onPress={() => selectedExistingEvent && handleAddToExistingEvent(selectedExistingEvent, 'videos')}
+            >
+              <Ionicons name="videocam-outline" size={26} color="#B05A72" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.albumAddChoiceTitle}>動画を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>端末の動画一覧から選択</Text>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
       <AdminBottomNav active="album" />
     </SafeAreaView>
   );
@@ -1617,9 +1683,13 @@ const styles = StyleSheet.create({
   albumAddMenuModal: { width: '90%', maxWidth: 480, borderRadius: 14, backgroundColor: COLORS.white, padding: 18 },
   albumAddChoice: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
   albumAddChoiceDaily: { backgroundColor: '#EFF9FA', borderColor: '#B8E2E4' },
+  albumAddChoiceVideo: { backgroundColor: '#FFF1F5', borderColor: '#EBC4D0' },
   albumAddChoiceEvent: { backgroundColor: '#F5F0FC', borderColor: '#D8C9EC' },
   albumAddChoiceTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
   albumAddChoiceCaption: { marginTop: 3, color: COLORS.textLight, fontSize: 12 },
+  albumMediaActionRow: { flexDirection: 'row', gap: 10 },
+  albumMediaActionButton: { flex: 1 },
+  albumVideoActionButton: { backgroundColor: '#C96F88' },
   dateAlbumModal: { width: '96%', maxWidth: 900, height: '84%', maxHeight: 820, borderRadius: 14, backgroundColor: COLORS.white, overflow: 'hidden' },
   dateAlbumTopRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderColor: COLORS.border },
   dateAlbumTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
