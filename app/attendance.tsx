@@ -143,7 +143,7 @@ export default function AttendanceScreen() {
   const [eventsData, setEventsData] = useState<Record<string, string>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
 
-  const [activeSchool, setActiveSchool] = useState<string | null>(null);
+  const [activeSchools, setActiveSchools] = useState<string[]>([]);
   const [todayEntries, setTodayEntries] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -881,7 +881,7 @@ export default function AttendanceScreen() {
   const renderSchoolUsersView = () => {
     const DOW = ['月','火','水','木','金'];
     const allUsers = Object.values(groupedUsersBySchool).flat();
-    const hasFilter = !!(userListSearch || userListFilterDow || activeSchool);
+    const hasFilter = !!(userListSearch || userListFilterDow || activeSchools.length > 0);
 
     const filtered = allUsers.filter((u: any) => {
       if (userListSearch) {
@@ -889,7 +889,7 @@ export default function AttendanceScreen() {
         if (!u.name?.toLowerCase().includes(q) && !u.nicknameKana?.toLowerCase().includes(q)) return false;
       }
       if (userListFilterDow && !u.days?.[userListFilterDow]) return false;
-      if (activeSchool && u.school !== activeSchool) return false;
+      if (activeSchools.length > 0 && !activeSchools.includes(u.school)) return false;
       return true;
     });
 
@@ -924,14 +924,16 @@ export default function AttendanceScreen() {
       {/* 学校カード（アイコンなし・低め） */}
       <View style={styles.gridContainer}>
         {sortedSchoolNames.map((school, index) => {
-          const isActive = activeSchool === school;
+          const isActive = activeSchools.includes(school);
           const bgColor = BG_COLORS[index % BG_COLORS.length];
           const schoolUsers = filteredBySchool[school] || [];
           return (
             <View key={school} style={styles.schoolAccordionItem}>
               <TouchableOpacity
                 style={[styles.schoolCardList, styles.schoolAccordionButton, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]}
-                onPress={() => setActiveSchool(isActive ? null : school)}
+                onPress={() => setActiveSchools(current =>
+                  isActive ? current.filter(item => item !== school) : [...current, school]
+                )}
               >
                 <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
                 <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color="#6D7375" />
@@ -965,7 +967,7 @@ export default function AttendanceScreen() {
       </View>
 
       {/* 学校を選択した場合は、その学校カードの直下へ結果を表示する */}
-      {activeSchool ? null : !hasFilter ? (
+      {activeSchools.length > 0 ? null : !hasFilter ? (
         <View style={{ alignItems:'center', marginTop:32 }}>
           <Ionicons name="search-outline" size={40} color="#DDD" />
           <Text style={{ color:'#BBB', marginTop:8, fontSize:13 }}>名前・曜日・学校で絞り込んでください</Text>
