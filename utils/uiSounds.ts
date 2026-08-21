@@ -11,10 +11,7 @@ const getAudioContext = () => {
   const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
   if (!AudioContextClass) return null;
   if (!audioContext) audioContext = new AudioContextClass();
-  const context = audioContext;
-  if (!context) return null;
-  if (context.state === 'suspended') context.resume().catch(() => {});
-  return context;
+  return audioContext;
 };
 
 const addTone = (
@@ -42,25 +39,34 @@ const addTone = (
 };
 
 export const playUiSound = (type: UiSoundType) => {
-  const now = Date.now();
-  if (now - lastPlayed[type] < minIntervals[type]) return;
-  lastPlayed[type] = now;
-
   try {
     const context = getAudioContext();
     if (!context) return;
-    if (type === 'tap') {
-      addTone(context, 880, 0, 0.045, 0.026, 'triangle', 1120);
-      addTone(context, 1320, 0.018, 0.035, 0.012, 'sine');
-    } else if (type === 'success') {
-      addTone(context, 660, 0, 0.11, 0.032, 'triangle');
-      addTone(context, 880, 0.07, 0.12, 0.034, 'triangle');
-      addTone(context, 1175, 0.14, 0.17, 0.038, 'sine');
-    } else if (type === 'back') {
-      addTone(context, 540, 0, 0.085, 0.025, 'triangle', 390);
-      addTone(context, 330, 0.045, 0.09, 0.018, 'sine', 250);
+
+    const play = () => {
+      const now = Date.now();
+      if (now - lastPlayed[type] < minIntervals[type]) return;
+      lastPlayed[type] = now;
+
+      if (type === 'tap') {
+        addTone(context, 720, 0, 0.06, 0.07, 'triangle', 980);
+        addTone(context, 1080, 0.022, 0.045, 0.035, 'sine');
+      } else if (type === 'success') {
+        addTone(context, 600, 0, 0.12, 0.065, 'triangle');
+        addTone(context, 820, 0.075, 0.13, 0.07, 'triangle');
+        addTone(context, 1100, 0.15, 0.18, 0.075, 'sine');
+      } else if (type === 'back') {
+        addTone(context, 520, 0, 0.09, 0.055, 'triangle', 370);
+        addTone(context, 320, 0.05, 0.1, 0.04, 'sine', 240);
+      } else {
+        addTone(context, 1300, 0, 0.024, 0.032, 'square', 900);
+      }
+    };
+
+    if (context.state === 'suspended') {
+      context.resume().then(play).catch(() => {});
     } else {
-      addTone(context, 1550, 0, 0.018, 0.011, 'square', 1050);
+      play();
     }
   } catch {
     // Sound must never interrupt the app operation.
@@ -76,11 +82,17 @@ const actionText = (element: Element) => [
 export const installGlobalUiSounds = () => {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {};
 
+  let lastInteractionAt = 0;
+
   const onPointerDown = (event: Event) => {
+    const now = Date.now();
+    if (event.type === 'click' && now - lastInteractionAt < 700) return;
     const target = event.target instanceof Element ? event.target : null;
     if (!target || target.closest('[id^="ui-time-wheel"], [id="ui-sound-none"]')) return;
-    const action = target.closest('[role="button"], button, a');
+    const action = target.closest('[role="button"], button, a, [tabindex="0"]');
     if (!action || action.getAttribute('aria-disabled') === 'true' || action.hasAttribute('disabled')) return;
+    if (action.matches('input, textarea, select') || action.closest('input, textarea, select')) return;
+    lastInteractionAt = now;
     const text = actionText(action);
     if (/削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|back|close|trash/i.test(text)) {
       playUiSound('back');
@@ -113,9 +125,11 @@ export const installGlobalUiSounds = () => {
   });
 
   document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('click', onPointerDown, true);
   successObserver.observe(document.body, { childList: true, subtree: true });
   return () => {
     document.removeEventListener('pointerdown', onPointerDown, true);
+    document.removeEventListener('click', onPointerDown, true);
     successObserver.disconnect();
     window.alert = originalAlert;
   };
