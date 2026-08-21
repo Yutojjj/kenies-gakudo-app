@@ -275,7 +275,9 @@ export default function AlbumScreen() {
   const [mediaReloadKey, setMediaReloadKey] = useState(0);
   
   const [mode, setMode] = useState<Mode>(role === 'user' ? 'view' : 'top');
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
+  const [dateJumpPicker, setDateJumpPicker] = useState<'year' | 'month' | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('月');
   
   const [fullScreenPhotos, setFullScreenPhotos] = useState<any[] | null>(null);
@@ -686,11 +688,10 @@ export default function AlbumScreen() {
         }));
     }
     
-    const year = new Date().getFullYear();
     const dayIdx = ['日', '月', '火', '水', '木', '金', '土'].indexOf(activeTab);
     const dates = [];
-    const d = new Date(year, viewMonth - 1, 1);
-    while (d.getMonth() === viewMonth - 1) {
+    const d = new Date(viewYear, viewMonth - 1, 1);
+    while (d.getFullYear() === viewYear && d.getMonth() === viewMonth - 1) {
       if (d.getDay() === dayIdx) {
         const dateObj = new Date(d);
         let canView = true;
@@ -711,6 +712,23 @@ export default function AlbumScreen() {
     }
     return dates;
   };
+
+  const moveViewMonth = (amount: number) => {
+    const next = new Date(viewYear, viewMonth - 1 + amount, 1);
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth() + 1);
+  };
+
+  const selectableYears = (() => {
+    const currentYear = new Date().getFullYear();
+    const years = new Set<number>();
+    for (let year = currentYear - 5; year <= currentYear + 5; year++) years.add(year);
+    Object.keys(albumPhotos).forEach(key => {
+      const match = key.match(/^(\d{4})-\d{2}-\d{2}$/);
+      if (match) years.add(Number(match[1]));
+    });
+    return Array.from(years).sort((a, b) => a - b);
+  })();
 
   const toggleSelectPhoto = (id: string) => {
     if (selectedPhotoIds.includes(id)) {
@@ -900,36 +918,36 @@ export default function AlbumScreen() {
         <View style={{ flex: 1 }}>
           {activeTab !== 'イベント' && (
             <View style={styles.monthSelector}>
-              <View style={styles.monthGrid}>
-                {[1,2,3,4,5,6].map(m => (
-                  <TouchableOpacity key={m} style={[styles.monthBtn, viewMonth === m && styles.monthBtnActive]} onPress={() => setViewMonth(m)}>
-                    <Text style={[styles.monthText, viewMonth === m && styles.monthTextActive]}>{m}月</Text>
-                  </TouchableOpacity>
-                ))}
+              <TouchableOpacity style={styles.monthArrowButton} onPress={() => moveViewMonth(-1)} accessibilityLabel="前の月">
+                <Ionicons name="chevron-back" size={23} color={COLORS.text} />
+              </TouchableOpacity>
+              <View style={styles.yearMonthButtons}>
+                <TouchableOpacity style={styles.dateJumpButton} onPress={() => setDateJumpPicker('year')}>
+                  <Text style={styles.dateJumpButtonText}>{viewYear}年</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.dateJumpButton} onPress={() => setDateJumpPicker('month')}>
+                  <Text style={styles.dateJumpButtonText}>{viewMonth}月</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.primary} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.monthGrid}>
-                {[7,8,9,10,11,12].map(m => (
-                  <TouchableOpacity key={m} style={[styles.monthBtn, viewMonth === m && styles.monthBtnActive]} onPress={() => setViewMonth(m)}>
-                    <Text style={[styles.monthText, viewMonth === m && styles.monthTextActive]}>{m}月</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TouchableOpacity style={styles.monthArrowButton} onPress={() => moveViewMonth(1)} accessibilityLabel="次の月">
+                <Ionicons name="chevron-forward" size={23} color={COLORS.text} />
+              </TouchableOpacity>
             </View>
           )}
 
           <View style={styles.tabContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
-              {ALL_TABS.map(tab => {
-                if (role === 'user' && tab !== 'イベント') {
-                  if (!userData?.days || !userData.days[tab]) return null;
-                }
-                return (
-                  <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => setActiveTab(tab)}>
-                    <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {ALL_TABS.map(tab => {
+              if (role === 'user' && tab !== 'イベント') {
+                if (!userData?.days || !userData.days[tab]) return null;
+              }
+              return (
+                <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => setActiveTab(tab)}>
+                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]} numberOfLines={1}>{tab}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <ScrollView style={styles.scrollArea}>
@@ -1074,6 +1092,44 @@ export default function AlbumScreen() {
       )}
 
       {/* 各種モーダル */}
+      <Modal visible={!!dateJumpPicker} transparent animationType="fade" onRequestClose={() => setDateJumpPicker(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDateJumpPicker(null)}>
+          <TouchableOpacity style={styles.dateJumpModal} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{dateJumpPicker === 'year' ? '年を選択' : '月を選択'}</Text>
+              <TouchableOpacity onPress={() => setDateJumpPicker(null)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            {dateJumpPicker === 'year' ? (
+              <ScrollView style={styles.yearPickerScroll} contentContainerStyle={styles.dateJumpGrid}>
+                {selectableYears.map(year => (
+                  <TouchableOpacity
+                    key={year}
+                    style={[styles.dateJumpOption, viewYear === year && styles.dateJumpOptionActive]}
+                    onPress={() => { setViewYear(year); setDateJumpPicker(null); }}
+                  >
+                    <Text style={[styles.dateJumpOptionText, viewYear === year && styles.dateJumpOptionTextActive]}>{year}年</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.dateJumpGrid}>
+                {MONTHS.map(month => (
+                  <TouchableOpacity
+                    key={month}
+                    style={[styles.dateJumpOption, viewMonth === month && styles.dateJumpOptionActive]}
+                    onPress={() => { setViewMonth(month); setDateJumpPicker(null); }}
+                  >
+                    <Text style={[styles.dateJumpOptionText, viewMonth === month && styles.dateJumpOptionTextActive]}>{month}月</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={calendarModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -1360,19 +1416,23 @@ const styles = StyleSheet.create({
   addOptionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
   iconCircle: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 20 },
   addOptionTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
-  monthSelector: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 8, paddingHorizontal: 8 },
-  monthGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  monthScroll: { },
-  monthBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', marginHorizontal: 2, borderRadius: 8, backgroundColor: '#F5F5F5' },
-  monthBtnActive: { backgroundColor: COLORS.primary },
-  monthText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
-  monthTextActive: { color: COLORS.white },
-  tabContainer: { backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
-  tabScroll: { },
-  tabBtn: { paddingHorizontal: 26, paddingVertical: 14, backgroundColor: COLORS.white, borderRightWidth: 1, borderColor: COLORS.border },
+  monthSelector: { minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 9, paddingHorizontal: 12 },
+  monthArrowButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E9D7C5' },
+  yearMonthButtons: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 12 },
+  dateJumpButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 13, borderRadius: 8, backgroundColor: '#EFF9FA', borderWidth: 1, borderColor: '#B8E2E4' },
+  dateJumpButtonText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  tabContainer: { flexDirection: 'row', width: '100%', backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
+  tabBtn: { flex: 1, minWidth: 0, paddingHorizontal: 2, paddingVertical: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderRightWidth: 1, borderColor: COLORS.border },
   tabBtnActive: { backgroundColor: '#E6E6FA' },
-  tabText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
+  tabText: { fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
   tabTextActive: { color: '#9370DB' },
+  dateJumpModal: { width: '88%', maxWidth: 440, maxHeight: '76%', borderRadius: 14, backgroundColor: COLORS.white, padding: 18 },
+  yearPickerScroll: { maxHeight: 360 },
+  dateJumpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 6 },
+  dateJumpOption: { width: '31%', minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: COLORS.border },
+  dateJumpOptionActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  dateJumpOptionText: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
+  dateJumpOptionTextActive: { color: COLORS.white },
   dateSection: { marginBottom: 12 },
   dateHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   dateHeader: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
