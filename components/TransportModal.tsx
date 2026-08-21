@@ -610,15 +610,16 @@ export default function TransportModal({
         const shiftHtml = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart
           ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1}; grid-row: 1 / span ${laneCount};"></div>`
           : '';
-        const blockHtml = timelineBlocks.map(({ block, slotIndex, tripIndex, lane }) => {
+        const blockHtml = timelineBlocks.map(({ block, slotIndex, lane }) => {
             const isSwimming = (block.nameOnly || block.label).includes('スイミング');
             const isLesson = block.type === 'lesson';
             const bg = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
             const border = isSwimming ? '#46B8D7' : isLesson ? '#78C28C' : '#F2B760';
-            const label = `${block.time || '-'} ${block.nameOnly || block.label} ${block.count}名`;
+            const meta = `${block.time || '-'}・${block.count}名`;
+            const label = block.nameOnly || block.label;
             return `
               <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; grid-row: ${lane + 1}; background:${bg}; border-color:${border};">
-                <span>${escapeHtml(TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`)}</span>
+                <span>${escapeHtml(meta)}</span>
                 ${escapeHtml(label)}
               </div>
             `;
@@ -1125,7 +1126,7 @@ export default function TransportModal({
                   }]} />
                 ))}
                 {shiftWidth > 0 && <View style={[styles.zoomTimelineShift, { left: shiftLeft, width: shiftWidth, height: rowHeight }]} />}
-                {layout.items.map(({ block, tripIndex, slotIndex, lane }, blockIndex) => {
+                {layout.items.map(({ block, slotIndex, lane }, blockIndex) => {
                   const isSwimming = (block.nameOnly || block.label).includes('スイミング');
                   const isLesson = block.type === 'lesson';
                   const backgroundColor = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
@@ -1138,9 +1139,9 @@ export default function TransportModal({
                       backgroundColor,
                       borderColor,
                     }]}>
-                      <Text style={styles.zoomTimelineBlockTrip} numberOfLines={1}>{TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`}</Text>
+                      <Text style={styles.zoomTimelineBlockTrip} numberOfLines={1}>{block.time || '-'}・{block.count}名</Text>
                       <Text style={styles.zoomTimelineBlockText} numberOfLines={1} adjustsFontSizeToFit>
-                        {block.time || '-'} {block.nameOnly || block.label} {block.count}名
+                        {block.nameOnly || block.label}
                       </Text>
                     </View>
                   );
@@ -1259,7 +1260,7 @@ export default function TransportModal({
                       )}
 
                       {/* 印刷と同じく、重なる送迎は上下の段へ分けて表示 */}
-                      {timelineLayout.items.map(({ block, tripIndex, slotIndex, lane }, blockIndex) => {
+                      {timelineLayout.items.map(({ block, slotIndex, lane }, blockIndex) => {
                         const isSwimming = (block.nameOnly || block.label).includes('スイミング');
                         const isLesson = block.type === 'lesson';
                         const bgColor = isSwimming ? '#DDF7FF' : isLesson ? '#EAF7EF' : '#FFF4D8';
@@ -1271,11 +1272,11 @@ export default function TransportModal({
                             backgroundColor: bgColor, borderWidth: 1, borderColor, borderRadius: 6,
                             paddingHorizontal: 4, paddingVertical: 2, justifyContent: 'center', zIndex: 2,
                           }}>
-                            <Text style={{ fontSize: 7, lineHeight: 8, color: '#555', fontWeight: '700' }} numberOfLines={1}>
-                              {TRIP_LABELS[tripIndex] || `${tripIndex + 1}回目`}
+                            <Text style={{ fontSize: 7, lineHeight: 8, color: '#555', fontWeight: '800' }} numberOfLines={1}>
+                              {block.time || '-'}・{block.count}名
                             </Text>
                             <Text style={{ fontSize: 8, lineHeight: 9, color: '#222', fontWeight: '800' }} numberOfLines={1} adjustsFontSizeToFit>
-                              {block.time || '-'} {block.nameOnly || block.label} {block.count}名
+                              {block.nameOnly || block.label}
                             </Text>
                           </View>
                         );
