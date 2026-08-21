@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
@@ -23,7 +23,6 @@ export default function QrScanScreen() {
   const [time, setTime] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [manualCode, setManualCode] = useState('');
   
   // カメラの向きを管理するステート（初期値は外カメラ）
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -161,28 +160,6 @@ export default function QrScanScreen() {
     processEntry(extractedId);
   };
 
-  const extractQrId = (raw: string) => {
-    let extractedId = raw.trim();
-    if (extractedId.includes('?id=')) {
-      extractedId = extractedId.split('?id=')[1].split('&')[0];
-    }
-    try {
-      extractedId = decodeURIComponent(extractedId);
-    } catch (e) {}
-    return extractedId.replace(/[^a-zA-Z0-9_-]/g, '');
-  };
-
-  const submitManualCode = () => {
-    const extractedId = extractQrId(manualCode);
-    if (!extractedId) {
-      setErrorMsg('QRコードのIDまたはURLを入力してください。');
-      setStatus('error');
-      return;
-    }
-    setScanned(true);
-    processEntry(extractedId);
-  };
-
   // 内カメラ・外カメラの切り替え処理
   const toggleCameraFacing = () => {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
@@ -222,41 +199,9 @@ export default function QrScanScreen() {
           </TouchableOpacity>
           <Text style={styles.scanHeaderTitle}>入室QRリーダー</Text>
         </View>
-        <View style={styles.scannerOverlay}>
-          {/* カメラ反転ボタン */}
-          <TouchableOpacity style={styles.flipBtn} onPress={toggleCameraFacing}>
-            <Ionicons name="camera-reverse" size={32} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.scannerGuideCard}>
-            <Text style={styles.scannerTitle}>QRコードを読み取ります</Text>
-            <Text style={styles.scannerText}>明るい場所で、枠いっぱいにQRを入れてください</Text>
-          </View>
-
-          <View style={styles.scannerBox}>
-            <View style={[styles.corner, styles.cornerTopLeft]} />
-            <View style={[styles.corner, styles.cornerTopRight]} />
-            <View style={[styles.corner, styles.cornerBottomLeft]} />
-            <View style={[styles.corner, styles.cornerBottomRight]} />
-          </View>
-
-          <View style={styles.manualCard}>
-            <Text style={styles.manualLabel}>読み取れない場合</Text>
-            <TextInput
-              value={manualCode}
-              onChangeText={setManualCode}
-              placeholder="QRのURLまたはIDを入力"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.manualInput}
-            />
-            <TouchableOpacity style={styles.manualBtn} onPress={submitManualCode}>
-              <Text style={styles.manualBtnText}>入力して記録する</Text>
-            </TouchableOpacity>
-          </View>
-
-        </View>
+        <TouchableOpacity style={styles.flipBtn} onPress={toggleCameraFacing} activeOpacity={0.78}>
+          <Ionicons name="camera-reverse" size={32} color="#FFFFFF" />
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -525,111 +470,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  scannerOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    paddingTop: Platform.OS === 'android' ? 92 : 78,
-    paddingBottom: 28,
-    paddingHorizontal: 20,
-  },
-  scannerBox: {
-    width: 280,
-    height: 280,
-    backgroundColor: 'transparent',
-    position: 'relative',
-  },
-  scannerGuideCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  scannerTitle: {
-    color: COLORS.text,
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  scannerText: {
-    color: COLORS.textLight,
-    fontSize: 13,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  corner: {
-    position: 'absolute',
-    width: 58,
-    height: 58,
-    borderColor: '#FFFFFF',
-  },
-  cornerTopLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 6,
-    borderLeftWidth: 6,
-    borderTopLeftRadius: 18,
-  },
-  cornerTopRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 6,
-    borderRightWidth: 6,
-    borderTopRightRadius: 18,
-  },
-  cornerBottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 6,
-    borderLeftWidth: 6,
-    borderBottomLeftRadius: 18,
-  },
-  cornerBottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 6,
-    borderRightWidth: 6,
-    borderBottomRightRadius: 18,
-  },
-  manualCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderRadius: 18,
-    padding: 12,
-  },
-  manualLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: 'bold',
-    marginBottom: 7,
-  },
-  manualInput: {
-    backgroundColor: '#F7F7F7',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.text,
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  manualBtn: {
-    backgroundColor: THEME_COLOR,
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  manualBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
   backBtn: {
     paddingHorizontal: 28,
     paddingVertical: 12,
@@ -643,8 +483,8 @@ const styles = StyleSheet.create({
   },
   flipBtn: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 60 : 50,
-    right: 30,
+    right: 20,
+    bottom: 28,
     width: 56,
     height: 56,
     borderRadius: 28,
