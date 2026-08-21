@@ -56,7 +56,7 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
   if (!isAdmin && !isStaff && !isUser) return null;
 
   const goHome = () => {
-    router.push({ pathname: '/menu', params: { role: isAdmin ? 'admin' : isStaff ? 'staff' : 'user', name: adminName || (isAdmin ? 'admin' : '') } } as any);
+    router.push('/menu' as any);
   };
 
   const itemColor = (key: AdminBottomNavActive) => active === key ? '#00AEB8' : '#766B64';

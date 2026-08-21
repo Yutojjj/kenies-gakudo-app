@@ -124,7 +124,7 @@ export default function AdminMoreScreen() {
     router.push(params ? ({ pathname, params } as any) : (pathname as any));
   };
   const goHome = () => {
-    router.replace({ pathname: '/menu', params: { role: 'admin', name: adminName || 'admin' } } as any);
+    router.replace('/menu' as any);
   };
 
   const normalizeDay = (value: string) => {

@@ -947,7 +947,7 @@ export default function AlbumScreen() {
                     ]}>{cell.day}</Text>
                     {hasMedia && <Text style={styles.albumCalendarCount}>{cell.media.length}件</Text>}
                     {cell.eventTitles.slice(0, 1).map(eventTitle => (
-                      <Text key={eventTitle} style={styles.albumCalendarEvent} numberOfLines={1}>{eventTitle}</Text>
+                      <Text key={eventTitle} style={styles.albumCalendarEvent} numberOfLines={2}>イベント{`\n`}{eventTitle}</Text>
                     ))}
                     {cell.eventTitles.length > 1 && <Text style={styles.albumCalendarMore}>ほか{cell.eventTitles.length - 1}件</Text>}
                   </TouchableOpacity>
@@ -1137,7 +1137,7 @@ export default function AlbumScreen() {
                   <View style={styles.dateAlbumEventRow}>
                     {selectedDateEventTitles.map(eventTitle => (
                       <View key={eventTitle} style={styles.dateAlbumEventBadge}>
-                        <Text style={styles.dateAlbumEventBadgeText}>{eventTitle}</Text>
+                        <Text style={styles.dateAlbumEventBadgeText}>イベント　{eventTitle}</Text>
                       </View>
                     ))}
                   </View>

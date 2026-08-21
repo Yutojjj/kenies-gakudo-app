@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 import { disableNetwork, enableNetwork } from 'firebase/firestore';
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +17,7 @@ const PUBLIC_PATHS = ['/', '/index'];
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { role: routeRole } = useGlobalSearchParams<{ role?: string }>();
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
@@ -25,15 +26,27 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         setChecked(true);
         return;
       }
+      setChecked(false);
       const raw = await AsyncStorage.getItem('loggedInUser');
       if (!raw) {
         router.replace('/');
         return;
       }
+      let user: any;
+      try {
+        user = JSON.parse(raw);
+      } catch {
+        router.replace('/');
+        return;
+      }
+      if (routeRole && routeRole !== user.role) {
+        router.replace('/menu' as any);
+        return;
+      }
       setChecked(true);
     };
     check();
-  }, [pathname]);
+  }, [pathname, routeRole]);
 
   if (!checked) {
     return (

@@ -70,7 +70,7 @@ export default function LoginScreen() {
         const savedUser = await AsyncStorage.getItem('loggedInUser');
         if (savedUser) {
           const user = JSON.parse(savedUser);
-          router.replace({ pathname: '/menu', params: { role: user.role, name: user.name } });
+          router.replace('/menu');
           return;
         }
       } catch (e) {
@@ -107,7 +107,7 @@ export default function LoginScreen() {
           refreshPushSubscription('admin').catch(() => {});
         }
         setLoading(false);
-        router.replace({ pathname: '/menu', params: { role: 'admin', name: '管理者' } });
+        router.replace('/menu');
         return;
       }
 
@@ -129,7 +129,7 @@ export default function LoginScreen() {
           if (Platform.OS === 'web') {
             refreshPushSubscription(querySnapshot.docs[0].id).catch(() => {});
           }
-          router.replace({ pathname: '/menu', params: { role: userData.role, name: userData.name } });
+          router.replace('/menu');
           return;
         }
       }

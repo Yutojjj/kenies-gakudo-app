@@ -172,13 +172,7 @@ export default function ScheduleScreen() {
   }, [lessonAddVisible]);
 
   const goHome = () => {
-    router.replace({
-      pathname: '/menu',
-      params: {
-        role: loggedInUser?.role || 'user',
-        name: loggedInUser?.name || name || '',
-      },
-    } as any);
+    router.replace('/menu' as any);
   };
 
   const formatScheduleModalDate = (dateStr: string) => {

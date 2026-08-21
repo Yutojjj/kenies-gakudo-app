@@ -74,6 +74,7 @@ const QUICK_MENU_IMAGES = {
   qrUpdater: require('../assets/quick-menu/qr-updater.png'),
   logout: require('../assets/quick-menu/logout.png'),
   scheduleChanges: require('../assets/quick-menu/schedule-changes.png'),
+  userList: require('../assets/quick-menu/user-list.png'),
 };
 
 const TODAY_TASK_IMAGES = {
@@ -94,6 +95,7 @@ type AdminQuickKey =
   | 'holidays'
   | 'lessons'
   | 'regularUsers'
+  | 'userList'
   | 'gradeChange'
   | 'paidTransport'
   | 'shiftPeriod'
@@ -117,6 +119,7 @@ type StaffQuickKey =
   | 'messages'
   | 'shift'
   | 'album'
+  | 'userList'
   | 'typing'
   | 'qrScan'
   | 'password'
@@ -413,7 +416,7 @@ export default function MenuScreen() {
       let user: any = {};
       try { user = JSON.parse(raw); } catch { router.replace('/'); return; }
       // URLパラメータのroleがAsyncStorageと一致するか確認
-      if (user.role !== roleParam) {
+      if (roleParam && user.role !== roleParam) {
         // 不一致の場合は正しいroleで上書き（URLの改ざん対策）
         router.replace('/');
         return;
@@ -488,7 +491,7 @@ export default function MenuScreen() {
         if (Array.isArray(parsed)) {
           const allowed = new Set<AdminQuickKey>([
             'attendance', 'todayStatus', 'pickup', 'shift', 'messages', 'events', 'album',
-            'schoolTimes', 'holidays', 'lessons', 'regularUsers', 'gradeChange',
+            'schoolTimes', 'holidays', 'lessons', 'regularUsers', 'userList', 'gradeChange',
             'paidTransport', 'shiftPeriod', 'staffHours', 'password', 'survey',
             'typing', 'qrScan', 'qrUpdater', 'accountList', 'accountCreate',
           ]);
@@ -542,7 +545,7 @@ export default function MenuScreen() {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           const allowed = new Set<StaffQuickKey>([
-            'attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album',
+            'attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'userList',
             'typing', 'qrScan', 'password', 'logout',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as StaffQuickKey)) as StaffQuickKey[];
@@ -1382,6 +1385,7 @@ export default function MenuScreen() {
     { key: 'holidays', label: '長期休み設定', icon: 'calendar-number-outline', color: '#4DA3FF', bg: '#E5F2FF', image: QUICK_MENU_IMAGES.holidays, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push('/holidays-setting') },
     { key: 'lessons', label: '習い事一覧', icon: 'musical-notes-outline', color: '#8A63D2', bg: '#EFE7FF', image: QUICK_MENU_IMAGES.lessons, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/lesson-management' as any) },
     { key: 'regularUsers', label: '定期利用者一覧', icon: 'people-outline', color: '#26A65B', bg: '#E5F7E9', image: QUICK_MENU_IMAGES.regularUsers, cardBg: '#EAFBF8', borderColor: '#9ADBD0', onPress: () => router.push('/regular-users' as any) },
+    { key: 'userList', label: '利用者一覧', icon: 'list-outline', color: '#2D8B79', bg: '#DFF5EE', image: QUICK_MENU_IMAGES.userList, cardBg: '#EFFAF5', borderColor: '#9DD8C6', onPress: () => router.push({ pathname: '/attendance', params: { view: 'schoolUsers' } } as any) },
     { key: 'gradeChange', label: '学年一括変更', icon: 'trending-up-outline', color: '#2D8BE8', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.gradeChange, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => setGradeChoiceModalVisible(true) },
     { key: 'paidTransport', label: '有料送迎 管理', icon: 'car-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.paidTransport, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/paid-transport', params: { role: 'admin', name: name || '' } } as any) },
     { key: 'shiftPeriod', label: 'シフト入力期間', icon: 'time-outline', color: '#2D8BE8', bg: '#E1F1FF', image: QUICK_MENU_IMAGES.shiftPeriod, cardBg: '#F0F8FF', borderColor: '#B9DFFF', onPress: () => setPeriodModal(true) },
@@ -1422,6 +1426,7 @@ export default function MenuScreen() {
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'shift', label: 'シフト', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
     { key: 'album', label: 'アルバム', icon: 'image', color: '#4A90E2', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.album, cardBg: '#DDF3FF', borderColor: '#8FD1F5', onPress: () => router.push({ pathname: '/album', params: { role: role || 'staff', name: name || '' } } as any) },
+    { key: 'userList', label: '利用者一覧', icon: 'list-outline', color: '#2D8B79', bg: '#DFF5EE', image: QUICK_MENU_IMAGES.userList, cardBg: '#EFFAF5', borderColor: '#9DD8C6', onPress: () => router.push({ pathname: '/attendance', params: { view: 'schoolUsers' } } as any) },
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
