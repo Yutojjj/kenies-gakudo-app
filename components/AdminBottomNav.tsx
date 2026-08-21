@@ -68,10 +68,12 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
   );
   const renderCenterHome = () => (
     <TouchableOpacity style={styles.centerHomeItem} onPress={goHome} activeOpacity={0.82} accessibilityLabel="ホーム">
-      <View style={[styles.centerHomeIconFrame, active === 'home' && styles.centerHomeIconFrameActive]}>
-        <Image source={NAV_IMAGES.home} style={styles.centerHomeIcon} resizeMode="contain" />
+      <View style={styles.centerHomeIconSlot}>
+        <View style={[styles.centerHomeIconFrame, active === 'home' && styles.centerHomeIconFrameActive]}>
+          <Image source={NAV_IMAGES.home} style={styles.centerHomeIcon} resizeMode="contain" />
+        </View>
       </View>
-      <Text style={[styles.centerHomeText, { color: itemColor('home') }]}>ホーム</Text>
+      <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
     </TouchableOpacity>
   );
 
@@ -171,12 +173,21 @@ const styles = StyleSheet.create({
   centerHomeItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    gap: 2,
     position: 'relative',
-    marginTop: -28,
     zIndex: 4,
   },
+  centerHomeIconSlot: {
+    width: 38,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
   centerHomeIconFrame: {
+    position: 'absolute',
+    bottom: -2,
     width: 68,
     height: 68,
     borderRadius: 34,
@@ -184,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFF7D8',
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: '#E8D79B',
     shadowColor: '#7A6034',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -193,17 +204,11 @@ const styles = StyleSheet.create({
   },
   centerHomeIconFrameActive: {
     backgroundColor: '#DFF7F3',
-    borderColor: '#B7E8E2',
+    borderColor: '#83D3CB',
   },
   centerHomeIcon: {
     width: 52,
     height: 52,
-  },
-  centerHomeText: {
-    marginTop: -1,
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: '900',
   },
   text: {
     fontSize: 9,
