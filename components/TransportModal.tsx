@@ -1109,8 +1109,8 @@ export default function TransportModal({
               <View style={{ flexDirection: 'row', width: TIMELINE_WIDTH }}>
                 {/* 時間のヘッダー */}
                 {timeHeaders.map(h => (
-                  <View key={h} style={{ width: COL_WIDTH * 4, borderLeftWidth: 1.5, borderColor: '#8FB8B5', paddingLeft: 4 }}>
-                    <Text style={{ fontSize: 11, color: '#333', fontWeight: 'bold' }}>{h}:00</Text>
+                  <View key={h} style={{ width: COL_WIDTH * 4, borderLeftWidth: 1.5, borderColor: '#8FB8B5', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ width: '100%', textAlign: 'center', fontSize: 11, color: '#333', fontWeight: 'bold' }}>{h}:00</Text>
                   </View>
                 ))}
               </View>

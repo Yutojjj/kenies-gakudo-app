@@ -82,17 +82,18 @@ const actionText = (element: Element) => [
 export const installGlobalUiSounds = () => {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {};
 
-  let lastInteractionAt = 0;
-
-  const onPointerDown = (event: Event) => {
-    const now = Date.now();
-    if (event.type === 'click' && now - lastInteractionAt < 700) return;
+  const onButtonClick = (event: Event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target || target.closest('[id^="ui-time-wheel"], [id="ui-sound-none"]')) return;
-    const action = target.closest('[role="button"], button, a, [tabindex="0"]');
+    let action = target.closest('[role="button"], button, a');
+    if (!action) {
+      const keyboardAction = target.closest('[tabindex="0"]');
+      if (keyboardAction && window.getComputedStyle(keyboardAction).cursor === 'pointer') {
+        action = keyboardAction;
+      }
+    }
     if (!action || action.getAttribute('aria-disabled') === 'true' || action.hasAttribute('disabled')) return;
     if (action.matches('input, textarea, select') || action.closest('input, textarea, select')) return;
-    lastInteractionAt = now;
     const text = actionText(action);
     if (/削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|back|close|trash/i.test(text)) {
       playUiSound('back');
@@ -124,12 +125,10 @@ export const installGlobalUiSounds = () => {
     }
   });
 
-  document.addEventListener('pointerdown', onPointerDown, true);
-  document.addEventListener('click', onPointerDown, true);
+  document.addEventListener('click', onButtonClick, true);
   successObserver.observe(document.body, { childList: true, subtree: true });
   return () => {
-    document.removeEventListener('pointerdown', onPointerDown, true);
-    document.removeEventListener('click', onPointerDown, true);
+    document.removeEventListener('click', onButtonClick, true);
     successObserver.disconnect();
     window.alert = originalAlert;
   };
