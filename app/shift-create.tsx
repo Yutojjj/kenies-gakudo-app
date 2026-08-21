@@ -821,9 +821,8 @@ export default function ShiftCreateScreen() {
                 
                 {isEventDay && (
                   <View style={styles.eventBadge}>
-                    <Ionicons name="calendar-outline" size={10} color="#7A4B00" />
                     <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      イベント {eventsData[item.dateStr].join('・')}
+                      {eventsData[item.dateStr].join('・')}
                     </Text>
                   </View>
                 )}
@@ -1501,8 +1500,8 @@ const styles = StyleSheet.create({
   cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
   cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
   
-  eventBadge: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 3, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
-  eventBadgeText: { flex: 1, fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
+  eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
+  eventBadgeText: { fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
   dayEventCard: { marginBottom: 18, padding: 14, borderRadius: 10, backgroundColor: '#FFF8DF', borderWidth: 1, borderColor: '#EBCB73' },
   dayEventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
   dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },

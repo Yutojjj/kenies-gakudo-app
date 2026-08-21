@@ -207,9 +207,8 @@ export default function ShiftViewScreen() {
 
                 {isEventDay && (
                   <View style={styles.eventBadge}>
-                    <Ionicons name="calendar-outline" size={10} color="#7A4B00" />
                     <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      イベント {eventsData[item.dateStr].join('・')}
+                      {eventsData[item.dateStr].join('・')}
                     </Text>
                   </View>
                 )}
@@ -280,8 +279,8 @@ const styles = StyleSheet.create({
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calDayText: { fontSize: 12, fontWeight: 'bold' },
   cellCountText: { fontSize: 10, color: '#007A82', fontWeight: '900' },
-  eventBadge: { flexDirection: 'row', alignItems: 'flex-start', gap: 2, backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 3, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
-  eventBadgeText: { flex: 1, fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
+  eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
+  eventBadgeText: { fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
   cellStaffRow: { marginBottom: 3, borderRadius: 5, paddingHorizontal: 3, paddingVertical: 2, minHeight: 36, borderWidth: 1 },
   cellStaffRowMe: { backgroundColor: '#E7F8F3', borderWidth: 1.5, borderColor: '#00A176', minHeight: 36 },
   cellStaffName: { fontSize: 9, fontWeight: '900', color: '#2E2A27', lineHeight: 12 },
