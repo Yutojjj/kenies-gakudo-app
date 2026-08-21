@@ -458,6 +458,7 @@ export default function TypingCertScreen() {
                       setStageVals(next);
                     }}
                     keyboardType="decimal-pad"
+                    inputMode="decimal"
                     placeholder="1.23"
                     placeholderTextColor="#bbb"
                   />
