@@ -97,11 +97,13 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any)} activeOpacity={0.78}>
-          {renderIcon('messages')}
-          <Text style={[styles.text, { color: itemColor('messages') }]}>メッセージ</Text>
-          {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
-        </TouchableOpacity>
+        {(isAdmin || isUser) && (
+          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any)} activeOpacity={0.78}>
+            {renderIcon('messages')}
+            <Text style={[styles.text, { color: itemColor('messages') }]}>メッセージ</Text>
+            {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
+          </TouchableOpacity>
+        )}
         {!isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
             {renderIcon('shift')}
