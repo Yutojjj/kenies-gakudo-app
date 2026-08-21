@@ -331,13 +331,20 @@ export default function QrScanScreen() {
 
       const expected = children.filter(child => {
         const override = schedules.get(child.id);
+        const hasOverrideLessons = Boolean(
+          override?.lesson
+          || (Array.isArray(override?.lessons) && override.lessons.length > 0)
+        );
         if (override && override.pickupTime !== undefined) {
-          return Boolean(override.pickupTime || override.lesson);
+          return Boolean(override.pickupTime || hasOverrideLessons);
         }
-        if (lessonChildIds.has(child.id)) return true;
+        if (hasOverrideLessons || lessonChildIds.has(child.id)) return true;
         if (!isWeekday || isLongHoliday || isPublicHoliday) return false;
         if (child.isStaffChild) {
           return workingStaff.has(child.parentName || '') && Boolean(schoolTimes[child.school]?.[child.grade]?.[dayName]);
+        }
+        if (override && child.usageType !== '定期利用') {
+          return Boolean(schoolTimes[child.school]?.[child.grade]?.[dayName]);
         }
         return child.usageType === '定期利用'
           && Boolean(child.days?.[dayName])
@@ -571,8 +578,7 @@ export default function QrScanScreen() {
             <Text style={styles.simpleHeaderTitle}>入室QRリーダー</Text>
             {isAdmin && (
               <TouchableOpacity style={styles.permissionPinButton} onPress={openPinFallback} activeOpacity={0.75}>
-                <Ionicons name="keypad-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.pinHeaderButtonText}>PIN入力</Text>
+                <Text style={styles.pinHeaderButtonText}>手動入力</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -599,8 +605,7 @@ export default function QrScanScreen() {
           <Text style={styles.scanHeaderTitle}>入室QRリーダー</Text>
           {isAdmin && (
             <TouchableOpacity style={styles.pinHeaderButton} onPress={openPinFallback} activeOpacity={0.75}>
-              <Ionicons name="keypad-outline" size={19} color="#FFFFFF" />
-              <Text style={styles.pinHeaderButtonText}>PIN入力</Text>
+              <Text style={styles.pinHeaderButtonText}>手動入力</Text>
             </TouchableOpacity>
           )}
         </View>
