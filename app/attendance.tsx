@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import SwipeTabPager from '../components/SwipeTabPager';
 import TransportModal from '../components/TransportModal';
@@ -78,6 +78,7 @@ const sortKidsByGrade = (kidsArray: any[]) => {
 
 export default function AttendanceScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const { dateStr: initialTransportDate, view: initialView } = useLocalSearchParams<{ dateStr?: string; view?: string }>();
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
@@ -749,6 +750,8 @@ export default function AttendanceScreen() {
   const renderTodayStatusView = () => {
     const today = new Date();
     const attendanceData = getAttendanceForDay(today);
+    const statusColumns = screenWidth >= 1400 ? 8 : screenWidth >= 1000 ? 6 : screenWidth >= 700 ? 5 : 4;
+    const statusCardWidth = `${(100 / statusColumns) - 0.7}%` as any;
     
     const expectedKids: Kid[] = [];
     const addedIds = new Set<string>();
@@ -802,42 +805,33 @@ export default function AttendanceScreen() {
       });
 
       return (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 6 }}>
           {sortedSchools.map(school => {
             const schoolKids = grouped[school];
             const bgColor = getCardColor(school);
             return (
-              <View key={school} style={{ backgroundColor: bgColor, borderRadius: 12, padding: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
-                <Text style={{ fontSize: 12, fontWeight: 'bold', color: COLORS.text, marginBottom: 6 }}>{school}</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 5 }}>
+              <View key={school} style={{ backgroundColor: '#FAFBFB', borderRadius: 10, padding: 6, borderWidth: 1, borderColor: '#E4E8E8', borderLeftWidth: 5, borderLeftColor: bgColor }}>
+                <Text style={{ fontSize: 11, fontWeight: '900', color: '#222222', marginBottom: 4 }}>{school}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 4 }}>
                   {schoolKids.map(k => {
                     const isArrived = statusType === 'arrived';
                     return (
                       <View key={k.id} style={{ 
-                        backgroundColor: isArrived ? '#E8F5E9' : '#FFFFFF', 
-                        paddingHorizontal: 5, 
-                        paddingVertical: 6, 
-                        borderRadius: 9, 
-                        flexDirection: 'row', 
-                        alignItems: 'center', 
-                        shadowColor: '#000', 
-                        shadowOpacity: 0.04, 
-                        shadowRadius: 3, 
-                        elevation: 1,
+                        backgroundColor: isArrived ? '#EAF8EF' : '#FFF0F0', 
+                        paddingHorizontal: 7, 
+                        paddingVertical: 5, 
+                        borderRadius: 8, 
                         borderWidth: 1,
-                        borderColor: isArrived ? '#4CAF50' : '#EEEEEE',
-                        width: '23.6%'
+                        borderColor: isArrived ? '#9AD4AA' : '#F1AAAA',
+                        width: statusCardWidth,
+                        minHeight: 42,
+                        justifyContent: 'center',
                       }}>
-                        <Ionicons 
-                          name={isArrived ? "checkmark-circle" : "person-circle-outline"} 
-                          size={13} 
-                          color={isArrived ? "#4CAF50" : COLORS.danger} 
-                          style={{ marginRight: 3 }} 
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 10, fontWeight: 'bold', color: COLORS.text }} numberOfLines={1}>{k.name}</Text>
-                          <Text style={{ fontSize: 8, color: isArrived ? '#4CAF50' : COLORS.textLight }} numberOfLines={1}>
-                            {k.grade}
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: '#222222' }} numberOfLines={1}>{k.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, gap: 4 }}>
+                          <Text style={{ fontSize: 8, color: '#555555', fontWeight: '700' }} numberOfLines={1}>{k.grade || '学年未設定'}</Text>
+                          <Text style={{ fontSize: 8, color: isArrived ? '#247A43' : '#C33E3E', fontWeight: '900' }} numberOfLines={1}>
+                            {isArrived ? '登所済み' : '未登所'}
                           </Text>
                         </View>
                       </View>
@@ -853,23 +847,35 @@ export default function AttendanceScreen() {
 
     return (
       <ScrollView style={styles.mainScroll}>
-        <View style={{ padding: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: COLORS.text }}>
-            {today.getMonth()+1}月{today.getDate()}日の登所状況
-          </Text>
+        <View style={{ paddingHorizontal: 10, paddingTop: 10, paddingBottom: ADMIN_BOTTOM_NAV_HEIGHT + 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+            <Text style={{ fontSize: 17, fontWeight: '900', color: '#222222' }}>
+              {today.getMonth()+1}月{today.getDate()}日の登所状況
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#F1AAAA' }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#C33E3E' }}>未登所 {notArrivedKids.length}名</Text>
+              </View>
+              <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#EAF8EF', borderWidth: 1, borderColor: '#9AD4AA' }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: '#247A43' }}>登所済み {arrivedKids.length}名</Text>
+              </View>
+            </View>
+          </View>
           
-          <View style={{ marginBottom: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.danger }}>未登所</Text>
-              <Text style={{ fontSize: 14, color: COLORS.danger, marginLeft: 8 }}>({notArrivedKids.length}名)</Text>
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#D94B4B', marginRight: 6 }} />
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#222222' }}>未登所</Text>
+              <Text style={{ fontSize: 12, color: '#555555', marginLeft: 6, fontWeight: '700' }}>({notArrivedKids.length}名)</Text>
             </View>
             {renderGroupedKids(notArrivedKids, 'notArrived')}
           </View>
 
-          <View style={{ marginBottom: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#4CAF50' }}>登所済み</Text>
-              <Text style={{ fontSize: 14, color: '#4CAF50', marginLeft: 8 }}>({arrivedKids.length}名)</Text>
+          <View style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#3B9B5C', marginRight: 6 }} />
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#222222' }}>登所済み</Text>
+              <Text style={{ fontSize: 12, color: '#555555', marginLeft: 6, fontWeight: '700' }}>({arrivedKids.length}名)</Text>
             </View>
             {renderGroupedKids(arrivedKids, 'arrived')}
           </View>
