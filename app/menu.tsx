@@ -1117,12 +1117,16 @@ export default function MenuScreen() {
       ? todayPlan.memos.join(' / ')
       : '新しい連絡はありません';
   const todayStr = makeDateStr(new Date());
-  const upcomingMenuEvents = menuEvents
-    .filter(event => event.dateStr >= todayStr)
+  const visibleMenuEvents = menuEvents
+    .filter(event => !event.hidden && event.dateStr >= todayStr)
+    .sort((a, b) => {
+      const dateCompare = String(a.dateStr).localeCompare(String(b.dateStr));
+      if (dateCompare !== 0) return dateCompare;
+      const titleCompare = String(a.title || '').localeCompare(String(b.title || ''), 'ja');
+      if (titleCompare !== 0) return titleCompare;
+      return String(a.id).localeCompare(String(b.id));
+    })
     .slice(0, 5);
-  const visibleMenuEvents = upcomingMenuEvents.length > 0
-    ? upcomingMenuEvents
-    : [...menuEvents].sort((a, b) => String(b.dateStr).localeCompare(String(a.dateStr))).slice(0, 5);
 
   const toggleMenuEventParticipation = (event: MenuEventItem) => {
     if (!accountId) {
