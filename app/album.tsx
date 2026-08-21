@@ -578,10 +578,31 @@ export default function AlbumScreen() {
   const chooseWebGalleryDirectory = async () => {
     try {
       const picker = (window as any).showDirectoryPicker;
-      if (typeof picker !== 'function') return;
-      const handle = await picker({ id: 'kenies-album-media', mode: 'read', startIn: 'pictures' });
-      await saveDirectoryHandle(handle);
-      await loadWebGalleryDirectory(handle);
+      if (typeof picker === 'function') {
+        const handle = await picker({ id: 'kenies-album-media', mode: 'read', startIn: 'pictures' });
+        await saveDirectoryHandle(handle);
+        await loadWebGalleryDirectory(handle);
+        return;
+      }
+
+      // AndroidなどFile System Access API非対応のブラウザでも、最初に
+      // 写真フォルダを選んでもらい、その中身を同じアプリ内一覧へ表示する。
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = 'image/*,video/*';
+      input.setAttribute('webkitdirectory', '');
+      input.onchange = () => {
+        const files = Array.from(input.files || []).filter(isVisualMediaFile);
+        files.sort((a, b) => b.lastModified - a.lastModified);
+        releasePickerAssets(webGalleryAssets);
+        setWebGalleryAssets(files.map(fileToPickerAsset));
+        setWebGallerySelectedUris([]);
+        setWebGalleryDirectoryName(files[0]?.webkitRelativePath?.split('/')[0] || '写真フォルダ');
+        setWebGalleryNeedsDirectory(false);
+        setWebGalleryLoading(false);
+      };
+      input.click();
     } catch (error: any) {
       if (error?.name !== 'AbortError') console.warn('写真フォルダを選択できませんでした', error);
     }
@@ -634,18 +655,34 @@ export default function AlbumScreen() {
       : { canceled: true, assets: null });
   };
 
+  const launchWebMediaPicker = (): Promise<ImagePicker.ImagePickerResult> => (
+    new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,video/*';
+      input.multiple = true;
+
+      input.onchange = () => {
+        const files = Array.from(input.files || []).filter(isVisualMediaFile);
+        resolve(files.length > 0
+          ? { canceled: false, assets: files.map(fileToPickerAsset) }
+          : { canceled: true, assets: null });
+      };
+      input.oncancel = () => resolve({ canceled: true, assets: null });
+      input.click();
+    })
+  );
+
   const launchAlbumMediaPicker = async () => {
-    // Web/PWAではユーザーのタップから直接ファイル選択を開く必要がある。
-    // 権限確認を先に待つと、特にiOS Safariで選択画面が遮断されることがある。
-    if (Platform.OS === 'web' && typeof (window as any).showDirectoryPicker === 'function') {
-      return openWebMediaGallery();
+    // Web/PWAでは端末標準の写真・動画選択画面を直接開く。
+    // captureを指定しないことで、カメラではなく保存済みメディアを選択させる。
+    if (Platform.OS === 'web') {
+      return launchWebMediaPicker();
     }
-    if (Platform.OS !== 'web') {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください');
-        return null;
-      }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください');
+      return null;
     }
 
     return ImagePicker.launchImageLibraryAsync({
@@ -1111,7 +1148,7 @@ export default function AlbumScreen() {
 
   const formatAlbumDay = (dateStr: string) => {
     const date = new Date(`${dateStr}T00:00:00`);
-    return `${date.getMonth() + 1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
+    return `${date.getMonth() + 1}月${date.getDate()}日(${DAY_NAMES[date.getDay()]})`;
   };
 
   const renderCalendarPage = (year: number, month: number) => {
@@ -1247,11 +1284,9 @@ export default function AlbumScreen() {
               <View style={styles.yearMonthButtons}>
                 <TouchableOpacity style={styles.dateJumpButton} onPress={() => setDateJumpPicker('year')}>
                   <Text style={styles.dateJumpButtonText}>{viewYear}年</Text>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.dateJumpButton} onPress={() => setDateJumpPicker('month')}>
                   <Text style={styles.dateJumpButtonText}>{viewMonth}月</Text>
-                  <Ionicons name="chevron-down" size={14} color={COLORS.primary} />
                 </TouchableOpacity>
               </View>
               <TouchableOpacity style={styles.monthArrowButton} onPress={() => moveViewMonth(1)} accessibilityLabel="次の月">
@@ -1889,7 +1924,7 @@ const styles = StyleSheet.create({
   dateAlbumTopRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderColor: COLORS.border },
   dateAlbumTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
   dateAlbumCloseButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  dateAlbumNavigator: { minHeight: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 66, gap: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: COLORS.border, position: 'relative' },
+  dateAlbumNavigator: { minHeight: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, gap: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: COLORS.border, position: 'relative' },
   dateAlbumNavButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E9D7C5' },
   dateAlbumNavButtonDisabled: { opacity: 0.45 },
   dateAlbumDateText: { minWidth: 0, flexShrink: 1, color: COLORS.text, fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
