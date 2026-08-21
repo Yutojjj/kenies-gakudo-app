@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,13 +23,112 @@ type AssignedStaff = { name: string, start: string, end: string };
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
+const SHIFT_WHEEL_ITEM_HEIGHT = 40;
+const SHIFT_WHEEL_VIEW_HEIGHT = 128;
+
+function ShiftTimeWheel({
+  values,
+  value,
+  visible,
+  onChange,
+}: {
+  values: number[];
+  value: number;
+  visible: boolean;
+  onChange: (value: number) => void;
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draggingRef = useRef(false);
+  const lastIndexRef = useRef(values.indexOf(value));
+
+  const getIndex = (y: number) => Math.max(
+    0,
+    Math.min(values.length - 1, Math.round(y / SHIFT_WHEEL_ITEM_HEIGHT)),
+  );
+
+  const selectIndex = (index: number, vibrate = true) => {
+    if (index === lastIndexRef.current) return;
+    lastIndexRef.current = index;
+    onChange(values[index]);
+    if (vibrate && Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+  };
+
+  const settle = (y: number) => {
+    const index = getIndex(y);
+    selectIndex(index);
+    const targetY = index * SHIFT_WHEEL_ITEM_HEIGHT;
+    if (Math.abs(y - targetY) > 0.5) {
+      scrollRef.current?.scrollTo({ y: targetY, animated: true });
+    }
+    draggingRef.current = false;
+  };
+
+  useEffect(() => {
+    if (!visible || draggingRef.current) return;
+    const index = Math.max(0, values.indexOf(value));
+    lastIndexRef.current = index;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: index * SHIFT_WHEEL_ITEM_HEIGHT, animated: false });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [value, visible, values]);
+
+  return (
+    <View style={styles.shiftWheelWrap}>
+      <View style={styles.shiftWheelSelection} pointerEvents="none" />
+      <ScrollView
+        ref={scrollRef}
+        style={styles.shiftWheelScroll}
+        contentContainerStyle={styles.shiftWheelContent}
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        snapToInterval={SHIFT_WHEEL_ITEM_HEIGHT}
+        snapToOffsets={values.map((_, index) => index * SHIFT_WHEEL_ITEM_HEIGHT)}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => { draggingRef.current = true; }}
+        onScroll={(event) => {
+          const y = event.nativeEvent.contentOffset.y;
+          selectIndex(getIndex(y));
+          if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+          snapTimerRef.current = setTimeout(() => settle(y), 110);
+        }}
+        onMomentumScrollEnd={(event) => settle(event.nativeEvent.contentOffset.y)}
+        onScrollEndDrag={(event) => {
+          const y = event.nativeEvent.contentOffset.y;
+          if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+          snapTimerRef.current = setTimeout(() => settle(y), 90);
+        }}
+      >
+        {values.map((item) => (
+          <TouchableOpacity
+            key={item}
+            style={styles.shiftWheelItem}
+            onPress={() => {
+              const index = values.indexOf(item);
+              selectIndex(index);
+              scrollRef.current?.scrollTo({ y: index * SHIFT_WHEEL_ITEM_HEIGHT, animated: true });
+            }}
+          >
+            <Text style={[styles.shiftWheelText, value === item && styles.shiftWheelTextActive]}>
+              {String(item).padStart(2, '0')}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
 
 export default function ShiftCreateScreen() {
   const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
-  const { openSettings, autoPdf, year: routeYear, month: routeMonth } = useLocalSearchParams<{
+  const { openSettings, openWorkSummary, autoPdf, year: routeYear, month: routeMonth } = useLocalSearchParams<{
     openSettings?: string;
+    openWorkSummary?: string;
     autoPdf?: string;
     year?: string;
     month?: string;
@@ -73,6 +173,8 @@ export default function ShiftCreateScreen() {
   const [availableStaff, setAvailableStaff] = useState<Staff[]>([]);
   const [unavailableStaff, setUnavailableStaff] = useState<{name: string, type: string}[]>([]);
   const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
+  const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
+  const [workSummaryDate, setWorkSummaryDate] = useState(currentDate);
   const [workHoursVisible, setWorkHoursVisible] = useState(false);
   const [currentDayAssigned, setCurrentDayAssigned] = useState<AssignedStaff[]>([]);
 
@@ -279,6 +381,10 @@ export default function ShiftCreateScreen() {
       let totalMin = 0;
       let days = 0;
       Object.entries(assignedShifts).forEach(([dateStr, entries]) => {
+        const periodKey = workSummaryPeriod === 'month'
+          ? `${workSummaryDate.getFullYear()}-${String(workSummaryDate.getMonth() + 1).padStart(2, '0')}`
+          : String(workSummaryDate.getFullYear());
+        if (!dateStr.startsWith(periodKey)) return;
         const entry = entries.find((e: any) => e.name === staff.name);
         if (!entry) return;
         const [sh, sm] = entry.start.split(':').map(Number);
@@ -288,15 +394,33 @@ export default function ShiftCreateScreen() {
       });
       summary.push({ name: staff.name, totalMin, days });
     });
-    return summary.sort((a,b) => b.totalMin - a.totalMin);
+    return summary.filter(item => item.days > 0).sort((a,b) => b.totalMin - a.totalMin);
   };
 
   const toHM = (mins: number) => `${Math.floor(mins/60)}h${mins%60 > 0 ? String(mins%60).padStart(2,'0')+'m' : ''}`;
 
+  const openWorkSummaryModal = () => {
+    setWorkSummaryDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+    setWorkSummaryPeriod('month');
+    setWorkSummaryVisible(true);
+  };
+
+  const moveWorkSummaryPeriod = (amount: number) => {
+    setWorkSummaryDate(previous => workSummaryPeriod === 'month'
+      ? new Date(previous.getFullYear(), previous.getMonth() + amount, 1)
+      : new Date(previous.getFullYear() + amount, 0, 1));
+  };
+
   const openTimeEditor = (staffName: string, start: string, end: string) => {
+    const [startHour, startMinute] = start.split(':').map(Number);
+    const [endHour, endMinute] = end.split(':').map(Number);
     setEditingStaffName(staffName);
     setTempStart(start);
     setTempEnd(end);
+    setNewStartHour(Number.isFinite(startHour) ? startHour : 14);
+    setNewStartMinute(Number.isFinite(startMinute) ? startMinute : 0);
+    setNewEndHour(Number.isFinite(endHour) ? endHour : 18);
+    setNewEndMinute(Number.isFinite(endMinute) ? endMinute : 30);
     setTimeSelectTarget('start');
     setTimePickerVisible(true);
   };
@@ -304,8 +428,14 @@ export default function ShiftCreateScreen() {
   const handleMasterTimeSelect = (t: string) => {
     if (t.includes('-')) {
       const [s, e] = t.split('-');
+      const [startHour, startMinute] = s.split(':').map(Number);
+      const [endHour, endMinute] = e.split(':').map(Number);
       setTempStart(s);
       setTempEnd(e);
+      setNewStartHour(startHour);
+      setNewStartMinute(startMinute);
+      setNewEndHour(endHour);
+      setNewEndMinute(endMinute);
     } else {
       if (timeSelectTarget === 'start') setTempStart(t);
       else setTempEnd(t);
@@ -505,6 +635,13 @@ export default function ShiftCreateScreen() {
   }, [openSettings]);
 
   useEffect(() => {
+    if (openWorkSummary !== '1') return;
+    setWorkSummaryDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+    setWorkSummaryPeriod('month');
+    setWorkSummaryVisible(true);
+  }, [openWorkSummary]);
+
+  useEffect(() => {
     if (autoPdf !== '1' || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
     autoPdfHandledRef.current = true;
     const timer = setTimeout(() => exportPDF(), 350);
@@ -532,6 +669,7 @@ export default function ShiftCreateScreen() {
   const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
+  const workSummary = calcWorkSummary();
 
   const saveAutoFillSettings = async (settings: typeof autoFillSettings) => {
     setAutoFillSettings(settings);
@@ -553,7 +691,7 @@ export default function ShiftCreateScreen() {
             <Ionicons name="document-text" size={20} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>PDF出力</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.pdfBtn, { backgroundColor: '#5D4037' }]} onPress={() => setWorkSummaryVisible(true)}>
+          <TouchableOpacity style={[styles.pdfBtn, { backgroundColor: '#5D4037' }]} onPress={openWorkSummaryModal}>
             <Ionicons name="time-outline" size={20} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>勤務時間</Text>
           </TouchableOpacity>
@@ -571,8 +709,37 @@ export default function ShiftCreateScreen() {
                 <Ionicons name="close-circle" size={28} color="#795548" />
               </TouchableOpacity>
             </View>
+            <View style={styles.workSummaryControls}>
+              <View style={styles.workSummaryTabs}>
+                <TouchableOpacity
+                  style={[styles.workSummaryTab, workSummaryPeriod === 'month' && styles.workSummaryTabActive]}
+                  onPress={() => setWorkSummaryPeriod('month')}
+                >
+                  <Text style={[styles.workSummaryTabText, workSummaryPeriod === 'month' && styles.workSummaryTabTextActive]}>月別</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.workSummaryTab, workSummaryPeriod === 'year' && styles.workSummaryTabActive]}
+                  onPress={() => setWorkSummaryPeriod('year')}
+                >
+                  <Text style={[styles.workSummaryTabText, workSummaryPeriod === 'year' && styles.workSummaryTabTextActive]}>年別</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.workSummaryPeriodNav}>
+                <TouchableOpacity style={styles.workSummaryPeriodBtn} onPress={() => moveWorkSummaryPeriod(-1)}>
+                  <Ionicons name="chevron-back" size={20} color="#5D4037" />
+                </TouchableOpacity>
+                <Text style={styles.workSummaryPeriodText}>
+                  {workSummaryPeriod === 'month'
+                    ? `${workSummaryDate.getFullYear()}年 ${workSummaryDate.getMonth() + 1}月`
+                    : `${workSummaryDate.getFullYear()}年`}
+                </Text>
+                <TouchableOpacity style={styles.workSummaryPeriodBtn} onPress={() => moveWorkSummaryPeriod(1)}>
+                  <Ionicons name="chevron-forward" size={20} color="#5D4037" />
+                </TouchableOpacity>
+              </View>
+            </View>
             <ScrollView style={{ padding:16 }}>
-              {calcWorkSummary().map((s, i) => (
+              {workSummary.map((s, i) => (
                 <View key={s.name} style={{ flexDirection:'row', alignItems:'center', paddingVertical:12, borderBottomWidth:1, borderColor:'#EEE' }}>
                   <Text style={{ width:30, fontSize:13, color:'#aaa', fontWeight:'bold' }}>{i+1}</Text>
                   <Text style={{ flex:1, fontSize:15, fontWeight:'bold', color:'#333' }}>{s.name}</Text>
@@ -580,7 +747,7 @@ export default function ShiftCreateScreen() {
                   <Text style={{ fontSize:16, fontWeight:'bold', color:'#5D4037', marginLeft:12, minWidth:70, textAlign:'right' }}>{toHM(s.totalMin)}</Text>
                 </View>
               ))}
-              {calcWorkSummary().length === 0 && <Text style={{ textAlign:'center', color:'#aaa', padding:20 }}>まだシフトが確定していません</Text>}
+              {workSummary.length === 0 && <Text style={{ textAlign:'center', color:'#aaa', padding:20 }}>この期間の確定シフトはありません</Text>}
               <View style={{ height:20 }} />
             </ScrollView>
           </View>
@@ -1008,66 +1175,64 @@ export default function ShiftCreateScreen() {
               </View>
             )}
 
-            {/* ドラムロール時間ピッカー（大きい・タップしやすい） */}
+            {/* スクロール式時間ピッカー */}
             <View style={{ marginBottom: 8 }}>
               <Text style={styles.addTimeTitle}>時間を直接選ぶ</Text>
               <View style={styles.drumPickerRow}>
-                {/* 開始 時 */}
-                <View style={styles.drumCol}>
-                  <Text style={styles.drumLabel}>開始 時</Text>
-                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                    {HOURS.map(h => (
-                      <TouchableOpacity key={`sh-${h}`} style={[styles.drumItem, newStartHour === h && styles.drumItemActive]} onPress={() => { setNewStartHour(h); setTempStart(`${String(h).padStart(2,'0')}:${String(newStartMinute).padStart(2,'0')}`); }}>
-                        <Text style={[styles.drumItemText, newStartHour === h && styles.drumItemTextActive]}>{String(h).padStart(2,'0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                <View style={styles.shiftTimeGroup}>
+                  <Text style={styles.shiftTimeGroupTitle}>開始</Text>
+                  <View style={styles.shiftTimePair}>
+                    <ShiftTimeWheel
+                      values={HOURS}
+                      value={newStartHour}
+                      visible={timePickerVisible}
+                      onChange={(hour) => {
+                        setNewStartHour(hour);
+                        setTempStart(`${String(hour).padStart(2, '0')}:${String(newStartMinute).padStart(2, '0')}`);
+                      }}
+                    />
+                    <Text style={styles.drumColon}>:</Text>
+                    <ShiftTimeWheel
+                      values={MINUTES}
+                      value={newStartMinute}
+                      visible={timePickerVisible}
+                      onChange={(minute) => {
+                        setNewStartMinute(minute);
+                        setTempStart(`${String(newStartHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+                      }}
+                    />
+                  </View>
                 </View>
-                <Text style={styles.drumColon}>:</Text>
-                {/* 開始 分 */}
-                <View style={styles.drumCol}>
-                  <Text style={styles.drumLabel}>開始 分</Text>
-                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                    {MINUTES.map(m => (
-                      <TouchableOpacity key={`sm-${m}`} style={[styles.drumItem, newStartMinute === m && styles.drumItemActive]} onPress={() => { setNewStartMinute(m); setTempStart(`${String(newStartHour).padStart(2,'0')}:${String(m).padStart(2,'0')}`); }}>
-                        <Text style={[styles.drumItemText, newStartMinute === m && styles.drumItemTextActive]}>{String(m).padStart(2,'0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
                 <Text style={styles.drumTilde}>〜</Text>
-
-                {/* 終了 時 */}
-                <View style={styles.drumCol}>
-                  <Text style={styles.drumLabel}>終了 時</Text>
-                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                    {HOURS.map(h => (
-                      <TouchableOpacity key={`eh-${h}`} style={[styles.drumItem, newEndHour === h && styles.drumItemActive]} onPress={() => { setNewEndHour(h); setTempEnd(`${String(h).padStart(2,'0')}:${String(newEndMinute).padStart(2,'0')}`); }}>
-                        <Text style={[styles.drumItemText, newEndHour === h && styles.drumItemTextActive]}>{String(h).padStart(2,'0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                <View style={styles.shiftTimeGroup}>
+                  <Text style={styles.shiftTimeGroupTitle}>終了</Text>
+                  <View style={styles.shiftTimePair}>
+                    <ShiftTimeWheel
+                      values={HOURS}
+                      value={newEndHour}
+                      visible={timePickerVisible}
+                      onChange={(hour) => {
+                        setNewEndHour(hour);
+                        setTempEnd(`${String(hour).padStart(2, '0')}:${String(newEndMinute).padStart(2, '0')}`);
+                      }}
+                    />
+                    <Text style={styles.drumColon}>:</Text>
+                    <ShiftTimeWheel
+                      values={MINUTES}
+                      value={newEndMinute}
+                      visible={timePickerVisible}
+                      onChange={(minute) => {
+                        setNewEndMinute(minute);
+                        setTempEnd(`${String(newEndHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+                      }}
+                    />
+                  </View>
                 </View>
-                <Text style={styles.drumColon}>:</Text>
-                {/* 終了 分 */}
-                <View style={styles.drumCol}>
-                  <Text style={styles.drumLabel}>終了 分</Text>
-                  <ScrollView style={styles.drumScroll} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                    {MINUTES.map(m => (
-                      <TouchableOpacity key={`em-${m}`} style={[styles.drumItem, newEndMinute === m && styles.drumItemActive]} onPress={() => { setNewEndMinute(m); setTempEnd(`${String(newEndHour).padStart(2,'0')}:${String(m).padStart(2,'0')}`); }}>
-                        <Text style={[styles.drumItemText, newEndMinute === m && styles.drumItemTextActive]}>{String(m).padStart(2,'0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* 候補として保存ボタン */}
-                <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddMasterTime}>
-                  <Ionicons name="bookmark" size={14} color={COLORS.white} />
-                  <Text style={{color: COLORS.white, fontWeight: 'bold', fontSize: 11, marginTop: 2}}>保存</Text>
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity style={styles.addOptionSubmit} onPress={handleAddMasterTime}>
+                <Ionicons name="bookmark-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.addOptionSubmitText}>この時間を候補に保存</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={{flexDirection:'row', gap: 12, marginTop: 8}}>
@@ -1275,6 +1440,15 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
+  workSummaryControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: '#EEE7E3' },
+  workSummaryTabs: { flexDirection: 'row', alignSelf: 'center', width: '100%', maxWidth: 320, padding: 4, borderRadius: 12, backgroundColor: '#F0ECE9' },
+  workSummaryTab: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  workSummaryTabActive: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#C7B6AC', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  workSummaryTabText: { fontSize: 14, fontWeight: '800', color: '#8A7A72' },
+  workSummaryTabTextActive: { color: '#5D4037', fontWeight: '900' },
+  workSummaryPeriodNav: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
+  workSummaryPeriodBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E1CDBD' },
+  workSummaryPeriodText: { minWidth: 130, textAlign: 'center', fontSize: 16, fontWeight: '900', color: '#3F302B' },
   
   monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
@@ -1327,7 +1501,7 @@ const styles = StyleSheet.create({
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  pickerContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20, maxHeight: '92%' },
+  pickerContent: { width: '100%', maxWidth: 560, backgroundColor: COLORS.white, borderRadius: 16, padding: 18, maxHeight: '92%' },
   pickerTitle: { fontSize: 17, fontWeight: 'bold', textAlign: 'center', marginBottom: 14, color: COLORS.text },
   
   timeTargetRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginBottom: 14 },
@@ -1342,16 +1516,19 @@ const styles = StyleSheet.create({
   masterTimeDeleteBtn: { marginLeft: -8, marginTop: -16, zIndex: 1 },
   masterTimeBtn: { backgroundColor: '#F0F8FF', borderWidth: 1.5, borderColor: COLORS.primary + '40', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center' },
   masterTimeText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary },
-  drumPickerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  drumCol: { flex: 1, alignItems: 'center' },
-  drumLabel: { fontSize: 10, color: COLORS.textLight, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
-  drumScroll: { height: 160, width: '100%', backgroundColor: '#FAFAFA', borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
-  drumItem: { paddingVertical: 12, alignItems: 'center', borderRadius: 6, marginHorizontal: 2, marginVertical: 1 },
-  drumItemActive: { backgroundColor: COLORS.primary },
-  drumItemText: { fontSize: 18, fontWeight: 'bold', color: COLORS.textLight },
-  drumItemTextActive: { color: COLORS.white, fontSize: 20 },
-  drumColon: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, paddingBottom: 70, marginHorizontal: 1 },
-  drumTilde: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight, paddingBottom: 70, marginHorizontal: 2 },
+  drumPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  shiftTimeGroup: { flex: 1, maxWidth: 164, minWidth: 0, alignItems: 'center' },
+  shiftTimeGroupTitle: { marginBottom: 5, fontSize: 12, fontWeight: '900', color: '#37474F' },
+  shiftTimePair: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  shiftWheelWrap: { position: 'relative', flex: 1, minWidth: 48, maxWidth: 64, height: SHIFT_WHEEL_VIEW_HEIGHT, overflow: 'hidden', borderRadius: 10, backgroundColor: '#FAFCFC', borderWidth: 1, borderColor: '#D6E1E2' },
+  shiftWheelSelection: { position: 'absolute', left: 2, right: 2, top: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2, height: SHIFT_WHEEL_ITEM_HEIGHT, borderRadius: 8, backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2', zIndex: 0 },
+  shiftWheelScroll: { height: SHIFT_WHEEL_VIEW_HEIGHT, zIndex: 1 },
+  shiftWheelContent: { paddingVertical: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2 },
+  shiftWheelItem: { height: SHIFT_WHEEL_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  shiftWheelText: { fontSize: 16, fontWeight: '700', color: '#919A9C' },
+  shiftWheelTextActive: { fontSize: 20, fontWeight: '900', color: '#172629' },
+  drumColon: { width: 12, textAlign: 'center', fontSize: 21, fontWeight: '900', color: '#333333' },
+  drumTilde: { width: 20, textAlign: 'center', fontSize: 17, fontWeight: '900', color: '#748083' },
   addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
   addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
   pickerColumns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 100 },
@@ -1362,7 +1539,8 @@ const styles = StyleSheet.create({
   pickerItemText: { fontSize: 14, color: COLORS.textLight },
   pickerItemTextActive: { color: COLORS.primary, fontWeight: 'bold', fontSize: 16 },
   pickerColon: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight, marginHorizontal: 2 },
-  addOptionSubmit: { backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 14, borderRadius: 6, marginLeft: 6, marginBottom: 0 },
+  addOptionSubmit: { minHeight: 40, marginTop: 10, alignSelf: 'center', paddingHorizontal: 16, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F2FBFB', borderWidth: 1.5, borderColor: '#8DCDD0' },
+  addOptionSubmitText: { fontSize: 12, fontWeight: '900', color: '#277A80' },
   settingSectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#444', marginBottom: 10 },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F5F5F5', borderRadius: 10 },
   settingLabel: { fontSize: 14, fontWeight: 'bold', color: '#333', width: 44 },

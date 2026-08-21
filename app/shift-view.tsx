@@ -131,7 +131,14 @@ export default function ShiftViewScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.adminHeaderBtn, styles.workHoursBtn]}
-              onPress={() => router.push('/staff-hours' as any)}
+              onPress={() => router.push({
+                pathname: '/shift-create',
+                params: {
+                  openWorkSummary: '1',
+                  year: String(currentDate.getFullYear()),
+                  month: String(currentDate.getMonth() + 1),
+                },
+              } as any)}
             >
               <Ionicons name="time-outline" size={18} color="#FFFFFF" />
               <Text style={styles.adminHeaderBtnText}>勤務時間</Text>
