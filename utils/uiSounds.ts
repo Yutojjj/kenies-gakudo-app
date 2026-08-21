@@ -49,8 +49,8 @@ export const playUiSound = (type: UiSoundType) => {
       lastPlayed[type] = now;
 
       if (type === 'tap') {
-        addTone(context, 720, 0, 0.06, 0.07, 'triangle', 980);
-        addTone(context, 1080, 0.022, 0.045, 0.035, 'sine');
+        addTone(context, 980, 0, 0.055, 0.062, 'triangle', 1320);
+        addTone(context, 1560, 0.024, 0.05, 0.038, 'sine', 1760);
       } else if (type === 'success') {
         addTone(context, 600, 0, 0.12, 0.065, 'triangle');
         addTone(context, 820, 0.075, 0.13, 0.07, 'triangle');

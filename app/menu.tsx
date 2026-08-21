@@ -1669,6 +1669,14 @@ export default function MenuScreen() {
               </View>
               <View style={styles.pickupInlineActions}>
                 <TouchableOpacity
+                  style={[styles.pickupInlineActionBtn, styles.pickupInlineAttendanceBtn]}
+                  onPress={() => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any)}
+                  activeOpacity={0.82}
+                >
+                  <Ionicons name="checkmark-done-outline" size={15} color="#247A5A" />
+                  <Text style={styles.pickupInlineAttendanceText}>登所一覧</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
                   onPress={() => openPickupOverviewAction('view')}
                   disabled={pickupOverviewLoadingAction !== null}
@@ -1677,7 +1685,7 @@ export default function MenuScreen() {
                   {pickupOverviewLoadingAction === 'view'
                     ? <ActivityIndicator size="small" color="#245E96" />
                     : <Ionicons name="open-outline" size={15} color="#245E96" />}
-                  <Text style={styles.pickupInlineOverviewText}>送迎一覧を開く</Text>
+                  <Text style={styles.pickupInlineOverviewText}>送迎一覧</Text>
                 </TouchableOpacity>
               </View>
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
@@ -3719,6 +3727,7 @@ const styles = StyleSheet.create({
   pickupInlineActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    gap: 7,
     marginBottom: 10,
   },
   pickupInlineActionBtn: {
@@ -3729,6 +3738,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
+  },
+  pickupInlineAttendanceBtn: {
+    backgroundColor: '#EFFAF5',
+    borderWidth: 1.5,
+    borderColor: '#9FD8BF',
+  },
+  pickupInlineAttendanceText: {
+    color: '#247A5A',
+    fontSize: 12,
+    fontWeight: '900',
   },
   pickupInlineOverviewBtn: {
     backgroundColor: '#F2F8FF',
