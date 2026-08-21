@@ -20,6 +20,7 @@ import {
   ActivityIndicator, FlatList,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
+import SwipeTabPager from '../components/SwipeTabPager';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { navigateHome } from '../utils/navigationHome';
@@ -27,6 +28,7 @@ import { navigateHome } from '../utils/navigationHome';
 // ─── 型 ────────────────────────────────────────────────────────────────
 type Star = 'kuro' | 'aka' | 'ki';
 type Result = 'pass' | 'fail';
+type TypingTab = 'create' | 'students' | 'history';
 
 interface Student {
   id: string;
@@ -61,6 +63,7 @@ const GRADES = Array.from({ length: 11 }, (_, i) => i + 1);
 const STAR_LABEL: Record<Star, string> = { kuro: '黒★', aka: '赤★', ki: '黄★' };
 const STAR_COLOR: Record<Star, string> = { kuro: '#212121', aka: '#C62828', ki: '#F9A825' };
 const MAX_STAGES = 10;
+const TYPING_TABS: TypingTab[] = ['create', 'students', 'history'];
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────
 const alert$ = (title: string, msg?: string) =>
@@ -101,7 +104,7 @@ export default function TypingCertScreen() {
   const router = useRouter();
 
   // ── タブ
-  const [tab, setTab] = useState<'create' | 'students' | 'history'>('create');
+  const [tab, setTab] = useState<TypingTab>('create');
 
   // ── Firestore data
   const [students, setStudents]     = useState<Student[]>([]);
@@ -337,7 +340,7 @@ export default function TypingCertScreen() {
 
       {/* タブ */}
       <View style={styles.tabBar}>
-        {(['create', 'students', 'history'] as const).map(t => (
+        {TYPING_TABS.map(t => (
           <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} onPress={() => setTab(t)}>
             <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
               {t === 'create' ? '認定書作成' : t === 'students' ? '受講者' : '履歴'}
@@ -346,8 +349,14 @@ export default function TypingCertScreen() {
         ))}
       </View>
 
+      <SwipeTabPager
+        tabs={TYPING_TABS}
+        active={tab}
+        onChange={setTab}
+        renderTab={(pageTab) => (
+          <>
       {/* ══════════ 認定書作成タブ ══════════ */}
-      {tab === 'create' && (
+      {pageTab === 'create' && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
           {/* 基本情報 */}
@@ -494,7 +503,7 @@ export default function TypingCertScreen() {
       )}
 
       {/* ══════════ 受講者タブ ══════════ */}
-      {tab === 'students' && (
+      {pageTab === 'students' && (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
           {/* 受講者追加 */}
@@ -639,7 +648,7 @@ export default function TypingCertScreen() {
       )}
 
       {/* ══════════ 履歴タブ ══════════ */}
-      {tab === 'history' && (() => {
+      {pageTab === 'history' && (() => {
         // 曜日フィルター
         const filteredCerts = certs.filter(c => {
           if (!historyFilterDay) return true;
@@ -704,6 +713,9 @@ export default function TypingCertScreen() {
           </ScrollView>
         );
       })()}
+          </>
+        )}
+      />
 
 
 
