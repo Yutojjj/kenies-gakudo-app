@@ -66,15 +66,25 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
       {active === key && <View style={styles.activeMark} />}
     </View>
   );
+  const renderCenterHome = () => (
+    <TouchableOpacity style={styles.centerHomeItem} onPress={goHome} activeOpacity={0.82} accessibilityLabel="ホーム">
+      <View style={[styles.centerHomeIconFrame, active === 'home' && styles.centerHomeIconFrameActive]}>
+        <Image source={NAV_IMAGES.home} style={styles.centerHomeIcon} resizeMode="contain" />
+      </View>
+      <Text style={[styles.centerHomeText, { color: itemColor('home') }]}>ホーム</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <>
       <View style={styles.navSpacer} />
       <View style={styles.nav}>
-        <TouchableOpacity style={styles.item} onPress={goHome} activeOpacity={0.78}>
-          {renderIcon('home')}
-          <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
-        </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity style={styles.item} onPress={goHome} activeOpacity={0.78}>
+            {renderIcon('home')}
+            <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
+          </TouchableOpacity>
+        )}
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
             {renderIcon('schedule')}
@@ -91,6 +101,7 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
           {renderIcon('event')}
           <Text style={[styles.text, { color: itemColor('event') }]}>イベント</Text>
         </TouchableOpacity>
+        {!isAdmin && renderCenterHome()}
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any)} activeOpacity={0.78}>
             {renderIcon('album')}
@@ -156,6 +167,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     position: 'relative',
+  },
+  centerHomeItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    position: 'relative',
+    marginTop: -28,
+    zIndex: 4,
+  },
+  centerHomeIconFrame: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7D8',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#7A6034',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  centerHomeIconFrameActive: {
+    backgroundColor: '#DFF7F3',
+    borderColor: '#B7E8E2',
+  },
+  centerHomeIcon: {
+    width: 52,
+    height: 52,
+  },
+  centerHomeText: {
+    marginTop: -1,
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '900',
   },
   text: {
     fontSize: 9,

@@ -295,6 +295,8 @@ export default function MenuScreen() {
   const [pickupOverviewAction, setPickupOverviewAction] = useState<'view' | 'print'>('view');
   const [pickupOverviewLoadingAction, setPickupOverviewLoadingAction] = useState<'view' | 'print' | null>(null);
   const [noticeVisible, setNoticeVisible] = useState(false);
+  const noticeButtonRef = useRef<any>(null);
+  const [noticePopoverPosition, setNoticePopoverPosition] = useState({ top: 100, left: 12, width: 340, maxHeight: 520 });
   const [todayMemos, setTodayMemos] = useState<{kidName: string; memo: string}[]>([]);
   const [todayScheduleChanges, setTodayScheduleChanges] = useState<{ childName: string; descriptions: string[] }[]>([]);
   const [scheduleChangesCollapsed, setScheduleChangesCollapsed] = useState(false);
@@ -329,6 +331,22 @@ export default function MenuScreen() {
   const [gradeUpModalVisible, setGradeUpModalVisible] = useState(false);
   const [gradeChoiceModalVisible, setGradeChoiceModalVisible] = useState(false);
   const [gradeUpPreview, setGradeUpPreview] = useState<{id:string; name:string; oldGrade:string; newGrade:string; role:string}[]>([]);
+
+  const openNoticePopover = () => {
+    const screen = Dimensions.get('window');
+    const panelWidth = Math.min(360, screen.width - 24);
+    setNoticePopoverPosition({ top: 96, left: screen.width - panelWidth - 12, width: panelWidth, maxHeight: Math.max(220, screen.height - 112) });
+    setNoticeVisible(true);
+    noticeButtonRef.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
+      const top = y + height + 6;
+      setNoticePopoverPosition({
+        top,
+        left: Math.max(12, Math.min(screen.width - panelWidth - 12, x + width - panelWidth)),
+        width: panelWidth,
+        maxHeight: Math.max(220, screen.height - top - 16),
+      });
+    });
+  };
   const [gradeUpLoading, setGradeUpLoading] = useState(false);
   const [gradeUpDirection, setGradeUpDirection] = useState<'up'|'down'>('up');
 
@@ -1638,7 +1656,7 @@ export default function MenuScreen() {
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
               {(role === 'staff' || role === 'admin') && (
-                <TouchableOpacity style={styles.staffSectionMemoBtn} onPress={() => setNoticeVisible(true)} activeOpacity={0.82}>
+                <TouchableOpacity ref={noticeButtonRef} style={styles.staffSectionMemoBtn} onPress={openNoticePopover} activeOpacity={0.82}>
                   <Ionicons name="pencil-outline" size={14} color="#7B4E8E" />
                   <Text style={styles.staffSectionMemoText}>メモを追加</Text>
                   {(todayMemos.length + adminNotices.length) > 0 && (
@@ -2724,9 +2742,12 @@ export default function MenuScreen() {
       </Modal>
 
       {/* ── 連絡事項モーダル ── */}
-      <Modal visible={noticeVisible} animationType="slide" transparent>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
-          <View style={{ backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'85%' }}>
+      <Modal visible={noticeVisible} animationType="fade" transparent onRequestClose={() => setNoticeVisible(false)}>
+        <View style={styles.noticePopoverLayer}>
+          <TouchableWithoutFeedback onPress={() => setNoticeVisible(false)}>
+            <View style={styles.noticePopoverBackdrop} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.noticePopover, noticePopoverPosition]}>
             <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:16, borderBottomWidth:1, borderColor:'#eee' }}>
               <Text style={{ fontSize:17, fontWeight:'bold', color:'#5D4037' }}>📋 連絡事項</Text>
               <TouchableOpacity onPress={() => setNoticeVisible(false)}>
@@ -4539,6 +4560,9 @@ const styles = StyleSheet.create({
   noticeBtnText: { color: '#008C96', fontSize: 14, fontWeight: 'bold' },
   noticeBadge: { backgroundColor: '#E53935', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   noticeBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+  noticePopoverLayer: { flex: 1 },
+  noticePopoverBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(40,32,28,0.18)' },
+  noticePopover: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#E6D8CE', shadowColor: '#000000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 18 },
   sectionLabel: {
     fontSize: 21,
     fontWeight: '900',
