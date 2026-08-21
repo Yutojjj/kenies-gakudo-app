@@ -11,6 +11,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 
@@ -675,7 +676,7 @@ export default function AlbumScreen() {
     return days;
   };
 
-  const getDatesForTab = () => {
+  const getDatesForTab = (year = viewYear, month = viewMonth) => {
     if (activeTab === 'イベント') {
       return albumEvents
         .filter(ev => role !== 'user' || unlockedEvents.includes(ev.id)) 
@@ -690,8 +691,8 @@ export default function AlbumScreen() {
     
     const dayIdx = ['日', '月', '火', '水', '木', '金', '土'].indexOf(activeTab);
     const dates = [];
-    const d = new Date(viewYear, viewMonth - 1, 1);
-    while (d.getFullYear() === viewYear && d.getMonth() === viewMonth - 1) {
+    const d = new Date(year, month - 1, 1);
+    while (d.getFullYear() === year && d.getMonth() === month - 1) {
       if (d.getDay() === dayIdx) {
         const dateObj = new Date(d);
         let canView = true;
@@ -703,7 +704,7 @@ export default function AlbumScreen() {
           const dateStr = getLocalDateString(dateObj);
           dates.push({
             key: dateStr,
-            label: `${viewMonth}月${dateObj.getDate()}日(${activeTab})`,
+            label: `${month}月${dateObj.getDate()}日(${activeTab})`,
             photos: albumPhotos[dateStr] || []
           });
         }
@@ -729,6 +730,8 @@ export default function AlbumScreen() {
     });
     return Array.from(years).sort((a, b) => a - b);
   })();
+  const monthPagerKeys = selectableYears.flatMap(year => MONTHS.map(month => `${year}-${String(month).padStart(2, '0')}`));
+  const activeMonthPagerKey = `${viewYear}-${String(viewMonth).padStart(2, '0')}`;
 
   const toggleSelectPhoto = (id: string) => {
     if (selectedPhotoIds.includes(id)) {
@@ -858,7 +861,123 @@ export default function AlbumScreen() {
   };
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
-  const visibleSections = getDatesForTab();
+
+  const renderAlbumPage = (year: number, month: number) => {
+    const pageSections = getDatesForTab(year, month);
+    return (
+      <ScrollView style={styles.scrollArea} nestedScrollEnabled>
+        {activeTab === 'イベント' && role === 'user' && (
+          <View style={{ padding: 16 }}>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#9370DB' }]} onPress={() => setUnlockModalVisible(true)}>
+              <Ionicons name="key-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.primaryBtnText}>イベントをアンロックする</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {mediaLoading && Object.keys(albumPhotos).length === 0 ? (
+          <View style={styles.noDataBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={[styles.noDataText, { marginTop: 14 }]}>アルバムを読み込んでいます</Text>
+          </View>
+        ) : mediaLoadError && Object.keys(albumPhotos).length === 0 ? (
+          <View style={styles.noDataBox}>
+            <Ionicons name="cloud-offline-outline" size={42} color={COLORS.textLight} />
+            <Text style={[styles.noDataText, { marginTop: 12 }]}>{mediaLoadError}</Text>
+            <TouchableOpacity style={styles.reloadMediaButton} onPress={() => { setMediaLoading(true); setMediaReloadKey(value => value + 1); }}>
+              <Ionicons name="refresh" size={19} color="#FFFFFF" />
+              <Text style={styles.reloadMediaButtonText}>もう一度読み込む</Text>
+            </TouchableOpacity>
+          </View>
+        ) : pageSections.length === 0 ? (
+          <View style={styles.noDataBox}><Text style={styles.noDataText}>閲覧できる写真・動画がありません</Text></View>
+        ) : (
+          pageSections.map((item: any) => {
+            const isExpanded = !!expandedDates[item.key];
+            const visibleCount = visibleMediaCounts[item.key] || INITIAL_MEDIA_COUNT;
+            const visiblePhotos = item.photos.slice(0, visibleCount);
+            return (
+              <View key={item.key} style={styles.dateSection}>
+                <TouchableOpacity style={styles.dateHeaderContainer} onPress={() => toggleExpand(item.key)} activeOpacity={0.7}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.dateHeader}>{item.label}</Text>
+                    {role !== 'user' && item.code && <Text style={styles.eventCodeText}>コード: {item.code}</Text>}
+                  </View>
+                  <View style={styles.sectionActions}>
+                    {isSelectMode ? (
+                      !isIOSWeb && (
+                        <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
+                          <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>すべて選択</Text>
+                        </TouchableOpacity>
+                      )
+                    ) : (
+                      <>
+                        {role !== 'user' && (
+                          <TouchableOpacity style={styles.sectionActionBtn} onPress={() => pickImages(item.label, item.key)}>
+                            <Ionicons name="add-circle" size={24} color={COLORS.primary} />
+                          </TouchableOpacity>
+                        )}
+                        {role !== 'user' && (
+                          <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSectionDelete(item.label, item.photos, item.eventId)}>
+                            <Ionicons name="trash" size={24} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+                    <View style={styles.expandBadge}>
+                      <Text style={styles.expandText}>{isExpanded ? 'たたむ' : `表示 (${item.photos.length}件)`}</Text>
+                      <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.primary} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                {isExpanded && (item.photos.length > 0 ? (
+                  <View style={styles.photoGrid}>
+                    {visiblePhotos.map((photoObj: AlbumMedia, idx: number) => {
+                      const isSelected = selectedPhotoIds.includes(photoObj.id);
+                      return (
+                        <TouchableOpacity
+                          key={photoObj.id}
+                          style={[styles.photoWrapper, isSelectMode && isSelected && { opacity: 0.6 }]}
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            if (isSelectMode) toggleSelectPhoto(photoObj.id);
+                            else openFullScreen(item.photos, idx);
+                          }}
+                          onLongPress={() => {
+                            if (!isSelectMode && !isIOSWeb) {
+                              setIsSelectMode(true);
+                              setSelectedPhotoIds([photoObj.id]);
+                            }
+                          }}
+                        >
+                          <AlbumMediaThumbnail item={photoObj} />
+                          {isSelectMode && !isIOSWeb && (
+                            <View style={styles.checkOverlay}>
+                              <Ionicons name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={28} color={isSelected ? COLORS.primary : 'rgba(255,255,255,0.7)'} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {visibleCount < item.photos.length && (
+                      <TouchableOpacity style={styles.loadMoreMediaButton} onPress={() => setVisibleMediaCounts(prev => ({ ...prev, [item.key]: visibleCount + INITIAL_MEDIA_COUNT }))}>
+                        <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
+                        <Text style={styles.loadMoreMediaText}>さらに表示（残り{item.photos.length - visibleCount}件）</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.noPhotoText}>写真・動画がありません</Text>
+                ))}
+              </View>
+            );
+          })
+        )}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -950,127 +1069,23 @@ export default function AlbumScreen() {
             })}
           </View>
 
-          <ScrollView style={styles.scrollArea}>
-            {activeTab === 'イベント' && role === 'user' && (
-               <View style={{ padding: 16 }}>
-                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#9370DB' }]} onPress={() => setUnlockModalVisible(true)}>
-                   <Ionicons name="key-outline" size={20} color="#fff" style={{marginRight: 8}} />
-                   <Text style={styles.primaryBtnText}>イベントをアンロックする</Text>
-                 </TouchableOpacity>
-               </View>
-            )}
-
-            {mediaLoading && Object.keys(albumPhotos).length === 0 ? (
-              <View style={styles.noDataBox}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={[styles.noDataText, { marginTop: 14 }]}>アルバムを読み込んでいます</Text>
-              </View>
-            ) : mediaLoadError && Object.keys(albumPhotos).length === 0 ? (
-              <View style={styles.noDataBox}>
-                <Ionicons name="cloud-offline-outline" size={42} color={COLORS.textLight} />
-                <Text style={[styles.noDataText, { marginTop: 12 }]}>{mediaLoadError}</Text>
-                <TouchableOpacity style={styles.reloadMediaButton} onPress={() => { setMediaLoading(true); setMediaReloadKey(value => value + 1); }}>
-                  <Ionicons name="refresh" size={19} color="#FFFFFF" />
-                  <Text style={styles.reloadMediaButtonText}>もう一度読み込む</Text>
-                </TouchableOpacity>
-              </View>
-            ) : visibleSections.length === 0 ? (
-              <View style={styles.noDataBox}><Text style={styles.noDataText}>閲覧できる写真・動画がありません</Text></View>
-            ) : (
-              visibleSections.map((item: any) => {
-                const isExpanded = !!expandedDates[item.key];
-                const visibleCount = visibleMediaCounts[item.key] || INITIAL_MEDIA_COUNT;
-                const visiblePhotos = item.photos.slice(0, visibleCount);
-                return (
-                  <View key={item.key} style={styles.dateSection}>
-                    <TouchableOpacity style={styles.dateHeaderContainer} onPress={() => toggleExpand(item.key)} activeOpacity={0.7}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.dateHeader}>{item.label}</Text>
-                        {role !== 'user' && item.code && (
-                          <Text style={styles.eventCodeText}>コード: {item.code}</Text>
-                        )}
-                      </View>
-
-                      <View style={styles.sectionActions}>
-                        {isSelectMode ? (
-                          // iOS Web版は一括保存できないため、選択モードでも「すべて選択」は出さないように制御可（必要なら）
-                          !isIOSWeb && (
-                            <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
-                              <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>すべて選択</Text>
-                            </TouchableOpacity>
-                          )
-                        ) : (
-                          <>
-                            {role !== 'user' && (
-                              <TouchableOpacity style={styles.sectionActionBtn} onPress={() => pickImages(item.label, item.key)}>
-                                <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                              </TouchableOpacity>
-                            )}
-                            {role !== 'user' && (
-                              <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSectionDelete(item.label, item.photos, item.eventId)}>
-                                <Ionicons name="trash" size={24} color={COLORS.danger} />
-                              </TouchableOpacity>
-                            )}
-                          </>
-                        )}
-                        <View style={styles.expandBadge}>
-                          <Text style={styles.expandText}>{isExpanded ? 'たたむ' : `表示 (${item.photos.length}件)`}</Text>
-                          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={COLORS.primary} />
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-
-                    {isExpanded && (
-                      item.photos.length > 0 ? (
-                        <View style={styles.photoGrid}>
-                          {visiblePhotos.map((photoObj: AlbumMedia, idx: number) => {
-                            const isSelected = selectedPhotoIds.includes(photoObj.id);
-                            return (
-                              <TouchableOpacity 
-                                key={photoObj.id} 
-                                style={[styles.photoWrapper, isSelectMode && isSelected && { opacity: 0.6 }]} 
-                                activeOpacity={0.8} 
-                                onPress={() => {
-                                  if (isSelectMode) toggleSelectPhoto(photoObj.id);
-                                  else openFullScreen(item.photos, idx);
-                                }}
-                                onLongPress={() => {
-                                  // iOS Web版以外なら長押しで選択モード開始
-                                  if (!isSelectMode && !isIOSWeb) {
-                                    setIsSelectMode(true);
-                                    setSelectedPhotoIds([photoObj.id]);
-                                  }
-                                }}
-                              >
-                                <AlbumMediaThumbnail item={photoObj} />
-                                {isSelectMode && !isIOSWeb && (
-                                  <View style={styles.checkOverlay}>
-                                    <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={28} color={isSelected ? COLORS.primary : "rgba(255,255,255,0.7)"} />
-                                  </View>
-                                )}
-                              </TouchableOpacity>
-                            )
-                          })}
-                          {visibleCount < item.photos.length && (
-                            <TouchableOpacity
-                              style={styles.loadMoreMediaButton}
-                              onPress={() => setVisibleMediaCounts(prev => ({ ...prev, [item.key]: visibleCount + INITIAL_MEDIA_COUNT }))}
-                            >
-                              <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
-                              <Text style={styles.loadMoreMediaText}>さらに表示（残り{item.photos.length - visibleCount}件）</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      ) : (
-                        <Text style={styles.noPhotoText}>写真・動画がありません</Text>
-                      )
-                    )}
-                  </View>
-                );
-              })
-            )}
-            <View style={{ height: 100 }} />
-          </ScrollView>
+          {activeTab === 'イベント' ? (
+            renderAlbumPage(viewYear, viewMonth)
+          ) : (
+            <SwipeTabPager
+              tabs={monthPagerKeys}
+              active={activeMonthPagerKey}
+              onChange={(nextKey) => {
+                const [year, month] = nextKey.split('-').map(Number);
+                setViewYear(year);
+                setViewMonth(month);
+              }}
+              renderTab={(monthKey) => {
+                const [year, month] = monthKey.split('-').map(Number);
+                return renderAlbumPage(year, month);
+              }}
+            />
+          )}
 
           {isSelectMode && !isIOSWeb && (
             <View style={styles.selectionBottomBar}>
