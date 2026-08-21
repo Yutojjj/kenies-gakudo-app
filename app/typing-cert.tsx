@@ -122,6 +122,7 @@ export default function TypingCertScreen() {
   const [score, setScore]           = useState('');
   const [stageCount, setStageCount] = useState(8);
   const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
+  const stageInputRefs = useRef<(TextInput | null)[]>([]);
   const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
 
@@ -450,11 +451,12 @@ export default function TypingCertScreen() {
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
                   <TextInput
+                    ref={ref => { stageInputRefs.current[i] = ref; }}
                     style={styles.stageInput}
                     value={v}
                     onChangeText={val => {
                       const next = [...stageVals];
-                      next[i] = val;
+                      next[i] = val.replace(/,/g, '.');
                       setStageVals(next);
                     }}
                     keyboardType="decimal-pad"
@@ -462,7 +464,24 @@ export default function TypingCertScreen() {
                     placeholder="1.23"
                     placeholderTextColor="#bbb"
                   />
-                  <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
+                  <View style={styles.stageAssistRow}>
+                    <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
+                    <TouchableOpacity
+                      style={styles.decimalKey}
+                      accessibilityLabel={`ステージ${i + 1}に小数点を入力`}
+                      onPress={() => {
+                        if (!v.includes('.')) {
+                          const next = [...stageVals];
+                          next[i] = v ? `${v}.` : '0.';
+                          setStageVals(next);
+                        }
+                        setTimeout(() => stageInputRefs.current[i]?.focus(), 0);
+                      }}
+                      activeOpacity={0.72}
+                    >
+                      <Text style={styles.decimalKeyText}>.</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </View>
@@ -983,7 +1002,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 7, padding: 8,
     fontSize: 14, textAlign: 'center', width: 72, backgroundColor: '#fff', color: '#1e3a5f',
   },
-  stageLabel:  { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+  stageAssistRow: { width: 72, minHeight: 28, marginTop: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stageLabel:  { fontSize: 10, color: '#94a3b8' },
+  decimalKey: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#E6F3FA', borderWidth: 1, borderColor: '#A7CFE8', alignItems: 'center', justifyContent: 'center' },
+  decimalKeyText: { color: '#185F8F', fontSize: 20, fontWeight: '900', lineHeight: 21 },
   wpmResult:   { backgroundColor: '#eff6ff', borderRadius: 8, padding: 10, marginTop: 8 },
   wpmResultText: { fontSize: 14, color: '#1d4ed8', fontWeight: '600' },
   resultBtn: {
