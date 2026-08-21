@@ -139,6 +139,7 @@ export default function ShiftCreateScreen() {
   });
   const autoPdfHandledRef = useRef(false);
   const [loading, setLoading] = useState(false);
+  const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
   
   const [showTimeInCalendar, setShowTimeInCalendar] = useState(true);
 
@@ -722,13 +723,6 @@ export default function ShiftCreateScreen() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const confirmed = Platform.OS === 'web'
-      ? window.confirm(`${year}年${month + 1}月のシフトを全て削除しますか？`)
-      : await new Promise<boolean>(resolve => Alert.alert('確認', `${year}年${month + 1}月のシフトを全て削除しますか？`, [
-          { text: 'キャンセル', onPress: () => resolve(false) },
-          { text: '削除', style: 'destructive', onPress: () => resolve(true) },
-        ]));
-    if (!confirmed) return;
     setLoading(true);
     let count = 0;
     for (let d = 1; d <= daysInMonth; d++) {
@@ -748,13 +742,6 @@ export default function ShiftCreateScreen() {
     const month = currentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     let updatedCount = 0;
-    const ok = Platform.OS === 'web'
-      ? window.confirm(`${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`)
-      : await new Promise<boolean>(resolve => Alert.alert('一括自動入力', `${year}年${month + 1}月の全平日に出勤可能スタッフを最大3名ずつ自動入力します。`, [
-          { text: 'キャンセル', onPress: () => resolve(false) },
-          { text: '実行', onPress: () => resolve(true) },
-        ]));
-    if (!ok) return;
     setLoading(true);
     try {
       for (let d = 1; d <= daysInMonth; d++) {
@@ -888,11 +875,11 @@ export default function ShiftCreateScreen() {
             <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={15} color={COLORS.primary} />
             <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.monthAutoFillBtn} onPress={autoFillCurrentMonth} disabled={loading}>
-            {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="flash-outline" size={15} color="#FFFFFF" />}
+          <TouchableOpacity style={styles.monthAutoFillBtn} onPress={() => setMonthActionConfirm('autoFill')} disabled={loading}>
+            {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="pencil-outline" size={15} color="#FFFFFF" />}
             <Text style={styles.monthActionText}>自動入力</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.monthDeleteBtn} onPress={deleteCurrentMonthShifts} disabled={loading}>
+          <TouchableOpacity style={styles.monthDeleteBtn} onPress={() => setMonthActionConfirm('delete')} disabled={loading}>
             <Ionicons name="trash-outline" size={15} color="#B93E48" />
             <Text style={styles.monthDeleteText}>削除</Text>
           </TouchableOpacity>
@@ -1298,6 +1285,168 @@ export default function ShiftCreateScreen() {
         </View>
       </Modal>
 
+      <Modal visible={monthActionConfirm !== null} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.monthConfirmOverlay}
+          activeOpacity={1}
+          onPress={() => setMonthActionConfirm(null)}
+        >
+          {monthActionConfirm === 'autoFill' ? (
+          <TouchableOpacity style={styles.monthAutoReviewPanel} activeOpacity={1} onPress={event => event.stopPropagation()}>
+            <View style={styles.monthAutoReviewHeader}>
+              <View style={styles.monthAutoReviewHeading}>
+                <Text style={styles.monthAutoReviewTitle}>自動入力の設定確認</Text>
+                <Text style={styles.monthAutoReviewMonth}>
+                  {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
+                </Text>
+              </View>
+              <View style={styles.monthAutoReviewTopActions}>
+                <TouchableOpacity
+                  style={styles.monthAutoReviewYesBtn}
+                  onPress={async () => {
+                    setMonthActionConfirm(null);
+                    await autoFillCurrentMonth();
+                  }}
+                >
+                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                  <Text style={styles.monthAutoReviewYesText}>はい</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.monthAutoReviewCloseBtn} onPress={() => setMonthActionConfirm(null)}>
+                  <Text style={styles.monthAutoReviewCloseText}>閉じる</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView style={styles.monthAutoReviewScroll} contentContainerStyle={styles.monthAutoReviewScrollContent}>
+              <Text style={styles.monthAutoReviewHelp}>
+                内容を確認・編集してから「はい」を押してください。変更した設定は自動で保存されます。
+              </Text>
+
+              <Text style={styles.monthAutoReviewSectionTitle}>曜日別の入力人数</Text>
+              <View style={styles.monthAutoReviewSection}>
+                {(['月','火','水','木','金'] as const).map(dow => (
+                  <View key={dow} style={styles.settingRow}>
+                    <Text style={styles.settingLabel}>{dow}曜日</Text>
+                    <View style={{ flexDirection:'row', gap:6 }}>
+                      {[1,2,3,4,5].map(n => (
+                        <TouchableOpacity
+                          key={n}
+                          style={[styles.settingNumBtn, autoFillSettings.dayMaxCount[dow] === n && styles.settingNumBtnActive]}
+                          onPress={() => saveAutoFillSettings({
+                            ...autoFillSettings,
+                            dayMaxCount: { ...autoFillSettings.dayMaxCount, [dow]: n },
+                          })}
+                        >
+                          <Text style={[styles.settingNumText, autoFillSettings.dayMaxCount[dow] === n && { color:'#fff' }]}>{n}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.monthAutoReviewSectionTitle}>スタッフ別の優先順位・時間</Text>
+              <Text style={styles.monthAutoReviewSectionNote}>上下ボタンで優先順位、ON/OFFで自動入力の対象を変更できます。</Text>
+              <View style={styles.monthAutoReviewSection}>
+                {autoFillSettings.staffSettings.map((s, idx) => (
+                  <View key={s.name} style={styles.settingStaffRow}>
+                    <View style={{ flexDirection:'column', gap:2, marginRight:6 }}>
+                      <TouchableOpacity
+                        style={[styles.settingArrowBtn, idx === 0 && { opacity:0.3 }]}
+                        disabled={idx === 0}
+                        onPress={() => {
+                          const arr = [...autoFillSettings.staffSettings];
+                          [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+                          arr.forEach((item, itemIndex) => item.priority = itemIndex + 1);
+                          saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                        }}
+                      ><Ionicons name="chevron-up" size={14} color="#555" /></TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.settingArrowBtn, idx === autoFillSettings.staffSettings.length - 1 && { opacity:0.3 }]}
+                        disabled={idx === autoFillSettings.staffSettings.length - 1}
+                        onPress={() => {
+                          const arr = [...autoFillSettings.staffSettings];
+                          [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+                          arr.forEach((item, itemIndex) => item.priority = itemIndex + 1);
+                          saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                        }}
+                      ><Ionicons name="chevron-down" size={14} color="#555" /></TouchableOpacity>
+                    </View>
+                    <Text style={styles.settingPriority}>{idx + 1}</Text>
+                    <TouchableOpacity
+                      style={[styles.settingEnabledBtn, s.enabled && styles.settingEnabledBtnOn]}
+                      onPress={() => {
+                        const arr = autoFillSettings.staffSettings.map((item, itemIndex) =>
+                          itemIndex === idx ? { ...item, enabled: !item.enabled } : item
+                        );
+                        saveAutoFillSettings({ ...autoFillSettings, staffSettings: arr });
+                      }}
+                    >
+                      <Text style={{ fontSize:10, color: s.enabled ? '#fff' : '#777', fontWeight:'bold' }}>{s.enabled ? 'ON' : 'OFF'}</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.settingStaffName}>{s.name}</Text>
+                    <View style={styles.monthAutoReviewTimes}>
+                      <Text style={styles.settingTimeLabel}>開始</Text>
+                      <TouchableOpacity style={styles.settingTimeInput} onPress={() => openSettingTimePicker(idx, 'start')}>
+                        <Text style={styles.settingTimeValue}>{s.start}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.settingTimeLabel}>終了</Text>
+                      <TouchableOpacity style={styles.settingTimeInput} onPress={() => openSettingTimePicker(idx, 'end')}>
+                        <Text style={styles.settingTimeValue}>{s.end}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+          ) : (
+          <TouchableOpacity
+            style={styles.monthConfirmPanel}
+            activeOpacity={1}
+            onPress={event => event.stopPropagation()}
+          >
+            <View style={[
+              styles.monthConfirmIcon,
+              monthActionConfirm === 'delete' ? styles.monthConfirmDeleteIcon : styles.monthConfirmAutoIcon,
+            ]}>
+              <Ionicons
+                name={monthActionConfirm === 'delete' ? 'trash-outline' : 'pencil-outline'}
+                size={25}
+                color={monthActionConfirm === 'delete' ? '#B93E48' : '#247A82'}
+              />
+            </View>
+            <Text style={styles.monthConfirmTitle}>
+              シフトを削除しますか？
+            </Text>
+            <Text style={styles.monthConfirmMonth}>
+              {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
+            </Text>
+            <Text style={styles.monthConfirmDescription}>
+              この月に作成されているシフトをすべて削除します。削除後は元に戻せません。
+            </Text>
+            <View style={styles.monthConfirmActions}>
+              <TouchableOpacity style={styles.monthConfirmCancelBtn} onPress={() => setMonthActionConfirm(null)}>
+                <Text style={styles.monthConfirmCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={monthActionConfirm === 'delete' ? styles.monthConfirmDeleteBtn : styles.monthConfirmExecuteBtn}
+                onPress={async () => {
+                  const action = monthActionConfirm;
+                  setMonthActionConfirm(null);
+                  if (action === 'delete') await deleteCurrentMonthShifts();
+                }}
+              >
+                <Text style={styles.monthConfirmExecuteText}>
+                  削除する
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── 設定モーダル ── */}
       <Modal visible={settingsVisible} animationType="slide" transparent>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' }}>
@@ -1552,6 +1701,37 @@ const styles = StyleSheet.create({
   monthDeleteBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
   monthActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   monthDeleteText: { color: '#B93E48', fontSize: 12, fontWeight: '900' },
+  monthConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  monthConfirmPanel: { width: '100%', maxWidth: 390, borderRadius: 18, padding: 20, alignItems: 'center', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  monthConfirmIcon: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 11, borderWidth: 1 },
+  monthConfirmAutoIcon: { backgroundColor: '#EAF8F8', borderColor: '#A7D8DC' },
+  monthConfirmDeleteIcon: { backgroundColor: '#FFF0F1', borderColor: '#EDB5BA' },
+  monthConfirmTitle: { fontSize: 18, fontWeight: '900', color: '#222222', textAlign: 'center' },
+  monthConfirmMonth: { marginTop: 5, fontSize: 14, fontWeight: '900', color: '#444444' },
+  monthConfirmDescription: { marginTop: 10, fontSize: 12, lineHeight: 19, fontWeight: '700', color: '#657174', textAlign: 'center' },
+  monthConfirmActions: { width: '100%', flexDirection: 'row', gap: 9, marginTop: 18 },
+  monthConfirmCancelBtn: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F4', borderWidth: 1, borderColor: '#D9DEDF' },
+  monthConfirmCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
+  monthConfirmExecuteBtn: { flex: 1.35, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#36A9B5' },
+  monthConfirmDeleteBtn: { flex: 1.35, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D9535F' },
+  monthConfirmExecuteText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
+  monthAutoReviewPanel: { width: '100%', maxWidth: 720, maxHeight: '90%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  monthAutoReviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E6ECEC', backgroundColor: '#FAFCFC' },
+  monthAutoReviewHeading: { flex: 1 },
+  monthAutoReviewTitle: { fontSize: 18, fontWeight: '900', color: '#222222' },
+  monthAutoReviewMonth: { marginTop: 3, fontSize: 12, fontWeight: '800', color: '#657174' },
+  monthAutoReviewTopActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  monthAutoReviewYesBtn: { minWidth: 82, minHeight: 42, paddingHorizontal: 16, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#29A6B2' },
+  monthAutoReviewYesText: { fontSize: 14, fontWeight: '900', color: '#FFFFFF' },
+  monthAutoReviewCloseBtn: { minWidth: 82, minHeight: 42, paddingHorizontal: 15, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F4', borderWidth: 1, borderColor: '#D9DEDF' },
+  monthAutoReviewCloseText: { fontSize: 14, fontWeight: '900', color: '#444444' },
+  monthAutoReviewScroll: { flexGrow: 0 },
+  monthAutoReviewScrollContent: { padding: 16, paddingBottom: 24 },
+  monthAutoReviewHelp: { marginBottom: 15, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, fontSize: 12, lineHeight: 18, fontWeight: '700', color: '#42575A', backgroundColor: '#EAF7F7' },
+  monthAutoReviewSectionTitle: { marginTop: 2, marginBottom: 8, fontSize: 15, fontWeight: '900', color: '#272727' },
+  monthAutoReviewSectionNote: { marginTop: -3, marginBottom: 8, fontSize: 11, lineHeight: 17, fontWeight: '700', color: '#717A7C' },
+  monthAutoReviewSection: { marginBottom: 16 },
+  monthAutoReviewTimes: { flex: 1, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'flex-end' },
 
   calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold' },
