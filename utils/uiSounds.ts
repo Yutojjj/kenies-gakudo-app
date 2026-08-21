@@ -1,10 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
+
 export type UiSoundType = 'tap' | 'success' | 'back' | 'tick';
 
 type WebAudioContext = AudioContext & { resume: () => Promise<void> };
 
 let audioContext: WebAudioContext | null = null;
 const lastPlayed: Record<UiSoundType, number> = { tap: 0, success: 0, back: 0, tick: 0 };
-const minIntervals: Record<UiSoundType, number> = { tap: 36, success: 180, back: 90, tick: 34 };
+const minIntervals: Record<UiSoundType, number> = { tap: 36, success: 240, back: 110, tick: 34 };
 
 const getAudioContext = () => {
   if (typeof window === 'undefined') return null;
@@ -79,11 +81,24 @@ const actionText = (element: Element) => [
   element.textContent,
 ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 
+const BACK_ICON_NAMES: (keyof typeof Ionicons.glyphMap)[] = [
+  'close', 'close-circle', 'close-circle-outline',
+  'chevron-back', 'arrow-back', 'arrow-back-outline',
+  'trash', 'trash-outline', 'log-out', 'log-out-outline',
+];
+
+const containsIonicon = (text: string, names: (keyof typeof Ionicons.glyphMap)[]) =>
+  names.some(name => {
+    const code = Number(Ionicons.glyphMap[name]);
+    return Number.isFinite(code) && text.includes(String.fromCodePoint(code));
+  });
+
 export const installGlobalUiSounds = () => {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {};
 
   let uiMutationVersion = 0;
   const pendingOutcomeTimers = new Set<number>();
+  let suppressOutcomeSuccessUntil = 0;
 
   const onButtonClick = (event: Event) => {
     const target = event.target instanceof Element ? event.target : null;
@@ -98,6 +113,20 @@ export const installGlobalUiSounds = () => {
     if (!action || action.getAttribute('aria-disabled') === 'true' || action.hasAttribute('disabled')) return;
     if (action.matches('input, textarea, select') || action.closest('input, textarea, select')) return;
     const text = actionText(action);
+    const isBackAction = /削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|[×✕✖]|back|close|trash/i.test(text)
+      || containsIonicon(text, BACK_ICON_NAMES);
+    const isSaveAction = /保存|記録のみ|記録する|PDF印刷して記録|設定を反映/i.test(text);
+
+    if (isBackAction) {
+      playUiSound('back');
+      return;
+    }
+    if (isSaveAction) {
+      playUiSound('success');
+      suppressOutcomeSuccessUntil = Date.now() + 1500;
+      return;
+    }
+
     const beforeMutationVersion = uiMutationVersion;
     const beforeUrl = window.location.href;
     const browserAction = /印刷|PDF|出力|ダウンロード|download|print/i.test(text);
@@ -108,11 +137,7 @@ export const installGlobalUiSounds = () => {
       const changed = browserAction || window.location.href !== beforeUrl || uiMutationVersion > beforeMutationVersion;
       if (!changed) return;
       soundPlayed = true;
-      if (/削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|back|close|trash/i.test(text)) {
-        playUiSound('back');
-      } else {
-        playUiSound('tap');
-      }
+      playUiSound('tap');
     };
 
     const firstTimer = window.setTimeout(() => {
@@ -131,7 +156,7 @@ export const installGlobalUiSounds = () => {
   window.alert = ((message?: any) => {
     const text = String(message ?? '');
     if (/保存完了|保存しました|更新完了|登録完了|作成完了|送信完了|完了[:：\s]/.test(text)) {
-      playUiSound('success');
+      if (Date.now() >= suppressOutcomeSuccessUntil) playUiSound('success');
     } else if (/削除しました|削除完了/.test(text)) {
       playUiSound('back');
     }
@@ -144,7 +169,7 @@ export const installGlobalUiSounds = () => {
       for (const node of Array.from(mutation.addedNodes)) {
         const text = (node.textContent || '').replace(/\s+/g, ' ').slice(0, 300);
         if (/保存完了|保存しました|更新完了|登録完了|作成完了|送信完了/.test(text)) {
-          playUiSound('success');
+          if (Date.now() >= suppressOutcomeSuccessUntil) playUiSound('success');
           return;
         }
       }
