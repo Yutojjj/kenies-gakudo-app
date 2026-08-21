@@ -1676,19 +1676,8 @@ export default function MenuScreen() {
                 >
                   {pickupOverviewLoadingAction === 'view'
                     ? <ActivityIndicator size="small" color="#245E96" />
-                    : <Ionicons name="grid-outline" size={17} color="#245E96" />}
-                  <Text style={styles.pickupInlineOverviewText}>全体表示</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.pickupInlineActionBtn, styles.pickupInlinePrintBtn]}
-                  onPress={() => openPickupOverviewAction('print')}
-                  disabled={pickupOverviewLoadingAction !== null}
-                  activeOpacity={0.82}
-                >
-                  {pickupOverviewLoadingAction === 'print'
-                    ? <ActivityIndicator size="small" color="#FFFFFF" />
-                    : <Ionicons name="print-outline" size={17} color="#FFFFFF" />}
-                  <Text style={styles.pickupInlinePrintText}>印刷</Text>
+                    : <Ionicons name="open-outline" size={15} color="#245E96" />}
+                  <Text style={styles.pickupInlineOverviewText}>送迎一覧を開く</Text>
                 </TouchableOpacity>
               </View>
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
@@ -3729,17 +3718,17 @@ const styles = StyleSheet.create({
   },
   pickupInlineActions: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'flex-end',
     marginBottom: 10,
   },
   pickupInlineActionBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 11,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 5,
   },
   pickupInlineOverviewBtn: {
     backgroundColor: '#F2F8FF',
@@ -3748,7 +3737,7 @@ const styles = StyleSheet.create({
   },
   pickupInlineOverviewText: {
     color: '#245E96',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
   },
   pickupInlinePrintBtn: {
