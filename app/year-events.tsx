@@ -64,8 +64,24 @@ interface PastPhoto {
   id: string;
   eventId: string;
   uri: string;
-  storagePath: string;
+  storagePath?: string;
   fiscalYear?: number; // アップロード時の年度（前年度として保存）
+  sourceAlbumId?: string;
+  isAlbumReference?: boolean;
+}
+
+interface AlbumLibraryPhoto {
+  id: string;
+  uri: string;
+  storagePath?: string;
+  category?: string;
+}
+
+interface AlbumLibraryEvent {
+  id: string;
+  name: string;
+  category: string;
+  dateStr: string;
 }
 
 interface EventTemplate {
@@ -596,6 +612,15 @@ export default function YearEventsScreen() {
   const [previewPhotos, setPreviewPhotos] = useState<PastPhoto[] | null>(null);
   const [previewIdx, setPreviewIdx] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [photoSourceModalVisible, setPhotoSourceModalVisible] = useState(false);
+  const [albumPickerVisible, setAlbumPickerVisible] = useState(false);
+  const [albumLibraryPhotos, setAlbumLibraryPhotos] = useState<AlbumLibraryPhoto[]>([]);
+  const [albumLibraryEvents, setAlbumLibraryEvents] = useState<AlbumLibraryEvent[]>([]);
+  const [selectedAlbumLibraryEvent, setSelectedAlbumLibraryEvent] = useState<AlbumLibraryEvent | null>(null);
+  const [selectedAlbumPhotoIds, setSelectedAlbumPhotoIds] = useState<string[]>([]);
+  const [albumLibraryLoading, setAlbumLibraryLoading] = useState(false);
+  const [photoAddTarget, setPhotoAddTarget] = useState<'past' | 'cover'>('past');
+  const [coverTargetEventId, setCoverTargetEventId] = useState<string | null>(null);
 
   // チラシプレビュー
   const [flyerPreview, setFlyerPreview] = useState<VacationFlyer | null>(null);
@@ -1101,9 +1126,144 @@ export default function YearEventsScreen() {
     if (count > 0) customAlert('完了', `${count}枚アップロードしました`);
   };
 
+  const openPhotoSourceMenu = (target: 'past' | 'cover', eventId?: string) => {
+    setPhotoAddTarget(target);
+    setCoverTargetEventId(target === 'cover' ? eventId || null : null);
+    setPhotoSourceModalVisible(true);
+  };
+
+  const openExistingAlbumPicker = async () => {
+    setPhotoSourceModalVisible(false);
+    setAlbumPickerVisible(true);
+    setAlbumLibraryLoading(true);
+    setSelectedAlbumPhotoIds([]);
+    setSelectedAlbumLibraryEvent(null);
+    try {
+      const [photoSnapshot, eventSnapshot] = await Promise.all([
+        getDocs(collection(db, 'albums2')),
+        getDocs(collection(db, 'album_events2')),
+      ]);
+      const photos = photoSnapshot.docs.flatMap(albumDoc => {
+        const data = albumDoc.data();
+        const mediaText = `${data.mediaType || ''} ${data.mimeType || ''} ${data.uri || ''}`.toLowerCase();
+        if (!data.uri || /video|\.mp4|\.mov|\.m4v|\.webm/.test(mediaText)) return [];
+        return [{
+          id: albumDoc.id,
+          uri: String(data.uri),
+          storagePath: data.storagePath ? String(data.storagePath) : undefined,
+          category: data.category ? String(data.category) : undefined,
+        }];
+      });
+      const registeredEvents = eventSnapshot.docs.flatMap(eventDoc => {
+        const data = eventDoc.data();
+        const dateStr = String(data.dateStr || '');
+        const category = String(data.category || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !category) return [];
+        return [{
+          id: eventDoc.id,
+          name: String(data.name || 'イベント').replace(/_\d{4}-\d{2}-\d{2}$/, ''),
+          category,
+          dateStr,
+        }];
+      });
+      const eventMap = new Map<string, AlbumLibraryEvent>(
+        registeredEvents.map(event => [event.category, event]),
+      );
+
+      // Older event albums can have photos without a matching album_events2 document.
+      // Rebuild those album entries from their EVENT_<name>_<date> category.
+      photos.forEach(photo => {
+        const category = photo.category || '';
+        if (!category || eventMap.has(category)) return;
+        const match = category.match(/^(?:EVENT_)?(.+?)_(\d{4}-\d{2}-\d{2})$/);
+        if (!match) return;
+        const [, rawName, dateStr] = match;
+        const name = rawName.replace(/_/g, ' ').trim();
+        if (!name) return;
+        eventMap.set(category, {
+          id: `inferred-${category}`,
+          name,
+          category,
+          dateStr,
+        });
+      });
+
+      const libraryEvents = Array.from(eventMap.values())
+        .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+      setAlbumLibraryPhotos(photos);
+      setAlbumLibraryEvents(libraryEvents);
+    } catch (error) {
+      console.error('album library load error:', error);
+      customAlert('エラー', 'アルバムの写真を読み込めませんでした');
+      setAlbumPickerVisible(false);
+    } finally {
+      setAlbumLibraryLoading(false);
+    }
+  };
+
+  const addExistingAlbumPhotos = async () => {
+    if (selectedAlbumPhotoIds.length === 0) return;
+    const selectedSet = new Set(selectedAlbumPhotoIds);
+    if (photoAddTarget === 'cover') {
+      const photo = albumLibraryPhotos.find(item => selectedSet.has(item.id));
+      if (!photo || !coverTargetEventId) return;
+      setUploading(true);
+      try {
+        await setDoc(doc(db, 'events', coverTargetEventId), {
+          coverImage: photo.uri,
+          coverStoragePath: null,
+          coverSourceAlbumId: photo.id,
+        }, { merge: true });
+        setDetailEvent((current: any) => current?.id === coverTargetEventId
+          ? { ...current, coverImage: photo.uri, coverStoragePath: null, coverSourceAlbumId: photo.id }
+          : current);
+        setAlbumPickerVisible(false);
+        setSelectedAlbumPhotoIds([]);
+        customAlert('完了', 'カバー写真を設定しました');
+      } catch (error: any) {
+        console.error('album cover reference error:', error);
+        customAlert('エラー', error?.message || 'カバー写真を設定できませんでした');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
+    if (!detailEvent) return;
+    const existingUris = new Set((pastPhotos[detailEvent.id] || []).map(photo => photo.uri));
+    const selectedPhotos = albumLibraryPhotos.filter(photo => selectedSet.has(photo.id) && !existingUris.has(photo.uri));
+    if (selectedPhotos.length === 0) {
+      customAlert('確認', '選択した写真はすでに追加されています');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      await Promise.all(selectedPhotos.map(photo => addDoc(collection(db, 'event_past_photos'), {
+        eventId: detailEvent.id,
+        uri: photo.uri,
+        storagePath: photo.storagePath || null,
+        sourceAlbumId: photo.id,
+        isAlbumReference: true,
+        fiscalYear: currentFY - 1,
+        createdAt: new Date(),
+      })));
+      setAlbumPickerVisible(false);
+      setSelectedAlbumPhotoIds([]);
+      customAlert('完了', `${selectedPhotos.length}枚追加しました`);
+    } catch (error: any) {
+      console.error('album reference add error:', error);
+      customAlert('エラー', error?.message || '写真を追加できませんでした');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const deletePastPhoto = async (photo: PastPhoto) => {
     customConfirm('削除', 'この写真を削除しますか？', async () => {
-      await deleteObject(storageRef(storage, photo.storagePath)).catch(() => {});
+      if (!photo.isAlbumReference && photo.storagePath) {
+        await deleteObject(storageRef(storage, photo.storagePath)).catch(() => {});
+      }
       await deleteDoc(doc(db, 'event_past_photos', photo.id));
     });
   };
@@ -1198,7 +1358,7 @@ export default function YearEventsScreen() {
         ) : (
           <View style={[styles.eventCoverImgFull, { backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center' }]}>
             {canEditEventDetail && (
-              <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); pickEventCover(ev.id); }} style={{ alignItems: 'center' }}>
+              <TouchableOpacity onPress={(e) => { e.stopPropagation?.(); openPhotoSourceMenu('cover', ev.id); }} style={{ alignItems: 'center' }}>
                 <Ionicons name="camera-outline" size={22} color="#bbb" />
                 <Text style={{ fontSize: 10, color: '#bbb', marginTop: 3 }}>画像追加</Text>
               </TouchableOpacity>
@@ -1207,7 +1367,7 @@ export default function YearEventsScreen() {
         )}
         {canEditEventDetail && ev.coverImage && (
           <View style={styles.coverActionBtns}>
-            <TouchableOpacity style={styles.coverActionBtn} onPress={(e) => { e.stopPropagation?.(); pickEventCover(ev.id); }}>
+            <TouchableOpacity style={styles.coverActionBtn} onPress={(e) => { e.stopPropagation?.(); openPhotoSourceMenu('cover', ev.id); }}>
               <Ionicons name="camera-outline" size={13} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.coverActionBtn, { backgroundColor: 'rgba(220,50,50,0.75)' }]} onPress={(e) => { e.stopPropagation?.(); deleteEventCover(ev); }}>
@@ -1417,9 +1577,9 @@ export default function YearEventsScreen() {
               </TouchableOpacity>
               <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
               {canEditEventDetail && (
-                <TouchableOpacity style={styles.uploadPhotoBtn} onPress={uploadPastPhoto}>
-                    <Ionicons name="cloud-upload-outline" size={16} color={COLORS.primary} />
-                    <Text style={styles.uploadPhotoBtnText}>写真をアップロード</Text>
+                <TouchableOpacity style={styles.uploadPhotoBtn} onPress={() => openPhotoSourceMenu('past')}>
+                    <Ionicons name="add" size={18} color={COLORS.primary} />
+                    <Text style={styles.uploadPhotoBtnText}>写真を追加</Text>
                   </TouchableOpacity>
                 )}
                 {uploading && <ActivityIndicator size="small" color={COLORS.primary} style={{ margin: 8 }} />}
@@ -2022,6 +2182,132 @@ export default function YearEventsScreen() {
       {/* 詳細モーダル */}
       {DetailModal}
 
+      {/* イベント写真の追加方法 */}
+      <Modal visible={photoSourceModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceModalVisible(false)}>
+        <TouchableOpacity style={styles.photoPickerOverlay} activeOpacity={1} onPress={() => setPhotoSourceModalVisible(false)}>
+          <View style={styles.photoSourceModal} onStartShouldSetResponder={() => true}>
+            <View style={styles.photoPickerHeader}>
+              <Text style={styles.photoPickerTitle}>写真を追加</Text>
+              <TouchableOpacity style={styles.photoPickerClose} onPress={() => setPhotoSourceModalVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={[styles.photoSourceChoice, styles.photoSourceAlbum]} onPress={openExistingAlbumPicker}>
+              <View style={styles.photoSourceIcon}>
+                <Ionicons name="images-outline" size={25} color="#2A7E83" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.photoSourceChoiceTitle}>既存アルバムから追加</Text>
+                <Text style={styles.photoSourceChoiceCaption}>アルバムに保存済みの写真を流用</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.photoSourceChoice, styles.photoSourceNew]} onPress={() => {
+              setPhotoSourceModalVisible(false);
+              if (photoAddTarget === 'cover' && coverTargetEventId) void pickEventCover(coverTargetEventId);
+              else void uploadPastPhoto();
+            }}>
+              <View style={[styles.photoSourceIcon, { backgroundColor: '#FFF0F4' }]}>
+                <Ionicons name="image-outline" size={25} color="#C55C7B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.photoSourceChoiceTitle}>新規写真を追加</Text>
+                <Text style={styles.photoSourceChoiceCaption}>端末の写真から新しく追加</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 既存アルバムの写真選択 */}
+      <Modal visible={albumPickerVisible} transparent animationType="fade" onRequestClose={() => setAlbumPickerVisible(false)}>
+        <View style={styles.photoPickerOverlay}>
+          <View style={styles.albumPickerModal}>
+            <View style={[styles.photoPickerHeader, styles.albumPickerHeader]}>
+              <View style={styles.albumPickerHeaderContent} pointerEvents="none">
+                <Text style={[styles.photoPickerTitle, styles.albumPickerHeaderTitle]}>イベントアルバムを選択</Text>
+                <Text style={styles.albumPickerCount}>{selectedAlbumPhotoIds.length}枚選択中</Text>
+              </View>
+              <TouchableOpacity style={[styles.photoPickerClose, styles.albumPickerHeaderClose]} onPress={() => setAlbumPickerVisible(false)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            {albumLibraryLoading ? (
+              <View style={styles.albumPickerStatus}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.albumPickerStatusText}>アルバムを読み込んでいます</Text>
+              </View>
+            ) : albumLibraryEvents.length === 0 ? (
+              <View style={styles.albumPickerStatus}>
+                <Ionicons name="images-outline" size={42} color="#AAB7B8" />
+                <Text style={styles.albumPickerStatusText}>イベントアルバムがありません</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.albumPickerScroll} contentContainerStyle={styles.albumEventList}>
+                {albumLibraryEvents.map(event => {
+                  const expanded = selectedAlbumLibraryEvent?.id === event.id;
+                  const eventPhotos = albumLibraryPhotos.filter(photo => photo.category === event.category);
+                  const eventDate = new Date(`${event.dateStr}T00:00:00`);
+                  return (
+                    <View key={event.id} style={styles.albumEventItem}>
+                      <TouchableOpacity style={styles.albumEventHeader} onPress={() => {
+                        setSelectedAlbumLibraryEvent(expanded ? null : event);
+                        setSelectedAlbumPhotoIds([]);
+                      }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.albumEventName}>{event.name}</Text>
+                          <Text style={styles.albumEventDate}>{eventDate.getFullYear()}年{eventDate.getMonth() + 1}月{eventDate.getDate()}日</Text>
+                        </View>
+                        <Text style={styles.albumEventPhotoCount}>{eventPhotos.length}枚</Text>
+                        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={21} color="#687879" />
+                      </TouchableOpacity>
+                      {expanded && (
+                        eventPhotos.length === 0 ? (
+                          <Text style={styles.albumEventEmpty}>このイベントには写真がありません</Text>
+                        ) : (
+                          <View style={styles.albumPickerGrid}>
+                            {eventPhotos.map(photo => {
+                              const selected = selectedAlbumPhotoIds.includes(photo.id);
+                              return (
+                                <TouchableOpacity
+                                  key={photo.id}
+                                  style={styles.albumPickerItem}
+                                  activeOpacity={0.82}
+                                  onPress={() => setSelectedAlbumPhotoIds(current => {
+                                    if (current.includes(photo.id)) return current.filter(id => id !== photo.id);
+                                    return photoAddTarget === 'cover' ? [photo.id] : [...current, photo.id];
+                                  })}
+                                >
+                                  <Image source={{ uri: photo.uri }} style={styles.albumPickerImage} />
+                                  <View style={[styles.albumPickerCheck, selected && styles.albumPickerCheckSelected]}>
+                                    {selected && <Ionicons name="checkmark" size={17} color="#FFFFFF" />}
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <View style={styles.albumPickerFooter}>
+              <TouchableOpacity style={styles.albumPickerCancel} onPress={() => setAlbumPickerVisible(false)}>
+                <Text style={styles.albumPickerCancelText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.albumPickerAdd, selectedAlbumPhotoIds.length === 0 && styles.albumPickerAddDisabled]}
+                disabled={selectedAlbumPhotoIds.length === 0}
+                onPress={addExistingAlbumPhotos}
+              >
+                <Text style={styles.albumPickerAddText}>{photoAddTarget === 'cover' ? 'この写真を設定' : '選択した写真を追加'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* 写真フルスクリーン */}
       <Modal visible={!!previewPhotos} transparent animationType="fade">
         <View style={styles.fsOverlay}>
@@ -2169,6 +2455,44 @@ const styles = StyleSheet.create({
   photoThumbWrap: { position: 'relative' },
   photoThumb: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' },
   photoDeleteBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 10 },
+  photoPickerOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 14, backgroundColor: 'rgba(0,0,0,0.55)' },
+  photoSourceModal: { width: '100%', maxWidth: 460, borderRadius: 14, padding: 16, backgroundColor: '#FFFFFF' },
+  photoPickerHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  photoPickerTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
+  photoPickerClose: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  photoSourceChoice: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 13, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10, borderRadius: 10, borderWidth: 1 },
+  photoSourceAlbum: { backgroundColor: '#EFF9FA', borderColor: '#A9DADC' },
+  photoSourceNew: { backgroundColor: '#FFF5F7', borderColor: '#EBC5D0' },
+  photoSourceIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#DDF3F4' },
+  photoSourceChoiceTitle: { color: COLORS.text, fontSize: 15, fontWeight: 'bold' },
+  photoSourceChoiceCaption: { marginTop: 4, color: '#777777', fontSize: 11 },
+  albumPickerModal: { width: '100%', maxWidth: 720, height: '86%', maxHeight: 820, overflow: 'hidden', borderRadius: 14, paddingTop: 12, backgroundColor: '#FFFFFF' },
+  albumPickerHeader: { position: 'relative', justifyContent: 'center', paddingHorizontal: 52 },
+  albumPickerHeaderContent: { alignItems: 'center', justifyContent: 'center' },
+  albumPickerHeaderTitle: { width: '100%', textAlign: 'center' },
+  albumPickerHeaderClose: { position: 'absolute', right: 4 },
+  albumPickerCount: { width: '100%', marginTop: 3, color: COLORS.primary, fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
+  albumPickerStatus: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  albumPickerStatusText: { marginTop: 12, color: '#777777', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  albumPickerScroll: { flex: 1, backgroundColor: '#F2F4F4' },
+  albumEventList: { padding: 10, gap: 8 },
+  albumEventItem: { overflow: 'hidden', borderRadius: 10, borderWidth: 1, borderColor: '#C9DEDF', backgroundColor: '#FFFFFF' },
+  albumEventHeader: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#EFF9FA' },
+  albumEventName: { color: COLORS.text, fontSize: 15, fontWeight: 'bold' },
+  albumEventDate: { marginTop: 4, color: '#666666', fontSize: 12 },
+  albumEventPhotoCount: { minWidth: 40, color: '#257A7E', fontSize: 13, fontWeight: 'bold', textAlign: 'right' },
+  albumEventEmpty: { paddingHorizontal: 14, paddingVertical: 18, color: '#888888', fontSize: 12, textAlign: 'center', backgroundColor: '#FFFFFF' },
+  albumPickerGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 2 },
+  albumPickerItem: { width: '33.333%', aspectRatio: 1, padding: 1, overflow: 'hidden', backgroundColor: '#DDE5E5' },
+  albumPickerImage: { width: '100%', height: '100%' },
+  albumPickerCheck: { position: 'absolute', top: 7, right: 7, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.28)' },
+  albumPickerCheckSelected: { backgroundColor: COLORS.primary },
+  albumPickerFooter: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderTopWidth: 1, borderColor: '#E5E5E5', backgroundColor: '#FFFFFF' },
+  albumPickerCancel: { minHeight: 44, paddingHorizontal: 18, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F1F1' },
+  albumPickerCancelText: { color: '#555555', fontSize: 13, fontWeight: 'bold' },
+  albumPickerAdd: { flex: 1, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  albumPickerAddDisabled: { opacity: 0.4 },
+  albumPickerAddText: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
 
   // フルスクリーン
   fsOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },

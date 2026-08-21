@@ -224,32 +224,66 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
 
 function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: number; height: number }) {
   const [currentUri, setCurrentUri] = useState('');
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const refreshAttemptedRef = useRef(false);
+
+  const resolveMediaUri = async (forceReload = false) => {
+    const storagePath = getStoragePath(item);
+    const freshUri = storagePath ? await getDownloadURL(ref(storage, storagePath)) : item.uri;
+    if (!forceReload) return freshUri;
+    const separator = freshUri.includes('?') ? '&' : '?';
+    return `${freshUri}${separator}reload=${Date.now()}`;
+  };
 
   useEffect(() => {
     let cancelled = false;
-    setLoadFailed(false);
-    const storagePath = getStoragePath(item);
-    const loadUri = storagePath ? getDownloadURL(ref(storage, storagePath)) : Promise.resolve(item.uri);
-    loadUri
+    refreshAttemptedRef.current = false;
+    setCurrentUri('');
+    setLoadState('loading');
+    resolveMediaUri()
       .then(uri => { if (!cancelled) setCurrentUri(uri); })
       .catch(error => {
         console.warn('アルバムメディアURLの取得に失敗しました', error);
-        if (!cancelled) setLoadFailed(true);
+        if (!cancelled) setLoadState('failed');
       });
     return () => { cancelled = true; };
   }, [item.id, item.uri, item.storagePath]);
+
+  const retryMedia = async () => {
+    setLoadState('loading');
+    try {
+      setCurrentUri(await resolveMediaUri(true));
+    } catch (error) {
+      console.warn('全画面メディアの再取得に失敗しました', error);
+      setLoadState('failed');
+    }
+  };
+
+  const handleMediaError = () => {
+    if (!refreshAttemptedRef.current) {
+      refreshAttemptedRef.current = true;
+      void retryMedia();
+      return;
+    }
+    setLoadState('failed');
+  };
+
+  useEffect(() => {
+    if (!currentUri || loadState !== 'loading') return;
+    const timeout = setTimeout(handleMediaError, 15000);
+    return () => clearTimeout(timeout);
+  }, [currentUri, loadState]);
 
   const player = useVideoPlayer(item.mediaType === 'video' && currentUri ? currentUri : null, currentPlayer => {
     currentPlayer.loop = false;
   });
 
-  if (loadFailed) {
+  if (loadState === 'failed') {
     return (
-      <View style={[styles.fullScreenMediaStatus, { width, height }]}>
-        <Ionicons name="cloud-offline-outline" size={38} color="#FFFFFF" />
-        <Text style={styles.fullScreenMediaStatusText}>読み込めませんでした</Text>
-      </View>
+      <TouchableOpacity style={[styles.fullScreenMediaStatus, { width, height }]} onPress={retryMedia}>
+        <Ionicons name="refresh" size={38} color="#FFFFFF" />
+        <Text style={styles.fullScreenMediaStatusText}>タップして再読み込み</Text>
+      </TouchableOpacity>
     );
   }
 
@@ -265,9 +299,9 @@ function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: num
     return <VideoView player={player} style={{ width, height }} nativeControls contentFit="contain" />;
   }
   if (Platform.OS === 'web') {
-    return <Image source={{ uri: currentUri }} style={{ width, height }} resizeMode="contain" />;
+    return <Image source={{ uri: currentUri }} style={{ width, height }} resizeMode="contain" onLoad={() => setLoadState('loaded')} onError={handleMediaError} />;
   }
-  return <CachedImage source={{ uri: currentUri }} style={{ width, height }} contentFit="contain" cachePolicy="memory" />;
+  return <CachedImage source={{ uri: currentUri }} style={{ width, height }} contentFit="contain" cachePolicy="memory-disk" onLoad={() => setLoadState('loaded')} onError={handleMediaError} />;
 }
 
 // iOSかどうかを判定するヘルパー
@@ -413,6 +447,7 @@ export default function AlbumScreen() {
       fullScreenProgrammaticScrollRef.current = false;
       setFullScreenIndex(rawIndex);
       fullScreenDragStartIndexRef.current = rawIndex;
+      flatListRef.current?.scrollToOffset({ offset: rawIndex * windowWidth, animated: false });
       return;
     }
 
@@ -420,10 +455,9 @@ export default function AlbumScreen() {
     const targetIndex = Math.max(startIndex - 1, Math.min(startIndex + 1, rawIndex));
     setFullScreenIndex(targetIndex);
     fullScreenDragStartIndexRef.current = targetIndex;
-    if (targetIndex !== rawIndex) {
-      fullScreenProgrammaticScrollRef.current = true;
-      flatListRef.current?.scrollToOffset({ offset: targetIndex * windowWidth, animated: true });
-    }
+    // ブラウザの慣性スクロールが画像の境界から数pxずれて止まると、
+    // FlatListの未描画領域が黒く見えるため、必ず1枚の先頭へ固定する。
+    flatListRef.current?.scrollToOffset({ offset: targetIndex * windowWidth, animated: false });
   };
 
   useEffect(() => {
@@ -1683,9 +1717,9 @@ export default function AlbumScreen() {
                 initialScrollIndex={fullScreenIndex}
                 getItemLayout={(data, index) => ({ length: windowWidth, offset: windowWidth * index, index })}
                 onScrollToIndexFailed={onScrollToIndexFailed}
-                initialNumToRender={1}
-                maxToRenderPerBatch={2}
-                windowSize={3}
+                initialNumToRender={3}
+                maxToRenderPerBatch={5}
+                windowSize={7}
                 removeClippedSubviews={Platform.OS !== 'web'}
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
