@@ -15,9 +15,6 @@ import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
 
-type Mode = 'top' | 'add' | 'view';
-type TabType = '月' | '火' | '水' | '木' | '金' | 'イベント';
-const ALL_TABS: TabType[] = ['月', '火', '水', '木', '金', 'イベント'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const INITIAL_MEDIA_COUNT = 24;
@@ -30,6 +27,21 @@ type AlbumMedia = {
   storagePath?: string;
   mediaType: 'image' | 'video';
   duration?: number | null;
+};
+
+type AlbumEvent = {
+  id: string;
+  name: string;
+  code: string;
+  category: string;
+  dateStr?: string;
+};
+
+type CalendarEvent = {
+  id: string;
+  dateStr: string;
+  title: string;
+  hidden?: boolean;
 };
 
 const getMediaType = (item: any): 'image' | 'video' => {
@@ -275,11 +287,12 @@ export default function AlbumScreen() {
   const [mediaLoadError, setMediaLoadError] = useState('');
   const [mediaReloadKey, setMediaReloadKey] = useState(0);
   
-  const [mode, setMode] = useState<Mode>(role === 'user' ? 'view' : 'top');
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [dateJumpPicker, setDateJumpPicker] = useState<'year' | 'month' | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('月');
+  const [selectedAlbumDate, setSelectedAlbumDate] = useState<string | null>(null);
+  const [addMenuVisible, setAddMenuVisible] = useState(false);
+  const [addTargetDate, setAddTargetDate] = useState<string | null>(null);
   
   const [fullScreenPhotos, setFullScreenPhotos] = useState<any[] | null>(null);
   const [fullScreenIndex, setFullScreenIndex] = useState(0);
@@ -298,7 +311,8 @@ export default function AlbumScreen() {
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
   const [visibleMediaCounts, setVisibleMediaCounts] = useState<Record<string, number>>({});
 
-  const [albumEvents, setAlbumEvents] = useState<{id: string, name: string, code: string, category: string}[]>([]);
+  const [albumEvents, setAlbumEvents] = useState<AlbumEvent[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockCodeInput, setUnlockCodeInput] = useState('');
@@ -345,35 +359,6 @@ export default function AlbumScreen() {
     }
   };
 
-  // 古いメディア整理は管理者画面が落ち着いてから実行し、初期表示を妨げない。
-  useEffect(() => {
-    if (role !== 'admin') return;
-    const cleanupOldPhotos = async () => {
-      try {
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const snap = await getDocs(collection(db, 'albums2'));
-        for (const d of snap.docs) {
-          const data = d.data();
-          const createdAt = data.createdAt?.toDate?.();
-          if (createdAt && createdAt < oneYearAgo) {
-            // Storageからも削除
-            if (data.storagePath) {
-              try {
-                await deleteObject(ref(storage, data.storagePath));
-              } catch (_) {}
-            }
-            await deleteDoc(doc(db, 'albums2', d.id));
-          }
-        }
-      } catch (e) {
-        console.log('古い写真の自動削除:', e);
-      }
-    };
-    const timer = setTimeout(cleanupOldPhotos, 8000);
-    return () => clearTimeout(timer);
-  }, [role]);
-
   useEffect(() => {
     let isMounted = true;
     const fetchUser = async () => {
@@ -383,8 +368,6 @@ export default function AlbumScreen() {
         if (!snap.empty && isMounted) {
           const data = snap.docs[0].data();
           setUserData(data);
-          const firstAllowedDay = ALL_TABS.find(t => t === 'イベント' || (data.days && data.days[t]));
-          if (firstAllowedDay) setActiveTab(firstAllowedDay);
         }
       }
     };
@@ -425,11 +408,23 @@ export default function AlbumScreen() {
 
     const unsubEvents = onSnapshot(collection(db, 'album_events2'), (eventsSnap) => {
       if (!isMounted) return;
-      const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() } as {id: string, name: string, code: string, category: string}));
+      const evs = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() } as AlbumEvent));
       setAlbumEvents(evs);
     }, (e) => console.warn('album_events読み込みエラー:', e));
 
-    return () => { isMounted = false; unsubPhotos(); unsubEvents(); };
+    const unsubCalendarEvents = onSnapshot(collection(db, 'events'), (eventsSnap) => {
+      if (!isMounted) return;
+      const events = eventsSnap.docs.flatMap(eventDoc => {
+        const data = eventDoc.data();
+        const dateStr = String(data.dateStr || eventDoc.id || '');
+        const title = String(data.title || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !title) return [];
+        return [{ id: eventDoc.id, dateStr, title, hidden: !!data.hidden }];
+      });
+      setCalendarEvents(events);
+    }, (e) => console.warn('events読み込みエラー:', e));
+
+    return () => { isMounted = false; unsubPhotos(); unsubEvents(); unsubCalendarEvents(); };
   }, [role, name, mediaReloadKey]);
 
   const toggleExpand = (key: string) => {
@@ -604,12 +599,12 @@ export default function AlbumScreen() {
       if (uploaded > 0) {
         await addDoc(collection(db, 'album_events2'), {
           name: `${eventNameInput.trim()}_${dateStr}`,
-          code: eventCode, category: eventCategory, createdAt: serverTimestamp()
+          code: eventCode, category: eventCategory, dateStr, createdAt: serverTimestamp()
         });
         if (Platform.OS === 'web') {
-          window.alert(`イベント作成完了\nイベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。`);
+          window.alert(`イベント作成完了\nイベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n写真・動画を${uploaded}件保存しました。`);
         } else {
-          Alert.alert('イベント作成完了', `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n${uploaded} 枚の写真を保存しました。\n※保護者にはこのコードを伝えてください。`);
+          Alert.alert('イベント作成完了', `イベント名: ${eventNameInput.trim()}_${dateStr}\n発行コード: ${eventCode}\n\n写真・動画を${uploaded}件保存しました。\n※保護者にはこのコードを伝えてください。`);
         }
       }
     } catch (e) {
@@ -625,8 +620,8 @@ export default function AlbumScreen() {
     try {
       const uploaded = await uploadPhotosToCategory(ev.category);
       if (uploaded > 0) {
-        if (Platform.OS === 'web') window.alert(`追加完了\n「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
-        else Alert.alert('追加完了', `「${ev.name}」に ${uploaded} 枚の写真を追加しました。`);
+        if (Platform.OS === 'web') window.alert(`追加完了\n「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
+        else Alert.alert('追加完了', `「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
       }
     } catch (e) {
       if (Platform.OS === 'web') window.alert('写真のアップロードに失敗しました。');
@@ -676,43 +671,74 @@ export default function AlbumScreen() {
     return days;
   };
 
-  const getDatesForTab = (year = viewYear, month = viewMonth) => {
-    if (activeTab === 'イベント') {
-      return albumEvents
-        .filter(ev => role !== 'user' || unlockedEvents.includes(ev.id)) 
-        .map(ev => ({
-          key: ev.category,
-          label: ev.name,
-          code: ev.code, 
-          eventId: ev.id,
-          photos: albumPhotos[ev.category] || []
-        }));
-    }
-    
-    const dayIdx = ['日', '月', '火', '水', '木', '金', '土'].indexOf(activeTab);
-    const dates = [];
-    const d = new Date(year, month - 1, 1);
-    while (d.getFullYear() === year && d.getMonth() === month - 1) {
-      if (d.getDay() === dayIdx) {
-        const dateObj = new Date(d);
-        let canView = true;
-        if (role === 'user' && userData?.createdAt) {
-          const createdTime = userData.createdAt.toDate().getTime();
-          if (dateObj.getTime() < createdTime) canView = false;
-        }
-        if (canView) {
-          const dateStr = getLocalDateString(dateObj);
-          dates.push({
-            key: dateStr,
-            label: `${month}月${dateObj.getDate()}日(${activeTab})`,
-            photos: albumPhotos[dateStr] || []
-          });
-        }
-      }
-      d.setDate(d.getDate() + 1);
-    }
-    return dates;
+  const getEventDateStr = (event: AlbumEvent) => {
+    if (event.dateStr && /^\d{4}-\d{2}-\d{2}$/.test(event.dateStr)) return event.dateStr;
+    return event.category.match(/(\d{4}-\d{2}-\d{2})$/)?.[1]
+      || event.name.match(/(\d{4}-\d{2}-\d{2})$/)?.[1]
+      || '';
   };
+
+  const getEventDisplayName = (event: AlbumEvent) => event.name.replace(/_?\d{4}-\d{2}-\d{2}$/, '');
+
+  const canViewDailyDate = (dateStr: string) => {
+    if (role !== 'user') return true;
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return false;
+    const dayName = DAY_NAMES[date.getDay()];
+    if (!userData?.days?.[dayName]) return false;
+    if (userData?.createdAt) {
+      const created = userData.createdAt?.toDate?.() || new Date(userData.createdAt);
+      if (!Number.isNaN(created?.getTime?.())) {
+        const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate()).getTime();
+        if (date.getTime() < createdDay) return false;
+      }
+    }
+    return true;
+  };
+
+  const getVisibleEventsForDate = (dateStr: string) => albumEvents.filter(event => (
+    getEventDateStr(event) === dateStr && (role !== 'user' || unlockedEvents.includes(event.id))
+  ));
+
+  const getCalendarEventTitlesForDate = (dateStr: string) => {
+    const managedEventTitles = calendarEvents
+      .filter(event => event.dateStr === dateStr && (role !== 'user' || !event.hidden))
+      .map(event => event.title);
+    const albumEventTitles = getVisibleEventsForDate(dateStr).map(getEventDisplayName);
+    return Array.from(new Set([...managedEventTitles, ...albumEventTitles]));
+  };
+
+  const getMediaForDate = (dateStr: string) => {
+    const dailyMedia = canViewDailyDate(dateStr) ? (albumPhotos[dateStr] || []) : [];
+    const eventMedia = getVisibleEventsForDate(dateStr).flatMap(event => albumPhotos[event.category] || []);
+    const unique = new Map<string, AlbumMedia>();
+    [...dailyMedia, ...eventMedia].forEach(item => unique.set(item.id, item));
+    return Array.from(unique.values());
+  };
+
+  const getCalendarCells = (year: number, month: number) => {
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const cellCount = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+    return Array.from({ length: cellCount }, (_, index) => {
+      const day = index - firstDay + 1;
+      if (day < 1 || day > daysInMonth) return null;
+      const date = new Date(year, month - 1, day);
+      const dateStr = getLocalDateString(date);
+      return {
+        day,
+        dateStr,
+        media: getMediaForDate(dateStr),
+        eventTitles: getCalendarEventTitlesForDate(dateStr),
+        isToday: dateStr === getLocalDateString(new Date()),
+      };
+    });
+  };
+
+  const availableMediaDates = Array.from(new Set([
+    ...Object.keys(albumPhotos).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key)),
+    ...albumEvents.map(getEventDateStr).filter(Boolean),
+  ])).filter(dateStr => getMediaForDate(dateStr).length > 0).sort();
 
   const moveViewMonth = (amount: number) => {
     const next = new Date(viewYear, viewMonth - 1 + amount, 1);
@@ -861,20 +887,24 @@ export default function AlbumScreen() {
   };
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
+  const selectedDateMedia = selectedAlbumDate ? getMediaForDate(selectedAlbumDate) : [];
+  const selectedDateEventTitles = selectedAlbumDate ? getCalendarEventTitlesForDate(selectedAlbumDate) : [];
+  const selectedDateIndex = selectedAlbumDate ? availableMediaDates.indexOf(selectedAlbumDate) : -1;
 
-  const renderAlbumPage = (year: number, month: number) => {
-    const pageSections = getDatesForTab(year, month);
+  const moveSelectedAlbumDate = (amount: number) => {
+    const nextDate = availableMediaDates[selectedDateIndex + amount];
+    if (nextDate) setSelectedAlbumDate(nextDate);
+  };
+
+  const formatAlbumDate = (dateStr: string) => {
+    const date = new Date(`${dateStr}T00:00:00`);
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
+  };
+
+  const renderCalendarPage = (year: number, month: number) => {
+    const cells = getCalendarCells(year, month);
     return (
-      <ScrollView style={styles.scrollArea} nestedScrollEnabled>
-        {activeTab === 'イベント' && role === 'user' && (
-          <View style={{ padding: 16 }}>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#9370DB' }]} onPress={() => setUnlockModalVisible(true)}>
-              <Ionicons name="key-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>イベントをアンロックする</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
+      <ScrollView style={styles.calendarPage} contentContainerStyle={styles.calendarPageContent} nestedScrollEnabled>
         {mediaLoading && Object.keys(albumPhotos).length === 0 ? (
           <View style={styles.noDataBox}>
             <ActivityIndicator size="large" color={COLORS.primary} />
@@ -889,92 +919,46 @@ export default function AlbumScreen() {
               <Text style={styles.reloadMediaButtonText}>もう一度読み込む</Text>
             </TouchableOpacity>
           </View>
-        ) : pageSections.length === 0 ? (
-          <View style={styles.noDataBox}><Text style={styles.noDataText}>閲覧できる写真・動画がありません</Text></View>
         ) : (
-          pageSections.map((item: any) => {
-            const isExpanded = !!expandedDates[item.key];
-            const visibleCount = visibleMediaCounts[item.key] || INITIAL_MEDIA_COUNT;
-            const visiblePhotos = item.photos.slice(0, visibleCount);
-            return (
-              <View key={item.key} style={styles.dateSection}>
-                <TouchableOpacity style={styles.dateHeaderContainer} onPress={() => toggleExpand(item.key)} activeOpacity={0.7}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.dateHeader}>{item.label}</Text>
-                    {role !== 'user' && item.code && <Text style={styles.eventCodeText}>コード: {item.code}</Text>}
-                  </View>
-                  <View style={styles.sectionActions}>
-                    {isSelectMode ? (
-                      !isIOSWeb && (
-                        <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSelectAllInSection(item.photos)}>
-                          <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>すべて選択</Text>
-                        </TouchableOpacity>
-                      )
-                    ) : (
-                      <>
-                        {role !== 'user' && (
-                          <TouchableOpacity style={styles.sectionActionBtn} onPress={() => pickImages(item.label, item.key)}>
-                            <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-                          </TouchableOpacity>
-                        )}
-                        {role !== 'user' && (
-                          <TouchableOpacity style={styles.sectionActionBtn} onPress={() => handleSectionDelete(item.label, item.photos, item.eventId)}>
-                            <Ionicons name="trash" size={24} color={COLORS.danger} />
-                          </TouchableOpacity>
-                        )}
-                      </>
-                    )}
-                    <View style={styles.expandBadge}>
-                      <Text style={styles.expandText}>{isExpanded ? 'たたむ' : `表示 (${item.photos.length}件)`}</Text>
-                      <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.primary} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-
-                {isExpanded && (item.photos.length > 0 ? (
-                  <View style={styles.photoGrid}>
-                    {visiblePhotos.map((photoObj: AlbumMedia, idx: number) => {
-                      const isSelected = selectedPhotoIds.includes(photoObj.id);
-                      return (
-                        <TouchableOpacity
-                          key={photoObj.id}
-                          style={[styles.photoWrapper, isSelectMode && isSelected && { opacity: 0.6 }]}
-                          activeOpacity={0.8}
-                          onPress={() => {
-                            if (isSelectMode) toggleSelectPhoto(photoObj.id);
-                            else openFullScreen(item.photos, idx);
-                          }}
-                          onLongPress={() => {
-                            if (!isSelectMode && !isIOSWeb) {
-                              setIsSelectMode(true);
-                              setSelectedPhotoIds([photoObj.id]);
-                            }
-                          }}
-                        >
-                          <AlbumMediaThumbnail item={photoObj} />
-                          {isSelectMode && !isIOSWeb && (
-                            <View style={styles.checkOverlay}>
-                              <Ionicons name={isSelected ? 'checkmark-circle' : 'ellipse-outline'} size={28} color={isSelected ? COLORS.primary : 'rgba(255,255,255,0.7)'} />
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {visibleCount < item.photos.length && (
-                      <TouchableOpacity style={styles.loadMoreMediaButton} onPress={() => setVisibleMediaCounts(prev => ({ ...prev, [item.key]: visibleCount + INITIAL_MEDIA_COUNT }))}>
-                        <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
-                        <Text style={styles.loadMoreMediaText}>さらに表示（残り{item.photos.length - visibleCount}件）</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.noPhotoText}>写真・動画がありません</Text>
-                ))}
-              </View>
-            );
-          })
+          <>
+            <View style={styles.calendarWeekRow}>
+              {DAY_NAMES.map((dayName, index) => (
+                <Text key={dayName} style={[styles.calendarWeekText, index === 0 && styles.calendarSundayText, index === 6 && styles.calendarSaturdayText]}>{dayName}</Text>
+              ))}
+            </View>
+            <View style={styles.albumCalendarGrid}>
+              {cells.map((cell, index) => {
+                if (!cell) return <View key={`empty-${index}`} style={styles.albumCalendarCell} />;
+                const hasMedia = cell.media.length > 0;
+                const weekday = new Date(`${cell.dateStr}T00:00:00`).getDay();
+                return (
+                  <TouchableOpacity
+                    key={cell.dateStr}
+                    style={[styles.albumCalendarCell, cell.isToday && styles.albumCalendarToday, hasMedia && styles.albumCalendarCellActive]}
+                    disabled={!hasMedia}
+                    activeOpacity={0.72}
+                    onPress={() => setSelectedAlbumDate(cell.dateStr)}
+                  >
+                    <Text style={[
+                      styles.albumCalendarDay,
+                      hasMedia && styles.albumCalendarDayWithMedia,
+                      hasMedia && weekday === 0 && styles.calendarSundayText,
+                      hasMedia && weekday === 6 && styles.calendarSaturdayText,
+                    ]}>{cell.day}</Text>
+                    {hasMedia && <Text style={styles.albumCalendarCount}>{cell.media.length}件</Text>}
+                    {cell.eventTitles.slice(0, 1).map(eventTitle => (
+                      <Text key={eventTitle} style={styles.albumCalendarEvent} numberOfLines={1}>{eventTitle}</Text>
+                    ))}
+                    {cell.eventTitles.length > 1 && <Text style={styles.albumCalendarMore}>ほか{cell.eventTitles.length - 1}件</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {cells.every(cell => !cell || cell.media.length === 0) && (
+              <Text style={styles.calendarEmptyText}>この月に閲覧できる写真・動画はありません</Text>
+            )}
+          </>
         )}
-        <View style={{ height: 100 }} />
       </ScrollView>
     );
   };
@@ -995,47 +979,28 @@ export default function AlbumScreen() {
             setIsSelectMode(false);
             setSelectedPhotoIds([]);
           } else {
-            mode === 'top' || role === 'user' ? router.back() : setMode('top');
+            router.back();
           }
         }}>
           <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {isSelectMode ? `${selectedPhotoIds.length}件選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真・動画を追加' : 'アルバムを見る'}
+          {isSelectMode ? `${selectedPhotoIds.length}件選択中` : 'アルバム'}
         </Text>
+        {!isSelectMode && role !== 'user' && (
+          <TouchableOpacity style={styles.headerAddButton} onPress={() => { setAddTargetDate(null); setAddMenuVisible(true); }}>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.headerAddButtonText}>追加</Text>
+          </TouchableOpacity>
+        )}
+        {!isSelectMode && role === 'user' && (
+          <TouchableOpacity style={styles.headerCodeButton} onPress={() => setUnlockModalVisible(true)}>
+            <Text style={styles.headerCodeButtonText}>イベントコード</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {mode === 'top' && (
-        <View style={styles.topContainerFull}>
-          <TouchableOpacity style={styles.albumImgCard} onPress={() => setMode('view')}>
-            <Image source={ALBUM_IMAGES.watch} style={styles.albumImgCardImg} resizeMode="cover" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.albumImgCard} onPress={() => setMode('add')}>
-            <Image source={ALBUM_IMAGES.add} style={styles.albumImgCardImg} resizeMode="cover" />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {mode === 'add' && (
-        <ScrollView style={styles.scrollArea} contentContainerStyle={styles.addGrid}>
-          <TouchableOpacity style={styles.addOptionCard} onPress={handleAddToday}>
-            <View style={[styles.iconCircle, { backgroundColor: '#E0FFFF' }]}><Ionicons name="today" size={32} color="#4682B4" /></View>
-            <Text style={styles.addOptionTitle}>今日</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addOptionCard} onPress={() => setCalendarModalVisible(true)}>
-            <View style={[styles.iconCircle, { backgroundColor: '#FFE4E1' }]}><Ionicons name="calendar" size={32} color="#D87093" /></View>
-            <Text style={styles.addOptionTitle}>過去</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addOptionCard} onPress={() => setEventChoiceModalVisible(true)}>
-            <View style={[styles.iconCircle, { backgroundColor: '#FFFACD' }]}><Ionicons name="star" size={32} color="#DAA520" /></View>
-            <Text style={styles.addOptionTitle}>イベントアルバム</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      {mode === 'view' && (
-        <View style={{ flex: 1 }}>
-          {activeTab !== 'イベント' && (
+      <View style={{ flex: 1 }}>
             <View style={styles.monthSelector}>
               <TouchableOpacity style={styles.monthArrowButton} onPress={() => moveViewMonth(-1)} accessibilityLabel="前の月">
                 <Ionicons name="chevron-back" size={23} color={COLORS.text} />
@@ -1054,38 +1019,20 @@ export default function AlbumScreen() {
                 <Ionicons name="chevron-forward" size={23} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-          )}
 
-          <View style={styles.tabContainer}>
-            {ALL_TABS.map(tab => {
-              if (role === 'user' && tab !== 'イベント') {
-                if (!userData?.days || !userData.days[tab]) return null;
-              }
-              return (
-                <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => setActiveTab(tab)}>
-                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]} numberOfLines={1}>{tab}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {activeTab === 'イベント' ? (
-            renderAlbumPage(viewYear, viewMonth)
-          ) : (
-            <SwipeTabPager
-              tabs={monthPagerKeys}
-              active={activeMonthPagerKey}
-              onChange={(nextKey) => {
-                const [year, month] = nextKey.split('-').map(Number);
-                setViewYear(year);
-                setViewMonth(month);
-              }}
-              renderTab={(monthKey) => {
-                const [year, month] = monthKey.split('-').map(Number);
-                return renderAlbumPage(year, month);
-              }}
-            />
-          )}
+          <SwipeTabPager
+            tabs={monthPagerKeys}
+            active={activeMonthPagerKey}
+            onChange={(nextKey) => {
+              const [year, month] = nextKey.split('-').map(Number);
+              setViewYear(year);
+              setViewMonth(month);
+            }}
+            renderTab={(monthKey) => {
+              const [year, month] = monthKey.split('-').map(Number);
+              return renderCalendarPage(year, month);
+            }}
+          />
 
           {isSelectMode && !isIOSWeb && (
             <View style={styles.selectionBottomBar}>
@@ -1102,11 +1049,112 @@ export default function AlbumScreen() {
             </View>
           )}
 
-          {/* FAB削除済み */}
-        </View>
-      )}
+      </View>
 
       {/* 各種モーダル */}
+      <Modal visible={addMenuVisible} transparent animationType="fade" onRequestClose={() => setAddMenuVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}>
+          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>アルバムに追加</Text>
+              <TouchableOpacity onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.albumAddChoice, styles.albumAddChoiceDaily]}
+              onPress={() => {
+                setAddMenuVisible(false);
+                if (addTargetDate) {
+                  const targetDate = addTargetDate;
+                  setAddTargetDate(null);
+                  pickImages(formatAlbumDate(targetDate), targetDate);
+                  return;
+                }
+                setPastDate(new Date(viewYear, viewMonth - 1, 1));
+                setCalendarModalVisible(true);
+              }}
+            >
+              <Ionicons name="calendar-outline" size={26} color="#23767A" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.albumAddChoiceTitle}>日常写真を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>日付を選んで写真・動画を追加</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.albumAddChoice, styles.albumAddChoiceEvent]}
+              onPress={() => { setAddMenuVisible(false); setEventChoiceModalVisible(true); }}
+            >
+              <Ionicons name="images-outline" size={26} color="#7861B5" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.albumAddChoiceTitle}>イベントアルバム</Text>
+                <Text style={styles.albumAddChoiceCaption}>新規作成または既存アルバムへ追加</Text>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={!!selectedAlbumDate} transparent animationType="fade" onRequestClose={() => setSelectedAlbumDate(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedAlbumDate(null)}>
+          <TouchableOpacity style={styles.dateAlbumModal} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.dateAlbumTopRow}>
+              <Text style={styles.dateAlbumTitle}>写真・動画</Text>
+              <TouchableOpacity style={styles.dateAlbumCloseButton} onPress={() => setSelectedAlbumDate(null)}>
+                <Ionicons name="close" size={28} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            {selectedAlbumDate && (
+              <>
+                <View style={styles.dateAlbumNavigator}>
+                  <TouchableOpacity
+                    style={[styles.dateAlbumNavButton, selectedDateIndex <= 0 && styles.dateAlbumNavButtonDisabled]}
+                    disabled={selectedDateIndex <= 0}
+                    onPress={() => moveSelectedAlbumDate(-1)}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={selectedDateIndex <= 0 ? '#C8C8C8' : COLORS.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.dateAlbumDateText} numberOfLines={1}>{formatAlbumDate(selectedAlbumDate)}</Text>
+                  <TouchableOpacity
+                    style={[styles.dateAlbumNavButton, selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? styles.dateAlbumNavButtonDisabled : null]}
+                    disabled={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1}
+                    onPress={() => moveSelectedAlbumDate(1)}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? '#C8C8C8' : COLORS.text} />
+                  </TouchableOpacity>
+                  {role !== 'user' && (
+                    <TouchableOpacity
+                      style={styles.dateAlbumAddButton}
+                      onPress={() => {
+                        setAddTargetDate(selectedAlbumDate);
+                        setSelectedAlbumDate(null);
+                        setAddMenuVisible(true);
+                      }}
+                    >
+                      <Text style={styles.dateAlbumAddButtonText}>追加</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {selectedDateEventTitles.length > 0 && (
+                  <View style={styles.dateAlbumEventRow}>
+                    {selectedDateEventTitles.map(eventTitle => (
+                      <View key={eventTitle} style={styles.dateAlbumEventBadge}>
+                        <Text style={styles.dateAlbumEventBadgeText}>{eventTitle}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <ScrollView style={styles.dateAlbumMediaScroll} contentContainerStyle={styles.dateAlbumMediaGrid}>
+                  {selectedDateMedia.map((media, index) => (
+                    <TouchableOpacity key={media.id} style={styles.dateAlbumMediaItem} activeOpacity={0.8} onPress={() => openFullScreen(selectedDateMedia, index)}>
+                      <AlbumMediaThumbnail item={media} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={!!dateJumpPicker} transparent animationType="fade" onRequestClose={() => setDateJumpPicker(null)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDateJumpPicker(null)}>
           <TouchableOpacity style={styles.dateJumpModal} activeOpacity={1} onPress={() => {}}>
@@ -1149,7 +1197,7 @@ export default function AlbumScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>過去の日付を選択</Text>
+              <Text style={styles.modalTitle}>日常写真の日付を選択</Text>
               <TouchableOpacity onPress={() => setCalendarModalVisible(false)}><Ionicons name="close" size={28} color={COLORS.textLight} /></TouchableOpacity>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -1164,7 +1212,13 @@ export default function AlbumScreen() {
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {generatePastCalendar().map((day, idx) => (
-                <TouchableOpacity key={idx} style={[styles.calCell, !day && {borderWidth: 0}]} disabled={!day} onPress={() => { if (day) { pastDate.setDate(day); handleAddPast(); } }}>
+                <TouchableOpacity key={idx} style={[styles.calCell, !day && {borderWidth: 0}]} disabled={!day} onPress={() => {
+                  if (!day) return;
+                  const selected = new Date(pastDate.getFullYear(), pastDate.getMonth(), day);
+                  setPastDate(selected);
+                  const dateStr = getLocalDateString(selected);
+                  pickImages(`${selected.getMonth() + 1}月${selected.getDate()}日`, dateStr);
+                }}>
                   {day && <Text style={{ fontWeight: 'bold', color: COLORS.text }}>{day}</Text>}
                 </TouchableOpacity>
               ))}
@@ -1180,11 +1234,16 @@ export default function AlbumScreen() {
               <Text style={styles.modalTitle}>イベントアルバム</Text>
               <TouchableOpacity onPress={() => setEventChoiceModalVisible(false)}><Ionicons name="close" size={28} color={COLORS.textLight} /></TouchableOpacity>
             </View>
-            <TouchableOpacity style={[styles.primaryBtn, { marginBottom: 12 }]} onPress={() => { setEventChoiceModalVisible(false); setNewEventDate(new Date()); setNewEventCalendarVisible(true); }}>
+             <TouchableOpacity style={[styles.primaryBtn, { marginBottom: 12 }]} onPress={() => {
+               setEventChoiceModalVisible(false);
+               setNewEventDate(addTargetDate ? new Date(`${addTargetDate}T00:00:00`) : new Date());
+               setAddTargetDate(null);
+               setNewEventCalendarVisible(true);
+             }}>
               <Ionicons name="add-circle-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>新規イベントアルバム作成</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#7B68EE' }]} onPress={() => { setEventChoiceModalVisible(false); setAddToExistingModalVisible(true); }}>
+             <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#7B68EE' }]} onPress={() => { setAddTargetDate(null); setEventChoiceModalVisible(false); setAddToExistingModalVisible(true); }}>
               <Ionicons name="folder-open-outline" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>既存のアルバムに追加</Text>
             </TouchableOpacity>
@@ -1421,6 +1480,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+  headerAddButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: COLORS.primary },
+  headerAddButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  headerCodeButton: { minHeight: 36, paddingHorizontal: 12, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1EAFB', borderWidth: 1, borderColor: '#D4C3EE' },
+  headerCodeButtonText: { color: '#6D55A6', fontSize: 12, fontWeight: 'bold' },
   scrollArea: { flex: 1 },
   topContainerFull: { flex: 1, padding: 20, gap: 20, justifyContent: 'center', alignItems: 'center' },
   albumImgCard: { flex: 0.48, aspectRatio: 1, borderRadius: 22, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 6 },
@@ -1448,6 +1511,44 @@ const styles = StyleSheet.create({
   dateJumpOptionActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   dateJumpOptionText: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
   dateJumpOptionTextActive: { color: COLORS.white },
+  calendarPage: { flex: 1, backgroundColor: '#FAFAFA' },
+  calendarPageContent: { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 100, alignItems: 'center' },
+  calendarWeekRow: { width: '100%', maxWidth: 760, flexDirection: 'row', paddingVertical: 8, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: '#F4F7F7', borderWidth: 1, borderColor: '#DCE5E5' },
+  calendarWeekText: { width: '14.285%', textAlign: 'center', color: '#5B5B5B', fontSize: 13, fontWeight: 'bold' },
+  calendarSundayText: { color: '#D94D55' },
+  calendarSaturdayText: { color: '#3D78C5' },
+  albumCalendarGrid: { width: '100%', maxWidth: 760, flexDirection: 'row', flexWrap: 'wrap', borderLeftWidth: 1, borderColor: '#DCE5E5' },
+  albumCalendarCell: { width: '14.285%', aspectRatio: 0.92, padding: 6, backgroundColor: '#FFFFFF', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#DCE5E5' },
+  albumCalendarCellActive: { backgroundColor: '#FBFEFE' },
+  albumCalendarToday: { backgroundColor: '#FFF5C9' },
+  albumCalendarDay: { color: '#B7B7B7', fontSize: 14, fontWeight: '500' },
+  albumCalendarDayWithMedia: { color: '#222222', fontWeight: '800' },
+  albumCalendarCount: { alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 9, overflow: 'hidden', backgroundColor: '#DDF3F2', color: '#087E82', fontSize: 11, fontWeight: 'bold' },
+  albumCalendarEvent: { marginTop: 4, color: '#6D55A6', fontSize: 10, fontWeight: 'bold' },
+  albumCalendarMore: { marginTop: 1, color: '#8A8A8A', fontSize: 9 },
+  calendarEmptyText: { marginTop: 20, color: COLORS.textLight, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  albumAddMenuModal: { width: '90%', maxWidth: 480, borderRadius: 14, backgroundColor: COLORS.white, padding: 18 },
+  albumAddChoice: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
+  albumAddChoiceDaily: { backgroundColor: '#EFF9FA', borderColor: '#B8E2E4' },
+  albumAddChoiceEvent: { backgroundColor: '#F5F0FC', borderColor: '#D8C9EC' },
+  albumAddChoiceTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
+  albumAddChoiceCaption: { marginTop: 3, color: COLORS.textLight, fontSize: 12 },
+  dateAlbumModal: { width: '96%', maxWidth: 900, height: '84%', maxHeight: 820, borderRadius: 14, backgroundColor: COLORS.white, overflow: 'hidden' },
+  dateAlbumTopRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderColor: COLORS.border },
+  dateAlbumTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
+  dateAlbumCloseButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  dateAlbumNavigator: { minHeight: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 66, gap: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: COLORS.border, position: 'relative' },
+  dateAlbumNavButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E9D7C5' },
+  dateAlbumNavButtonDisabled: { opacity: 0.45 },
+  dateAlbumDateText: { minWidth: 0, flexShrink: 1, color: COLORS.text, fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  dateAlbumAddButton: { position: 'absolute', right: 8, minHeight: 36, paddingHorizontal: 9, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  dateAlbumAddButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
+  dateAlbumEventRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#FAF7FE' },
+  dateAlbumEventBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 11, backgroundColor: '#EDE3F8' },
+  dateAlbumEventBadgeText: { color: '#674F9C', fontSize: 11, fontWeight: 'bold' },
+  dateAlbumMediaScroll: { flex: 1 },
+  dateAlbumMediaGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 2 },
+  dateAlbumMediaItem: { width: '33.333%', aspectRatio: 1, padding: 1 },
   dateSection: { marginBottom: 12 },
   dateHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border },
   dateHeader: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
