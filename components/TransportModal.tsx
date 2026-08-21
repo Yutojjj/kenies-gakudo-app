@@ -1406,6 +1406,9 @@ export default function TransportModal({
                       <Text style={{ fontSize: 10, color: '#4CAF50', fontWeight: 'bold', marginTop: 2 }}>全完了</Text>
                     </View>
                   )}
+                  <Text style={styles.customBlockDeleteHint}>
+                    追加した送迎先は長押しで削除できます
+                  </Text>
                 </ScrollView>
               </View>
             </View>
@@ -1930,4 +1933,5 @@ const styles = StyleSheet.create({
   customDeleteCancelText: { fontSize: 13, fontWeight: '900', color: '#555555' },
   customDeleteConfirmBtn: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D95B5B' },
   customDeleteConfirmText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
+  customBlockDeleteHint: { marginTop: 12, marginBottom: 8, paddingHorizontal: 4, textAlign: 'center', fontSize: 9, lineHeight: 14, fontWeight: '600', color: '#9AA3A5' },
 });
