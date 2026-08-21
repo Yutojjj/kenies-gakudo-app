@@ -13,7 +13,7 @@ import {
   addDoc, collection, deleteDoc, doc,
   onSnapshot, orderBy, query, serverTimestamp, updateDoc,
 } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert, Modal, Platform, SafeAreaView, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
@@ -124,7 +124,6 @@ export default function TypingCertScreen() {
   const [score, setScore]           = useState('');
   const [stageCount, setStageCount] = useState(8);
   const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
-  const stageInputRefs = useRef<(TextInput | null)[]>([]);
   const [activeStageInput, setActiveStageInput] = useState<number | null>(null);
   const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
@@ -477,7 +476,6 @@ export default function TypingCertScreen() {
                     </TouchableOpacity>
                   ) : (
                     <TextInput
-                      ref={ref => { stageInputRefs.current[i] = ref; }}
                       style={styles.stageInput}
                       value={v}
                       onChangeText={val => {
@@ -491,26 +489,7 @@ export default function TypingCertScreen() {
                       placeholderTextColor="#bbb"
                     />
                   )}
-                  <View style={styles.stageAssistRow}>
-                    <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
-                    {!useCustomNumberPad && (
-                      <TouchableOpacity
-                        style={styles.decimalKey}
-                        accessibilityLabel={`ステージ${i + 1}に小数点を入力`}
-                        onPress={() => {
-                          if (!v.includes('.')) {
-                            const next = [...stageVals];
-                            next[i] = v ? `${v}.` : '0.';
-                            setStageVals(next);
-                          }
-                          setTimeout(() => stageInputRefs.current[i]?.focus(), 0);
-                        }}
-                        activeOpacity={0.72}
-                      >
-                        <Text style={styles.decimalKeyText}>.</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
                 </View>
               ))}
             </View>
@@ -525,13 +504,12 @@ export default function TypingCertScreen() {
           {/* 判定 */}
           <View style={styles.card}>
             <SectionHeader title="判定" />
-            <Text style={styles.autoResultNote}>90点以上で自動的に合格になります</Text>
             <View style={styles.row}>
               {(['pass', 'fail'] as Result[]).map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.resultBtn, result === r && (r === 'pass' ? styles.resultBtnPass : styles.resultBtnFail)]}
-                  disabled
+                  onPress={() => setResult(r)}
                 >
                   <Text style={[styles.resultBtnText, result === r && { color: r === 'pass' ? '#fff' : '#fff' }]}>
                     {r === 'pass' ? '合格' : '不合格'}
@@ -929,7 +907,7 @@ export default function TypingCertScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.numberPadGrid}>
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'backspace'].map(key => (
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', '.'].map(key => (
                 <TouchableOpacity
                   key={key}
                   style={[styles.numberPadKey, key === '.' && styles.numberPadDecimalKey]}
@@ -1050,7 +1028,6 @@ const styles = StyleSheet.create({
   },
   sectionHeader: { fontSize: 11, color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   fieldLabel:  { fontSize: 12, color: '#475569', fontWeight: 'bold', marginBottom: 4, marginTop: 6 },
-  autoResultNote: { fontSize: 11, color: '#64748B', fontWeight: '700', marginBottom: 8 },
   input: {
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 8, padding: 9,
     fontSize: 15, color: '#1e3a5f', marginBottom: 8, backgroundColor: '#fff',
@@ -1077,10 +1054,7 @@ const styles = StyleSheet.create({
   },
   stageInputValue: { fontSize: 14, fontWeight: '800', color: '#1E3A5F' },
   stageInputPlaceholder: { fontSize: 14, color: '#BBBBBB' },
-  stageAssistRow: { width: 72, minHeight: 28, marginTop: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stageLabel:  { fontSize: 10, color: '#94a3b8' },
-  decimalKey: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#E6F3FA', borderWidth: 1, borderColor: '#A7CFE8', alignItems: 'center', justifyContent: 'center' },
-  decimalKeyText: { color: '#185F8F', fontSize: 20, fontWeight: '900', lineHeight: 21 },
+  stageLabel:  { fontSize: 10, color: '#94a3b8', marginTop: 2 },
   numberPadBackdrop: { flex: 1, backgroundColor: 'rgba(24,35,40,0.38)', justifyContent: 'flex-end' },
   numberPadSheet: {
     width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: '#FFFDF9',
