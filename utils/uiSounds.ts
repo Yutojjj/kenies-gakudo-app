@@ -82,6 +82,9 @@ const actionText = (element: Element) => [
 export const installGlobalUiSounds = () => {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {};
 
+  let uiMutationVersion = 0;
+  const pendingOutcomeTimers = new Set<number>();
+
   const onButtonClick = (event: Event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target || target.closest('[id^="ui-time-wheel"], [id="ui-sound-none"]')) return;
@@ -95,11 +98,33 @@ export const installGlobalUiSounds = () => {
     if (!action || action.getAttribute('aria-disabled') === 'true' || action.hasAttribute('disabled')) return;
     if (action.matches('input, textarea, select') || action.closest('input, textarea, select')) return;
     const text = actionText(action);
-    if (/削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|back|close|trash/i.test(text)) {
-      playUiSound('back');
-    } else {
-      playUiSound('tap');
-    }
+    const beforeMutationVersion = uiMutationVersion;
+    const beforeUrl = window.location.href;
+    const browserAction = /印刷|PDF|出力|ダウンロード|download|print/i.test(text);
+    let soundPlayed = false;
+
+    const confirmOutcome = () => {
+      if (soundPlayed) return;
+      const changed = browserAction || window.location.href !== beforeUrl || uiMutationVersion > beforeMutationVersion;
+      if (!changed) return;
+      soundPlayed = true;
+      if (/削除|消去|取り消し|戻る|閉じる|キャンセル|ログアウト|back|close|trash/i.test(text)) {
+        playUiSound('back');
+      } else {
+        playUiSound('tap');
+      }
+    };
+
+    const firstTimer = window.setTimeout(() => {
+      pendingOutcomeTimers.delete(firstTimer);
+      confirmOutcome();
+    }, 80);
+    const fallbackTimer = window.setTimeout(() => {
+      pendingOutcomeTimers.delete(fallbackTimer);
+      confirmOutcome();
+    }, 600);
+    pendingOutcomeTimers.add(firstTimer);
+    pendingOutcomeTimers.add(fallbackTimer);
   };
 
   const originalAlert = window.alert.bind(window);
@@ -114,6 +139,7 @@ export const installGlobalUiSounds = () => {
   }) as typeof window.alert;
 
   const successObserver = new MutationObserver((mutations) => {
+    if (mutations.length > 0) uiMutationVersion += 1;
     for (const mutation of mutations) {
       for (const node of Array.from(mutation.addedNodes)) {
         const text = (node.textContent || '').replace(/\s+/g, ' ').slice(0, 300);
@@ -126,9 +152,17 @@ export const installGlobalUiSounds = () => {
   });
 
   document.addEventListener('click', onButtonClick, true);
-  successObserver.observe(document.body, { childList: true, subtree: true });
+  successObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    characterData: true,
+    attributeFilter: ['class', 'style', 'aria-selected', 'aria-expanded', 'aria-pressed', 'disabled'],
+  });
   return () => {
     document.removeEventListener('click', onButtonClick, true);
+    pendingOutcomeTimers.forEach(timer => window.clearTimeout(timer));
+    pendingOutcomeTimers.clear();
     successObserver.disconnect();
     window.alert = originalAlert;
   };
