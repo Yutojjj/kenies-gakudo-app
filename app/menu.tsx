@@ -2071,7 +2071,6 @@ export default function MenuScreen() {
                   <Text style={styles.quickFeatureText}>{item.label}</Text>
                   {item.key === 'messages' && unreadCount > 0 && <View style={styles.quickFeatureBadge}><Text style={styles.quickFeatureBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
                   {item.key === 'survey' && surveyCount > 0 && <View style={styles.quickFeatureBadge}><Text style={styles.quickFeatureBadgeText}>{surveyCount > 99 ? '99+' : surveyCount}</Text></View>}
-                  <Ionicons name="chevron-forward" size={20} color="#9A8F86" style={styles.quickFeatureChevron} />
                 </AnimatedTouchableOpacity>
               ))}
               {visibleAdminQuickOptions.length === 0 && (
@@ -2101,7 +2100,6 @@ export default function MenuScreen() {
                     </View>
                   )}
                   <Text style={styles.quickFeatureText}>{item.label}</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#9A8F86" style={styles.quickFeatureChevron} />
                 </AnimatedTouchableOpacity>
               ))}
               {visibleStaffQuickOptions.length === 0 && (
@@ -3437,11 +3435,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#3F302B',
     textAlign: 'center',
-  },
-  quickFeatureChevron: {
-    position: 'absolute',
-    right: 7,
-    top: 36,
   },
   quickFeatureBadge: {
     position: 'absolute',

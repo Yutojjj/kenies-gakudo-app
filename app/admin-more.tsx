@@ -303,7 +303,6 @@ export default function AdminMoreScreen() {
           </View>
         )}
         <Text style={textStyle} numberOfLines={size === 'small' ? 1 : 2}>{item.label}</Text>
-        <Ionicons name="chevron-forward" size={size === 'small' ? 17 : 18} color="#9A8F86" style={styles.cardChevron} />
       </TouchableOpacity>
     );
   };
@@ -645,12 +644,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     color: '#3F302B',
-  },
-  cardChevron: {
-    position: 'absolute',
-    right: 7,
-    top: '50%',
-    marginTop: -9,
   },
   modalBackdrop: {
     flex: 1,
