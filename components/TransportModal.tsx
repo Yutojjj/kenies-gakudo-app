@@ -1211,38 +1211,47 @@ export default function TransportModal({
         <View style={styles.container}>
           {/* ヘッダー */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{showTimeline ? `${dateLabel} 送迎一覧` : `🚗 ${dateLabel}`}</Text>
-            
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              {showTimeline ? (
-                // タイムライン表示中のボタン
-                <>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.headerTitle}>{dateLabel} 送迎一覧</Text>
+              <View style={styles.headerActions}>
+                {showTimeline ? (
                   <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
                     <Ionicons name="print-outline" size={14} color="#fff" />
                     <Text style={styles.printBtnText}>印刷</Text>
                   </TouchableOpacity>
-                  {!readOnly && (
-                    <TouchableOpacity style={[styles.lastWeekBtn, { borderColor: COLORS.primary }]} onPress={() => setShowTimeline(false)}>
-                      <Text style={[styles.lastWeekBtnText, { color: COLORS.primary }]}>編集に戻る</Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                // 割り当て編集中のボタン
-                <>
-                  <TouchableOpacity style={styles.overviewBtn} onPress={() => setShowTimeline(true)}>
-                    <Ionicons name="list-outline" size={17} color="#fff" />
-                    <Text style={styles.overviewBtnText}>全体表示</Text>
-                  </TouchableOpacity>
+                ) : (
                   <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
                     <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
                   </TouchableOpacity>
-                </>
-              )}
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                  <Ionicons name="close" size={26} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {!readOnly && (
+              <View style={styles.modeTabs} accessibilityRole="tablist">
+                <TouchableOpacity
+                  style={[styles.modeTab, showTimeline && styles.modeTabActive]}
+                  onPress={() => setShowTimeline(true)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: showTimeline }}
+                >
+                  <Ionicons name="list-outline" size={16} color={showTimeline ? '#FFFFFF' : '#52606A'} />
+                  <Text style={[styles.modeTabText, showTimeline && styles.modeTabTextActive]}>全体表示</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeTab, !showTimeline && styles.modeTabActive]}
+                  onPress={() => setShowTimeline(false)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: !showTimeline }}
+                >
+                  <Ionicons name="create-outline" size={16} color={!showTimeline ? '#FFFFFF' : '#52606A'} />
+                  <Text style={[styles.modeTabText, !showTimeline && styles.modeTabTextActive]}>編集</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
 
@@ -1768,10 +1777,17 @@ export default function TransportModal({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   container: { backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
+  header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
+  headerTopRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   headerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, flex: 1 },
   
   closeBtn: { padding: 4 },
+  modeTabs: { width: '100%', maxWidth: 340, minHeight: 40, alignSelf: 'center', marginTop: 9, padding: 3, borderRadius: 12, flexDirection: 'row', backgroundColor: '#EEF2F3', borderWidth: 1, borderColor: '#D8E0E2' },
+  modeTab: { flex: 1, minHeight: 34, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  modeTabActive: { backgroundColor: '#4C9CCA' },
+  modeTabText: { fontSize: 13, fontWeight: '900', color: '#52606A' },
+  modeTabTextActive: { color: '#FFFFFF' },
   printBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 88, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#56B6C2' },
   printBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
   overviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 104, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#5B9BD5' },
