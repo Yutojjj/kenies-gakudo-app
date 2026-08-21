@@ -304,12 +304,8 @@ export default function AlbumScreen() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems && viewableItems.length > 0) {
-      setFullScreenIndex(viewableItems[0].index);
-    }
-  }).current;
+  const fullScreenDragStartIndexRef = useRef(0);
+  const fullScreenProgrammaticScrollRef = useRef(false);
 
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
@@ -319,7 +315,30 @@ export default function AlbumScreen() {
 
   const scrollToIndex = (index: number) => {
     if (fullScreenPhotos && index >= 0 && index < fullScreenPhotos.length) {
+      fullScreenProgrammaticScrollRef.current = true;
+      fullScreenDragStartIndexRef.current = index;
+      setFullScreenIndex(index);
       flatListRef.current?.scrollToIndex({ index, animated: true });
+    }
+  };
+
+  const settleFullScreenPage = (offsetX: number) => {
+    if (!fullScreenPhotos?.length) return;
+    const rawIndex = Math.max(0, Math.min(fullScreenPhotos.length - 1, Math.round(offsetX / windowWidth)));
+    if (fullScreenProgrammaticScrollRef.current) {
+      fullScreenProgrammaticScrollRef.current = false;
+      setFullScreenIndex(rawIndex);
+      fullScreenDragStartIndexRef.current = rawIndex;
+      return;
+    }
+
+    const startIndex = fullScreenDragStartIndexRef.current;
+    const targetIndex = Math.max(startIndex - 1, Math.min(startIndex + 1, rawIndex));
+    setFullScreenIndex(targetIndex);
+    fullScreenDragStartIndexRef.current = targetIndex;
+    if (targetIndex !== rawIndex) {
+      fullScreenProgrammaticScrollRef.current = true;
+      flatListRef.current?.scrollToOffset({ offset: targetIndex * windowWidth, animated: true });
     }
   };
 
@@ -810,6 +829,8 @@ export default function AlbumScreen() {
   };
 
   const openFullScreen = (photos: any[], index: number) => {
+    fullScreenDragStartIndexRef.current = index;
+    fullScreenProgrammaticScrollRef.current = false;
     setFullScreenPhotos(photos);
     setFullScreenIndex(index);
   };
@@ -1228,11 +1249,11 @@ export default function AlbumScreen() {
                 keyExtractor={(item) => item.id}
                 horizontal
                 pagingEnabled
+                snapToInterval={windowWidth}
+                snapToAlignment="start"
                 showsHorizontalScrollIndicator={false}
                 initialScrollIndex={fullScreenIndex}
                 getItemLayout={(data, index) => ({ length: windowWidth, offset: windowWidth * index, index })}
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={viewabilityConfig}
                 onScrollToIndexFailed={onScrollToIndexFailed}
                 initialNumToRender={1}
                 maxToRenderPerBatch={2}
@@ -1240,9 +1261,12 @@ export default function AlbumScreen() {
                 removeClippedSubviews={Platform.OS !== 'web'}
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
+                onScrollBeginDrag={() => {
+                  fullScreenProgrammaticScrollRef.current = false;
+                  fullScreenDragStartIndexRef.current = fullScreenIndex;
+                }}
                 onMomentumScrollEnd={(e) => {
-                  const idx = Math.round(e.nativeEvent.contentOffset.x / windowWidth);
-                  setFullScreenIndex(idx);
+                  settleFullScreenPage(e.nativeEvent.contentOffset.x);
                 }}
                 renderItem={({ item }) => (
                   <View style={{ width: windowWidth, height: windowHeight, justifyContent: 'center', alignItems: 'center' }}>
