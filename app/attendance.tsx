@@ -926,16 +926,46 @@ export default function AttendanceScreen() {
         {sortedSchoolNames.map((school, index) => {
           const isActive = activeSchool === school;
           const bgColor = BG_COLORS[index % BG_COLORS.length];
+          const schoolUsers = filteredBySchool[school] || [];
           return (
-            <TouchableOpacity key={school} style={[styles.schoolCardList, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]} onPress={() => setActiveSchool(isActive ? null : school)}>
-              <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
-            </TouchableOpacity>
+            <View key={school} style={styles.schoolAccordionItem}>
+              <TouchableOpacity
+                style={[styles.schoolCardList, styles.schoolAccordionButton, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]}
+                onPress={() => setActiveSchool(isActive ? null : school)}
+              >
+                <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
+                <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color="#6D7375" />
+              </TouchableOpacity>
+
+              {isActive && (
+                <View style={styles.schoolInlineResults}>
+                  {schoolUsers.length === 0 ? (
+                    <Text style={styles.schoolInlineEmpty}>該当する利用者はいません</Text>
+                  ) : sortKidsByGrade(schoolUsers).map((user: any, idx: number) => (
+                    <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === schoolUsers.length - 1 && { borderBottomWidth: 0 }]}>
+                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                        <View style={styles.userInfo}>
+                          <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                          {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
+                        </View>
+                        <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+                      </TouchableOpacity>
+                      {isAdmin && user.parentDocId && (
+                        <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
+                          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           );
         })}
       </View>
 
-      {/* フィルター未設定時は何も表示しない */}
-      {!hasFilter ? (
+      {/* 学校を選択した場合は、その学校カードの直下へ結果を表示する */}
+      {activeSchool ? null : !hasFilter ? (
         <View style={{ alignItems:'center', marginTop:32 }}>
           <Ionicons name="search-outline" size={40} color="#DDD" />
           <Text style={{ color:'#BBB', marginTop:8, fontSize:13 }}>名前・曜日・学校で絞り込んでください</Text>
@@ -946,10 +976,9 @@ export default function AttendanceScreen() {
         </View>
       ) : (
         <View style={styles.listSection}>
-          {activeSchool && <Text style={styles.listSectionTitle}>【{activeSchool}】の利用者</Text>}
           {Object.entries(filteredBySchool).map(([school, users]) => (
             <View key={school}>
-              {!activeSchool && <Text style={[styles.listSectionTitle, { fontSize:12 }]}>{school}</Text>}
+              <Text style={[styles.listSectionTitle, { fontSize:12 }]}>{school}</Text>
               {sortKidsByGrade(users).map((user: any, idx: number) => (
                 <View key={user.id} style={[styles.userListItem, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
                   <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
@@ -1284,6 +1313,11 @@ const styles = StyleSheet.create({
   instruction: { padding: 16, color: COLORS.textLight, fontWeight: 'bold', textAlign: 'center', marginTop: 8 },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 12 },
   schoolCardList: { width: '46%', margin: '2%', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
+  schoolAccordionItem: { width: '46%', margin: '2%', alignSelf: 'flex-start' },
+  schoolAccordionButton: { width: '100%', margin: 0, minHeight: 44, flexDirection: 'row', gap: 8 },
+  schoolInlineResults: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  schoolInlineUserItem: { minHeight: 52, paddingVertical: 8 },
+  schoolInlineEmpty: { paddingVertical: 18, textAlign: 'center', fontSize: 12, fontWeight: '700', color: COLORS.textLight },
   schoolCardActive: { borderColor: COLORS.primary },
   schoolCardName: { fontSize: 11, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   listSection: { backgroundColor: COLORS.white, borderTopWidth: 1, borderColor: COLORS.border, padding: 16, minHeight: 400 },
