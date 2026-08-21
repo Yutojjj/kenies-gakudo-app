@@ -400,7 +400,8 @@ export default function ShiftCreateScreen() {
   const toHM = (mins: number) => `${Math.floor(mins/60)}h${mins%60 > 0 ? String(mins%60).padStart(2,'0')+'m' : ''}`;
 
   const openWorkSummaryModal = () => {
-    setWorkSummaryDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+    const today = new Date();
+    setWorkSummaryDate(new Date(today.getFullYear(), today.getMonth(), 1));
     setWorkSummaryPeriod('month');
     setWorkSummaryVisible(true);
   };
@@ -636,7 +637,8 @@ export default function ShiftCreateScreen() {
 
   useEffect(() => {
     if (openWorkSummary !== '1') return;
-    setWorkSummaryDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), 1));
+    const today = new Date();
+    setWorkSummaryDate(new Date(today.getFullYear(), today.getMonth(), 1));
     setWorkSummaryPeriod('month');
     setWorkSummaryVisible(true);
   }, [openWorkSummary]);
@@ -713,7 +715,11 @@ export default function ShiftCreateScreen() {
               <View style={styles.workSummaryTabs}>
                 <TouchableOpacity
                   style={[styles.workSummaryTab, workSummaryPeriod === 'month' && styles.workSummaryTabActive]}
-                  onPress={() => setWorkSummaryPeriod('month')}
+                  onPress={() => {
+                    const today = new Date();
+                    setWorkSummaryDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                    setWorkSummaryPeriod('month');
+                  }}
                 >
                   <Text style={[styles.workSummaryTabText, workSummaryPeriod === 'month' && styles.workSummaryTabTextActive]}>月別</Text>
                 </TouchableOpacity>
