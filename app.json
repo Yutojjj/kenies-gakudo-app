@@ -11,7 +11,8 @@
         {
           "cameraPermission": "QRコードをスキャンするためにカメラを使用します。"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "web": {
       "output": "static",

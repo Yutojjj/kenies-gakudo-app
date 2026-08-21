@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
+import { Image as CachedImage } from 'expo-image';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
-import React, { useEffect, useRef, useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
@@ -17,6 +19,185 @@ type TabType = '月' | '火' | '水' | '木' | '金' | 'イベント';
 const ALL_TABS: TabType[] = ['月', '火', '水', '木', '金', 'イベント'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+const INITIAL_MEDIA_COUNT = 24;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
+
+type AlbumMedia = {
+  id: string;
+  uri: string;
+  storagePath?: string;
+  mediaType: 'image' | 'video';
+  duration?: number | null;
+};
+
+const getMediaType = (item: any): 'image' | 'video' => {
+  if (item?.mediaType === 'video') return 'video';
+  const value = `${item?.mimeType || ''} ${item?.storagePath || ''} ${item?.uri || ''}`.toLowerCase();
+  return /video|\.mp4|\.mov|\.m4v|\.webm/.test(value) ? 'video' : 'image';
+};
+
+const getStoragePath = (item: AlbumMedia) => {
+  if (item.storagePath) return item.storagePath;
+  try {
+    const match = item.uri.match(/\/o\/([^?]+)/);
+    return match?.[1] ? decodeURIComponent(match[1]) : '';
+  } catch {
+    return '';
+  }
+};
+
+const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: AlbumMedia }) {
+  const [imageUri, setImageUri] = useState(item.uri);
+  const [imageState, setImageState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const refreshAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    refreshAttemptedRef.current = false;
+    setImageState('loading');
+    const storagePath = getStoragePath(item);
+    if (!storagePath) {
+      setImageUri(item.uri);
+      return () => { cancelled = true; };
+    }
+    getDownloadURL(ref(storage, storagePath))
+      .then(currentUri => {
+        if (!cancelled) setImageUri(currentUri);
+      })
+      .catch(error => {
+        console.warn('アルバム画像URLの取得に失敗しました', error);
+        if (!cancelled) setImageState('failed');
+      });
+    return () => { cancelled = true; };
+  }, [item.uri, item.storagePath]);
+
+  const retryImage = async () => {
+    setImageState('loading');
+    try {
+      const storagePath = getStoragePath(item);
+      const freshUri = storagePath
+        ? await getDownloadURL(ref(storage, storagePath))
+        : item.uri;
+      const separator = freshUri.includes('?') ? '&' : '?';
+      setImageUri(`${freshUri}${separator}reload=${Date.now()}`);
+    } catch (error) {
+      console.warn('アルバム画像URLの再取得に失敗しました', error);
+      setImageState('failed');
+    }
+  };
+
+  const handleImageError = () => {
+    if (!refreshAttemptedRef.current) {
+      refreshAttemptedRef.current = true;
+      retryImage();
+      return;
+    }
+    setImageState('failed');
+  };
+
+  useEffect(() => {
+    if (item.mediaType !== 'image' || imageState !== 'loading') return;
+    const timeout = setTimeout(handleImageError, 12000);
+    return () => clearTimeout(timeout);
+  }, [imageState, imageUri, item.mediaType]);
+
+  if (item.mediaType === 'video') {
+    return (
+      <View style={styles.videoThumbnail}>
+        <View style={styles.videoPlayCircle}>
+          <Ionicons name="play" size={24} color="#FFFFFF" />
+        </View>
+        <Text style={styles.videoThumbnailText}>動画</Text>
+      </View>
+    );
+  }
+  if (imageState === 'failed') {
+    return (
+      <TouchableOpacity style={styles.mediaFailed} onPress={retryImage} activeOpacity={0.75}>
+        <Ionicons name="refresh" size={24} color={COLORS.primary} />
+        <Text style={styles.mediaFailedText}>再読み込み</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.photo}>
+      {Platform.OS === 'web' ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onLoad={() => setImageState('loaded')}
+          onError={handleImageError}
+        />
+      ) : (
+        <CachedImage
+          source={{ uri: imageUri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="memory"
+          transition={160}
+          onLoad={() => setImageState('loaded')}
+          onError={handleImageError}
+        />
+      )}
+      {imageState === 'loading' && (
+        <View style={styles.mediaLoadingOverlay}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      )}
+    </View>
+  );
+});
+
+function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: number; height: number }) {
+  const [currentUri, setCurrentUri] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadFailed(false);
+    const storagePath = getStoragePath(item);
+    const loadUri = storagePath ? getDownloadURL(ref(storage, storagePath)) : Promise.resolve(item.uri);
+    loadUri
+      .then(uri => { if (!cancelled) setCurrentUri(uri); })
+      .catch(error => {
+        console.warn('アルバムメディアURLの取得に失敗しました', error);
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => { cancelled = true; };
+  }, [item.id, item.uri, item.storagePath]);
+
+  const player = useVideoPlayer(item.mediaType === 'video' && currentUri ? currentUri : null, currentPlayer => {
+    currentPlayer.loop = false;
+  });
+
+  if (loadFailed) {
+    return (
+      <View style={[styles.fullScreenMediaStatus, { width, height }]}>
+        <Ionicons name="cloud-offline-outline" size={38} color="#FFFFFF" />
+        <Text style={styles.fullScreenMediaStatusText}>読み込めませんでした</Text>
+      </View>
+    );
+  }
+
+  if (!currentUri) {
+    return (
+      <View style={[styles.fullScreenMediaStatus, { width, height }]}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
+
+  if (item.mediaType === 'video') {
+    return <VideoView player={player} style={{ width, height }} nativeControls contentFit="contain" />;
+  }
+  if (Platform.OS === 'web') {
+    return <Image source={{ uri: currentUri }} style={{ width, height }} resizeMode="contain" />;
+  }
+  return <CachedImage source={{ uri: currentUri }} style={{ width, height }} contentFit="contain" cachePolicy="memory" />;
+}
 
 // iOSかどうかを判定するヘルパー
 const isIOSWeb = Platform.OS === 'web' && /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -89,6 +270,9 @@ export default function AlbumScreen() {
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(true);
+  const [mediaLoadError, setMediaLoadError] = useState('');
+  const [mediaReloadKey, setMediaReloadKey] = useState(0);
   
   const [mode, setMode] = useState<Mode>(role === 'user' ? 'view' : 'top');
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
@@ -107,8 +291,9 @@ export default function AlbumScreen() {
   const [newEventDate, setNewEventDate] = useState(new Date());
   const [addToExistingModalVisible, setAddToExistingModalVisible] = useState(false);
   
-  const [albumPhotos, setAlbumPhotos] = useState<Record<string, { id: string, uri: string, storagePath?: string }[]>>({});
+  const [albumPhotos, setAlbumPhotos] = useState<Record<string, AlbumMedia[]>>({});
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
+  const [visibleMediaCounts, setVisibleMediaCounts] = useState<Record<string, number>>({});
 
   const [albumEvents, setAlbumEvents] = useState<{id: string, name: string, code: string, category: string}[]>([]);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
@@ -138,8 +323,9 @@ export default function AlbumScreen() {
     }
   };
 
-  // 追加から1年以上経過した写真を自動削除
+  // 古いメディア整理は管理者画面が落ち着いてから実行し、初期表示を妨げない。
   useEffect(() => {
+    if (role !== 'admin') return;
     const cleanupOldPhotos = async () => {
       try {
         const oneYearAgo = new Date();
@@ -162,8 +348,9 @@ export default function AlbumScreen() {
         console.log('古い写真の自動削除:', e);
       }
     };
-    cleanupOldPhotos();
-  }, []);
+    const timer = setTimeout(cleanupOldPhotos, 8000);
+    return () => clearTimeout(timer);
+  }, [role]);
 
   useEffect(() => {
     let isMounted = true;
@@ -184,20 +371,35 @@ export default function AlbumScreen() {
     AsyncStorage.getItem('unlockedEvents').then(res => {
       if (res && isMounted) { try { setUnlockedEvents(JSON.parse(res)); } catch {} }
     });
+    AsyncStorage.removeItem('albumMediaCacheV2').catch(() => {});
 
-    // onSnapshotでリアルタイム同期（getDocs→消えるバグを修正）
+    setMediaLoadError('');
+    // メタデータだけを同期し、実画像・動画はセクションを開いた時に読み込む。
     const unsubPhotos = onSnapshot(collection(db, 'albums2'), (photosSnap) => {
       if (!isMounted) return;
-      const photosData: Record<string, { id: string, uri: string, storagePath?: string }[]> = {};
+      const photosData: Record<string, AlbumMedia[]> = {};
       photosSnap.forEach(d => {
         const item = d.data();
         const key = item.category as string;
-        if (!key) return;
+        if (!key || !item.uri) return;
         if (!photosData[key]) photosData[key] = [];
-        photosData[key].push({ id: d.id, uri: item.uri, storagePath: item.storagePath });
+        photosData[key].push({
+          id: d.id,
+          uri: item.uri,
+          storagePath: item.storagePath,
+          mediaType: getMediaType(item),
+          duration: item.duration ?? null,
+        });
       });
       setAlbumPhotos(photosData);
-    }, (e) => console.warn('albums読み込みエラー:', e));
+      setMediaLoading(false);
+      setMediaLoadError('');
+    }, (e) => {
+      console.warn('albums読み込みエラー:', e);
+      if (!isMounted) return;
+      setMediaLoading(false);
+      setMediaLoadError('アルバムを読み込めませんでした');
+    });
 
     const unsubEvents = onSnapshot(collection(db, 'album_events2'), (eventsSnap) => {
       if (!isMounted) return;
@@ -206,19 +408,53 @@ export default function AlbumScreen() {
     }, (e) => console.warn('album_events読み込みエラー:', e));
 
     return () => { isMounted = false; unsubPhotos(); unsubEvents(); };
-  }, [role, name]);
+  }, [role, name, mediaReloadKey]);
 
   const toggleExpand = (key: string) => {
     setExpandedDates(prev => ({ ...prev, [key]: !prev[key] }));
+    setVisibleMediaCounts(prev => prev[key] ? prev : { ...prev, [key]: INITIAL_MEDIA_COUNT });
+  };
+
+  const uploadAlbumAsset = async (asset: ImagePicker.ImagePickerAsset, category: string) => {
+    const mediaType: 'image' | 'video' = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
+    const maxBytes = mediaType === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    if (asset.fileSize && asset.fileSize > maxBytes) {
+      const maxMb = Math.round(maxBytes / 1024 / 1024);
+      throw new Error(`${asset.fileName || (mediaType === 'video' ? '動画' : '画像')}は${maxMb}MB以下にしてください。`);
+    }
+
+    const response = await fetch(asset.uri);
+    const blob = await response.blob();
+    const nameExtension = asset.fileName?.split('.').pop()?.toLowerCase();
+    const mimeExtension = asset.mimeType?.split('/').pop()?.replace('quicktime', 'mov').replace('jpeg', 'jpg');
+    const extension = nameExtension || mimeExtension || (mediaType === 'video' ? 'mp4' : 'jpg');
+    const filename = `${mediaType}_${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
+    const storagePath = `albums/${filename}`;
+    const storageReference = ref(storage, storagePath);
+    await uploadBytes(storageReference, blob, asset.mimeType ? { contentType: asset.mimeType } : undefined);
+    const downloadUrl = await getDownloadURL(storageReference);
+    await addDoc(collection(db, 'albums2'), {
+      uri: downloadUrl,
+      storagePath,
+      mediaType,
+      mimeType: asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg'),
+      duration: asset.duration ?? null,
+      width: asset.width || null,
+      height: asset.height || null,
+      uploader: name || '不明',
+      category,
+      createdAt: serverTimestamp(),
+    });
   };
 
   const pickImages = async (targetTitle: string, targetKey: string) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as any,
+      mediaTypes: ['images', 'videos'] as any,
       allowsMultipleSelection: true,
       quality: 0.6,
+      videoMaxDuration: 180,
     });
 
     if (!result.canceled) {
@@ -227,25 +463,11 @@ export default function AlbumScreen() {
       try {
         let uploadedCount = 0;
         for (const asset of result.assets) {
-          const res = await fetch(asset.uri);
-          const blob = await res.blob();
-          const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
-          const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-          const storagePath = `albums/${filename}`;
-          const storageRef = ref(storage, storagePath);
-          await uploadBytes(storageRef, blob);
-          const downloadUrl = await getDownloadURL(storageRef);
-          await addDoc(collection(db, 'albums2'), {
-            uri: downloadUrl,
-            storagePath: storagePath,
-            uploader: name || '不明',
-            category: targetKey,
-            createdAt: serverTimestamp()
-          });
+          await uploadAlbumAsset(asset, targetKey);
           uploadedCount++;
         }
-        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 枚保存しました`);
-        else Alert.alert('完了', `${targetTitle} に ${uploadedCount} 枚保存しました`);
+        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 件保存しました`);
+        else Alert.alert('完了', `${targetTitle} に写真・動画を ${uploadedCount} 件保存しました`);
       } catch (e: any) {
         console.error('upload error:', e);
         const msg = e?.message || String(e);
@@ -283,6 +505,7 @@ export default function AlbumScreen() {
           await addDoc(collection(db, 'albums2'), {
             uri: url,
             storagePath: `albums/${itemRef.name}`,
+            mediaType: getMediaType({ storagePath: itemRef.name }),
             uploader: '復元',
             category,
             createdAt: serverTimestamp(),
@@ -322,9 +545,10 @@ export default function AlbumScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return 0; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as any,
+      mediaTypes: ['images', 'videos'] as any,
       allowsMultipleSelection: true,
       quality: 0.6,
+      videoMaxDuration: 180,
     });
     if (result.canceled) return 0;
     
@@ -335,21 +559,10 @@ export default function AlbumScreen() {
     
     let count = 0;
     try {
-    for (const asset of result.assets) {
-      const res = await fetch(asset.uri);
-      const blob = await res.blob();
-      const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
-      const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const storagePath = `albums/${filename}`;
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, blob);
-      const downloadUrl = await getDownloadURL(storageRef);
-      await addDoc(collection(db, 'albums2'), {
-        uri: downloadUrl, storagePath,
-        uploader: name || '不明', category, createdAt: serverTimestamp()
-      });
-      count++;
-    }
+      for (const asset of result.assets) {
+        await uploadAlbumAsset(asset, category);
+        count++;
+      }
     } catch (e: any) {
       console.error('uploadPhotosToCategory error:', e?.message || e);
       if (Platform.OS === 'web') window.alert('アップロード失敗: ' + (e?.message || String(e)));
@@ -511,7 +724,7 @@ export default function AlbumScreen() {
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
-    if (success) Alert.alert('保存完了', 'アルバムに保存しました。');
+    if (success) Alert.alert('保存完了', targetPhoto.mediaType === 'video' ? '動画を端末に保存しました。' : '画像を端末に保存しました。');
     else Alert.alert('エラー', '保存に失敗しました。');
   };
 
@@ -534,7 +747,7 @@ export default function AlbumScreen() {
       }
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
-      Alert.alert('保存完了', `${successCount} 枚の画像を端末のアルバムに保存しました。`);
+      Alert.alert('保存完了', `${successCount} 件の写真・動画を端末に保存しました。`);
     } catch (error) {
       Alert.alert('エラー', '一括保存中にエラーが発生しました。');
     } finally {
@@ -545,12 +758,12 @@ export default function AlbumScreen() {
   const handleBulkDelete = () => {
     if (selectedPhotoIds.length === 0) return;
     if (Platform.OS === 'web') {
-      if (window.confirm(`選択した ${selectedPhotoIds.length} 枚の画像を完全に削除しますか？`)) {
+      if (window.confirm(`選択した ${selectedPhotoIds.length} 件の写真・動画を完全に削除しますか？`)) {
         executeBulkDelete(selectedPhotoIds);
       }
       return;
     }
-    Alert.alert('一括削除確認', `選択した ${selectedPhotoIds.length} 枚の画像を完全に削除しますか？`, [
+    Alert.alert('一括削除確認', `選択した ${selectedPhotoIds.length} 件の写真・動画を完全に削除しますか？`, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: () => executeBulkDelete(selectedPhotoIds) }
     ]);
@@ -606,6 +819,7 @@ export default function AlbumScreen() {
   };
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
+  const visibleSections = getDatesForTab();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -629,7 +843,7 @@ export default function AlbumScreen() {
           <Ionicons name={isSelectMode ? "close" : "chevron-back"} size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {isSelectMode ? `${selectedPhotoIds.length}枚選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真を追加' : 'アルバムを見る'}
+          {isSelectMode ? `${selectedPhotoIds.length}件選択中` : mode === 'top' ? 'アルバム管理' : mode === 'add' ? '写真・動画を追加' : 'アルバムを見る'}
         </Text>
       </View>
 
@@ -707,11 +921,27 @@ export default function AlbumScreen() {
                </View>
             )}
 
-            {getDatesForTab().length === 0 ? (
-              <View style={styles.noDataBox}><Text style={styles.noDataText}>閲覧できる写真がありません</Text></View>
+            {mediaLoading && Object.keys(albumPhotos).length === 0 ? (
+              <View style={styles.noDataBox}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={[styles.noDataText, { marginTop: 14 }]}>アルバムを読み込んでいます</Text>
+              </View>
+            ) : mediaLoadError && Object.keys(albumPhotos).length === 0 ? (
+              <View style={styles.noDataBox}>
+                <Ionicons name="cloud-offline-outline" size={42} color={COLORS.textLight} />
+                <Text style={[styles.noDataText, { marginTop: 12 }]}>{mediaLoadError}</Text>
+                <TouchableOpacity style={styles.reloadMediaButton} onPress={() => { setMediaLoading(true); setMediaReloadKey(value => value + 1); }}>
+                  <Ionicons name="refresh" size={19} color="#FFFFFF" />
+                  <Text style={styles.reloadMediaButtonText}>もう一度読み込む</Text>
+                </TouchableOpacity>
+              </View>
+            ) : visibleSections.length === 0 ? (
+              <View style={styles.noDataBox}><Text style={styles.noDataText}>閲覧できる写真・動画がありません</Text></View>
             ) : (
-              getDatesForTab().map((item: any) => {
+              visibleSections.map((item: any) => {
                 const isExpanded = !!expandedDates[item.key];
+                const visibleCount = visibleMediaCounts[item.key] || INITIAL_MEDIA_COUNT;
+                const visiblePhotos = item.photos.slice(0, visibleCount);
                 return (
                   <View key={item.key} style={styles.dateSection}>
                     <TouchableOpacity style={styles.dateHeaderContainer} onPress={() => toggleExpand(item.key)} activeOpacity={0.7}>
@@ -745,7 +975,7 @@ export default function AlbumScreen() {
                           </>
                         )}
                         <View style={styles.expandBadge}>
-                          <Text style={styles.expandText}>{isExpanded ? 'たたむ' : `表示 (${item.photos.length}枚)`}</Text>
+                          <Text style={styles.expandText}>{isExpanded ? 'たたむ' : `表示 (${item.photos.length}件)`}</Text>
                           <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={COLORS.primary} />
                         </View>
                       </View>
@@ -754,7 +984,7 @@ export default function AlbumScreen() {
                     {isExpanded && (
                       item.photos.length > 0 ? (
                         <View style={styles.photoGrid}>
-                          {item.photos.map((photoObj: any, idx: number) => {
+                          {visiblePhotos.map((photoObj: AlbumMedia, idx: number) => {
                             const isSelected = selectedPhotoIds.includes(photoObj.id);
                             return (
                               <TouchableOpacity 
@@ -773,7 +1003,7 @@ export default function AlbumScreen() {
                                   }
                                 }}
                               >
-                                <Image source={{ uri: photoObj.uri }} style={styles.photo} resizeMode="cover" />
+                                <AlbumMediaThumbnail item={photoObj} />
                                 {isSelectMode && !isIOSWeb && (
                                   <View style={styles.checkOverlay}>
                                     <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={28} color={isSelected ? COLORS.primary : "rgba(255,255,255,0.7)"} />
@@ -782,9 +1012,18 @@ export default function AlbumScreen() {
                               </TouchableOpacity>
                             )
                           })}
+                          {visibleCount < item.photos.length && (
+                            <TouchableOpacity
+                              style={styles.loadMoreMediaButton}
+                              onPress={() => setVisibleMediaCounts(prev => ({ ...prev, [item.key]: visibleCount + INITIAL_MEDIA_COUNT }))}
+                            >
+                              <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
+                              <Text style={styles.loadMoreMediaText}>さらに表示（残り{item.photos.length - visibleCount}件）</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       ) : (
-                        <Text style={styles.noPhotoText}>写真がありません</Text>
+                        <Text style={styles.noPhotoText}>写真・動画がありません</Text>
                       )
                     )}
                   </View>
@@ -995,7 +1234,10 @@ export default function AlbumScreen() {
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={viewabilityConfig}
                 onScrollToIndexFailed={onScrollToIndexFailed}
-                removeClippedSubviews={false}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                windowSize={3}
+                removeClippedSubviews={Platform.OS !== 'web'}
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
                 onMomentumScrollEnd={(e) => {
@@ -1004,7 +1246,7 @@ export default function AlbumScreen() {
                 }}
                 renderItem={({ item }) => (
                   <View style={{ width: windowWidth, height: windowHeight, justifyContent: 'center', alignItems: 'center' }}>
-                    <Image source={{ uri: item.uri }} style={{ width: windowWidth, height: windowHeight }} resizeMode="contain" />
+                    <FullScreenMedia item={item} width={windowWidth} height={windowHeight} />
                   </View>
                 )}
               />
@@ -1023,7 +1265,7 @@ export default function AlbumScreen() {
           )}
 
           <View style={styles.fullScreenFooter}>
-            {isIOSWeb ? (
+            {isIOSWeb && currentFullScreenPhoto?.mediaType !== 'video' ? (
               // ★ iOS Web版のみ：ボタンではなくメッセージを表示
               <View style={{ alignItems: 'center' }}>
                 <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>
@@ -1045,13 +1287,13 @@ export default function AlbumScreen() {
             {role !== 'user' && currentFullScreenPhoto && (
               <TouchableOpacity style={styles.fullScreenActionBtn} onPress={async () => {
                 if (Platform.OS === 'web') {
-                  if (window.confirm('この写真を削除しますか？')) {
+                  if (window.confirm('この写真・動画を削除しますか？')) {
                     await executeBulkDelete([currentFullScreenPhoto.id]);
                     closeFullScreen();
                   }
                   return;
                 }
-                Alert.alert('削除確認', 'この写真を削除しますか？', [
+                Alert.alert('削除確認', 'この写真・動画を削除しますか？', [
                   { text: 'キャンセル', style: 'cancel' },
                   { text: '削除', style: 'destructive', onPress: async () => {
                     await executeBulkDelete([currentFullScreenPhoto.id]);
@@ -1118,10 +1360,22 @@ const styles = StyleSheet.create({
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', backgroundColor: COLORS.background },
   photoWrapper: { width: '33.333%', aspectRatio: 1, padding: 1 }, 
   photo: { flex: 1, backgroundColor: '#EAEAEA' },
+  mediaLoadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F4F4' },
+  mediaFailed: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F7F7' },
+  mediaFailedText: { marginTop: 6, color: COLORS.primary, fontSize: 11, fontWeight: 'bold' },
+  fullScreenMediaStatus: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#111111' },
+  fullScreenMediaStatusText: { marginTop: 10, color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  videoThumbnail: { flex: 1, backgroundColor: '#DDEFF4', alignItems: 'center', justifyContent: 'center' },
+  videoPlayCircle: { width: 48, height: 48, borderRadius: 24, paddingLeft: 3, backgroundColor: 'rgba(0,126,132,0.82)', alignItems: 'center', justifyContent: 'center' },
+  videoThumbnailText: { marginTop: 7, color: '#2F555A', fontSize: 12, fontWeight: 'bold' },
+  loadMoreMediaButton: { width: '100%', minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F7F5F3', borderTopWidth: 1, borderColor: COLORS.border },
+  loadMoreMediaText: { color: COLORS.primary, fontSize: 13, fontWeight: 'bold' },
   checkOverlay: { position: 'absolute', top: 4, right: 4, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 14 },
   noPhotoText: { color: COLORS.textLight, paddingHorizontal: 16, paddingVertical: 16, fontStyle: 'italic', fontSize: 14, textAlign: 'center' },
   noDataBox: { padding: 60, alignItems: 'center' },
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
+  reloadMediaButton: { marginTop: 18, minHeight: 44, paddingHorizontal: 18, borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.primary },
+  reloadMediaButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },

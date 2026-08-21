@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -251,26 +252,46 @@ export default function ScheduleScreen() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    const unsubscribers: Array<() => void> = [];
+    const addSubscription = (unsubscribe: () => void) => {
+      if (isMounted) unsubscribers.push(unsubscribe);
+      else unsubscribe();
+    };
+
+    setInitialLoading(true);
+    AsyncStorage.removeItem(`scheduleScreenCache_${name || 'self'}`).catch(() => {});
+
     const fetchData = async () => {
       try {
-        try {
-          const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
-          const data = await res.json();
-          setPublicHolidays(data);
-        } catch (e) {
-          console.warn('祝日APIの取得に失敗しました', e);
-        }
+        fetch('https://holidays-jp.github.io/api/v1/date.json')
+          .then(res => res.json())
+          .then(data => {
+            if (!isMounted) return;
+            setPublicHolidays(data);
+          })
+          .catch(e => console.warn('祝日APIの取得に失敗しました', e));
 
         const targetName = name || '';
-        
-        // ★ ④ 兄弟も含めて名前が一致する親ドキュメントを探す
-        const qAccounts = query(collection(db, 'accounts'));
-        const snapshot = await getDocs(qAccounts);
+        const storedUserRaw = await AsyncStorage.getItem('loggedInUser');
+        let storedUser: any = null;
+        try { storedUser = storedUserRaw ? JSON.parse(storedUserRaw) : null; } catch {}
+
+        // 利用者本人は自分のアカウントを直接取得し、全アカウント検索を避ける。
+        let accountDocs: any[] = [];
+        if (storedUser?.role === 'user' && storedUser?.accountId) {
+          const accountDoc = await getDoc(doc(db, 'accounts', storedUser.accountId));
+          if (accountDoc.exists()) accountDocs = [accountDoc];
+        } else {
+          const snapshot = await getDocs(query(collection(db, 'accounts')));
+          accountDocs = snapshot.docs;
+        }
         
         let foundParentId = '';
         let foundData: any = null;
+        let loadedChildIds: string[] = [];
         
-        snapshot.docs.forEach(docSnap => {
+        accountDocs.forEach(docSnap => {
            const d = docSnap.data();
            if (d.name === targetName || 
                (d.childName && d.childName === targetName) || 
@@ -282,6 +303,7 @@ export default function ScheduleScreen() {
         });
 
         if (foundData) {
+          if (!isMounted) return;
           setParentDocId(foundParentId);
           if (foundData.lessonTemplates) setLessonTemplates(foundData.lessonTemplates);
           
@@ -334,12 +356,13 @@ export default function ScheduleScreen() {
             }
           }
           setChildren(loadedChildren);
+          loadedChildIds = loadedChildren.map(child => child.id);
           
           // 開いた時に、渡された名前の子のタブをアクティブにする
           const targetIndex = loadedChildren.findIndex(c => c.name === targetName);
           if (targetIndex !== -1) setActiveChildIdx(targetIndex);
 
-          onSnapshot(query(collection(db, 'schedules2'), where('parentId', '==', foundParentId)), (sSnap) => {
+          addSubscription(onSnapshot(query(collection(db, 'schedules2'), where('parentId', '==', foundParentId)), (sSnap) => {
             const sData: Record<string, DailyData> = {};
             sSnap.forEach(d => {
               const item = d.data();
@@ -370,7 +393,11 @@ export default function ScheduleScreen() {
 
             scheduleDataRef.current = sData;
             setScheduleData(sData);
-          });
+            setInitialLoading(false);
+          }, error => {
+            console.warn('スケジュール読み込み失敗', error);
+            if (isMounted) setInitialLoading(false);
+          }));
 
           // schedule_memosを読み込む（メモはschedule_memosコレクションで管理されており、schedulesには保存されない）
           try {
@@ -388,45 +415,55 @@ export default function ScheduleScreen() {
             console.warn('schedule_memos 読み込み失敗', e);
           }
           
-          onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
+          addSubscription(onSnapshot(doc(db, 'accounts', foundParentId), (accSnap) => {
              if(accSnap.exists()) {
                  const accData = accSnap.data();
                  if(accData.lessonTemplates) setLessonTemplates(accData.lessonTemplates);
              }
-          });
+          }));
         }
 
-        onSnapshot(collection(db, 'school_times'), (snap) => {
+        addSubscription(onSnapshot(collection(db, 'school_times'), (snap) => {
           const times: Record<string, any> = {};
           snap.forEach(d => { times[d.id] = d.data(); });
           setSchoolTimesData(times);
-        });
+        }));
 
-        onSnapshot(collection(db, 'assigned_shifts'), (snap) => {
-          const shifts: Record<string, any[]> = {};
-          snap.forEach(d => { shifts[d.id] = d.data().staff || []; });
-          setAssignedShifts(shifts);
-        });
+        if (foundData?.role === 'staff') {
+          addSubscription(onSnapshot(collection(db, 'assigned_shifts'), (snap) => {
+            const shifts: Record<string, any[]> = {};
+            snap.forEach(d => { shifts[d.id] = d.data().staff || []; });
+            setAssignedShifts(shifts);
+          }));
+        }
 
-        onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
+        addSubscription(onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
           if (docSnap.exists() && docSnap.data().periods) {
-            setHolidays(docSnap.data().periods);
+            const periods = docSnap.data().periods;
+            setHolidays(periods);
           } else {
             setHolidays([]);
           }
-        });
+        }));
 
-        onSnapshot(collection(db, 'lessons'), (snap) => {
-          setScheduleLessons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
+        const childScopedLessons = loadedChildIds.length > 0 && loadedChildIds.length <= 30
+          ? query(collection(db, 'lessons'), where('childId', 'in', loadedChildIds))
+          : query(collection(db, 'lessons'));
+        addSubscription(onSnapshot(childScopedLessons, (snap) => {
+          const nextLessons = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setScheduleLessons(nextLessons);
+        }));
 
-        onSnapshot(collection(db, 'events'), (snap) => {
+        addSubscription(onSnapshot(collection(db, 'events'), (snap) => {
           const eData: Record<string, any> = {};
           snap.forEach(d => { eData[d.id] = d.data(); });
           setEventsData(eData);
-        });
+        }));
         
-        onSnapshot(collection(db, 'event_participants'), (snap) => {
+        const childScopedParticipants = loadedChildIds.length > 0 && loadedChildIds.length <= 30
+          ? query(collection(db, 'event_participants'), where('childId', 'in', loadedChildIds))
+          : query(collection(db, 'event_participants'));
+        addSubscription(onSnapshot(childScopedParticipants, (snap) => {
            const pData: Record<string, any> = {};
            snap.forEach(d => {
                const item = d.data();
@@ -434,13 +471,18 @@ export default function ScheduleScreen() {
                pData[item.eventId][item.childId] = item.status;
            });
            setParticipantData(pData);
-        });
+        }));
 
       } catch (error) {
         console.error("データ取得エラー:", error);
+        if (isMounted) setInitialLoading(false);
       }
     };
     fetchData();
+    return () => {
+      isMounted = false;
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+    };
   }, [name]);
 
   const saveLessonTemplate = async () => {
@@ -1082,6 +1124,13 @@ export default function ScheduleScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>スケジュール</Text>
       </View>
+
+      {initialLoading && children.length === 0 && (
+        <View style={styles.initialLoadingBar}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.initialLoadingText}>予定を読み込んでいます</Text>
+        </View>
+      )}
 
       {children.length > 0 && (
         <View style={styles.childTabs}>
@@ -1787,6 +1836,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+  },
+  initialLoadingBar: {
+    minHeight: 44,
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    backgroundColor: '#F3FAFA',
+    borderWidth: 1,
+    borderColor: '#CBE9E8',
+  },
+  initialLoadingText: {
+    color: '#455A5A',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   backBtn: {
     marginRight: 16
