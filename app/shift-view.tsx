@@ -99,6 +99,45 @@ export default function ShiftViewScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト確認</Text>
+        {isAdmin && (
+          <View style={styles.adminHeaderActions}>
+            <TouchableOpacity
+              style={[styles.adminHeaderBtn, styles.settingsBtn]}
+              onPress={() => router.push({
+                pathname: '/shift-create',
+                params: {
+                  openSettings: '1',
+                  year: String(currentDate.getFullYear()),
+                  month: String(currentDate.getMonth() + 1),
+                },
+              } as any)}
+            >
+              <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.adminHeaderBtnText}>設定</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.adminHeaderBtn, styles.pdfBtn]}
+              onPress={() => router.push({
+                pathname: '/shift-create',
+                params: {
+                  autoPdf: '1',
+                  year: String(currentDate.getFullYear()),
+                  month: String(currentDate.getMonth() + 1),
+                },
+              } as any)}
+            >
+              <Ionicons name="document-text" size={18} color="#FFFFFF" />
+              <Text style={styles.adminHeaderBtnText}>PDF出力</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.adminHeaderBtn, styles.workHoursBtn]}
+              onPress={() => router.push('/staff-hours' as any)}
+            >
+              <Ionicons name="time-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.adminHeaderBtnText}>勤務時間</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       <AdminShiftTabs active="view" />
 
@@ -208,6 +247,12 @@ const styles = StyleSheet.create({
   header: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+  adminHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  adminHeaderBtn: { minHeight: 38, paddingHorizontal: 9, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  settingsBtn: { backgroundColor: '#78909C' },
+  pdfBtn: { backgroundColor: '#08AEB8' },
+  workHoursBtn: { backgroundColor: '#6A4338' },
+  adminHeaderBtnText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 4 },

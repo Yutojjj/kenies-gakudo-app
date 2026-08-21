@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
@@ -27,12 +27,27 @@ export default function ShiftCreateScreen() {
   const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const { openSettings, autoPdf, year: routeYear, month: routeMonth } = useLocalSearchParams<{
+    openSettings?: string;
+    autoPdf?: string;
+    year?: string;
+    month?: string;
+  }>();
+  const [currentDate, setCurrentDate] = useState(() => {
+    const year = Number(routeYear);
+    const month = Number(routeMonth);
+    return Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12
+      ? new Date(year, month - 1, 1)
+      : new Date();
+  });
+  const autoPdfHandledRef = useRef(false);
   const [loading, setLoading] = useState(false);
   
   const [showTimeInCalendar, setShowTimeInCalendar] = useState(true);
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
+  const [staffListLoaded, setStaffListLoaded] = useState(false);
+  const [assignedShiftsLoaded, setAssignedShiftsLoaded] = useState(false);
   const [requests, setRequests] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   
@@ -112,6 +127,7 @@ export default function ShiftCreateScreen() {
           .filter(d => d.data().showInShiftTable !== false)
           .map(d => ({ id: d.id, name: d.data().name }));
         setAllStaff(staffList);
+        setStaffListLoaded(true);
 
         // autoFillSettings初期化（Firestoreの保存データをマージ）
         getDoc(doc(db, 'settings', 'autoFillSettings')).then(settingSnap => {
@@ -138,6 +154,7 @@ export default function ShiftCreateScreen() {
         });
       } catch (e) {
         console.warn('スタッフ取得失敗', e);
+        setStaffListLoaded(true);
       }
 
       // ▼ リアルタイムリスナーをまとめて設定 ▼
@@ -167,6 +184,7 @@ export default function ShiftCreateScreen() {
         const asData: Record<string, AssignedStaff[]> = {};
         s.forEach(d => { asData[d.id] = d.data().staff || []; });
         setAssignedShifts(asData);
+        setAssignedShiftsLoaded(true);
       }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
       const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
@@ -428,7 +446,7 @@ export default function ShiftCreateScreen() {
                          white-space: nowrap; overflow: hidden; }
         .c-shift-empty { background-color: #F0F0F0 !important; }
         .c-assigned    { background-color: #FFD700 !important; font-weight: 900; color: #111; font-size: 10px; }
-        .c-off         { background-color: #D0D0D0 !important; color: #444; font-size: 9px; }
+        .c-off         { background-color: #D0D0D0 !important; color: #111; font-size: 13px; font-weight: 900; line-height: 1; }
         .c-col-sun     { background-color: #FFD9D9 !important; }
         .c-col-sat     { background-color: #CCE4FF !important; }
 
@@ -481,6 +499,17 @@ export default function ShiftCreateScreen() {
       Alert.alert('エラー', `PDF作成に失敗しました: ${e?.message || String(e)}`);
     }
   };
+
+  useEffect(() => {
+    if (openSettings === '1') setSettingsVisible(true);
+  }, [openSettings]);
+
+  useEffect(() => {
+    if (autoPdf !== '1' || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
+    autoPdfHandledRef.current = true;
+    const timer = setTimeout(() => exportPDF(), 350);
+    return () => clearTimeout(timer);
+  }, [autoPdf, staffListLoaded, assignedShiftsLoaded, allStaff, assignedShifts, requests]);
 
 
 
