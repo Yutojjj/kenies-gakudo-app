@@ -63,6 +63,7 @@ const GRADES = Array.from({ length: 11 }, (_, i) => i + 1);
 const STAR_LABEL: Record<Star, string> = { kuro: '黒★', aka: '赤★', ki: '黄★' };
 const STAR_COLOR: Record<Star, string> = { kuro: '#212121', aka: '#C62828', ki: '#F9A825' };
 const MAX_STAGES = 10;
+const PASSING_SCORE = 90;
 const TYPING_TABS: TypingTab[] = ['create', 'students', 'history'];
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ export default function TypingCertScreen() {
   const [score, setScore]           = useState('');
   const [stageCount, setStageCount] = useState(8);
   const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
-  const [result, setResult]         = useState<Result>('pass');
+  const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
 
   // ── 受講者管理
@@ -141,6 +142,12 @@ export default function TypingCertScreen() {
   // ── ピッカーモーダル（ドロップダウン代替）
   type PickerTarget = 'student' | 'certifier' | 'star' | 'grade' | 'stageCount' | 'newStar' | 'newGrade' | null;
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
+
+  useEffect(() => {
+    const numericScore = Number(score);
+    const passed = score.trim() !== '' && Number.isFinite(numericScore) && numericScore >= PASSING_SCORE;
+    setResult(passed ? 'pass' : 'fail');
+  }, [score]);
 
   // ── Firestore 購読
   useEffect(() => {
@@ -238,7 +245,7 @@ export default function TypingCertScreen() {
       );
       alert$('保存完了', '認定書を記録しました');
       setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
-      setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
+      setScore(''); setStageVals(Array(stageCount).fill('')); setResult('fail');
     } catch (e) {
       alert$('エラー', '保存に失敗しました');
     } finally {
@@ -264,7 +271,7 @@ export default function TypingCertScreen() {
     }
     setSaving(false);
     setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
-    setScore(''); setStageVals(Array(stageCount).fill('')); setResult('pass');
+    setScore(''); setStageVals(Array(stageCount).fill('')); setResult('fail');
     openPrintPage({
       result,
       name: student.name,
@@ -469,12 +476,13 @@ export default function TypingCertScreen() {
           {/* 判定 */}
           <View style={styles.card}>
             <SectionHeader title="判定" />
+            <Text style={styles.autoResultNote}>90点以上で自動的に合格になります</Text>
             <View style={styles.row}>
               {(['pass', 'fail'] as Result[]).map(r => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.resultBtn, result === r && (r === 'pass' ? styles.resultBtnPass : styles.resultBtnFail)]}
-                  onPress={() => setResult(r)}
+                  disabled
                 >
                   <Text style={[styles.resultBtnText, result === r && { color: r === 'pass' ? '#fff' : '#fff' }]}>
                     {r === 'pass' ? '合格' : '不合格'}
@@ -950,6 +958,7 @@ const styles = StyleSheet.create({
   },
   sectionHeader: { fontSize: 11, color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   fieldLabel:  { fontSize: 12, color: '#475569', fontWeight: 'bold', marginBottom: 4, marginTop: 6 },
+  autoResultNote: { fontSize: 11, color: '#64748B', fontWeight: '700', marginBottom: 8 },
   input: {
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 8, padding: 9,
     fontSize: 15, color: '#1e3a5f', marginBottom: 8, backgroundColor: '#fff',
