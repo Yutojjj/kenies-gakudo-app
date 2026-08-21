@@ -2267,9 +2267,9 @@ export default function YearEventsScreen() {
       <Modal visible={photoSourceModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceModalVisible(false)}>
         <TouchableOpacity style={styles.photoPickerOverlay} activeOpacity={1} onPress={() => setPhotoSourceModalVisible(false)}>
           <View style={styles.photoSourceModal} onStartShouldSetResponder={() => true}>
-            <View style={styles.photoPickerHeader}>
-              <Text style={styles.photoPickerTitle}>写真を追加</Text>
-              <TouchableOpacity style={styles.photoPickerClose} onPress={() => setPhotoSourceModalVisible(false)}>
+            <View style={[styles.photoPickerHeader, styles.photoSourceHeader]}>
+              <Text style={[styles.photoPickerTitle, styles.photoSourceHeaderTitle]} pointerEvents="none">写真を追加</Text>
+              <TouchableOpacity style={[styles.photoPickerClose, styles.photoSourceHeaderClose]} onPress={() => setPhotoSourceModalVisible(false)}>
                 <Ionicons name="close" size={28} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -2541,6 +2541,9 @@ const styles = StyleSheet.create({
   photoPickerHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   photoPickerTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
   photoPickerClose: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  photoSourceHeader: { position: 'relative', justifyContent: 'center', paddingHorizontal: 48 },
+  photoSourceHeaderTitle: { width: '100%', textAlign: 'center' },
+  photoSourceHeaderClose: { position: 'absolute', right: 0 },
   photoSourceChoice: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 13, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10, borderRadius: 10, borderWidth: 1 },
   photoSourceAlbum: { backgroundColor: '#EFF9FA', borderColor: '#A9DADC' },
   photoSourceNew: { backgroundColor: '#FFF5F7', borderColor: '#EBC5D0' },
