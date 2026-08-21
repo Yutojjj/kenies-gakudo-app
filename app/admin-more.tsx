@@ -283,10 +283,15 @@ export default function AdminMoreScreen() {
     const cardSizeStyle = size === 'large' ? styles.largeCard : size === 'medium' ? styles.mediumCard : styles.smallCard;
     const imageStyle = size === 'large' ? styles.largeCardImage : size === 'medium' ? styles.mediumCardImage : styles.smallCardImage;
     const textStyle = size === 'large' ? styles.largeCardText : size === 'medium' ? styles.mediumCardText : styles.smallCardText;
+    const sectionColorStyle = size === 'large'
+      ? styles.frequentCardColor
+      : size === 'medium'
+        ? styles.settingsCardColor
+        : styles.otherCardColor;
     return (
       <TouchableOpacity
         key={item.label}
-        style={[styles.cardBase, cardSizeStyle, item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg }]}
+        style={[styles.cardBase, cardSizeStyle, sectionColorStyle]}
         onPress={item.onPress}
         activeOpacity={0.82}
       >
@@ -553,6 +558,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 5,
     elevation: 2,
+  },
+  frequentCardColor: {
+    backgroundColor: '#F7DDE6',
+    borderColor: '#DC9BB2',
+    borderWidth: 1.3,
+  },
+  settingsCardColor: {
+    backgroundColor: '#E6F3EF',
+    borderColor: '#AED2C8',
+    borderWidth: 1.1,
+  },
+  otherCardColor: {
+    backgroundColor: '#F3EFF8',
+    borderColor: '#D5C9E2',
   },
   largeCard: {
     width: '48.6%',

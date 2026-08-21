@@ -2056,7 +2056,6 @@ export default function MenuScreen() {
                   key={item.key}
                   style={[
                     styles.quickFeatureCard,
-                    item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg },
                     quickItemAnimatedStyle(index),
                   ]}
                   onPress={item.onPress}
@@ -2089,7 +2088,6 @@ export default function MenuScreen() {
                   key={item.key}
                   style={[
                     styles.quickFeatureCard,
-                    item.cardBg && { backgroundColor: item.cardBg, borderColor: item.borderColor || item.bg },
                     quickItemAnimatedStyle(index),
                   ]}
                   onPress={item.onPress}
@@ -3405,9 +3403,9 @@ const styles = StyleSheet.create({
     width: '31.7%',
     minHeight: 108,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F1E3D2',
+    backgroundColor: '#F7EBDD',
+    borderWidth: 1.2,
+    borderColor: '#DFC4AA',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
@@ -3415,9 +3413,9 @@ const styles = StyleSheet.create({
     paddingBottom: 11,
     position: 'relative',
     overflow: 'hidden',
-    shadowColor: '#8B7340',
+    shadowColor: '#806B5A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.07,
     shadowRadius: 5,
     elevation: 2,
   },
