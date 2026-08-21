@@ -750,8 +750,8 @@ export default function AttendanceScreen() {
   const renderTodayStatusView = () => {
     const today = new Date();
     const attendanceData = getAttendanceForDay(today);
-    const statusColumns = screenWidth >= 1400 ? 8 : screenWidth >= 1000 ? 6 : screenWidth >= 700 ? 5 : 4;
-    const statusCardWidth = `${(100 / statusColumns) - 0.7}%` as any;
+    const schoolChildColumns = screenWidth >= 1400 ? 4 : screenWidth >= 800 ? 3 : 2;
+    const statusCardWidth = `${(100 / schoolChildColumns) - 1.2}%` as any;
     
     const expectedKids: Kid[] = [];
     const addedIds = new Set<string>();
@@ -781,9 +781,9 @@ export default function AttendanceScreen() {
     const arrivedKids = expectedKids.filter(k => todayEntries[k.parentDocId || k.id] || todayEntries[k.id]);
     const notArrivedKids = expectedKids.filter(k => !(todayEntries[k.parentDocId || k.id] || todayEntries[k.id]));
 
-    const renderGroupedKids = (kidsList: Kid[], statusType: 'arrived' | 'notArrived') => {
+    const renderGroupedKids = (kidsList: Kid[]) => {
       if (kidsList.length === 0) {
-        return <View style={styles.noDataBox}><Text style={styles.noDataText}>{statusType === 'arrived' ? '登所済みの児童はいません' : '未登所の児童はいません'}</Text></View>;
+        return <View style={styles.noDataBox}><Text style={styles.noDataText}>本日の利用予定はありません</Text></View>;
       }
 
       // 学校別にグループ化
@@ -804,43 +804,50 @@ export default function AttendanceScreen() {
         return a.localeCompare(b);
       });
 
+      const renderSchoolGroup = (school: string) => {
+        const schoolKids = grouped[school];
+        const bgColor = getCardColor(school);
+        return (
+          <View key={school} style={{ backgroundColor: '#FAFBFB', borderRadius: 10, padding: 6, borderWidth: 1, borderColor: '#E4E8E8', borderTopWidth: 4, borderTopColor: bgColor }}>
+            <Text style={{ fontSize: 11, fontWeight: '900', color: '#222222', marginBottom: 4 }}>{school}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 4 }}>
+              {schoolKids.map(k => {
+                const isArrived = !!(todayEntries[k.parentDocId || k.id] || todayEntries[k.id]);
+                return (
+                  <View key={k.id} style={{ 
+                    backgroundColor: isArrived ? '#EAF8EF' : '#FFF0F0', 
+                    paddingHorizontal: 7, 
+                    paddingVertical: 5, 
+                    borderRadius: 8, 
+                    borderWidth: 1,
+                    borderColor: isArrived ? '#9AD4AA' : '#F1AAAA',
+                    width: statusCardWidth,
+                    minHeight: 42,
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#222222' }} numberOfLines={1}>{k.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, gap: 4 }}>
+                      <Text style={{ fontSize: 8, color: '#555555', fontWeight: '700' }} numberOfLines={1}>{k.grade || '学年未設定'}</Text>
+                      <Text style={{ fontSize: 8, color: isArrived ? '#247A43' : '#C33E3E', fontWeight: '900' }} numberOfLines={1}>
+                        {isArrived ? '登所済み' : '未登所'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        );
+      };
+
       return (
-        <View style={{ gap: 6 }}>
-          {sortedSchools.map(school => {
-            const schoolKids = grouped[school];
-            const bgColor = getCardColor(school);
-            return (
-              <View key={school} style={{ backgroundColor: '#FAFBFB', borderRadius: 10, padding: 6, borderWidth: 1, borderColor: '#E4E8E8', borderLeftWidth: 5, borderLeftColor: bgColor }}>
-                <Text style={{ fontSize: 11, fontWeight: '900', color: '#222222', marginBottom: 4 }}>{school}</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: 4 }}>
-                  {schoolKids.map(k => {
-                    const isArrived = statusType === 'arrived';
-                    return (
-                      <View key={k.id} style={{ 
-                        backgroundColor: isArrived ? '#EAF8EF' : '#FFF0F0', 
-                        paddingHorizontal: 7, 
-                        paddingVertical: 5, 
-                        borderRadius: 8, 
-                        borderWidth: 1,
-                        borderColor: isArrived ? '#9AD4AA' : '#F1AAAA',
-                        width: statusCardWidth,
-                        minHeight: 42,
-                        justifyContent: 'center',
-                      }}>
-                        <Text style={{ fontSize: 10, fontWeight: '900', color: '#222222' }} numberOfLines={1}>{k.name}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, gap: 4 }}>
-                          <Text style={{ fontSize: 8, color: '#555555', fontWeight: '700' }} numberOfLines={1}>{k.grade || '学年未設定'}</Text>
-                          <Text style={{ fontSize: 8, color: isArrived ? '#247A43' : '#C33E3E', fontWeight: '900' }} numberOfLines={1}>
-                            {isArrived ? '登所済み' : '未登所'}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            {sortedSchools.filter((_, index) => index % 2 === 0).map(renderSchoolGroup)}
+          </View>
+          <View style={{ flex: 1, gap: 6 }}>
+            {sortedSchools.filter((_, index) => index % 2 === 1).map(renderSchoolGroup)}
+          </View>
         </View>
       );
     };
@@ -863,21 +870,7 @@ export default function AttendanceScreen() {
           </View>
           
           <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#D94B4B', marginRight: 6 }} />
-              <Text style={{ fontSize: 14, fontWeight: '900', color: '#222222' }}>未登所</Text>
-              <Text style={{ fontSize: 12, color: '#555555', marginLeft: 6, fontWeight: '700' }}>({notArrivedKids.length}名)</Text>
-            </View>
-            {renderGroupedKids(notArrivedKids, 'notArrived')}
-          </View>
-
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#3B9B5C', marginRight: 6 }} />
-              <Text style={{ fontSize: 14, fontWeight: '900', color: '#222222' }}>登所済み</Text>
-              <Text style={{ fontSize: 12, color: '#555555', marginLeft: 6, fontWeight: '700' }}>({arrivedKids.length}名)</Text>
-            </View>
-            {renderGroupedKids(arrivedKids, 'arrived')}
+            {renderGroupedKids(expectedKids)}
           </View>
 
         </View>
