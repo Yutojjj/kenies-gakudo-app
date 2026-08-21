@@ -6,7 +6,7 @@ export function useRequireRole(requiredRole: string | string[]) {
   const router = useRouter();
   const [verified, setVerified] = useState(false);
   const [checking, setChecking] = useState(true);
-  const [userInfo, setUserInfo] = useState<{ role: string; name: string } | null>(null);
+  const [userInfo, setUserInfo] = useState<{ role: string; name: string; accountId?: string } | null>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -19,7 +19,7 @@ export function useRequireRole(requiredRole: string | string[]) {
           router.replace('/');
           return;
         }
-        setUserInfo({ role: user.role, name: user.name || '' });
+        setUserInfo({ role: user.role, name: user.name || '', accountId: user.accountId || undefined });
         setVerified(true);
       } catch {
         router.replace('/');

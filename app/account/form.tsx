@@ -59,6 +59,7 @@ export default function AccountFormScreen() {
   const [empType, setEmpType] = useState('アルバイト');
   const [skills, setSkills] = useState({ drive: false, program: false, child: false });
   const [showInShiftTable, setShowInShiftTable] = useState(true);
+  const [canEditEvents, setCanEditEvents] = useState(false);
 
   const [staffChildren, setStaffChildren] = useState<any[]>([]);
 
@@ -116,6 +117,7 @@ export default function AccountFormScreen() {
             setEmpType(data.empType || 'アルバイト');
             setSkills(data.skills || { drive: false, program: false, child: false });
             setShowInShiftTable(data.showInShiftTable !== false);
+            setCanEditEvents(data.canEditEvents === true);
             
             const loadedStaffChildren = data.staffChildren || [];
             if (loadedStaffChildren.length === 0 && data.childName) {
@@ -170,7 +172,7 @@ export default function AccountFormScreen() {
       let accountData: any = {
         name, nicknameKana, updatedAt: serverTimestamp(),
         ...(role === 'staff' ? { 
-          empType, skills, showInShiftTable,
+          empType, skills, showInShiftTable, canEditEvents,
           hasChild: skills.child,
           // ★ ④ 保存時にIDの抜け漏れがないように補完
           staffChildren: skills.child ? staffChildren.map((c, i) => ({...c, id: c.id || `temp_staffchild_${i}`})) : [] 
@@ -302,6 +304,20 @@ export default function AccountFormScreen() {
                 trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
                 thumbColor={showInShiftTable ? '#158F87' : '#F5F5F5'}
                 accessibilityLabel="シフト表に表示"
+              />
+            </View>
+
+            <View style={styles.eventPermissionCard}>
+              <View style={styles.shiftVisibilityTextWrap}>
+                <Text style={styles.shiftVisibilityTitle}>イベントを編集</Text>
+                <Text style={styles.shiftVisibilityDescription}>年行事・長期休み・イベント管理の編集を許可します</Text>
+              </View>
+              <Switch
+                value={canEditEvents}
+                onValueChange={setCanEditEvents}
+                trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
+                thumbColor={canEditEvents ? '#158F87' : '#F5F5F5'}
+                accessibilityLabel="イベントを編集"
               />
             </View>
 
@@ -490,6 +506,7 @@ const styles = StyleSheet.create({
   radioText: { fontSize: 14, color: COLORS.textLight, fontWeight: 'bold' },
   radioTextActive: { color: COLORS.primary },
   shiftVisibilityCard: { marginTop: 16, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#CFE1DF', backgroundColor: '#F5FBFA', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  eventPermissionCard: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#F2D6B8', backgroundColor: '#FFF9F1', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   shiftVisibilityTextWrap: { flex: 1 },
   shiftVisibilityTitle: { fontSize: 14, fontWeight: '900', color: '#263638' },
   shiftVisibilityDescription: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#68777A' },

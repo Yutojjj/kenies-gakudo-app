@@ -16,6 +16,7 @@ import {
   TextInput, TouchableOpacity, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import { EventMediaThumbnail, EventMediaViewer } from '../components/EventMedia';
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
@@ -68,6 +69,9 @@ interface PastPhoto {
   fiscalYear?: number; // アップロード時の年度（前年度として保存）
   sourceAlbumId?: string;
   isAlbumReference?: boolean;
+  mediaType?: 'image' | 'video';
+  mimeType?: string;
+  duration?: number | null;
 }
 
 interface AlbumLibraryPhoto {
@@ -75,6 +79,9 @@ interface AlbumLibraryPhoto {
   uri: string;
   storagePath?: string;
   category?: string;
+  mediaType?: 'image' | 'video';
+  mimeType?: string;
+  duration?: number | null;
 }
 
 interface AlbumLibraryEvent {
@@ -92,7 +99,7 @@ interface EventTemplate {
   detailDescription?: RichDoc;
   detailItems?: RichDoc;
   coverImage?: string | null;
-  photos?: { uri: string; fiscalYear?: number }[];
+  photos?: { uri: string; fiscalYear?: number; mediaType?: 'image' | 'video'; mimeType?: string }[];
 }
 
 // ─── 学期定義 ──────────────────────────────────────────────────
@@ -546,13 +553,18 @@ const EMPTY_RICH: RichDoc = [[{ text: '' }]];
 
 // ─── メイン画面 ───────────────────────────────────────────────
 export default function YearEventsScreen() {
-  const { verified, checking } = useRequireRole(['admin', 'user', 'staff']);
+  const { verified, checking, userInfo } = useRequireRole(['admin', 'user', 'staff']);
 
   const router = useRouter();
   const { role, name, tab } = useLocalSearchParams<{ role?: string; name?: string; tab?: string }>();
-  const isAdmin = role === 'admin';
-  const canEditEventDetail = isAdmin || role === 'staff';
-  const isUser = role === 'user';
+  const loggedInRole = userInfo?.role || role;
+  const isAdmin = loggedInRole === 'admin';
+  const isStaff = loggedInRole === 'staff';
+  const isUser = loggedInRole === 'user';
+  const [staffCanEditEvents, setStaffCanEditEvents] = useState(false);
+  const [eventPermissionLoaded, setEventPermissionLoaded] = useState(false);
+  const canEditEvents = isAdmin || (isStaff && staffCanEditEvents);
+  const canEditEventDetail = canEditEvents;
 
   // 参加状態 key: eventId → '参加' | undefined
   const [myParticipations, setMyParticipations] = useState<Record<string, string>>({});
@@ -621,6 +633,51 @@ export default function YearEventsScreen() {
   const [albumLibraryLoading, setAlbumLibraryLoading] = useState(false);
   const [photoAddTarget, setPhotoAddTarget] = useState<'past' | 'cover'>('past');
   const [coverTargetEventId, setCoverTargetEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userInfo) return;
+    if (userInfo.role !== 'staff') {
+      setStaffCanEditEvents(false);
+      setEventPermissionLoaded(true);
+      return;
+    }
+
+    const handleAccountData = (data?: Record<string, any>) => {
+      setStaffCanEditEvents(data?.canEditEvents === true);
+      setEventPermissionLoaded(true);
+    };
+    const handlePermissionError = (error: unknown) => {
+      console.error('event edit permission load error:', error);
+      setStaffCanEditEvents(false);
+      setEventPermissionLoaded(true);
+    };
+
+    if (userInfo.accountId) {
+      return onSnapshot(
+        doc(db, 'accounts', userInfo.accountId),
+        snapshot => handleAccountData(snapshot.exists() ? snapshot.data() : undefined),
+        handlePermissionError,
+      );
+    }
+
+    const accountQuery = query(collection(db, 'accounts'), where('name', '==', userInfo.name));
+    return onSnapshot(accountQuery, snapshot => {
+      const staffAccount = snapshot.docs.find(accountDoc => accountDoc.data().role === 'staff');
+      handleAccountData(staffAccount?.data());
+    }, handlePermissionError);
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (!eventPermissionLoaded || canEditEvents) return;
+    if (mainTab === 'management') {
+      setMainTab('year');
+    }
+    setMgmtModalVisible(false);
+    setPhotoSourceModalVisible(false);
+    setAlbumPickerVisible(false);
+    setEditDesc(false);
+    setEditItems(false);
+  }, [canEditEvents, eventPermissionLoaded, mainTab]);
 
   // チラシプレビュー
   const [flyerPreview, setFlyerPreview] = useState<VacationFlyer | null>(null);
@@ -973,6 +1030,8 @@ export default function YearEventsScreen() {
             uri: photo.uri,
             storagePath: '',
             fiscalYear: photo.fiscalYear,
+            mediaType: photo.mediaType || 'image',
+            mimeType: photo.mimeType || null,
             createdAt: new Date(),
           });
         }
@@ -990,7 +1049,12 @@ export default function YearEventsScreen() {
     if (!mgmtTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) as any;
     const det = ev ? details[ev.id] : undefined;
-    const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({ uri: p.uri, fiscalYear: p.fiscalYear })) : [];
+    const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({
+      uri: p.uri,
+      fiscalYear: p.fiscalYear,
+      mediaType: p.mediaType,
+      mimeType: p.mimeType,
+    })) : [];
     const docId = `tpl_${Date.now()}`;
     await setDoc(doc(db, 'event_templates', docId), {
       id: docId,
@@ -1095,7 +1159,7 @@ export default function YearEventsScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { customAlert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'] as any,
+      mediaTypes: ['images', 'videos'] as any,
       allowsMultipleSelection: true,
       quality: 0.7,
     });
@@ -1104,15 +1168,25 @@ export default function YearEventsScreen() {
     let count = 0;
     for (const asset of result.assets) {
       try {
+        const mediaType: 'image' | 'video' = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
+        const maxBytes = mediaType === 'video' ? 200 * 1024 * 1024 : 20 * 1024 * 1024;
+        if (asset.fileSize && asset.fileSize > maxBytes) {
+          throw new Error(`${mediaType === 'video' ? '動画は200MB' : '写真は20MB'}以下にしてください`);
+        }
         const res = await fetch(asset.uri);
         const blob = await res.blob();
-        const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
+        const originalExt = asset.fileName?.split('.').pop()?.toLowerCase();
+        const mimeExt = asset.mimeType?.split('/').pop()?.replace('quicktime', 'mov').replace('jpeg', 'jpg');
+        const ext = originalExt || mimeExt || (mediaType === 'video' ? 'mp4' : 'jpg');
         const filename = `albums/event_past_${detailEvent.id}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
         const sref = storageRef(storage, filename);
-        await uploadBytes(sref, blob);
+        await uploadBytes(sref, blob, asset.mimeType ? { contentType: asset.mimeType } : undefined);
         const url = await getDownloadURL(sref);
         await addDoc(collection(db, 'event_past_photos'), {
           eventId: detailEvent.id, uri: url, storagePath: filename,
+          mediaType,
+          mimeType: asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg'),
+          duration: asset.duration ?? null,
           fiscalYear: currentFY - 1,  // 前年度として記録
           createdAt: new Date()
         });
@@ -1123,7 +1197,7 @@ export default function YearEventsScreen() {
       }
     }
     setUploading(false);
-    if (count > 0) customAlert('完了', `${count}枚アップロードしました`);
+    if (count > 0) customAlert('完了', `${count}件アップロードしました`);
   };
 
   const openPhotoSourceMenu = (target: 'past' | 'cover', eventId?: string) => {
@@ -1146,12 +1220,16 @@ export default function YearEventsScreen() {
       const photos = photoSnapshot.docs.flatMap(albumDoc => {
         const data = albumDoc.data();
         const mediaText = `${data.mediaType || ''} ${data.mimeType || ''} ${data.uri || ''}`.toLowerCase();
-        if (!data.uri || /video|\.mp4|\.mov|\.m4v|\.webm/.test(mediaText)) return [];
+        const mediaType: 'image' | 'video' = /video|\.mp4|\.mov|\.m4v|\.webm/.test(mediaText) ? 'video' : 'image';
+        if (!data.uri || (photoAddTarget === 'cover' && mediaType === 'video')) return [];
         return [{
           id: albumDoc.id,
           uri: String(data.uri),
           storagePath: data.storagePath ? String(data.storagePath) : undefined,
           category: data.category ? String(data.category) : undefined,
+          mediaType,
+          mimeType: data.mimeType ? String(data.mimeType) : undefined,
+          duration: typeof data.duration === 'number' ? data.duration : null,
         }];
       });
       const registeredEvents = eventSnapshot.docs.flatMap(eventDoc => {
@@ -1245,12 +1323,15 @@ export default function YearEventsScreen() {
         storagePath: photo.storagePath || null,
         sourceAlbumId: photo.id,
         isAlbumReference: true,
+        mediaType: photo.mediaType || 'image',
+        mimeType: photo.mimeType || null,
+        duration: photo.duration ?? null,
         fiscalYear: currentFY - 1,
         createdAt: new Date(),
       })));
       setAlbumPickerVisible(false);
       setSelectedAlbumPhotoIds([]);
-      customAlert('完了', `${selectedPhotos.length}枚追加しました`);
+      customAlert('完了', `${selectedPhotos.length}件追加しました`);
     } catch (error: any) {
       console.error('album reference add error:', error);
       customAlert('エラー', error?.message || '写真を追加できませんでした');
@@ -1260,7 +1341,7 @@ export default function YearEventsScreen() {
   };
 
   const deletePastPhoto = async (photo: PastPhoto) => {
-    customConfirm('削除', 'この写真を削除しますか？', async () => {
+    customConfirm('削除', 'この写真・動画を削除しますか？', async () => {
       if (!photo.isAlbumReference && photo.storagePath) {
         await deleteObject(storageRef(storage, photo.storagePath)).catch(() => {});
       }
@@ -1329,7 +1410,7 @@ export default function YearEventsScreen() {
               // 年度内のその月のデータ取得（1〜3月は翌年、4〜12月は年度開始年）
               const dataYear = m >= 4 ? currentFY : currentFY + 1;
               const evs = eventsForMonth(dataYear, m)
-                .filter(ev => (isAdmin || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
+                .filter(ev => (canEditEvents || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
               return (
                 <View key={m} style={[styles.monthCard, { flex: 1, borderColor: termColor.border, backgroundColor: termColor.light }]}>
                   <Text style={[styles.monthCardLabel, { color: termColor.text }]}>{m}月</Text>
@@ -1389,7 +1470,7 @@ export default function YearEventsScreen() {
     const vc = VAC_COLORS[vac];
     const monthFlyers = flyers.filter(f => f.vacation === vac && f.month === month);
     const vacLabel = vc.label;
-    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => (isAdmin || !ev.hidden) && isCurrentFiscalYear(ev.dateStr));
+    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => (canEditEvents || !ev.hidden) && isCurrentFiscalYear(ev.dateStr));
     return (
       <View
         onLayout={e => { vacMonthRefs.current[`${vac}_${month}`] = e.nativeEvent.layout.y; }}
@@ -1404,7 +1485,7 @@ export default function YearEventsScreen() {
                 <Ionicons name="document-text-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
                 <Text style={styles.flyerDetailBtnText}>詳細</Text>
               </TouchableOpacity>
-              {isAdmin && (
+              {canEditEvents && (
                 <>
                   <TouchableOpacity style={[styles.flyerDeleteBtn, { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 6 }]} onPress={() => replaceFlyer(flyer)}>
                     <Ionicons name="camera-outline" size={15} color="#1565C0" />
@@ -1436,7 +1517,7 @@ export default function YearEventsScreen() {
           <Text style={styles.noEventText}>イベント・チラシなし</Text>
         )}
 
-        {isAdmin && (
+        {canEditEvents && (
           <TouchableOpacity style={styles.uploadFlyerBtn} onPress={() => uploadFlyer(vac, month)}>
             <Ionicons name="cloud-upload-outline" size={18} color={vc.text} />
             <Text style={[styles.uploadFlyerBtnText, { color: vc.text }]}>チラシをアップロード</Text>
@@ -1464,7 +1545,7 @@ export default function YearEventsScreen() {
               <Ionicons name="chevron-back" size={24} color="#5D4037" />
             </TouchableOpacity>
             <Text style={styles.detailTitle} numberOfLines={1}>{detailEvent.title}</Text>
-            {isAdmin && (
+            {canEditEvents && (
               <TouchableOpacity
                 style={[styles.hiddenToggleBtn, detailEvent.hidden ? styles.hiddenToggleBtnHidden : styles.hiddenToggleBtnVisible]}
                 onPress={() => toggleHidden(detailEvent)}
@@ -1572,24 +1653,24 @@ export default function YearEventsScreen() {
                 <Ionicons name="images-outline" size={18} color="#8A5BB5" />
                 <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
                 <View style={{ flex: 1 }} />
-                <Text style={[styles.photoCount, { color: '#8A5BB5' }]}>{detailPhotos.length}枚</Text>
+                <Text style={[styles.photoCount, { color: '#8A5BB5' }]}>{detailPhotos.length}件</Text>
                 <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
               </TouchableOpacity>
               <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
               {canEditEventDetail && (
                 <TouchableOpacity style={styles.uploadPhotoBtn} onPress={() => openPhotoSourceMenu('past')}>
                     <Ionicons name="add" size={18} color={COLORS.primary} />
-                    <Text style={styles.uploadPhotoBtnText}>写真を追加</Text>
+                    <Text style={styles.uploadPhotoBtnText}>写真・動画を追加</Text>
                   </TouchableOpacity>
                 )}
                 {uploading && <ActivityIndicator size="small" color={COLORS.primary} style={{ margin: 8 }} />}
                 {detailPhotos.length === 0 ? (
-                  <Text style={styles.emptyText}>写真はまだありません</Text>
+                  <Text style={styles.emptyText}>写真・動画はまだありません</Text>
                 ) : (
                   <View style={styles.photoGrid}>
                     {detailPhotos.map((p, idx) => (
                       <TouchableOpacity key={p.id} style={styles.photoThumbWrap} onPress={() => { setPreviewPhotos(detailPhotos); setPreviewIdx(idx); }}>
-                        <Image source={{ uri: p.uri }} style={styles.photoThumb} />
+                        <EventMediaThumbnail media={p} style={styles.photoThumb} />
                     {canEditEventDetail && (
                       <TouchableOpacity style={styles.photoDeleteBtn} onPress={() => deletePastPhoto(p)}>
                             <Ionicons name="close-circle" size={18} color={COLORS.danger} />
@@ -1610,11 +1691,11 @@ export default function YearEventsScreen() {
   );
 
   // ─── メインレンダリング ───────────────────────────────────
-  const eventMainTabs: MainTab[] = (isAdmin || role === 'staff')
+  const eventMainTabs: MainTab[] = canEditEvents
     ? ['year', 'vacation', 'management']
     : ['year', 'vacation'];
 
-  if (checking || !verified) return null;
+  if (checking || !verified || !eventPermissionLoaded) return null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1634,7 +1715,7 @@ export default function YearEventsScreen() {
         <TouchableOpacity style={[styles.mainTab, mainTab === 'vacation' && styles.mainTabActive]} onPress={() => setMainTab('vacation')}>
           <Text style={[styles.mainTabText, mainTab === 'vacation' && styles.mainTabTextActive]}>長期休み</Text>
         </TouchableOpacity>
-        {(isAdmin || role === 'staff') && (
+        {canEditEvents && (
           <TouchableOpacity style={[styles.mainTab, mainTab === 'management' && styles.mainTabActive]} onPress={() => setMainTab('management')}>
             <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>イベント管理</Text>
           </TouchableOpacity>
@@ -1726,7 +1807,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── イベント管理タブ ── */}
-      {currentTab === 'management' && (isAdmin || role === 'staff') && (
+      {currentTab === 'management' && canEditEvents && (
         <View style={{ flex: 1 }}>
           {/* 月ナビ */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
@@ -2198,7 +2279,7 @@ export default function YearEventsScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.photoSourceChoiceTitle}>既存アルバムから追加</Text>
-                <Text style={styles.photoSourceChoiceCaption}>アルバムに保存済みの写真を流用</Text>
+                <Text style={styles.photoSourceChoiceCaption}>{photoAddTarget === 'cover' ? 'アルバムに保存済みの写真を流用' : 'アルバムに保存済みの写真・動画を流用'}</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.photoSourceChoice, styles.photoSourceNew]} onPress={() => {
@@ -2210,8 +2291,8 @@ export default function YearEventsScreen() {
                 <Ionicons name="image-outline" size={25} color="#C55C7B" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.photoSourceChoiceTitle}>新規写真を追加</Text>
-                <Text style={styles.photoSourceChoiceCaption}>端末の写真から新しく追加</Text>
+                <Text style={styles.photoSourceChoiceTitle}>{photoAddTarget === 'cover' ? '新規写真を追加' : '新規写真・動画を追加'}</Text>
+                <Text style={styles.photoSourceChoiceCaption}>{photoAddTarget === 'cover' ? '端末の写真から新しく追加' : '端末の写真・動画から新しく追加'}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -2225,7 +2306,7 @@ export default function YearEventsScreen() {
             <View style={[styles.photoPickerHeader, styles.albumPickerHeader]}>
               <View style={styles.albumPickerHeaderContent} pointerEvents="none">
                 <Text style={[styles.photoPickerTitle, styles.albumPickerHeaderTitle]}>イベントアルバムを選択</Text>
-                <Text style={styles.albumPickerCount}>{selectedAlbumPhotoIds.length}枚選択中</Text>
+                <Text style={styles.albumPickerCount}>{selectedAlbumPhotoIds.length}件選択中</Text>
               </View>
               <TouchableOpacity style={[styles.photoPickerClose, styles.albumPickerHeaderClose]} onPress={() => setAlbumPickerVisible(false)}>
                 <Ionicons name="close" size={28} color={COLORS.text} />
@@ -2257,7 +2338,7 @@ export default function YearEventsScreen() {
                           <Text style={styles.albumEventName}>{event.name}</Text>
                           <Text style={styles.albumEventDate}>{eventDate.getFullYear()}年{eventDate.getMonth() + 1}月{eventDate.getDate()}日</Text>
                         </View>
-                        <Text style={styles.albumEventPhotoCount}>{eventPhotos.length}枚</Text>
+                        <Text style={styles.albumEventPhotoCount}>{eventPhotos.length}件</Text>
                         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={21} color="#687879" />
                       </TouchableOpacity>
                       {expanded && (
@@ -2277,7 +2358,7 @@ export default function YearEventsScreen() {
                                     return photoAddTarget === 'cover' ? [photo.id] : [...current, photo.id];
                                   })}
                                 >
-                                  <Image source={{ uri: photo.uri }} style={styles.albumPickerImage} />
+                                  <EventMediaThumbnail media={photo} style={styles.albumPickerImage} />
                                   <View style={[styles.albumPickerCheck, selected && styles.albumPickerCheckSelected]}>
                                     {selected && <Ionicons name="checkmark" size={17} color="#FFFFFF" />}
                                   </View>
@@ -2301,7 +2382,7 @@ export default function YearEventsScreen() {
                 disabled={selectedAlbumPhotoIds.length === 0}
                 onPress={addExistingAlbumPhotos}
               >
-                <Text style={styles.albumPickerAddText}>{photoAddTarget === 'cover' ? 'この写真を設定' : '選択した写真を追加'}</Text>
+                <Text style={styles.albumPickerAddText}>{photoAddTarget === 'cover' ? 'この写真を設定' : '選択した写真・動画を追加'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2316,7 +2397,7 @@ export default function YearEventsScreen() {
           </TouchableOpacity>
           {previewPhotos && (
             <>
-              <Image source={{ uri: previewPhotos[previewIdx].uri }} style={styles.fsImage} resizeMode="contain" />
+              <EventMediaViewer media={previewPhotos[previewIdx]} style={styles.fsImage} />
               <View style={styles.fsNav}>
                 <TouchableOpacity onPress={() => setPreviewIdx(i => Math.max(0, i - 1))} disabled={previewIdx === 0}>
                   <Ionicons name="chevron-back" size={32} color={previewIdx === 0 ? '#555' : '#fff'} />

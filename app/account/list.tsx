@@ -118,6 +118,17 @@ export default function AccountManagementScreen() {
     }
   };
 
+  const handleEventEditPermissionChange = async (account: any, value: boolean) => {
+    const updated = { ...account, canEditEvents: value };
+    setSelectedAccount(updated);
+    try {
+      await updateDoc(doc(db, 'accounts', account.id), { canEditEvents: value });
+    } catch (error) {
+      setSelectedAccount(account);
+      Alert.alert('エラー', 'イベント編集権限を更新できませんでした。');
+    }
+  };
+
   const toggleFilterArray = (currentArray: string[], value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => {
     if (currentArray.includes(value)) {
       setter(currentArray.filter(item => item !== value));
@@ -329,6 +340,18 @@ export default function AccountManagementScreen() {
                           onValueChange={(value) => handleShiftVisibilityChange(selectedAccount, value)}
                           trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
                           thumbColor={selectedAccount.showInShiftTable !== false ? '#158F87' : '#F5F5F5'}
+                        />
+                      </View>
+                      <View style={styles.eventPermissionRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.shiftVisibilityTitle}>イベントを編集</Text>
+                          <Text style={styles.shiftVisibilityDescription}>年行事・長期休み・イベント管理の編集を許可</Text>
+                        </View>
+                        <Switch
+                          value={selectedAccount.canEditEvents === true}
+                          onValueChange={(value) => handleEventEditPermissionChange(selectedAccount, value)}
+                          trackColor={{ false: '#D7DCDE', true: '#9AD9D3' }}
+                          thumbColor={selectedAccount.canEditEvents === true ? '#158F87' : '#F5F5F5'}
                         />
                       </View>
                       
@@ -585,6 +608,7 @@ const styles = StyleSheet.create({
   modalDetails: { marginBottom: 24 },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderColor: '#F0F0F0' },
   shiftVisibilityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: '#F3FAF9', borderWidth: 1, borderColor: '#CFE1DF' },
+  eventPermissionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12, padding: 12, borderRadius: 12, backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#F2D6B8' },
   shiftVisibilityTitle: { fontSize: 14, fontWeight: '900', color: '#263638' },
   shiftVisibilityDescription: { marginTop: 3, fontSize: 11, color: '#68777A' },
   detailIcon: { marginRight: 8, marginTop: 2 },

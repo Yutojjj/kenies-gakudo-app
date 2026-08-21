@@ -19,6 +19,7 @@ import {
   View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import { EventMediaThumbnail, EventMediaViewer } from '../components/EventMedia';
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -43,7 +44,16 @@ type RichLine = RichSpan[];
 type RichDoc = RichLine[];
 interface YearEventDetail { id: string; eventId: string; description: RichDoc; items: RichDoc }
 interface VacationFlyer { id: string; vacation: VacTab; month: number; uri: string; title: string }
-interface PastPhoto { id: string; eventId: string; uri: string; storagePath: string; fiscalYear?: number }
+interface PastPhoto {
+  id: string;
+  eventId: string;
+  uri: string;
+  storagePath: string;
+  fiscalYear?: number;
+  mediaType?: 'image' | 'video';
+  mimeType?: string;
+  duration?: number | null;
+}
 
 // ── 定数 ──────────────────────────────────────────────────────
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -817,20 +827,20 @@ export default function EventListScreen() {
                   <Ionicons name="images-outline" size={18} color="#8A5BB5" />
                   <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
                   <View style={{ flex: 1 }} />
-                  <Text style={{ fontSize: 12, color: '#8A5BB5', marginRight: 4 }}>{detailPhotos.length}枚</Text>
+                  <Text style={{ fontSize: 12, color: '#8A5BB5', marginRight: 4 }}>{detailPhotos.length}件</Text>
                   <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
                 </TouchableOpacity>
                 {secPhotos && (
                   <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
                     {detailPhotos.length === 0
-                      ? <Text style={styles.emptyText}>写真はまだありません</Text>
+                      ? <Text style={styles.emptyText}>写真・動画はまだありません</Text>
                       : (
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                           {detailPhotos.map((p, idx) => (
                             <TouchableOpacity key={p.id} style={{ position: 'relative' }}
                               onPress={() => { setPreviewPhotos(detailPhotos); setPreviewIdx(idx); }}
                             >
-                              <Image source={{ uri: p.uri }} style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' }} />
+                              <EventMediaThumbnail media={p} style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' }} />
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -854,7 +864,7 @@ export default function EventListScreen() {
           </TouchableOpacity>
           {previewPhotos && (
             <>
-              <Image source={{ uri: previewPhotos[previewIdx].uri }} style={{ width: '100%', height: '70%' }} resizeMode="contain" />
+              <EventMediaViewer media={previewPhotos[previewIdx]} style={{ width: '100%', height: '70%' }} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 32, marginTop: 16 }}>
                 <TouchableOpacity onPress={() => setPreviewIdx(i => Math.max(0, i - 1))} disabled={previewIdx === 0}>
                   <Ionicons name="chevron-back" size={32} color={previewIdx === 0 ? '#555' : '#fff'} />
