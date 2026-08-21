@@ -44,7 +44,63 @@ type CalendarEvent = {
   hidden?: boolean;
 };
 
-type AlbumPickerMedia = 'images' | 'videos';
+const DIRECTORY_DB_NAME = 'kenies-album-directory';
+const DIRECTORY_STORE_NAME = 'handles';
+const DIRECTORY_HANDLE_KEY = 'media-library';
+
+const openDirectoryDatabase = (): Promise<IDBDatabase | null> => {
+  if (Platform.OS !== 'web' || typeof indexedDB === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const request = indexedDB.open(DIRECTORY_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(DIRECTORY_STORE_NAME)) {
+        request.result.createObjectStore(DIRECTORY_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+};
+
+const loadSavedDirectoryHandle = async (): Promise<any | null> => {
+  const database = await openDirectoryDatabase();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    const request = database.transaction(DIRECTORY_STORE_NAME, 'readonly').objectStore(DIRECTORY_STORE_NAME).get(DIRECTORY_HANDLE_KEY);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+};
+
+const saveDirectoryHandle = async (handle: any) => {
+  const database = await openDirectoryDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    const request = database.transaction(DIRECTORY_STORE_NAME, 'readwrite').objectStore(DIRECTORY_STORE_NAME).put(handle, DIRECTORY_HANDLE_KEY);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+  });
+};
+
+const isVisualMediaFile = (file: File) => {
+  if (file.type.startsWith('image/') || file.type.startsWith('video/')) return true;
+  return /\.(jpe?g|png|webp|gif|heic|heif|mp4|mov|m4v|webm)$/i.test(file.name);
+};
+
+const fileToPickerAsset = (file: File): ImagePicker.ImagePickerAsset => {
+  const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name);
+  return {
+    uri: URL.createObjectURL(file),
+    width: 0,
+    height: 0,
+    type: isVideo ? 'video' : 'image',
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+    duration: null,
+    file,
+  };
+};
 
 const getMediaType = (item: any): 'image' | 'video' => {
   if (item?.mediaType === 'video') return 'video';
@@ -309,8 +365,12 @@ export default function AlbumScreen() {
   const [newEventCalendarVisible, setNewEventCalendarVisible] = useState(false);
   const [newEventDate, setNewEventDate] = useState(new Date());
   const [addToExistingModalVisible, setAddToExistingModalVisible] = useState(false);
-  const [existingEventMediaModalVisible, setExistingEventMediaModalVisible] = useState(false);
-  const [selectedExistingEvent, setSelectedExistingEvent] = useState<AlbumEvent | null>(null);
+  const [webGalleryVisible, setWebGalleryVisible] = useState(false);
+  const [webGalleryLoading, setWebGalleryLoading] = useState(false);
+  const [webGalleryAssets, setWebGalleryAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [webGallerySelectedUris, setWebGallerySelectedUris] = useState<string[]>([]);
+  const [webGalleryDirectoryName, setWebGalleryDirectoryName] = useState('');
+  const [webGalleryNeedsDirectory, setWebGalleryNeedsDirectory] = useState(false);
   
   const [albumPhotos, setAlbumPhotos] = useState<Record<string, AlbumMedia[]>>({});
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
@@ -326,6 +386,8 @@ export default function AlbumScreen() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
+  const webGalleryResolverRef = useRef<((result: ImagePicker.ImagePickerResult) => void) | null>(null);
+  const webDirectoryHandleRef = useRef<any>(null);
   const fullScreenDragStartIndexRef = useRef(0);
   const fullScreenProgrammaticScrollRef = useRef(false);
 
@@ -469,9 +531,115 @@ export default function AlbumScreen() {
     });
   };
 
-  const launchAlbumMediaPicker = async (mediaType: AlbumPickerMedia) => {
+  const releasePickerAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
+    assets.forEach(asset => {
+      if (asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
+    });
+  };
+
+  const readDirectoryAssets = async (directoryHandle: any) => {
+    const files: File[] = [];
+    const walk = async (handle: any, depth: number) => {
+      if (depth > 4 || files.length >= 800) return;
+      for await (const entry of handle.values()) {
+        if (files.length >= 800) break;
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          if (isVisualMediaFile(file)) files.push(file);
+        } else if (entry.kind === 'directory') {
+          await walk(entry, depth + 1);
+        }
+      }
+    };
+    await walk(directoryHandle, 0);
+    files.sort((a, b) => b.lastModified - a.lastModified);
+    return files.map(fileToPickerAsset);
+  };
+
+  const loadWebGalleryDirectory = async (directoryHandle: any) => {
+    setWebGalleryLoading(true);
+    setWebGalleryNeedsDirectory(false);
+    try {
+      releasePickerAssets(webGalleryAssets);
+      const assets = await readDirectoryAssets(directoryHandle);
+      webDirectoryHandleRef.current = directoryHandle;
+      setWebGalleryDirectoryName(directoryHandle.name || '写真フォルダ');
+      setWebGalleryAssets(assets);
+      setWebGallerySelectedUris([]);
+    } catch (error) {
+      console.warn('写真フォルダの読み込みに失敗しました', error);
+      setWebGalleryNeedsDirectory(true);
+      setWebGalleryAssets([]);
+    } finally {
+      setWebGalleryLoading(false);
+    }
+  };
+
+  const chooseWebGalleryDirectory = async () => {
+    try {
+      const picker = (window as any).showDirectoryPicker;
+      if (typeof picker !== 'function') return;
+      const handle = await picker({ id: 'kenies-album-media', mode: 'read', startIn: 'pictures' });
+      await saveDirectoryHandle(handle);
+      await loadWebGalleryDirectory(handle);
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') console.warn('写真フォルダを選択できませんでした', error);
+    }
+  };
+
+  const openWebMediaGallery = async (): Promise<ImagePicker.ImagePickerResult> => {
+    setWebGalleryVisible(true);
+    setWebGalleryLoading(true);
+    setWebGalleryNeedsDirectory(false);
+    setWebGallerySelectedUris([]);
+
+    const resultPromise = new Promise<ImagePicker.ImagePickerResult>((resolve) => {
+      webGalleryResolverRef.current = resolve;
+    });
+
+    void (async () => {
+      const savedHandle = webDirectoryHandleRef.current || await loadSavedDirectoryHandle();
+      if (!savedHandle) {
+        setWebGalleryNeedsDirectory(true);
+        setWebGalleryLoading(false);
+        return;
+      }
+      try {
+        const permission = await savedHandle.queryPermission({ mode: 'read' });
+        if (permission === 'granted') await loadWebGalleryDirectory(savedHandle);
+        else {
+          setWebGalleryNeedsDirectory(true);
+          setWebGalleryLoading(false);
+        }
+      } catch {
+        setWebGalleryNeedsDirectory(true);
+        setWebGalleryLoading(false);
+      }
+    })();
+
+    return resultPromise;
+  };
+
+  const finishWebMediaGallery = (confirmed: boolean) => {
+    const selectedSet = new Set(webGallerySelectedUris);
+    const selectedAssets = confirmed ? webGalleryAssets.filter(asset => selectedSet.has(asset.uri)) : [];
+    releasePickerAssets(webGalleryAssets.filter(asset => !selectedSet.has(asset.uri) || !confirmed));
+    setWebGalleryVisible(false);
+    setWebGalleryAssets([]);
+    setWebGallerySelectedUris([]);
+    const resolver = webGalleryResolverRef.current;
+    webGalleryResolverRef.current = null;
+    resolver?.(confirmed && selectedAssets.length > 0
+      ? { canceled: false, assets: selectedAssets }
+      : { canceled: true, assets: null });
+  };
+
+  const launchAlbumMediaPicker = async () => {
     // Web/PWAではユーザーのタップから直接ファイル選択を開く必要がある。
     // 権限確認を先に待つと、特にiOS Safariで選択画面が遮断されることがある。
+    if (Platform.OS === 'web' && typeof (window as any).showDirectoryPicker === 'function') {
+      return openWebMediaGallery();
+    }
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -481,7 +649,7 @@ export default function AlbumScreen() {
     }
 
     return ImagePicker.launchImageLibraryAsync({
-      mediaTypes: [mediaType],
+      mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
       selectionLimit: 0,
       quality: 0.6,
@@ -497,13 +665,11 @@ export default function AlbumScreen() {
     setNewEventCalendarVisible(false);
     setEventModalVisible(false);
     setAddToExistingModalVisible(false);
-    setExistingEventMediaModalVisible(false);
-    setSelectedExistingEvent(null);
     setAddTargetDate(null);
   };
 
-  const pickImages = async (targetTitle: string, targetKey: string, mediaType: AlbumPickerMedia = 'images') => {
-    const result = await launchAlbumMediaPicker(mediaType);
+  const pickImages = async (targetTitle: string, targetKey: string) => {
+    const result = await launchAlbumMediaPicker();
     if (!result) return;
 
     if (!result.canceled) {
@@ -523,6 +689,7 @@ export default function AlbumScreen() {
         if (Platform.OS === 'web') window.alert('アップロード失敗: ' + msg);
         else Alert.alert('エラー', 'アップロード失敗: ' + msg);
       } finally {
+        releasePickerAssets(result.assets);
         setIsUploading(false);
       }
     }
@@ -590,8 +757,8 @@ export default function AlbumScreen() {
     return code;
   };
 
-  const uploadPhotosToCategory = async (category: string, mediaType: AlbumPickerMedia): Promise<number> => {
-    const result = await launchAlbumMediaPicker(mediaType);
+  const uploadPhotosToCategory = async (category: string): Promise<number> => {
+    const result = await launchAlbumMediaPicker();
     if (!result || result.canceled) return 0;
 
     closeAddFlow();
@@ -607,18 +774,20 @@ export default function AlbumScreen() {
       console.error('uploadPhotosToCategory error:', e?.message || e);
       if (Platform.OS === 'web') window.alert('アップロード失敗: ' + (e?.message || String(e)));
       else Alert.alert('エラー', 'アップロード失敗: ' + (e?.message || String(e)));
+    } finally {
+      releasePickerAssets(result.assets);
     }
     return count;
   };
 
-  const handleCreateEvent = async (mediaType: AlbumPickerMedia) => {
+  const handleCreateEvent = async () => {
     if (!eventNameInput.trim()) return Alert.alert('エラー', 'イベント名を入力してください');
     const eventCode = generateEventCode();
     const dateStr = getLocalDateString(newEventDate);
     const eventCategory = `EVENT_${eventNameInput.trim()}_${dateStr}`;
     
     try {
-      const uploaded = await uploadPhotosToCategory(eventCategory, mediaType);
+      const uploaded = await uploadPhotosToCategory(eventCategory);
       if (uploaded > 0) {
         await addDoc(collection(db, 'album_events2'), {
           name: `${eventNameInput.trim()}_${dateStr}`,
@@ -639,9 +808,9 @@ export default function AlbumScreen() {
     }
   };
 
-  const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}, mediaType: AlbumPickerMedia) => {
+  const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
     try {
-      const uploaded = await uploadPhotosToCategory(ev.category, mediaType);
+      const uploaded = await uploadPhotosToCategory(ev.category);
       if (uploaded > 0) {
         if (Platform.OS === 'web') window.alert(`追加完了\n「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
         else Alert.alert('追加完了', `「${ev.name}」に写真・動画を${uploaded}件追加しました。`);
@@ -940,6 +1109,11 @@ export default function AlbumScreen() {
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
   };
 
+  const formatAlbumDay = (dateStr: string) => {
+    const date = new Date(`${dateStr}T00:00:00`);
+    return `${date.getMonth() + 1}月${date.getDate()}日（${DAY_NAMES[date.getDay()]}）`;
+  };
+
   const renderCalendarPage = (year: number, month: number) => {
     const cells = getCalendarCells(year, month);
     const calendarRows = Array.from(
@@ -1058,15 +1232,6 @@ export default function AlbumScreen() {
         <Text style={styles.headerTitle}>
           {isSelectMode ? `${selectedPhotoIds.length}件選択中` : 'アルバム'}
         </Text>
-        {!isSelectMode && role !== 'user' && (
-          <TouchableOpacity style={styles.headerAddButton} onPress={() => {
-            setAddTargetDate(null);
-            setIsChoosingAddDate(value => !value);
-          }}>
-            <Ionicons name={isChoosingAddDate ? "close" : "add"} size={20} color="#FFFFFF" />
-            <Text style={styles.headerAddButtonText}>{isChoosingAddDate ? 'キャンセル' : '追加'}</Text>
-          </TouchableOpacity>
-        )}
         {!isSelectMode && role === 'user' && (
           <TouchableOpacity style={styles.headerCodeButton} onPress={() => setUnlockModalVisible(true)}>
             <Text style={styles.headerCodeButtonText}>イベントコード</Text>
@@ -1131,6 +1296,19 @@ export default function AlbumScreen() {
 
       </View>
 
+      {!isSelectMode && role !== 'user' && !selectedAlbumDate && (
+        <TouchableOpacity
+          style={styles.albumFab}
+          accessibilityLabel={isChoosingAddDate ? '日付選択をキャンセル' : 'アルバムに追加'}
+          onPress={() => {
+            setAddTargetDate(null);
+            setIsChoosingAddDate(value => !value);
+          }}
+        >
+          <Ionicons name={isChoosingAddDate ? 'close' : 'add'} size={34} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
       {/* 各種モーダル */}
       <Modal visible={!!selectedAlbumDate} transparent animationType="fade" onRequestClose={() => setSelectedAlbumDate(null)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedAlbumDate(null)}>
@@ -1151,7 +1329,7 @@ export default function AlbumScreen() {
                   >
                     <Ionicons name="chevron-back" size={24} color={selectedDateIndex <= 0 ? '#C8C8C8' : COLORS.text} />
                   </TouchableOpacity>
-                  <Text style={styles.dateAlbumDateText} numberOfLines={1}>{formatAlbumDate(selectedAlbumDate)}</Text>
+                  <Text style={styles.dateAlbumDateText} numberOfLines={1}>{formatAlbumDay(selectedAlbumDate)}</Text>
                   <TouchableOpacity
                     style={[styles.dateAlbumNavButton, selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? styles.dateAlbumNavButtonDisabled : null]}
                     disabled={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1}
@@ -1159,17 +1337,6 @@ export default function AlbumScreen() {
                   >
                     <Ionicons name="chevron-forward" size={24} color={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? '#C8C8C8' : COLORS.text} />
                   </TouchableOpacity>
-                  {role !== 'user' && (
-                    <TouchableOpacity
-                      style={styles.dateAlbumAddButton}
-                      onPress={() => {
-                        setAddTargetDate(selectedAlbumDate);
-                        setAddMenuVisible(true);
-                      }}
-                    >
-                      <Text style={styles.dateAlbumAddButtonText}>追加</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
                 {selectedDateEventTitles.length > 0 && (
                   <View style={styles.dateAlbumEventRow}>
@@ -1192,10 +1359,22 @@ export default function AlbumScreen() {
                   <View style={styles.dateAlbumEmpty}>
                     <Ionicons name="images-outline" size={40} color="#B9C4C4" />
                     <Text style={styles.dateAlbumEmptyTitle}>この日の写真・動画はまだありません</Text>
-                    {role !== 'user' && <Text style={styles.dateAlbumEmptyCaption}>右上の「追加」から登録できます</Text>}
+                    {role !== 'user' && <Text style={styles.dateAlbumEmptyCaption}>右下の「＋」から登録できます</Text>}
                   </View>
                 )}
               </>
+            )}
+            {role !== 'user' && selectedAlbumDate && (
+              <TouchableOpacity
+                style={styles.dateAlbumFab}
+                accessibilityLabel="この日に追加"
+                onPress={() => {
+                  setAddTargetDate(selectedAlbumDate);
+                  setAddMenuVisible(true);
+                }}
+              >
+                <Ionicons name="add" size={32} color="#FFFFFF" />
+              </TouchableOpacity>
             )}
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1281,38 +1460,18 @@ export default function AlbumScreen() {
               <Text style={styles.modalTitle}>{addTargetDate ? `${formatAlbumDate(addTargetDate)}に追加` : 'アルバムに追加'}</Text>
               <TouchableOpacity onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.albumAddChoice, styles.albumAddChoiceDaily]}
-              onPress={() => {
-                if (addTargetDate) {
-                  pickImages(formatAlbumDate(addTargetDate), addTargetDate, 'images');
-                  return;
-                }
-                setPastDate(new Date(viewYear, viewMonth - 1, 1));
-                setCalendarModalVisible(true);
-              }}
-            >
+            <TouchableOpacity style={[styles.albumAddChoice, styles.albumAddChoiceDaily]} onPress={() => {
+              if (addTargetDate) {
+                pickImages(formatAlbumDate(addTargetDate), addTargetDate);
+                return;
+              }
+              setPastDate(new Date(viewYear, viewMonth - 1, 1));
+              setCalendarModalVisible(true);
+            }}>
               <Ionicons name="images-outline" size={26} color="#23767A" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.albumAddChoiceTitle}>写真を追加</Text>
-                <Text style={styles.albumAddChoiceCaption}>端末の写真一覧から選択</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.albumAddChoice, styles.albumAddChoiceVideo]}
-              onPress={() => {
-                if (addTargetDate) {
-                  pickImages(formatAlbumDate(addTargetDate), addTargetDate, 'videos');
-                  return;
-                }
-                setPastDate(new Date(viewYear, viewMonth - 1, 1));
-                setCalendarModalVisible(true);
-              }}
-            >
-              <Ionicons name="videocam-outline" size={26} color="#B05A72" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.albumAddChoiceTitle}>動画を追加</Text>
-                <Text style={styles.albumAddChoiceCaption}>端末の動画一覧から選択</Text>
+                <Text style={styles.albumAddChoiceTitle}>日常写真・動画を追加</Text>
+                <Text style={styles.albumAddChoiceCaption}>端末の写真フォルダから複数選択</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity
@@ -1405,14 +1564,9 @@ export default function AlbumScreen() {
             <Text style={{ marginBottom: 16, color: COLORS.textLight, fontSize: 12 }}>
               ※ 保存名: {eventNameInput.trim() || 'イベント名'}_{getLocalDateString(newEventDate)}
             </Text>
-            <View style={styles.albumMediaActionRow}>
-              <TouchableOpacity style={[styles.primaryBtn, styles.albumMediaActionButton]} onPress={() => handleCreateEvent('images')}>
-                <Text style={styles.primaryBtnText}>写真を選択</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryBtn, styles.albumMediaActionButton, styles.albumVideoActionButton]} onPress={() => handleCreateEvent('videos')}>
-                <Text style={styles.primaryBtnText}>動画を選択</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateEvent}>
+              <Text style={styles.primaryBtnText}>写真・動画を選択</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1430,10 +1584,7 @@ export default function AlbumScreen() {
               <ScrollView>
                 {albumEvents.map(ev => (
                   <TouchableOpacity key={ev.id} style={{ padding: 16, borderBottomWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center' }}
-                    onPress={() => {
-                      setSelectedExistingEvent(ev);
-                      setExistingEventMediaModalVisible(true);
-                    }}>
+                    onPress={() => handleAddToExistingEvent(ev)}>
                     <Ionicons name="images-outline" size={24} color={COLORS.primary} style={{ marginRight: 12 }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', color: COLORS.text }}>{ev.name}</Text>
@@ -1575,38 +1726,87 @@ export default function AlbumScreen() {
         </View>
       </Modal>
 
-      <Modal visible={existingEventMediaModalVisible} transparent animationType="fade" onRequestClose={() => setExistingEventMediaModalVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setExistingEventMediaModalVisible(false)}>
-          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedExistingEvent?.name || 'イベントアルバム'}に追加</Text>
-              <TouchableOpacity onPress={() => setExistingEventMediaModalVisible(false)}>
+      <Modal visible={webGalleryVisible} transparent animationType="fade" onRequestClose={() => finishWebMediaGallery(false)}>
+        <View style={styles.webGalleryOverlay}>
+          <View style={styles.webGalleryModal}>
+            <View style={styles.webGalleryHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.webGalleryTitle}>端末の写真・動画</Text>
+                {!!webGalleryDirectoryName && <Text style={styles.webGalleryDirectoryName}>{webGalleryDirectoryName}</Text>}
+              </View>
+              <TouchableOpacity style={styles.webGalleryFolderButton} onPress={chooseWebGalleryDirectory}>
+                <Text style={styles.webGalleryFolderButtonText}>フォルダ変更</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.webGalleryCloseButton} onPress={() => finishWebMediaGallery(false)}>
                 <Ionicons name="close" size={28} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.albumAddChoice, styles.albumAddChoiceDaily]}
-              onPress={() => selectedExistingEvent && handleAddToExistingEvent(selectedExistingEvent, 'images')}
-            >
-              <Ionicons name="images-outline" size={26} color="#23767A" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.albumAddChoiceTitle}>写真を追加</Text>
-                <Text style={styles.albumAddChoiceCaption}>端末の写真一覧から選択</Text>
+
+            {webGalleryLoading ? (
+              <View style={styles.webGalleryStatus}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.webGalleryStatusText}>写真・動画を読み込んでいます</Text>
               </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.albumAddChoice, styles.albumAddChoiceVideo]}
-              onPress={() => selectedExistingEvent && handleAddToExistingEvent(selectedExistingEvent, 'videos')}
-            >
-              <Ionicons name="videocam-outline" size={26} color="#B05A72" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.albumAddChoiceTitle}>動画を追加</Text>
-                <Text style={styles.albumAddChoiceCaption}>端末の動画一覧から選択</Text>
+            ) : webGalleryNeedsDirectory ? (
+              <View style={styles.webGalleryStatus}>
+                <Ionicons name="folder-open-outline" size={48} color={COLORS.primary} />
+                <Text style={styles.webGalleryStatusTitle}>写真フォルダを選択</Text>
+                <Text style={styles.webGalleryStatusText}>最初にDCIMやPicturesなど、表示するフォルダを選んでください</Text>
+                <TouchableOpacity style={styles.webGalleryChooseFolderButton} onPress={chooseWebGalleryDirectory}>
+                  <Text style={styles.webGalleryChooseFolderButtonText}>フォルダを選択</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            ) : (
+              <>
+                <ScrollView style={styles.webGalleryScroll} contentContainerStyle={styles.webGalleryGrid}>
+                  {webGalleryAssets.map(asset => {
+                    const selected = webGallerySelectedUris.includes(asset.uri);
+                    const isVideo = asset.type === 'video';
+                    return (
+                      <TouchableOpacity
+                        key={asset.uri}
+                        style={styles.webGalleryItem}
+                        activeOpacity={0.78}
+                        onPress={() => setWebGallerySelectedUris(current => current.includes(asset.uri)
+                          ? current.filter(uri => uri !== asset.uri)
+                          : [...current, asset.uri])}
+                      >
+                        {isVideo ? (
+                          <View style={styles.webGalleryVideoItem}>
+                            <Ionicons name="play-circle" size={34} color="#FFFFFF" />
+                            <Text style={styles.webGalleryVideoText} numberOfLines={1}>{asset.fileName || '動画'}</Text>
+                          </View>
+                        ) : (
+                          <Image source={{ uri: asset.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                        )}
+                        <View style={[styles.webGalleryCheck, selected && styles.webGalleryCheckSelected]}>
+                          {selected && <Ionicons name="checkmark" size={17} color="#FFFFFF" />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {webGalleryAssets.length === 0 && (
+                    <View style={styles.webGalleryEmpty}>
+                      <Text style={styles.webGalleryStatusText}>このフォルダに写真・動画はありません</Text>
+                    </View>
+                  )}
+                </ScrollView>
+                <View style={styles.webGalleryFooter}>
+                  <Text style={styles.webGallerySelectedCount}>{webGallerySelectedUris.length}件選択中</Text>
+                  <TouchableOpacity
+                    style={[styles.webGalleryConfirmButton, webGallerySelectedUris.length === 0 && styles.webGalleryConfirmButtonDisabled]}
+                    disabled={webGallerySelectedUris.length === 0}
+                    onPress={() => finishWebMediaGallery(true)}
+                  >
+                    <Text style={styles.webGalleryConfirmButtonText}>追加する</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
+
       <AdminBottomNav active="album" />
     </SafeAreaView>
   );
@@ -1625,8 +1825,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-  headerAddButton: { minHeight: 38, paddingHorizontal: 13, borderRadius: 19, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: COLORS.primary },
-  headerAddButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
   headerCodeButton: { minHeight: 36, paddingHorizontal: 12, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1EAFB', borderWidth: 1, borderColor: '#D4C3EE' },
   headerCodeButtonText: { color: '#6D55A6', fontSize: 12, fontWeight: 'bold' },
   scrollArea: { flex: 1 },
@@ -1680,16 +1878,13 @@ const styles = StyleSheet.create({
   calendarEmptyText: { marginTop: 20, color: COLORS.textLight, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
   addDateSelectionBanner: { alignSelf: 'center', marginTop: 8, marginBottom: 2, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, backgroundColor: '#DFF4F4', borderWidth: 1, borderColor: '#9FD7D9' },
   addDateSelectionBannerText: { color: '#176F73', fontSize: 13, fontWeight: 'bold' },
+  albumFab: { position: 'absolute', right: 20, bottom: 92, zIndex: 30, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#184D50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.24, shadowRadius: 8, elevation: 8 },
   albumAddMenuModal: { width: '90%', maxWidth: 480, borderRadius: 14, backgroundColor: COLORS.white, padding: 18 },
   albumAddChoice: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 10, borderWidth: 1, marginBottom: 12 },
   albumAddChoiceDaily: { backgroundColor: '#EFF9FA', borderColor: '#B8E2E4' },
-  albumAddChoiceVideo: { backgroundColor: '#FFF1F5', borderColor: '#EBC4D0' },
   albumAddChoiceEvent: { backgroundColor: '#F5F0FC', borderColor: '#D8C9EC' },
   albumAddChoiceTitle: { color: COLORS.text, fontSize: 16, fontWeight: 'bold' },
   albumAddChoiceCaption: { marginTop: 3, color: COLORS.textLight, fontSize: 12 },
-  albumMediaActionRow: { flexDirection: 'row', gap: 10 },
-  albumMediaActionButton: { flex: 1 },
-  albumVideoActionButton: { backgroundColor: '#C96F88' },
   dateAlbumModal: { width: '96%', maxWidth: 900, height: '84%', maxHeight: 820, borderRadius: 14, backgroundColor: COLORS.white, overflow: 'hidden' },
   dateAlbumTopRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderColor: COLORS.border },
   dateAlbumTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
@@ -1698,8 +1893,7 @@ const styles = StyleSheet.create({
   dateAlbumNavButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E9D7C5' },
   dateAlbumNavButtonDisabled: { opacity: 0.45 },
   dateAlbumDateText: { minWidth: 0, flexShrink: 1, color: COLORS.text, fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
-  dateAlbumAddButton: { position: 'absolute', right: 8, minHeight: 36, paddingHorizontal: 9, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
-  dateAlbumAddButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
+  dateAlbumFab: { position: 'absolute', right: 18, bottom: 18, zIndex: 20, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#184D50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.24, shadowRadius: 8, elevation: 8 },
   dateAlbumEventRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#FAF7FE' },
   dateAlbumEventBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 11, backgroundColor: '#EDE3F8' },
   dateAlbumEventBadgeText: { color: '#674F9C', fontSize: 11, fontWeight: 'bold' },
@@ -1736,6 +1930,32 @@ const styles = StyleSheet.create({
   noDataText: { color: COLORS.textLight, fontWeight: 'bold', fontSize: 16, textAlign: 'center' },
   reloadMediaButton: { marginTop: 18, minHeight: 44, paddingHorizontal: 18, borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: COLORS.primary },
   reloadMediaButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
+  webGalleryOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: 'rgba(0,0,0,0.58)' },
+  webGalleryModal: { width: '100%', maxWidth: 720, height: '88%', maxHeight: 860, overflow: 'hidden', borderRadius: 16, backgroundColor: '#FFFFFF' },
+  webGalleryHeader: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, borderBottomWidth: 1, borderColor: COLORS.border, backgroundColor: '#FFF8F0' },
+  webGalleryTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
+  webGalleryDirectoryName: { marginTop: 2, color: COLORS.textLight, fontSize: 11 },
+  webGalleryFolderButton: { minHeight: 34, paddingHorizontal: 10, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF9FA', borderWidth: 1, borderColor: '#B8E2E4' },
+  webGalleryFolderButtonText: { color: '#23767A', fontSize: 11, fontWeight: 'bold' },
+  webGalleryCloseButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  webGalleryStatus: { flex: 1, minHeight: 280, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  webGalleryStatusTitle: { marginTop: 14, color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
+  webGalleryStatusText: { marginTop: 8, color: COLORS.textLight, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  webGalleryChooseFolderButton: { marginTop: 22, minHeight: 48, paddingHorizontal: 24, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  webGalleryChooseFolderButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
+  webGalleryScroll: { flex: 1, backgroundColor: '#F3F4F4' },
+  webGalleryGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 2 },
+  webGalleryItem: { width: '33.333%', aspectRatio: 1, padding: 1, overflow: 'hidden', backgroundColor: '#DCE7E8' },
+  webGalleryVideoItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, backgroundColor: '#607D8B' },
+  webGalleryVideoText: { width: '100%', marginTop: 5, color: '#FFFFFF', fontSize: 9, textAlign: 'center' },
+  webGalleryCheck: { position: 'absolute', top: 7, right: 7, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.28)' },
+  webGalleryCheckSelected: { backgroundColor: COLORS.primary },
+  webGalleryEmpty: { width: '100%', minHeight: 220, alignItems: 'center', justifyContent: 'center' },
+  webGalleryFooter: { minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FFFFFF' },
+  webGallerySelectedCount: { color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
+  webGalleryConfirmButton: { minWidth: 118, minHeight: 44, paddingHorizontal: 18, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  webGalleryConfirmButtonDisabled: { opacity: 0.4 },
+  webGalleryConfirmButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
   fullScreenHeader: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, zIndex: 10 },
   fullScreenCounter: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
   fullScreenIconBtn: { padding: 8 },
