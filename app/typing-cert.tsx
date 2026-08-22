@@ -222,8 +222,6 @@ export default function TypingCertScreen() {
     setStageInputMode(mode);
   };
 
-  const completeStageValue = () => setStageInputMode('misses');
-
   const moveToNextStage = () => {
     if (activeStageInput === null || activeStageInput >= STAGE_COUNT - 1) {
       setActiveStageInput(null);
@@ -232,6 +230,14 @@ export default function TypingCertScreen() {
     }
     setActiveStageInput(activeStageInput + 1);
     setStageInputMode('value');
+  };
+
+  const advanceStageInput = () => {
+    if (stageInputMode === 'value') {
+      setStageInputMode('misses');
+      return;
+    }
+    moveToNextStage();
   };
 
   const clearAllStages = () => {
@@ -990,24 +996,18 @@ export default function TypingCertScreen() {
                   )
               ))}
             </View>
-            {stageInputMode === 'value' ? (
-              <TouchableOpacity style={styles.numberPadDone} onPress={completeStageValue} activeOpacity={0.78}>
-                <Text style={styles.numberPadDoneText}>完了</Text>
+            <View style={styles.numberPadActionRow}>
+              <TouchableOpacity
+                style={styles.numberPadClose}
+                onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}
+                activeOpacity={0.78}
+              >
+                <Text style={styles.numberPadCloseText}>閉じる</Text>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.numberPadActionRow}>
-                <TouchableOpacity
-                  style={styles.numberPadClose}
-                  onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}
-                  activeOpacity={0.78}
-                >
-                  <Text style={styles.numberPadCloseText}>閉じる</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.numberPadDone, styles.numberPadNext]} onPress={moveToNextStage} activeOpacity={0.78}>
-                  <Text style={styles.numberPadDoneText}>次へ</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              <TouchableOpacity style={[styles.numberPadDone, styles.numberPadNext]} onPress={advanceStageInput} activeOpacity={0.78}>
+                <Text style={styles.numberPadDoneText}>次へ</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1131,22 +1131,22 @@ const styles = StyleSheet.create({
   clearAllStagesButtonDisabled: { backgroundColor: '#F3F4F4', borderColor: '#E3E6E7' },
   clearAllStagesText: { fontSize: 11, fontWeight: '900', color: '#B64156' },
   clearAllStagesTextDisabled: { color: '#AEB5B8' },
-  stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
-  stageCell: { alignItems: 'center', minWidth: 72 },
+  stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 },
+  stageCell: { alignItems: 'center', width: 66 },
   stageGuide: { marginBottom: 6, fontSize: 12, color: '#64748B', fontWeight: '700' },
   stageInput: {
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 8,
-    width: 86, minHeight: 78, overflow: 'hidden', backgroundColor: '#fff',
+    width: 66, minHeight: 64, overflow: 'hidden', backgroundColor: '#fff',
   },
-  stageValueButton: { minHeight: 48, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
-  stageMissButton: { minHeight: 29, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8FA' },
+  stageValueButton: { minHeight: 38, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
+  stageMissButton: { minHeight: 25, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8FA' },
   stageInputDivider: { height: 1, backgroundColor: '#DCE9F2' },
-  stageInputCaption: { marginBottom: 1, fontSize: 9, fontWeight: '800', color: '#7A8D98' },
-  stageInputValue: { fontSize: 14, fontWeight: '800', color: '#1E3A5F' },
-  stageInputPlaceholder: { fontSize: 14, color: '#BBBBBB' },
-  stageMissValue: { fontSize: 10, fontWeight: '800', color: '#D05067' },
-  stageMissPlaceholder: { fontSize: 10, color: '#A5ADB5' },
-  stageLabel:  { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+  stageInputCaption: { fontSize: 8, fontWeight: '800', color: '#7A8D98' },
+  stageInputValue: { fontSize: 13, fontWeight: '800', color: '#1E3A5F' },
+  stageInputPlaceholder: { fontSize: 12, color: '#BBBBBB' },
+  stageMissValue: { fontSize: 9, fontWeight: '800', color: '#D05067' },
+  stageMissPlaceholder: { fontSize: 9, color: '#A5ADB5' },
+  stageLabel:  { fontSize: 9, color: '#94a3b8', marginTop: 2 },
   autoScoreBox: {
     width: 160, minHeight: 48, paddingHorizontal: 12, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF7F8', borderWidth: 1.5, borderColor: '#B6DDE0',
