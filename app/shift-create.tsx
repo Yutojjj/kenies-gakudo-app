@@ -880,7 +880,7 @@ export default function ShiftCreateScreen() {
       </Modal>
 
       <View style={styles.monthSelector}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={styles.monthNavRow}>
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
           <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
@@ -1721,10 +1721,11 @@ const styles = StyleSheet.create({
   workSummaryPeriodBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E1CDBD' },
   workSummaryPeriodText: { minWidth: 130, textAlign: 'center', fontSize: 16, fontWeight: '900', color: '#3F302B' },
   
-  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 16 },
-  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 12 },
+  monthSelector: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
+  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
 
-  monthActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginLeft: 'auto' },
+  monthActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },
   toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
   monthAutoFillBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#36A9B5', borderWidth: 1, borderColor: '#258C96' },
@@ -1783,8 +1784,8 @@ const styles = StyleSheet.create({
   cellStaffTimeRow: { marginTop: 1 },
   cellStaffTime: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: '#171717' },
   
-  eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
-  eventBadgeText: { fontSize: 11, lineHeight: 14, color: '#5B3A00', fontWeight: '900' },
+  eventBadge: { alignSelf: 'stretch', marginTop: 3, marginHorizontal: -2, paddingHorizontal: 4, paddingVertical: 2, backgroundColor: '#FFF1C9' },
+  eventBadgeText: { fontSize: 11, lineHeight: 14, color: '#6A4500', fontWeight: '900' },
   dayEventCard: { marginBottom: 18, padding: 14, borderRadius: 10, backgroundColor: '#FFF8DF', borderWidth: 1, borderColor: '#EBCB73' },
   dayEventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
   dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },
