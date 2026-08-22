@@ -4,7 +4,7 @@ import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -209,117 +209,91 @@ export default function ShiftCreateScreen() {
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      // ▼ 修正: 各処理を個別に try/catch し、失敗しても次の処理へ進む ▼
+    let staffList: Staff[] = [];
+    let savedSettings: any = {};
 
-      // 祝日 API（失敗しても続行）
-      try {
-        const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
-        const data = await res.json();
-        setPublicHolidays(data);
-      } catch (e) {
-        console.warn('祝日APIの取得に失敗しました', e);
-      }
+    const applyStaffSettings = () => {
+      if (!staffList.length) return;
+      const savedStaff: any[] = Array.isArray(savedSettings.staffSettings) ? savedSettings.staffSettings : [];
+      const merged = staffList
+        .map((staff, index) => {
+          const found = savedStaff.find((item: any) => item.name === staff.name);
+          return found
+            ? {
+                name: staff.name,
+                start: found.start || '14:00',
+                end: found.end || '18:30',
+                priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
+                enabled: found.enabled !== false,
+              }
+            : {
+                name: staff.name,
+                start: staff.name === '稲熊' ? '11:00' : '14:00',
+                end: staff.name === '稲熊' ? '20:00' : '18:30',
+                priority: savedStaff.length + index + 1,
+                enabled: true,
+              };
+        })
+        .sort((a, b) => a.priority - b.priority)
+        .map((item, index) => ({ ...item, priority: index + 1 }));
+      const staffNames = staffList.map(staff => staff.name);
+      const savedPdfOrder = Array.isArray(savedSettings.pdfOrder)
+        ? savedSettings.pdfOrder.filter((name: string) => staffNames.includes(name))
+        : [];
+      const normalizedPdfOrder = [...savedPdfOrder, ...staffNames.filter(name => !savedPdfOrder.includes(name))];
+      setPdfOrder(normalizedPdfOrder);
+      setAutoFillSettings({
+        staffSettings: merged,
+        dayMaxCount: savedSettings.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
+        pdfOrder: normalizedPdfOrder,
+      });
+    };
 
-      // master_data（失敗してもデフォルト値で続行）
-      try {
-        const masterRef = doc(db, 'settings', 'master_data');
-        const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists() && masterSnap.data().workTimes) {
-          setMasterTimes(masterSnap.data().workTimes);
-        } else {
-          const defaultTimes = ['14:00-18:30', '11:00-18:30', '13:30-18:30'];
-          setMasterTimes(defaultTimes);
-          await setDoc(masterRef, { workTimes: defaultTimes }, { merge: true });
-        }
-      } catch (e) {
-        console.warn('master_data 取得失敗。デフォルト値を使用します', e);
-        setMasterTimes(['14:00-18:30', '11:00-18:30', '13:30-18:30']);
-      }
+    fetch('https://holidays-jp.github.io/api/v1/date.json')
+      .then(res => res.json())
+      .then(setPublicHolidays)
+      .catch(e => console.warn('祝日APIの取得に失敗しました', e));
 
-      // スタッフ一覧（失敗しても続行）
-      try {
-        const q = query(collection(db, 'accounts'), where('role', '==', 'staff'));
-        const snap = await getDocs(q);
-        const staffList = snap.docs
-          .filter(d => d.data().showInShiftTable !== false)
-          .map(d => ({ id: d.id, name: d.data().name }));
-        setAllStaff(staffList);
+    const masterUnsub = onSnapshot(doc(db, 'settings', 'master_data'), (snap) => {
+      const workTimes = snap.data()?.workTimes;
+      if (Array.isArray(workTimes)) setMasterTimes(workTimes);
+    }, () => setMasterTimes(['14:00-18:30', '11:00-18:30', '13:30-18:30']));
 
-        // Firebaseの保存順を基準にし、新しいスタッフだけ末尾へ補完する
-        const settingRef = doc(db, 'settings', 'autoFillSettings');
-        const settingSnap = await getDoc(settingRef);
-        const saved = settingSnap.exists() ? settingSnap.data() : {};
-        const savedStaff: any[] = Array.isArray(saved.staffSettings) ? saved.staffSettings : [];
-        const merged = staffList
-          .map((staff, index) => {
-            const found = savedStaff.find((item: any) => item.name === staff.name);
-            return found
-              ? {
-                  name: staff.name,
-                  start: found.start || '14:00',
-                  end: found.end || '18:30',
-                  priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
-                  enabled: found.enabled !== false,
-                }
-              : {
-                  name: staff.name,
-                  start: staff.name === '稲熊' ? '11:00' : '14:00',
-                  end: staff.name === '稲熊' ? '20:00' : '18:30',
-                  priority: savedStaff.length + index + 1,
-                  enabled: true,
-                };
-          })
-          .sort((a, b) => a.priority - b.priority)
-          .map((item, index) => ({ ...item, priority: index + 1 }));
-        const staffNames = staffList.map(staff => staff.name);
-        const savedPdfOrder = Array.isArray(saved.pdfOrder) ? saved.pdfOrder.filter((name: string) => staffNames.includes(name)) : [];
-        const normalizedPdfOrder = [...savedPdfOrder, ...staffNames.filter(name => !savedPdfOrder.includes(name))];
-        const normalizedSettings = {
-          staffSettings: merged,
-          dayMaxCount: saved.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
-          pdfOrder: normalizedPdfOrder,
-        };
-        setPdfOrder(normalizedPdfOrder);
-        setAutoFillSettings(normalizedSettings);
-        await setDoc(settingRef, { ...normalizedSettings, updatedAt: new Date() }, { merge: true });
-        setStaffListLoaded(true);
-      } catch (e) {
-        console.warn('スタッフ取得失敗', e);
-        setStaffListLoaded(true);
-      }
+    const settingsUnsub = onSnapshot(doc(db, 'settings', 'autoFillSettings'), (snap) => {
+      savedSettings = snap.exists() ? snap.data() : {};
+      applyStaffSettings();
+    });
 
-      // ▼ リアルタイムリスナーをまとめて設定 ▼
-      // shifts はgetDocs（1回読み込み）に変更
-      const shiftsSnap = await getDocs(collection(db, 'shifts2'));
+    const staffUnsub = onSnapshot(query(collection(db, 'accounts'), where('role', '==', 'staff')), (snap) => {
+      staffList = snap.docs
+        .filter(d => d.data().showInShiftTable !== false)
+        .map(d => ({ id: d.id, name: d.data().name }));
+      setAllStaff(staffList);
+      applyStaffSettings();
+      setStaffListLoaded(true);
+    }, (e) => {
+      console.warn('スタッフ取得失敗', e);
+      setStaffListLoaded(true);
+    });
+
+    const shiftsUnsub = onSnapshot(collection(db, 'shifts2'), (snap) => {
       const reqData: Record<string, string> = {};
-      shiftsSnap.forEach(d => {
+      snap.forEach(d => {
         const data = d.data();
         if (!data.staffName || !data.dateStr || !data.type) return;
         reqData[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
       });
       setRequests(reqData);
+    });
 
-      // シフト画面を再読み込みするボタン用の関数を定義
-      const reloadShifts = async () => {
-        const snap = await getDocs(collection(db, 'shifts2'));
-        const rd: Record<string, string> = {};
-        snap.forEach(d => {
-          const data = d.data();
-          if (!data.staffName || !data.dateStr || !data.type) return;
-          rd[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
-        });
-        setRequests(rd);
-      };
-
-      const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
+    const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
         const asData: Record<string, AssignedStaff[]> = {};
         s.forEach(d => { asData[d.id] = d.data().staff || []; });
         setAssignedShifts(asData);
         setAssignedShiftsLoaded(true);
       }, (e) => console.warn('assigned_shifts リスナーエラー', e));
 
-      const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
+    const evUnsub = onSnapshot(collection(db, 'events'), (snap) => {
         const eData: Record<string, string[]> = {};
         snap.forEach(d => {
           const data = d.data();
@@ -332,15 +306,19 @@ export default function ShiftCreateScreen() {
         setEventsData(eData);
       }, (e) => console.warn('events リスナーエラー', e));
 
-      onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
-        if (docSnap.exists() && docSnap.data().periods) setHolidayPeriods(docSnap.data().periods);
-      });
+    const holidaysUnsub = onSnapshot(doc(db, 'settings', 'holidays_data'), (snap) => {
+      if (snap.exists() && snap.data().periods) setHolidayPeriods(snap.data().periods);
+    });
 
-      // ▼ 修正: リスナー設定完了時点でローディング解除（コールバック待ち不要）▼
-
-      return () => { asUnsub(); evUnsub(); };
+    return () => {
+      masterUnsub();
+      settingsUnsub();
+      staffUnsub();
+      shiftsUnsub();
+      asUnsub();
+      evUnsub();
+      holidaysUnsub();
     };
-    fetchData();
   }, []);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();

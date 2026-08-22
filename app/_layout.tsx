@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { disableNetwork, enableNetwork } from 'firebase/firestore';
+import { enableNetwork } from 'firebase/firestore';
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -125,31 +125,15 @@ export default function RootLayout() {
 
     setupLoggedInPush();
 
-    // オンライン状態の監視
-    const checkOnline = async () => {
-      try {
-        await enableNetwork(db);
-        setIsOnline(true);
-      } catch {
-        setIsOnline(false);
-      }
-    };
-
     // アプリがフォアグラウンドに戻ったとき、Firestoreを再接続して最新データを取得
     const handleAppStateChange = async (nextState: string) => {
       if (nextState === 'active') {
         try {
-          await disableNetwork(db);
           await enableNetwork(db);
           setIsOnline(true);
         } catch {
           setIsOnline(false);
         }
-      } else if (nextState === 'background') {
-        // バックグラウンド時はネットワークを切断（古いキャッシュの書き戻しを防ぐ）
-        try {
-          await disableNetwork(db);
-        } catch {}
       }
     };
 
@@ -157,7 +141,6 @@ export default function RootLayout() {
     if (Platform.OS === 'web') {
       const handleOnline = async () => {
         try {
-          await disableNetwork(db);
           await enableNetwork(db);
           setIsOnline(true);
         } catch {}

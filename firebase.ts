@@ -1,5 +1,10 @@
 import { getApps, initializeApp } from "firebase/app";
-import { Firestore, getFirestore, initializeFirestore, memoryLocalCache } from "firebase/firestore";
+import {
+  Firestore,
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { Platform } from "react-native";
 

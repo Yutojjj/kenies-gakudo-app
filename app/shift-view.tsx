@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -53,12 +53,15 @@ export default function ShiftViewScreen() {
     }).finally(() => setIdentityLoaded(true));
 
     fetch('https://holidays-jp.github.io/api/v1/date.json')
-      .then(r => r.json()).then(setPublicHolidays).catch(() => {});
+      .then(r => r.json())
+      .then(setPublicHolidays)
+      .catch(() => {});
 
-    getDocs(query(collection(db, 'accounts'), where('role', '==', 'staff')))
-      .then(snap => setAllStaff(snap.docs
+    const unsubAccounts = onSnapshot(query(collection(db, 'accounts'), where('role', '==', 'staff')), snap => {
+      setAllStaff(snap.docs
         .filter(d => d.data().showInShiftTable !== false)
-        .map(d => ({ id: d.id, name: d.data().name }))));
+        .map(d => ({ id: d.id, name: d.data().name })));
+    });
 
     const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), snap => {
       const data: Record<string, AssignedStaff[]> = {};
@@ -83,7 +86,7 @@ export default function ShiftViewScreen() {
       setEventsData(eData);
     });
 
-    return () => { unsubShifts(); unsubHolidays(); unsubEvents(); };
+    return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); };
   }, []);
 
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
