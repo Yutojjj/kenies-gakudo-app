@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
+import { isLessonActiveOnDate } from './lessonPeriod';
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -140,6 +141,26 @@ export async function loadTransportOverview(dateStr: string): Promise<TransportO
       lessons[key].push(child);
     });
   });
+
+  regularLessons
+    .filter((lesson: any) => (
+      lesson.isExternal === true
+      && lesson.dayOfWeek === dayName
+      && isLessonActiveOnDate(lesson, dateStr)
+      && lesson.lessonName
+      && lesson.lessonTime
+    ))
+    .forEach((lesson: any) => {
+      const key = `${lesson.lessonTime} ${lesson.lessonName}`;
+      if (!lessons[key]) lessons[key] = [];
+      lessons[key].push({
+        id: lesson.childId || lesson.id,
+        name: lesson.childName,
+        school: '外部',
+        grade: '外部',
+        isExternal: true,
+      });
+    });
 
   return {
     attendance: { schools, lessons, totalCount },

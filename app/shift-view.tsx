@@ -113,11 +113,14 @@ export default function ShiftViewScreen() {
     ? allStaff.filter(s => s.name === myName)
     : allStaff;
   const monthSwipeHandlers = useMonthSwipe({
-    onMoveMonth: amount => setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1)),
+    enabled: !createVisible,
+    onMoveMonth: amount => {
+      setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1));
+    },
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} {...monthSwipeHandlers}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
@@ -176,7 +179,7 @@ export default function ShiftViewScreen() {
       </View>
 
       {/* カレンダー */}
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent} {...monthSwipeHandlers}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
         {/* 曜日ヘッダー */}
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => (

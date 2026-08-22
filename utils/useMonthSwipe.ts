@@ -3,14 +3,17 @@ import { PanResponder } from 'react-native';
 
 type UseMonthSwipeOptions = {
   onMoveMonth: (amount: -1 | 1) => void;
+  enabled?: boolean;
 };
 
-export function useMonthSwipe({ onMoveMonth }: UseMonthSwipeOptions) {
+export function useMonthSwipe({ onMoveMonth, enabled = true }: UseMonthSwipeOptions) {
   const onMoveMonthRef = useRef(onMoveMonth);
+  const enabledRef = useRef(enabled);
   onMoveMonthRef.current = onMoveMonth;
+  enabledRef.current = enabled;
 
   const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_event, gesture) => (
+    onMoveShouldSetPanResponderCapture: (_event, gesture) => enabledRef.current && (
       Math.abs(gesture.dx) > 12 &&
       Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2
     ),

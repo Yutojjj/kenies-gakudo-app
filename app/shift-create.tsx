@@ -788,7 +788,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
   if (checking || !verified) return null;
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} {...monthSwipeHandlers}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => embedded ? onClose?.() : navigateHome(router)}>
           <Ionicons name={embedded ? 'close' : 'chevron-back'} size={embedded ? 26 : 24} color="#5D4037" />
@@ -875,7 +875,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </View>
       </View>
 
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent} {...monthSwipeHandlers}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => <Text key={i} style={[styles.calWeekText, i === 0 && {color: 'red'}, i === 6 && {color: 'blue'}]}>{w}</Text>)}
         </View>

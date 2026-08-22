@@ -10,6 +10,7 @@ import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import { isLessonActiveOnDate } from '../utils/lessonPeriod';
 import { getTransportEntryStatus } from '../utils/transportEntryStatus';
 
 const customAlert = (title: string, message?: string) => {
@@ -491,6 +492,7 @@ export default function AttendanceScreen() {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
+    const dayOfWeekStr = DAY_NAMES[date.getDay()];
 
     const schools: Record<string, Record<string, Kid[]>> = {};
     const lessons: Record<string, Kid[]> = {}; 
@@ -513,6 +515,28 @@ export default function AttendanceScreen() {
         lessons[key].push(displayKid);
       }
     });
+
+    lessonsData
+      .filter(lesson => (
+        lesson.isExternal === true
+        && lesson.dayOfWeek === dayOfWeekStr
+        && isLessonActiveOnDate(lesson, dateStr)
+        && lesson.lessonName
+        && lesson.lessonTime
+      ))
+      .forEach(lesson => {
+        const key = `${lesson.lessonTime} ${lesson.lessonName}`;
+        if (!lessons[key]) lessons[key] = [];
+        lessons[key].push({
+          id: lesson.childId || lesson.id,
+          name: lesson.childName,
+          school: '外部',
+          grade: '外部',
+          usageType: '外部',
+          days: {},
+          isExternal: true,
+        } as Kid);
+      });
 
     return { schools, lessons, totalCount };
   };

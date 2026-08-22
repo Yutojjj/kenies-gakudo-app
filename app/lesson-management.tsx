@@ -63,7 +63,22 @@ interface Lesson {
   lessonTime: string;
   dayOfWeek?: string;
   isPaid?: boolean;
+  isExternal?: boolean;
+  validFrom?: string;
+  validTo?: string;
 }
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateLabel = (dateKey: string) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return `${year}年${month}月${day}日`;
+};
 
 const getGradeNum = (grade: string) => {
   const m = grade.match(/\d/);
@@ -85,6 +100,14 @@ export default function LessonManagementScreen() {
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState('月');
   const [selectedTime, setSelectedTime] = useState('15:00');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
+  const [childSource, setChildSource] = useState<'account' | 'external'>('account');
+  const [externalChildName, setExternalChildName] = useState('');
+  const [externalStartDate, setExternalStartDate] = useState(() => toDateKey(new Date()));
+  const [externalEndDate, setExternalEndDate] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() + 1);
+    return toDateKey(date);
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSchool, setFilterSchool] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
@@ -106,6 +129,9 @@ export default function LessonManagementScreen() {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [datePickerTarget, setDatePickerTarget] = useState<'start' | 'end'>('start');
+  const [datePickerMonth, setDatePickerMonth] = useState(() => new Date());
 
   // ピッカーScrollViewのref（選択値を中央にスクロールするため）
   const ITEM_HEIGHT = 44;
@@ -281,6 +307,35 @@ export default function LessonManagementScreen() {
 
   const handleRegister = async () => {
     if (!lessonName.trim()) { customAlert('エラー', '習い事の名前を入力してください'); return; }
+    if (childSource === 'external') {
+      if (!externalChildName.trim()) { customAlert('エラー', '外部児童の名前を入力してください'); return; }
+      if (!externalStartDate || !externalEndDate || externalStartDate > externalEndDate) {
+        customAlert('エラー', '表示期間を正しく入力してください');
+        return;
+      }
+      try {
+        await addDoc(collection(db, 'lessons'), {
+          childId: `external_${Date.now()}`,
+          childName: externalChildName.trim(),
+          school: '外部',
+          lessonName: lessonName.trim(),
+          lessonTime: selectedTime,
+          dayOfWeek: selectedDayOfWeek,
+          isPaid,
+          isExternal: true,
+          validFrom: externalStartDate,
+          validTo: externalEndDate,
+        });
+        customAlert('成功', `${externalChildName.trim()}さんの習い事を登録しました`);
+        resetForm();
+        await fetchData();
+        setViewMode('list');
+      } catch (e) {
+        console.error('外部児童の登録失敗:', e);
+        customAlert('エラー', '登録に失敗しました');
+      }
+      return;
+    }
     if (selectedKidIds.length === 0) { customAlert('エラー', '児童を1人以上選択してください'); return; }
 
     let successCount = 0;
@@ -372,10 +427,48 @@ export default function LessonManagementScreen() {
     setTempHour(15);
     setTempMinute(0);
     setSelectedKidIds([]);
+    setChildSource('account');
+    setExternalChildName('');
+    setExternalStartDate(toDateKey(new Date()));
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    setExternalEndDate(toDateKey(nextMonth));
     setSearchQuery('');
     setFilterSchool('');
     setFilterGrade('');
   };
+
+  const openDatePicker = (target: 'start' | 'end') => {
+    const current = target === 'start' ? externalStartDate : externalEndDate;
+    const parsed = new Date(`${current}T00:00:00`);
+    setDatePickerTarget(target);
+    setDatePickerMonth(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
+    setDatePickerVisible(true);
+  };
+
+  const selectExternalDate = (dateKey: string) => {
+    if (datePickerTarget === 'start') {
+      setExternalStartDate(dateKey);
+      if (dateKey > externalEndDate) setExternalEndDate(dateKey);
+    } else {
+      setExternalEndDate(dateKey < externalStartDate ? externalStartDate : dateKey);
+    }
+    setDatePickerVisible(false);
+  };
+
+  const calendarCells = useMemo(() => {
+    const year = datePickerMonth.getFullYear();
+    const month = datePickerMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const days = new Date(year, month + 1, 0).getDate();
+    return [
+      ...Array.from({ length: firstDay }, () => null),
+      ...Array.from({ length: days }, (_, index) => {
+        const date = new Date(year, month, index + 1);
+        return { day: index + 1, key: toDateKey(date) };
+      }),
+    ];
+  }, [datePickerMonth]);
 
   if (checking || !verified) return null;
   return (
@@ -558,12 +651,17 @@ export default function LessonManagementScreen() {
                                               <Text style={[styles.lessonBadgeText, { color:'#7B1FA2', fontSize:9 }]}>{lesson.dayOfWeek}曜</Text>
                                             </View>
                                           )}
-                                          {lesson.isPaid && (
+                                           {lesson.isPaid && (
                                             <View style={[styles.lessonBadge, { backgroundColor:'#FBE9E7', paddingHorizontal:5, paddingVertical:1 }]}>
                                               <Text style={[styles.lessonBadgeText, { color:'#FF7043', fontSize:9 }]}>有料</Text>
-                                            </View>
-                                          )}
-                                        </View>
+                                             </View>
+                                           )}
+                                           {lesson.isExternal && lesson.validFrom && lesson.validTo && (
+                                             <View style={[styles.lessonBadge, { backgroundColor:'#FFF3E0', paddingHorizontal:5, paddingVertical:1 }]}>
+                                               <Text style={[styles.lessonBadgeText, { color:'#A65B00', fontSize:9 }]}>外部 {lesson.validFrom.replaceAll('-', '/')}〜{lesson.validTo.replaceAll('-', '/')}</Text>
+                                             </View>
+                                           )}
+                                         </View>
                                       </View>
                                       <TouchableOpacity
                                         style={[styles.groupAddBtn, { marginRight:4 }]}
@@ -656,13 +754,55 @@ export default function LessonManagementScreen() {
           <View style={styles.stepCard}>
             <View style={styles.stepHeader}>
               <View style={styles.stepNum}><Text style={styles.stepNumText}>4</Text></View>
-              <Text style={styles.stepTitle}>児童を選択（複数可）</Text>
-              {selectedKidIds.length > 0 && (
+              <Text style={styles.stepTitle}>児童を選択</Text>
+              {childSource === 'account' && selectedKidIds.length > 0 && (
                 <View style={styles.selectedCountBadge}>
                   <Text style={styles.selectedCountText}>{selectedKidIds.length}名</Text>
                 </View>
               )}
             </View>
+
+            <View style={styles.sourceTabs}>
+              <TouchableOpacity
+                style={[styles.sourceTab, childSource === 'account' && styles.sourceTabActive]}
+                onPress={() => setChildSource('account')}
+              >
+                <Text style={[styles.sourceTabText, childSource === 'account' && styles.sourceTabTextActive]}>登録済み児童</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sourceTab, childSource === 'external' && styles.sourceTabActive]}
+                onPress={() => setChildSource('external')}
+              >
+                <Text style={[styles.sourceTabText, childSource === 'external' && styles.sourceTabTextActive]}>外部</Text>
+              </TouchableOpacity>
+            </View>
+
+            {childSource === 'external' ? (
+              <View style={styles.externalForm}>
+                <Text style={styles.fieldLabel}>名前</Text>
+                <TextInput
+                  style={styles.input}
+                  value={externalChildName}
+                  onChangeText={setExternalChildName}
+                  placeholder="例: 山田 はな"
+                  placeholderTextColor="#BBBBBB"
+                />
+                <Text style={[styles.fieldLabel, { marginTop: 14 }]}>表示する期間</Text>
+                <View style={styles.dateRangeRow}>
+                  <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('start')}>
+                    <Text style={styles.dateFieldCaption}>開始日</Text>
+                    <Text style={styles.dateFieldValue}>{formatDateLabel(externalStartDate)}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.dateRangeSeparator}>〜</Text>
+                  <TouchableOpacity style={styles.dateField} onPress={() => openDatePicker('end')}>
+                    <Text style={styles.dateFieldCaption}>終了日</Text>
+                    <Text style={styles.dateFieldValue}>{formatDateLabel(externalEndDate)}</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.externalHint}>この期間の該当曜日だけ、習い事・送迎一覧に表示されます。</Text>
+              </View>
+            ) : (
+              <>
 
             {/* 検索バー */}
             <View style={styles.searchBar}>
@@ -753,16 +893,23 @@ export default function LessonManagementScreen() {
                 })
               )}
             </View>
+              </>
+            )}
           </View>
 
           <TouchableOpacity
-            style={[styles.submitBtn, (!lessonName || selectedKidIds.length === 0) && styles.submitBtnDisabled]}
+            style={[
+              styles.submitBtn,
+              (!lessonName || (childSource === 'account' ? selectedKidIds.length === 0 : !externalChildName.trim())) && styles.submitBtnDisabled,
+            ]}
             onPress={handleRegister}
-            disabled={!lessonName || selectedKidIds.length === 0}
+            disabled={!lessonName || (childSource === 'account' ? selectedKidIds.length === 0 : !externalChildName.trim())}
           >
             <Ionicons name="checkmark-circle" size={22} color={COLORS.white} />
             <Text style={styles.submitBtnText}>
-              {selectedKidIds.length > 0 ? `${selectedKidIds.length}名に登録する` : '登録する'}
+              {childSource === 'external'
+                ? '外部児童を登録する'
+                : selectedKidIds.length > 0 ? `${selectedKidIds.length}名に登録する` : '登録する'}
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -868,6 +1015,49 @@ export default function LessonManagementScreen() {
         </View>
       </Modal>
 
+      {/* 外部児童の表示期間 */}
+      <Modal visible={datePickerVisible} transparent animationType="fade" onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={[styles.pickerOverlay, { justifyContent: 'center', padding: 18 }]}> 
+          <View style={styles.calendarModal}>
+            <View style={styles.calendarModalHeader}>
+              <View>
+                <Text style={styles.calendarModalTitle}>表示期間を選択</Text>
+                <Text style={styles.calendarModalTarget}>{datePickerTarget === 'start' ? '開始日' : '終了日'}</Text>
+              </View>
+              <TouchableOpacity style={styles.calendarCloseBtn} onPress={() => setDatePickerVisible(false)}>
+                <Ionicons name="close" size={26} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.calendarMonthRow}>
+              <TouchableOpacity style={styles.calendarArrow} onPress={() => setDatePickerMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>
+                <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+              <Text style={styles.calendarMonthText}>{datePickerMonth.getFullYear()}年 {datePickerMonth.getMonth() + 1}月</Text>
+              <TouchableOpacity style={styles.calendarArrow} onPress={() => setDatePickerMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>
+                <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.calendarWeekRow}>
+              {['日','月','火','水','木','金','土'].map((day, index) => (
+                <Text key={day} style={[styles.calendarWeekText, index === 0 && { color:'#E74C3C' }, index === 6 && { color:'#2F80ED' }]}>{day}</Text>
+              ))}
+            </View>
+            <View style={styles.calendarGrid}>
+              {calendarCells.map((cell, index) => {
+                if (!cell) return <View key={`empty-${index}`} style={styles.calendarDay} />;
+                const selected = cell.key === (datePickerTarget === 'start' ? externalStartDate : externalEndDate);
+                const inRange = cell.key >= externalStartDate && cell.key <= externalEndDate;
+                return (
+                  <TouchableOpacity key={cell.key} style={[styles.calendarDay, inRange && styles.calendarDayInRange, selected && styles.calendarDaySelected]} onPress={() => selectExternalDate(cell.key)}>
+                    <Text style={[styles.calendarDayText, selected && styles.calendarDayTextSelected]}>{cell.day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* ④ 新規追加用 時刻ピッカー */}
       <Modal visible={timePickerVisible} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
@@ -952,6 +1142,19 @@ const styles = StyleSheet.create({
   stepNum: { width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
   stepNumText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13 },
   stepTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  sourceTabs: { flexDirection: 'row', backgroundColor: '#F1F4F5', borderRadius: 12, padding: 4, marginBottom: 14 },
+  sourceTab: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
+  sourceTabActive: { backgroundColor: COLORS.white, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  sourceTabText: { fontSize: 14, fontWeight: 'bold', color: COLORS.textLight },
+  sourceTabTextActive: { color: COLORS.primary },
+  externalForm: { backgroundColor: '#FFF9F2', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#FFD6A5' },
+  fieldLabel: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, marginBottom: 6 },
+  dateRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  dateField: { flex: 1, minHeight: 64, borderRadius: 10, borderWidth: 1, borderColor: COLORS.primary + '55', backgroundColor: '#F4FBFC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  dateFieldCaption: { fontSize: 11, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 4 },
+  dateFieldValue: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
+  dateRangeSeparator: { fontSize: 18, color: COLORS.textLight },
+  externalHint: { fontSize: 11, color: COLORS.textLight, marginTop: 10, lineHeight: 17 },
   selectedCountBadge: { backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   selectedCountText: { color: COLORS.white, fontSize: 11, fontWeight: 'bold' },
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#FAFAFA' },
@@ -1009,4 +1212,20 @@ const styles = StyleSheet.create({
   pickerCancelText: { fontSize: 16, fontWeight: 'bold', color: COLORS.textLight },
   pickerConfirmBtn: { flex: 1, paddingVertical: 16, backgroundColor: COLORS.primary, borderRadius: 12, alignItems: 'center' },
   pickerConfirmText: { fontSize: 16, fontWeight: 'bold', color: COLORS.white },
+  calendarModal: { width: '100%', maxWidth: 460, alignSelf: 'center', backgroundColor: COLORS.white, borderRadius: 18, padding: 18 },
+  calendarModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  calendarModalTitle: { fontSize: 19, fontWeight: 'bold', color: COLORS.text },
+  calendarModalTarget: { fontSize: 13, fontWeight: 'bold', color: COLORS.primary, marginTop: 3 },
+  calendarCloseBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5F5F5' },
+  calendarMonthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  calendarArrow: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
+  calendarMonthText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  calendarWeekRow: { flexDirection: 'row' },
+  calendarWeekText: { width: '14.285%', textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, paddingVertical: 8 },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDay: { width: '14.285%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  calendarDayInRange: { backgroundColor: '#E8F8FA' },
+  calendarDaySelected: { backgroundColor: COLORS.primary, borderRadius: 999 },
+  calendarDayText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  calendarDayTextSelected: { color: COLORS.white, fontWeight: 'bold' },
 });
