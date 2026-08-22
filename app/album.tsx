@@ -36,13 +36,6 @@ type AlbumEvent = {
   dateStr?: string;
 };
 
-type CalendarEvent = {
-  id: string;
-  dateStr: string;
-  title: string;
-  hidden?: boolean;
-};
-
 const DIRECTORY_DB_NAME = 'kenies-album-directory';
 const DIRECTORY_STORE_NAME = 'handles';
 const DIRECTORY_HANDLE_KEY = 'media-library';
@@ -194,6 +187,26 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
           <ActivityIndicator size="small" color={COLORS.primary} />
         </View>
       )}
+    </View>
+  );
+});
+
+const AlbumUploadProgress = memo(function AlbumUploadProgress() {
+  const [uploadQueue, setUploadQueue] = useState(getAlbumUploadQueueState);
+
+  useEffect(() => subscribeAlbumUploadQueue(setUploadQueue), []);
+
+  if (!uploadQueue.active) return null;
+  return (
+    <View style={styles.backgroundUploadBanner}>
+      <ActivityIndicator size="small" color={COLORS.primary} />
+      <View style={styles.backgroundUploadContent}>
+        <Text style={styles.backgroundUploadTitle}>写真・動画をアップロード中</Text>
+        <Text style={styles.backgroundUploadStatus}>{uploadQueue.message}　{uploadQueue.progress}%</Text>
+        <View style={styles.backgroundUploadTrack}>
+          <View style={[styles.backgroundUploadProgress, { width: `${uploadQueue.progress}%` }]} />
+        </View>
+      </View>
     </View>
   );
 });
@@ -350,7 +363,6 @@ export default function AlbumScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadQueue, setUploadQueue] = useState(getAlbumUploadQueueState);
   const [isDownloading, setIsDownloading] = useState(false);
   const [mediaLoading, setMediaLoading] = useState(true);
   const [mediaLoadError, setMediaLoadError] = useState('');
@@ -388,7 +400,6 @@ export default function AlbumScreen() {
   const [visibleMediaCounts, setVisibleMediaCounts] = useState<Record<string, number>>({});
 
   const [albumEvents, setAlbumEvents] = useState<AlbumEvent[]>([]);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockCodeInput, setUnlockCodeInput] = useState('');
@@ -401,8 +412,6 @@ export default function AlbumScreen() {
   const webDirectoryHandleRef = useRef<any>(null);
   const fullScreenDragStartIndexRef = useRef(0);
   const fullScreenProgrammaticScrollRef = useRef(false);
-
-  useEffect(() => subscribeAlbumUploadQueue(setUploadQueue), []);
 
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
@@ -474,7 +483,27 @@ export default function AlbumScreen() {
     });
 
     setMediaLoadError('');
-    // メタデータだけを同期し、実画像・動画はセクションを開いた時に読み込む。
+    let pendingPhotosData: Record<string, AlbumMedia[]> | null = null;
+    const applyPhotosData = (photosData: Record<string, AlbumMedia[]>) => {
+      if (!isMounted) return;
+      setAlbumPhotos(photosData);
+      setMediaLoading(false);
+      setMediaLoadError('');
+      AsyncStorage.setItem(albumCacheKey, JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        photos: photosData,
+      })).catch(error => console.warn('アルバムキャッシュの保存に失敗しました', error));
+    };
+    const unsubscribeUploadQueue = subscribeAlbumUploadQueue(queueState => {
+      if (!queueState.active && pendingPhotosData) {
+        const nextPhotosData = pendingPhotosData;
+        pendingPhotosData = null;
+        applyPhotosData(nextPhotosData);
+      }
+    });
+
+    // アップロード中は1枚ごとの更新を保留し、完了時にまとめて反映する。
     const unsubPhotos = onSnapshot(collection(db, 'albums2'), (photosSnap) => {
       if (!isMounted) return;
       snapshotReceived = true;
@@ -492,14 +521,11 @@ export default function AlbumScreen() {
           duration: item.duration ?? null,
         });
       });
-      setAlbumPhotos(photosData);
-      setMediaLoading(false);
-      setMediaLoadError('');
-      AsyncStorage.setItem(albumCacheKey, JSON.stringify({
-        version: 1,
-        savedAt: Date.now(),
-        photos: photosData,
-      })).catch(error => console.warn('アルバムキャッシュの保存に失敗しました', error));
+      if (getAlbumUploadQueueState().active) {
+        pendingPhotosData = photosData;
+      } else {
+        applyPhotosData(photosData);
+      }
     }, (e) => {
       console.warn('albums読み込みエラー:', e);
       if (!isMounted) return;
@@ -513,19 +539,7 @@ export default function AlbumScreen() {
       setAlbumEvents(evs);
     }, (e) => console.warn('album_events読み込みエラー:', e));
 
-    const unsubCalendarEvents = onSnapshot(collection(db, 'events'), (eventsSnap) => {
-      if (!isMounted) return;
-      const events = eventsSnap.docs.flatMap(eventDoc => {
-        const data = eventDoc.data();
-        const dateStr = String(data.dateStr || eventDoc.id || '');
-        const title = String(data.title || '').trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !title) return [];
-        return [{ id: eventDoc.id, dateStr, title, hidden: !!data.hidden }];
-      });
-      setCalendarEvents(events);
-    }, (e) => console.warn('events読み込みエラー:', e));
-
-    return () => { isMounted = false; unsubPhotos(); unsubEvents(); unsubCalendarEvents(); };
+    return () => { isMounted = false; unsubscribeUploadQueue(); unsubPhotos(); unsubEvents(); };
   }, [role, name, mediaReloadKey]);
 
   const toggleExpand = (key: string) => {
@@ -921,11 +935,8 @@ export default function AlbumScreen() {
   ));
 
   const getCalendarEventTitlesForDate = (dateStr: string) => {
-    const managedEventTitles = calendarEvents
-      .filter(event => event.dateStr === dateStr && (role !== 'user' || !event.hidden))
-      .map(event => event.title);
     const albumEventTitles = getVisibleEventsForDate(dateStr).map(getEventDisplayName);
-    return Array.from(new Set([...managedEventTitles, ...albumEventTitles]));
+    return Array.from(new Set(albumEventTitles));
   };
 
   const getCalendarEventItemsForDate = (dateStr: string) => {
@@ -1278,18 +1289,7 @@ export default function AlbumScreen() {
         )}
       </View>
 
-      {uploadQueue.active && (
-        <View style={styles.backgroundUploadBanner}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
-          <View style={styles.backgroundUploadContent}>
-            <Text style={styles.backgroundUploadTitle}>写真・動画をアップロード中</Text>
-            <Text style={styles.backgroundUploadStatus}>{uploadQueue.message}　{uploadQueue.progress}%</Text>
-            <View style={styles.backgroundUploadTrack}>
-              <View style={[styles.backgroundUploadProgress, { width: `${uploadQueue.progress}%` }]} />
-            </View>
-          </View>
-        </View>
-      )}
+      <AlbumUploadProgress />
 
       <View style={{ flex: 1 }}>
             <View style={styles.monthSelector}>
@@ -1929,7 +1929,7 @@ const styles = StyleSheet.create({
   albumCalendarDayManageable: { color: '#555555', fontWeight: '700' },
   albumCalendarDayWithMedia: { color: '#222222', fontWeight: '800' },
   albumCalendarDailyBadge: { width: '100%', marginTop: 4, paddingHorizontal: 3, paddingVertical: 3, backgroundColor: '#FCE8EE', alignItems: 'center' },
-  albumCalendarEventBadge: { width: '100%', marginTop: 4, paddingHorizontal: 3, paddingVertical: 3, backgroundColor: '#FFF3C9', alignItems: 'center' },
+  albumCalendarEventBadge: { width: '100%', marginTop: 4, paddingHorizontal: 3, paddingVertical: 3, backgroundColor: '#FFE2C2', alignItems: 'center' },
   albumCalendarBadgeText: { width: '100%', color: '#4A4141', fontSize: 9, lineHeight: 12, fontWeight: 'bold', flexShrink: 1, textAlign: 'center' },
   albumCalendarBadgeCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },
   albumCalendarEventCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },

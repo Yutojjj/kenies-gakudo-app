@@ -77,10 +77,15 @@ const uploadAsset = async (
     blob,
     asset.mimeType ? { contentType: asset.mimeType } : undefined,
   );
+  let lastProgressPublishedAt = 0;
 
   await new Promise<void>((resolve, reject) => {
     task.on('state_changed', snapshot => {
       const currentProgress = snapshot.totalBytes > 0 ? snapshot.bytesTransferred / snapshot.totalBytes : 0;
+      const now = Date.now();
+      const isComplete = snapshot.bytesTransferred >= snapshot.totalBytes;
+      if (!isComplete && now - lastProgressPublishedAt < 300) return;
+      lastProgressPublishedAt = now;
       publish({
         progress: Math.round(((itemIndex + currentProgress) / total) * 100),
         message: `${itemIndex + 1}/${total}件をアップロード中`,
