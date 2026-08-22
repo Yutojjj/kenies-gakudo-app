@@ -217,7 +217,7 @@ const AlbumUploadProgress = memo(function AlbumUploadProgress() {
   );
 });
 
-function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: number; height: number }) {
+function FullScreenMedia({ item, width, height, active }: { item: AlbumMedia; width: number; height: number; active: boolean }) {
   const [currentUri, setCurrentUri] = useState(item.uri);
   const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const refreshAttemptedRef = useRef(false);
@@ -264,12 +264,16 @@ function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: num
   };
 
   useEffect(() => {
-    if (!currentUri || loadState !== 'loading') return;
+    if (item.mediaType !== 'image' || !currentUri || loadState !== 'loading') return;
     const timeout = setTimeout(handleMediaError, 15000);
     return () => clearTimeout(timeout);
-  }, [currentUri, loadState]);
+  }, [currentUri, item.mediaType, loadState]);
 
-  const player = useVideoPlayer(item.mediaType === 'video' && currentUri ? currentUri : null, currentPlayer => {
+  useEffect(() => {
+    if (active && item.mediaType === 'video' && currentUri) setLoadState('loaded');
+  }, [active, currentUri, item.mediaType]);
+
+  const player = useVideoPlayer(active && item.mediaType === 'video' && currentUri ? currentUri : null, currentPlayer => {
     currentPlayer.loop = false;
   });
 
@@ -291,6 +295,13 @@ function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: num
   }
 
   if (item.mediaType === 'video') {
+    if (!active) {
+      return (
+        <View style={[styles.fullScreenMediaStatus, { width, height }]}>
+          <Ionicons name="play-circle-outline" size={48} color="#FFFFFF" />
+        </View>
+      );
+    }
     return <VideoView player={player} style={{ width, height }} nativeControls contentFit="contain" />;
   }
   if (Platform.OS === 'web') {
@@ -403,6 +414,7 @@ export default function AlbumScreen() {
   const [visibleMediaCounts, setVisibleMediaCounts] = useState<Record<string, number>>({});
 
   const [albumEvents, setAlbumEvents] = useState<AlbumEvent[]>([]);
+  const [eventAlbumDeleteTarget, setEventAlbumDeleteTarget] = useState<AlbumEvent | null>(null);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
   const [unlockCodeInput, setUnlockCodeInput] = useState('');
@@ -1119,23 +1131,23 @@ export default function AlbumScreen() {
     setLoading(true);
     try {
       const allPhotosFlat = Object.values(albumPhotos).flat();
-      for (const id of idsToDelete) {
-        const photo = allPhotosFlat.find(p => p.id === id);
-        if (photo) {
-          if (photo.storagePath) {
-            const storageRef = ref(storage, photo.storagePath);
-            await deleteObject(storageRef).catch(() => {});
-          }
-          if (photo.thumbnailStoragePath) {
-            await deleteObject(ref(storage, photo.thumbnailStoragePath)).catch(() => {});
-          }
+      const photos = idsToDelete
+        .map(id => allPhotosFlat.find(photo => photo.id === id))
+        .filter((photo): photo is AlbumMedia => !!photo);
+      const deleteBatchSize = 6;
+      for (let start = 0; start < photos.length; start += deleteBatchSize) {
+        await Promise.all(photos.slice(start, start + deleteBatchSize).map(async photo => {
+          if (photo.storagePath) await deleteObject(ref(storage, photo.storagePath)).catch(() => {});
+          if (photo.thumbnailStoragePath) await deleteObject(ref(storage, photo.thumbnailStoragePath)).catch(() => {});
           await deleteDoc(doc(db, 'albums2', photo.id));
-        }
+        }));
       }
       setIsSelectMode(false);
       setSelectedPhotoIds([]);
+      return true;
     } catch (e) {
       Alert.alert('エラー', '一部の画像の削除に失敗しました。');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -1148,6 +1160,15 @@ export default function AlbumScreen() {
     setFullScreenIndex(index);
   };
 
+  const executeEventAlbumDelete = async () => {
+    const target = eventAlbumDeleteTarget;
+    if (!target) return;
+    const eventMedia = albumPhotos[target.category] || [];
+    setEventAlbumDeleteTarget(null);
+    const mediaDeleted = await executeBulkDelete(eventMedia.map(media => media.id));
+    if (mediaDeleted) await deleteDoc(doc(db, 'album_events2', target.id));
+  };
+
   const closeFullScreen = () => {
     setFullScreenPhotos(null);
   };
@@ -1155,7 +1176,7 @@ export default function AlbumScreen() {
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
   const selectedDateMedia = selectedAlbumDate ? getMediaForDate(selectedAlbumDate) : [];
   const visibleSelectedDateMedia = selectedDateMedia.slice(0, selectedDateVisibleCount);
-  const selectedDateEventTitles = selectedAlbumDate ? getCalendarEventTitlesForDate(selectedAlbumDate) : [];
+  const selectedDateEvents = selectedAlbumDate ? getVisibleEventsForDate(selectedAlbumDate) : [];
   const selectedDateIndex = selectedAlbumDate ? availableMediaDates.indexOf(selectedAlbumDate) : -1;
 
   const moveSelectedAlbumDate = (amount: number) => {
@@ -1396,11 +1417,20 @@ export default function AlbumScreen() {
                     <Ionicons name="chevron-forward" size={24} color={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? '#C8C8C8' : COLORS.text} />
                   </TouchableOpacity>
                 </View>
-                {selectedDateEventTitles.length > 0 && (
+                {selectedDateEvents.length > 0 && (
                   <View style={styles.dateAlbumEventRow}>
-                    {selectedDateEventTitles.map(eventTitle => (
-                      <View key={eventTitle} style={styles.dateAlbumEventBadge}>
-                        <Text style={styles.dateAlbumEventBadgeText}>イベント　{eventTitle}</Text>
+                    {selectedDateEvents.map(event => (
+                      <View key={event.id} style={styles.dateAlbumEventBadge}>
+                        <Text style={styles.dateAlbumEventBadgeText}>イベント　{getEventDisplayName(event)}</Text>
+                        {role !== 'user' && (
+                          <TouchableOpacity
+                            style={styles.dateAlbumEventDeleteButton}
+                            accessibilityLabel={`${getEventDisplayName(event)}を削除`}
+                            onPress={() => setEventAlbumDeleteTarget(event)}
+                          >
+                            <Ionicons name="trash-outline" size={17} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     ))}
                   </View>
@@ -1450,6 +1480,25 @@ export default function AlbumScreen() {
                 <Ionicons name="add" size={32} color="#FFFFFF" />
               </TouchableOpacity>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={!!eventAlbumDeleteTarget} transparent animationType="fade" onRequestClose={() => setEventAlbumDeleteTarget(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEventAlbumDeleteTarget(null)}>
+          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} onPress={() => {}}>
+            <Text style={styles.eventAlbumDeleteTitle}>イベントアルバムを削除</Text>
+            <Text style={styles.eventAlbumDeleteMessage}>
+              「{eventAlbumDeleteTarget ? getEventDisplayName(eventAlbumDeleteTarget) : ''}」と、中の写真・動画をすべて削除しますか？
+            </Text>
+            <View style={styles.eventAlbumDeleteActions}>
+              <TouchableOpacity style={styles.eventAlbumDeleteCancel} onPress={() => setEventAlbumDeleteTarget(null)}>
+                <Text style={styles.eventAlbumDeleteCancelText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.eventAlbumDeleteConfirm} onPress={executeEventAlbumDelete}>
+                <Text style={styles.eventAlbumDeleteConfirmText}>削除する</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1735,9 +1784,9 @@ export default function AlbumScreen() {
                 onMomentumScrollEnd={(e) => {
                   settleFullScreenPage(e.nativeEvent.contentOffset.x);
                 }}
-                renderItem={({ item }) => (
+                renderItem={({ item, index }) => (
                   <View style={{ width: windowWidth, height: windowHeight, justifyContent: 'center', alignItems: 'center' }}>
-                    <FullScreenMedia item={item} width={windowWidth} height={windowHeight} />
+                    <FullScreenMedia item={item} width={windowWidth} height={windowHeight} active={index === fullScreenIndex} />
                   </View>
                 )}
               />
@@ -1960,8 +2009,17 @@ const styles = StyleSheet.create({
   dateAlbumDateText: { minWidth: 0, flexShrink: 1, color: COLORS.text, fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   dateAlbumFab: { position: 'absolute', right: 18, bottom: 18, zIndex: 20, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#184D50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.24, shadowRadius: 8, elevation: 8 },
   dateAlbumEventRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#FAF7FE' },
-  dateAlbumEventBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 11, backgroundColor: '#EDE3F8' },
+  dateAlbumEventBadge: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 9, paddingRight: 4, paddingVertical: 3, borderRadius: 11, backgroundColor: '#EDE3F8' },
   dateAlbumEventBadgeText: { color: '#674F9C', fontSize: 11, fontWeight: 'bold' },
+  dateAlbumEventDeleteButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#FFF4F4' },
+  eventAlbumDeleteModal: { width: '88%', maxWidth: 420, borderRadius: 14, backgroundColor: COLORS.white, padding: 20 },
+  eventAlbumDeleteTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
+  eventAlbumDeleteMessage: { marginTop: 12, color: COLORS.text, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  eventAlbumDeleteActions: { marginTop: 20, flexDirection: 'row', gap: 10 },
+  eventAlbumDeleteCancel: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#F2F2F2' },
+  eventAlbumDeleteCancelText: { color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
+  eventAlbumDeleteConfirm: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: COLORS.danger },
+  eventAlbumDeleteConfirmText: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
   dateAlbumMediaScroll: { flex: 1 },
   dateAlbumMediaGrid: { padding: 2 },
   dateAlbumMediaItem: { width: '33.333%', aspectRatio: 1, padding: 1 },
