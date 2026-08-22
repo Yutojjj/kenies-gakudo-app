@@ -18,12 +18,14 @@ import { enqueueAlbumUploads, getAlbumUploadQueueState, subscribeAlbumUploadQueu
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
-const INITIAL_MEDIA_COUNT = 24;
+const INITIAL_MEDIA_COUNT = 9;
 
 type AlbumMedia = {
   id: string;
   uri: string;
   storagePath?: string;
+  thumbnailUri?: string;
+  thumbnailStoragePath?: string;
   mediaType: 'image' | 'video';
   duration?: number | null;
 };
@@ -111,23 +113,24 @@ const getStoragePath = (item: AlbumMedia) => {
 };
 
 const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: AlbumMedia }) {
-  const [imageUri, setImageUri] = useState(item.uri);
+  const preferredUri = item.thumbnailUri || item.uri;
+  const [imageUri, setImageUri] = useState(preferredUri);
   const [imageState, setImageState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const refreshAttemptedRef = useRef(false);
 
   useEffect(() => {
     refreshAttemptedRef.current = false;
-    setImageUri(item.uri);
+    setImageUri(preferredUri);
     setImageState('loading');
-  }, [item.uri, item.storagePath]);
+  }, [preferredUri, item.storagePath, item.thumbnailStoragePath]);
 
   const retryImage = async () => {
     setImageState('loading');
     try {
-      const storagePath = getStoragePath(item);
+      const storagePath = item.thumbnailStoragePath || getStoragePath(item);
       const freshUri = storagePath
         ? await getDownloadURL(ref(storage, storagePath))
-        : item.uri;
+        : preferredUri;
       const separator = freshUri.includes('?') ? '&' : '?';
       setImageUri(`${freshUri}${separator}reload=${Date.now()}`);
     } catch (error) {
@@ -178,6 +181,8 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
         pointerEvents="none"
         contentFit="cover"
         cachePolicy="memory-disk"
+        allowDownscaling
+        responsivePolicy="initial"
         recyclingKey={item.id}
         transition={120}
         onLoad={() => setImageState('loaded')}
@@ -519,6 +524,8 @@ export default function AlbumScreen() {
           id: d.id,
           uri: item.uri,
           storagePath: item.storagePath,
+          thumbnailUri: item.thumbnailUri,
+          thumbnailStoragePath: item.thumbnailStoragePath,
           mediaType: getMediaType(item),
           duration: item.duration ?? null,
         });
@@ -1119,6 +1126,9 @@ export default function AlbumScreen() {
             const storageRef = ref(storage, photo.storagePath);
             await deleteObject(storageRef).catch(() => {});
           }
+          if (photo.thumbnailStoragePath) {
+            await deleteObject(ref(storage, photo.thumbnailStoragePath)).catch(() => {});
+          }
           await deleteDoc(doc(db, 'albums2', photo.id));
         }
       }
@@ -1401,10 +1411,11 @@ export default function AlbumScreen() {
                     style={styles.dateAlbumMediaScroll}
                     contentContainerStyle={styles.dateAlbumMediaGrid}
                     numColumns={3}
-                    initialNumToRender={12}
-                    maxToRenderPerBatch={12}
-                    windowSize={5}
-                    removeClippedSubviews={Platform.OS !== 'web'}
+                    initialNumToRender={6}
+                    maxToRenderPerBatch={6}
+                    updateCellsBatchingPeriod={80}
+                    windowSize={3}
+                    removeClippedSubviews
                     onEndReachedThreshold={0.35}
                     onEndReached={() => {
                       if (selectedDateVisibleCount < selectedDateMedia.length) {
@@ -1714,7 +1725,7 @@ export default function AlbumScreen() {
                 initialNumToRender={1}
                 maxToRenderPerBatch={2}
                 windowSize={3}
-                removeClippedSubviews={Platform.OS !== 'web'}
+                removeClippedSubviews
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
                 onScrollBeginDrag={() => {

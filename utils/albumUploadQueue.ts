@@ -1,10 +1,15 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { db, storage } from '../firebase';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
+const MAX_IMAGE_LONG_EDGE = 1920;
+const IMAGE_UPLOAD_QUALITY = 0.78;
+const THUMBNAIL_WIDTH = 480;
+const THUMBNAIL_QUALITY = 0.68;
 
 export type AlbumUploadQueueState = {
   active: boolean;
@@ -63,19 +68,38 @@ const uploadAsset = async (
     throw new Error(`${asset.fileName || (mediaType === 'video' ? '動画' : '画像')}は${maxMb}MB以下にしてください。`);
   }
 
-  const response = await fetch(asset.uri);
+  let uploadUri = asset.uri;
+  let uploadMimeType = asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+  if (mediaType === 'image') {
+    const isPortrait = Number(asset.height || 0) > Number(asset.width || 0);
+    const longEdge = Math.max(Number(asset.width || 0), Number(asset.height || 0));
+    const actions = longEdge > MAX_IMAGE_LONG_EDGE
+      ? [{ resize: isPortrait ? { height: MAX_IMAGE_LONG_EDGE } : { width: MAX_IMAGE_LONG_EDGE } }]
+      : [];
+    const optimized = await manipulateAsync(
+      asset.uri,
+      actions,
+      { compress: IMAGE_UPLOAD_QUALITY, format: SaveFormat.JPEG },
+    );
+    uploadUri = optimized.uri;
+    uploadMimeType = 'image/jpeg';
+  }
+
+  const response = await fetch(uploadUri);
   if (!response.ok) throw new Error(`${asset.fileName || 'ファイル'}を読み込めませんでした。`);
   const blob = await response.blob();
   const nameExtension = asset.fileName?.split('.').pop()?.toLowerCase();
   const mimeExtension = asset.mimeType?.split('/').pop()?.replace('quicktime', 'mov').replace('jpeg', 'jpg');
-  const extension = nameExtension || mimeExtension || (mediaType === 'video' ? 'mp4' : 'jpg');
+  const extension = mediaType === 'image'
+    ? 'jpg'
+    : (nameExtension || mimeExtension || 'mp4');
   const filename = `${mediaType}_${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
   const storagePath = `albums/${filename}`;
   const storageReference = ref(storage, storagePath);
   const task = uploadBytesResumable(
     storageReference,
     blob,
-    asset.mimeType ? { contentType: asset.mimeType } : undefined,
+    { contentType: uploadMimeType },
   );
   let lastProgressPublishedAt = 0;
 
@@ -94,11 +118,40 @@ const uploadAsset = async (
   });
 
   const downloadUrl = await getDownloadURL(storageReference);
+  let thumbnailUrl: string | null = null;
+  let thumbnailStoragePath: string | null = null;
+
+  if (mediaType === 'image') {
+    try {
+      const thumbnail = await manipulateAsync(
+        uploadUri,
+        [{ resize: { width: THUMBNAIL_WIDTH } }],
+        { compress: THUMBNAIL_QUALITY, format: SaveFormat.JPEG },
+      );
+      const thumbnailResponse = await fetch(thumbnail.uri);
+      if (!thumbnailResponse.ok) throw new Error('サムネイルを読み込めませんでした。');
+      const thumbnailBlob = await thumbnailResponse.blob();
+      thumbnailStoragePath = `album-thumbnails/${filename.replace(/\.[^.]+$/, '')}.jpg`;
+      const thumbnailReference = ref(storage, thumbnailStoragePath);
+      const thumbnailTask = uploadBytesResumable(thumbnailReference, thumbnailBlob, { contentType: 'image/jpeg' });
+      await new Promise<void>((resolve, reject) => {
+        thumbnailTask.on('state_changed', undefined, reject, () => resolve());
+      });
+      thumbnailUrl = await getDownloadURL(thumbnailReference);
+    } catch (error) {
+      // 元画像の登録は成功させ、一覧画像だけ原画像へフォールバックする。
+      console.warn('album thumbnail creation error:', error);
+      thumbnailStoragePath = null;
+    }
+  }
+
   await addDoc(collection(db, 'albums2'), {
     uri: downloadUrl,
     storagePath,
+    thumbnailUri: thumbnailUrl,
+    thumbnailStoragePath,
     mediaType,
-    mimeType: asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg'),
+    mimeType: uploadMimeType,
     duration: asset.duration ?? null,
     width: asset.width || null,
     height: asset.height || null,
