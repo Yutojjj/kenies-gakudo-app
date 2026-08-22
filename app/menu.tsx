@@ -16,6 +16,7 @@ import SignaturePad from '../components/SignaturePad';
 import TransportModal from '../components/TransportModal';
 import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
+import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
 import { getNotificationState, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
@@ -307,6 +308,7 @@ export default function MenuScreen() {
   const [name, setName] = useState(nameParam || '');
   const [authChecked, setAuthChecked] = useState(false);
   const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
+  const [pickupEntryStatus, setPickupEntryStatus] = useState<TransportEntryStatus | null>(null);
   const [staffPlanDate, setStaffPlanDate] = useState(new Date());
   const [paidTransportCount, setPaidTransportCount] = useState(0);
   const [isPaidTransportMember, setIsPaidTransportMember] = useState(false);
@@ -1032,12 +1034,31 @@ export default function MenuScreen() {
   useEffect(() => {
     if (role !== 'staff' && role !== 'admin') return;
     const dateStr = makeDateStr(staffPlanDate);
+    setTodayPickup({});
     const unsub2 = onSnapshot(doc(db, 'pickup_assignments', dateStr), snap => {
       if (snap.exists()) setTodayPickup(snap.data() as Record<string, string>);
       else setTodayPickup({});
     });
     return () => unsub2();
   }, [role, staffPlanDate]);
+
+  useEffect(() => {
+    if (role !== 'staff' && role !== 'admin') return;
+    const dateStr = makeDateStr(staffPlanDate);
+    const dayOfWeek = staffPlanDate.getDay();
+    let cancelled = false;
+
+    setPickupEntryStatus(null);
+    loadTransportOverview(dateStr).then(overview => {
+      if (cancelled) return;
+      const isNonWorkingDay = dayOfWeek === 0 || dayOfWeek === 6 || !!overview.publicHolidays?.[dateStr];
+      setPickupEntryStatus(isNonWorkingDay ? null : getTransportEntryStatus(overview.attendance, todayPickup));
+    }).catch(() => {
+      if (!cancelled) setPickupEntryStatus(null);
+    });
+
+    return () => { cancelled = true; };
+  }, [role, staffPlanDate, todayPickup]);
 
   useEffect(() => {
     // フワフワアニメーション
@@ -1819,6 +1840,31 @@ export default function MenuScreen() {
                   <Text style={styles.pickupInlineOverviewText}>送迎一覧</Text>
                 </TouchableOpacity>
               </View>
+              {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
+                <TouchableOpacity
+                  style={[
+                    styles.pickupEntryWarning,
+                    pickupEntryStatus === 'partial' ? styles.pickupEntryWarningPartial : styles.pickupEntryWarningEmpty,
+                  ]}
+                  onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate), view: 'transport' } } as any)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={pickupEntryStatus === 'partial' ? '#7A5A00' : '#A63F58'}
+                  />
+                  <Text style={[
+                    styles.pickupEntryWarningText,
+                    { color: pickupEntryStatus === 'partial' ? '#6C5100' : '#94364F' },
+                  ]}>
+                    {pickupEntryStatus === 'partial'
+                      ? '一部、送迎担当が未記入です'
+                      : '送迎担当がまだ記入されていません'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={17} color={pickupEntryStatus === 'partial' ? '#7A5A00' : '#A63F58'} />
+                </TouchableOpacity>
+              )}
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
               <TouchableOpacity
                 style={styles.pickupExpandToggle}
@@ -4181,6 +4227,20 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     minHeight: 34,
   },
+  pickupEntryWarning: {
+    minHeight: 42,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  pickupEntryWarningPartial: { backgroundColor: '#FFF2B8' },
+  pickupEntryWarningEmpty: { backgroundColor: '#FFDCE4' },
+  pickupEntryWarningText: { flex: 1, fontSize: 13, fontWeight: '800' },
   staffSectionMemoBtn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -10,6 +10,7 @@ import TransportModal from '../components/TransportModal';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import { getTransportEntryStatus } from '../utils/transportEntryStatus';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -1157,20 +1158,6 @@ export default function AttendanceScreen() {
     });
   }, [transportCalendarMonth]);
 
-  const hasTransportEntry = (dateStr: string) => {
-    const savedData = pickupAssignments[dateStr];
-    if (!savedData) return false;
-    try {
-      const parsed = typeof savedData.entries === 'string'
-        ? JSON.parse(savedData.entries)
-        : savedData.entries;
-      if (Array.isArray(parsed?.entries) && parsed.entries.length > 0) return true;
-    } catch {}
-    return Object.entries(savedData).some(([key, value]) =>
-      key !== 'entries' && typeof value === 'string' && value.trim().length > 0
-    );
-  };
-
   const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
     const docRef = doc(db, 'pickup_assignments', dateStr);
     await setDoc(docRef, { [blockKey]: staffName }, { merge: true });
@@ -1219,7 +1206,10 @@ export default function AttendanceScreen() {
                 if (!item) return <View key={`empty-${index}`} style={styles.transportCalendarCell} />;
                 const { date, dateStr } = item;
                 const isToday = dateStr === todayKey;
-                const isWritten = hasTransportEntry(dateStr);
+                const entryStatus = getTransportEntryStatus(
+                  getAttendanceForDay(new Date(`${dateStr}T00:00:00`)),
+                  pickupAssignments[dateStr],
+                );
                 const isHoliday = !!publicHolidays[dateStr] || date.getDay() === 0;
                 const isSaturday = date.getDay() === 6;
                 const isNonWorkingDay = isHoliday || isSaturday;
@@ -1228,7 +1218,6 @@ export default function AttendanceScreen() {
                     key={dateStr}
                     style={[
                       styles.transportCalendarCell,
-                      !isWritten && !isNonWorkingDay && styles.transportCalendarCellUnwritten,
                       isToday && styles.transportCalendarCellToday,
                     ]}
                     onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
@@ -1245,9 +1234,23 @@ export default function AttendanceScreen() {
                       {isToday && <Text style={styles.transportTodayLabel}>今日</Text>}
                     </View>
                     {!isNonWorkingDay && (
-                      <View style={[styles.transportStatusBadge, isWritten ? styles.transportStatusWritten : styles.transportStatusEmpty]}>
-                        <Text style={[styles.transportStatusText, isWritten ? styles.transportStatusWrittenText : styles.transportStatusEmptyText]}>
-                          {isWritten ? '記入済み' : '未記入'}
+                      <View style={[
+                        styles.transportStatusBadge,
+                        entryStatus === 'complete'
+                          ? styles.transportStatusWritten
+                          : entryStatus === 'partial'
+                            ? styles.transportStatusPartial
+                            : styles.transportStatusEmpty,
+                      ]}>
+                        <Text style={[
+                          styles.transportStatusText,
+                          entryStatus === 'complete'
+                            ? styles.transportStatusWrittenText
+                            : entryStatus === 'partial'
+                              ? styles.transportStatusPartialText
+                              : styles.transportStatusEmptyText,
+                        ]}>
+                          {entryStatus === 'complete' ? '記入済み' : entryStatus === 'partial' ? '一部記入' : '未記入'}
                         </Text>
                       </View>
                     )}
@@ -1550,16 +1553,17 @@ const styles = StyleSheet.create({
   transportSaturdayText: { color: '#2869B0' },
   transportCalendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   transportCalendarCell: { width: '14.2857%', minHeight: 82, padding: 5, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#E2E7E7', backgroundColor: COLORS.white },
-  transportCalendarCellUnwritten: { backgroundColor: '#FFF0F3' },
   transportCalendarCellToday: { backgroundColor: '#FFF5C9', borderWidth: 2, borderColor: '#E7B83F' },
   transportCalendarDateRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
   transportCalendarDate: { fontSize: 14, fontWeight: '900', color: COLORS.text },
   transportTodayLabel: { fontSize: 8, fontWeight: '900', color: '#7A5510', backgroundColor: '#FFE59A', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2 },
   transportStatusBadge: { marginTop: 8, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 2, alignItems: 'center' },
   transportStatusWritten: { backgroundColor: '#E2F5EA' },
+  transportStatusPartial: { backgroundColor: '#FFF2B8' },
   transportStatusEmpty: { backgroundColor: '#FFDCE4' },
   transportStatusText: { fontSize: 10, fontWeight: '900', textAlign: 'center' },
   transportStatusWrittenText: { color: '#247A43' },
+  transportStatusPartialText: { color: '#7A5A00' },
   transportStatusEmptyText: { color: '#A63F58' },
   fab: {
     position: 'absolute',
