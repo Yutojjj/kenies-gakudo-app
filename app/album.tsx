@@ -175,6 +175,7 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
       <CachedImage
         source={{ uri: imageUri }}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
         contentFit="cover"
         cachePolicy="memory-disk"
         recyclingKey={item.id}
@@ -290,7 +291,7 @@ function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: num
   if (Platform.OS === 'web') {
     return <Image source={{ uri: currentUri }} style={{ width, height }} resizeMode="contain" onLoad={() => setLoadState('loaded')} onError={handleMediaError} />;
   }
-  return <CachedImage source={{ uri: currentUri }} style={{ width, height }} contentFit="contain" cachePolicy="memory-disk" onLoad={() => setLoadState('loaded')} onError={handleMediaError} />;
+  return <CachedImage source={{ uri: currentUri }} style={{ width, height }} pointerEvents="none" contentFit="contain" cachePolicy="memory-disk" onLoad={() => setLoadState('loaded')} onError={handleMediaError} />;
 }
 
 // iOSかどうかを判定するヘルパー
@@ -310,10 +311,6 @@ const getLocalDateString = (date: Date) => {
 
 const saveImageToDevice = async (uri: string): Promise<boolean> => {
   if (Platform.OS === 'web') {
-    if (isIOSWeb) {
-      window.open(uri, '_blank');
-      return true;
-    } 
     try {
       const response = await fetch(uri);
       if (!response.ok) throw new Error('Network error');
@@ -372,6 +369,7 @@ export default function AlbumScreen() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth() + 1);
   const [dateJumpPicker, setDateJumpPicker] = useState<'year' | 'month' | null>(null);
   const [selectedAlbumDate, setSelectedAlbumDate] = useState<string | null>(null);
+  const [selectedDateVisibleCount, setSelectedDateVisibleCount] = useState(INITIAL_MEDIA_COUNT);
   const [isChoosingAddDate, setIsChoosingAddDate] = useState(false);
   const [addMenuVisible, setAddMenuVisible] = useState(false);
   const [addTargetDate, setAddTargetDate] = useState<string | null>(null);
@@ -412,6 +410,10 @@ export default function AlbumScreen() {
   const webDirectoryHandleRef = useRef<any>(null);
   const fullScreenDragStartIndexRef = useRef(0);
   const fullScreenProgrammaticScrollRef = useRef(false);
+
+  useEffect(() => {
+    setSelectedDateVisibleCount(INITIAL_MEDIA_COUNT);
+  }, [selectedAlbumDate]);
 
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
@@ -1041,11 +1043,6 @@ export default function AlbumScreen() {
     const targetPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
     if (!targetPhoto || !targetPhoto.uri) return;
     
-    if (isIOSWeb) {
-      await saveImageToDevice(targetPhoto.uri);
-      return;
-    }
-
     setIsDownloading(true);
     const success = await saveImageToDevice(targetPhoto.uri);
     setIsDownloading(false);
@@ -1147,6 +1144,7 @@ export default function AlbumScreen() {
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
   const selectedDateMedia = selectedAlbumDate ? getMediaForDate(selectedAlbumDate) : [];
+  const visibleSelectedDateMedia = selectedDateMedia.slice(0, selectedDateVisibleCount);
   const selectedDateEventTitles = selectedAlbumDate ? getCalendarEventTitlesForDate(selectedAlbumDate) : [];
   const selectedDateIndex = selectedAlbumDate ? availableMediaDates.indexOf(selectedAlbumDate) : -1;
 
@@ -1399,7 +1397,7 @@ export default function AlbumScreen() {
                 )}
                 {selectedDateMedia.length > 0 ? (
                   <FlatList
-                    data={selectedDateMedia}
+                    data={visibleSelectedDateMedia}
                     style={styles.dateAlbumMediaScroll}
                     contentContainerStyle={styles.dateAlbumMediaGrid}
                     numColumns={3}
@@ -1407,6 +1405,12 @@ export default function AlbumScreen() {
                     maxToRenderPerBatch={12}
                     windowSize={5}
                     removeClippedSubviews={Platform.OS !== 'web'}
+                    onEndReachedThreshold={0.35}
+                    onEndReached={() => {
+                      if (selectedDateVisibleCount < selectedDateMedia.length) {
+                        setSelectedDateVisibleCount(count => Math.min(count + INITIAL_MEDIA_COUNT, selectedDateMedia.length));
+                      }
+                    }}
                     keyExtractor={media => media.id}
                     renderItem={({ item: media, index }) => (
                       <TouchableOpacity style={styles.dateAlbumMediaItem} activeOpacity={0.8} onPress={() => openFullScreen(selectedDateMedia, index)}>
@@ -1707,9 +1711,9 @@ export default function AlbumScreen() {
                 initialScrollIndex={fullScreenIndex}
                 getItemLayout={(data, index) => ({ length: windowWidth, offset: windowWidth * index, index })}
                 onScrollToIndexFailed={onScrollToIndexFailed}
-                initialNumToRender={3}
-                maxToRenderPerBatch={5}
-                windowSize={7}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                windowSize={3}
                 removeClippedSubviews={Platform.OS !== 'web'}
                 decelerationRate="fast"
                 disableIntervalMomentum={true}
@@ -1741,24 +1745,10 @@ export default function AlbumScreen() {
           )}
 
           <View style={styles.fullScreenFooter}>
-            {isIOSWeb && currentFullScreenPhoto?.mediaType !== 'video' ? (
-              // ★ iOS Web版のみ：ボタンではなくメッセージを表示
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>
-                  画像をなが押しして保存
-                </Text>
-                <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
-                  <Ionicons name="expand-outline" size={24} color={COLORS.white} />
-                  <Text style={styles.fullScreenActionText}>全画面で表示</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              // Android / アプリ版：通常の保存ボタン
-              <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
-                <Ionicons name="download-outline" size={28} color={COLORS.white} />
-                <Text style={styles.fullScreenActionText}>保存</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.fullScreenActionBtn} onPress={handleSaveSinglePhoto}>
+              <Ionicons name="download-outline" size={28} color={COLORS.white} />
+              <Text style={styles.fullScreenActionText}>保存</Text>
+            </TouchableOpacity>
 
             {role !== 'user' && currentFullScreenPhoto && (
               <TouchableOpacity style={styles.fullScreenActionBtn} onPress={async () => {
