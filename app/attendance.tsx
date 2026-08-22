@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
@@ -107,7 +107,6 @@ export default function AttendanceScreen() {
   const attendanceTodayPositionedRef = useRef(false);
   const attendanceAutoPositioningRef = useRef(false);
   const [attendanceResetToken, setAttendanceResetToken] = useState(0);
-  const [attendanceViewReady, setAttendanceViewReady] = useState(false);
   const attendanceScrollYRef = useRef(0);
   const attendanceContentHeightRef = useRef(0);
   const pendingHistoryPrependRef = useRef<{ height: number; scrollY: number } | null>(null);
@@ -162,29 +161,27 @@ export default function AttendanceScreen() {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        try {
-          const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
-          const data = await res.json();
-          setPublicHolidays(data);
-        } catch (e) {
-          console.warn('祝日APIの取得に失敗しました', e);
-        }
+    fetch('https://holidays-jp.github.io/api/v1/date.json')
+      .then(res => res.json())
+      .then(setPublicHolidays)
+      .catch(e => console.warn('祝日APIの取得に失敗しました', e));
 
-        const masterRef = doc(db, 'settings', 'master_data');
-        const masterSnap = await getDoc(masterRef);
-        if (masterSnap.exists() && masterSnap.data().schools) {
-            setMasterSchools(masterSnap.data().schools);
-        }
+    const unsubMaster = onSnapshot(doc(db, 'settings', 'master_data'), snap => {
+      if (snap.exists() && Array.isArray(snap.data().schools)) {
+        setMasterSchools(snap.data().schools);
+      }
+    }, e => console.warn('学校設定の取得に失敗しました', e));
 
-        const q = query(collection(db, 'accounts')); 
-        const snapshot = await getDocs(q);
-        
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), snapshot => {
         let allKids: Kid[] = [];
+        const staffNames: string[] = [];
         snapshot.docs.forEach(docSnap => {
           const data = docSnap.data();
           const parentId = docSnap.id;
+
+          if (['staff', 'admin'].includes(data.role) && data.name) {
+            staffNames.push(data.name);
+          }
 
           if (data.role === 'staff' && data.hasChild) {
             if (data.staffChildren && data.staffChildren.length > 0) {
@@ -246,17 +243,19 @@ export default function AttendanceScreen() {
           }
         });
         setKids(allKids);
+        setAllStaffList(staffNames);
+    }, e => console.warn('利用者一覧の取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'schedules2'), (snap) => {
+    const unsubSchedules = onSnapshot(collection(db, 'schedules2'), (snap) => {
           const sData: Record<string, any> = {};
           snap.forEach(d => {
             const item = d.data();
             sData[`${item.childId}_${item.dateStr}`] = { pickupTime: item.pickupTime, lesson: item.lesson, memo: item.memo };
           });
           setScheduleOverrides(sData);
-        });
+    }, e => console.warn('スケジュールの取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'schedule_memos'), (snap) => {
+    const unsubMemos = onSnapshot(collection(db, 'schedule_memos'), (snap) => {
           const mData: Record<string, string> = {};
           snap.forEach(d => {
             const item = d.data();
@@ -265,56 +264,56 @@ export default function AttendanceScreen() {
             }
           });
           setScheduleMemoData(mData);
-        });
+    }, e => console.warn('メモの取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'school_times'), (snap) => {
+    const unsubSchoolTimes = onSnapshot(collection(db, 'school_times'), (snap) => {
           const times: Record<string, any> = {};
           snap.forEach(d => { times[d.id] = d.data(); });
           setSchoolTimesData(times);
-        });
+    }, e => console.warn('学校時刻の取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'lessons'), (snap) => {
-          setLessonsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
+    const unsubLessons = onSnapshot(collection(db, 'lessons'), (snap) => {
+      setLessonsData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, e => console.warn('習い事の取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'assigned_shifts'), (snap) => {
+    const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), (snap) => {
           const shifts: Record<string, any[]> = {};
           snap.forEach(d => { shifts[d.id] = d.data().staff || []; });
           setAssignedShifts(shifts);
-        });
+    }, e => console.warn('シフトの取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'pickup_assignments'), (snap) => {
+    const unsubAssignments = onSnapshot(collection(db, 'pickup_assignments'), (snap) => {
           const data: Record<string, any> = {};
           snap.forEach(d => { data[d.id] = d.data(); });
           setPickupAssignments(data);
-        });
+    }, e => console.warn('送迎担当の取得に失敗しました', e));
 
-        getDocs(query(collection(db, 'accounts'))).then(snap => {
-          const names = snap.docs
-            .filter(d => ['staff','admin'].includes(d.data().role))
-            .map(d => d.data().name as string).filter(Boolean);
-          setAllStaffList(names);
-        });
-
-        onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
+    const unsubHolidays = onSnapshot(doc(db, 'settings', 'holidays_data'), (docSnap) => {
           if (docSnap.exists() && docSnap.data().periods) {
             setHolidays(docSnap.data().periods);
           } else {
             setHolidays([]);
           }
-        });
+    }, e => console.warn('長期休み設定の取得に失敗しました', e));
 
-        onSnapshot(collection(db, 'events'), (snap) => {
+    const unsubEvents = onSnapshot(collection(db, 'events'), (snap) => {
           const eData: Record<string, string> = {};
           snap.forEach(d => { eData[d.id] = d.data().title; });
           setEventsData(eData);
-        });
+    }, e => console.warn('イベントの取得に失敗しました', e));
 
-      } catch (error) {
-        console.error("データ取得エラー:", error);
-      }
+    return () => {
+      unsubMaster();
+      unsubAccounts();
+      unsubSchedules();
+      unsubMemos();
+      unsubSchoolTimes();
+      unsubLessons();
+      unsubShifts();
+      unsubAssignments();
+      unsubHolidays();
+      unsubEvents();
     };
-    fetchData();
   }, []);
 
   useEffect(() => {
@@ -350,7 +349,6 @@ export default function AttendanceScreen() {
   const changeAttendanceView = useCallback((nextView: ViewMode) => {
     if (nextView === 'attendance' && currentView !== 'attendance') {
       attendanceTodayPositionedRef.current = false;
-      setAttendanceViewReady(false);
       setPastWeeks(2);
       setFutureWeeks(1);
       pendingHistoryPrependRef.current = null;
@@ -364,7 +362,6 @@ export default function AttendanceScreen() {
   useEffect(() => {
     if (currentView !== 'attendance') {
       attendanceAutoPositioningRef.current = false;
-      setAttendanceViewReady(false);
       return;
     }
     if (attendanceTodayPositionedRef.current) return;
@@ -380,24 +377,20 @@ export default function AttendanceScreen() {
         if (!todayElement) return;
         todayElement.scrollIntoView({ block: 'start', behavior: 'auto' });
         attendanceTodayPositionedRef.current = true;
-        requestAnimationFrame(() => setAttendanceViewReady(true));
         return;
       }
       if (attendanceTodayY === null) return;
       scrollViewRef.current?.scrollTo({ y: Math.max(0, (attendanceTodayY ?? 0) - 8), animated: false });
       attendanceTodayPositionedRef.current = true;
-      requestAnimationFrame(() => setAttendanceViewReady(true));
     };
     const firstFrame = requestAnimationFrame(scrollToToday);
     const afterPagerSettles = setTimeout(scrollToToday, 180);
-    const revealFallback = setTimeout(() => setAttendanceViewReady(true), 500);
     const finishPositioning = setTimeout(() => {
       attendanceAutoPositioningRef.current = false;
     }, 420);
     return () => {
       cancelAnimationFrame(firstFrame);
       clearTimeout(afterPagerSettles);
-      clearTimeout(revealFallback);
       clearTimeout(finishPositioning);
     };
   }, [attendanceResetToken, currentView, attendanceTodayY]);
@@ -581,7 +574,7 @@ export default function AttendanceScreen() {
     <>
       <ScrollView
         ref={scrollViewRef}
-        style={[styles.mainScroll, !attendanceViewReady && styles.attendanceViewPositioning]}
+        style={styles.mainScroll}
         contentContainerStyle={{ paddingBottom: 100 }}
         onScroll={handleAttendanceScroll}
         onContentSizeChange={handleAttendanceContentSizeChange}
@@ -1423,7 +1416,6 @@ const styles = StyleSheet.create({
   tabSwipeArea: { flex: 1 },
 
   mainScroll: { flex: 1, backgroundColor: '#F8F9FA' },
-  attendanceViewPositioning: { opacity: 0 },
   daySection: { marginBottom: 0, backgroundColor: '#F8F9FA' },
   daySectionToday: { backgroundColor: '#FFFBEA', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#E5C557' },
   dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#E1E4E5', gap: 6 },

@@ -19,13 +19,30 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { role: routeRole } = useGlobalSearchParams<{ role?: string }>();
   const [checked, setChecked] = useState(false);
+  const verifiedUserRef = useRef<any>(null);
 
   useEffect(() => {
+    const validateUser = (user: any) => {
+      if (routeRole && routeRole !== user.role) {
+        router.replace('/menu' as any);
+        return;
+      }
+      setChecked(true);
+    };
+
     const check = async () => {
       if (PUBLIC_PATHS.includes(pathname)) {
+        verifiedUserRef.current = null;
         setChecked(true);
         return;
       }
+
+      // 画面移動のたびに端末保存を読み直すと、iPhone PWAで全画面ローディングになる。
+      if (verifiedUserRef.current) {
+        validateUser(verifiedUserRef.current);
+        return;
+      }
+
       setChecked(false);
       const raw = await AsyncStorage.getItem('loggedInUser');
       if (!raw) {
@@ -39,14 +56,11 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         router.replace('/');
         return;
       }
-      if (routeRole && routeRole !== user.role) {
-        router.replace('/menu' as any);
-        return;
-      }
-      setChecked(true);
+      verifiedUserRef.current = user;
+      validateUser(user);
     };
     check();
-  }, [pathname, routeRole]);
+  }, [pathname, routeRole, router]);
 
   if (!checked) {
     return (
