@@ -1470,7 +1470,14 @@ export default function YearEventsScreen() {
         )}
         <View style={styles.eventChipCaption}>
           <Text style={styles.eventChipTitle} numberOfLines={2}>{ev.title}</Text>
-          <Text style={styles.eventChipDate}>{formatDateWithDay(ev.dateStr)}</Text>
+          <View style={styles.eventChipMetaRow}>
+            <Text style={styles.eventChipDate}>{formatDateWithDay(ev.dateStr)}</Text>
+            {isUser && myParticipations[ev.id] === '参加' && (
+              <View style={styles.eventParticipationBadge}>
+                <Text style={styles.eventParticipationBadgeText}>参加</Text>
+              </View>
+            )}
+          </View>
           {ev.hidden && <Text style={styles.hiddenBadge}>非表示</Text>}
         </View>
       </View>
@@ -2515,7 +2522,10 @@ const styles = StyleSheet.create({
   eventChipCaption: { paddingHorizontal: 6, paddingVertical: 5, minHeight: 42, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEEB' },
   eventChipOverlay: { padding: 6, backgroundColor: 'rgba(0,0,0,0.42)' },
   eventChipTitle: { fontSize: 10, fontWeight: '800', color: '#393633' },
-  eventChipDate: { fontSize: 8, color: '#85817D', marginTop: 2 },
+  eventChipMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 2 },
+  eventChipDate: { flex: 1, fontSize: 8, color: '#85817D' },
+  eventParticipationBadge: { flexShrink: 0, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, backgroundColor: '#DDF3E5' },
+  eventParticipationBadgeText: { fontSize: 8, lineHeight: 11, fontWeight: '800', color: '#287A50' },
   hiddenBadge: { fontSize: 8, color: '#D15E6E', fontWeight: 'bold', marginTop: 2 },
   hiddenToggleBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, marginLeft: 6 },
   hiddenToggleBtnVisible: { backgroundColor: '#7BC67E' },
