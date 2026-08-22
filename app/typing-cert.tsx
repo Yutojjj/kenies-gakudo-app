@@ -509,6 +509,7 @@ export default function TypingCertScreen() {
             <View style={styles.stageGrid}>
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
+                  <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
                   <View style={styles.stageInput}>
                     <TouchableOpacity
                       style={styles.stageValueButton}
@@ -526,12 +527,12 @@ export default function TypingCertScreen() {
                       activeOpacity={0.72}
                       accessibilityLabel={`ステージ${i + 1}のミス数を編集`}
                     >
+                      <Text style={styles.stageMissCaption}>ミス数</Text>
                       <Text style={stageMisses[i] !== '' ? styles.stageMissValue : styles.stageMissPlaceholder}>
-                        ミス {stageMisses[i] !== '' ? stageMisses[i] : '—'}
+                        {stageMisses[i] !== '' ? stageMisses[i] : '—'}
                       </Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
                 </View>
               ))}
             </View>
@@ -1138,15 +1139,19 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 8,
     width: 66, minHeight: 64, overflow: 'hidden', backgroundColor: '#fff',
   },
-  stageValueButton: { minHeight: 38, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
-  stageMissButton: { minHeight: 25, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8FA' },
+  stageValueButton: { minHeight: 40, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5FBFC' },
+  stageMissButton: {
+    minHeight: 25, paddingHorizontal: 5, flexDirection: 'row', gap: 4,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF3F6',
+  },
   stageInputDivider: { height: 1, backgroundColor: '#DCE9F2' },
-  stageInputCaption: { fontSize: 8, fontWeight: '800', color: '#7A8D98' },
+  stageInputCaption: { fontSize: 9, fontWeight: '900', color: '#168293' },
   stageInputValue: { fontSize: 13, fontWeight: '800', color: '#1E3A5F' },
   stageInputPlaceholder: { fontSize: 12, color: '#BBBBBB' },
-  stageMissValue: { fontSize: 9, fontWeight: '800', color: '#D05067' },
-  stageMissPlaceholder: { fontSize: 9, color: '#A5ADB5' },
-  stageLabel:  { fontSize: 9, color: '#94a3b8', marginTop: 2 },
+  stageMissCaption: { fontSize: 8, fontWeight: '900', color: '#C3465E' },
+  stageMissValue: { fontSize: 10, fontWeight: '900', color: '#B92F4A' },
+  stageMissPlaceholder: { fontSize: 10, fontWeight: '800', color: '#9AA5AA' },
+  stageLabel:  { marginBottom: 3, fontSize: 10, fontWeight: '900', color: '#304B55' },
   autoScoreBox: {
     width: 160, minHeight: 48, paddingHorizontal: 12, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF7F8', borderWidth: 1.5, borderColor: '#B6DDE0',
