@@ -954,15 +954,21 @@ export default function TypingCertScreen() {
         <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
           <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} onPress={event => event.stopPropagation()}>
             <View style={styles.numberPadHeader}>
-              <View>
-                <Text style={styles.numberPadTitle}>
-                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}　${stageInputMode === 'value' ? 'はやさ' : 'ミス数'}`}
+              <View style={styles.numberPadHeading}>
+                <Text style={styles.numberPadStageLabel}>
+                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}`}
                 </Text>
-                <Text style={styles.numberPadValue}>
-                  {activeStageInput === null
-                    ? '0'
-                    : (stageInputMode === 'value' ? stageVals[activeStageInput] : stageMisses[activeStageInput]) || '0'}
+                <Text style={[styles.numberPadInputTitle, stageInputMode === 'value' ? styles.numberPadInputTitleSpeed : styles.numberPadInputTitleMiss]}>
+                  {stageInputMode === 'value' ? 'はやさを入力' : 'ミス数を入力'}
                 </Text>
+                <View style={styles.numberPadValueRow}>
+                  <Text style={styles.numberPadValueLabel}>入力値</Text>
+                  <Text style={styles.numberPadValue}>
+                    {activeStageInput === null
+                      ? '0'
+                      : (stageInputMode === 'value' ? stageVals[activeStageInput] : stageMisses[activeStageInput]) || '0'}
+                  </Text>
+                </View>
               </View>
               <View style={styles.numberPadHeaderActions}>
                 <TouchableOpacity style={styles.numberPadClear} onPress={() => pressCustomNumberKey('clear')} activeOpacity={0.72}>
@@ -1173,9 +1179,15 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 16, paddingTop: 15, paddingBottom: 22,
     shadowColor: '#243A40', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 12,
   },
-  numberPadHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, marginBottom: 10 },
-  numberPadTitle: { fontSize: 12, fontWeight: '800', color: '#647B82', marginBottom: 2 },
-  numberPadValue: { fontSize: 28, fontWeight: '900', color: '#223C44' },
+  numberPadHeader: { minHeight: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, marginBottom: 10 },
+  numberPadHeading: { flex: 1, alignItems: 'flex-start' },
+  numberPadStageLabel: { fontSize: 12, fontWeight: '900', color: '#526B73', marginBottom: 3 },
+  numberPadInputTitle: { fontSize: 19, fontWeight: '900', letterSpacing: 0, marginBottom: 5 },
+  numberPadInputTitleSpeed: { color: '#087F91' },
+  numberPadInputTitleMiss: { color: '#C33F59' },
+  numberPadValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
+  numberPadValueLabel: { fontSize: 10, fontWeight: '900', color: '#7A8D93' },
+  numberPadValue: { fontSize: 27, fontWeight: '900', color: '#223C44' },
   numberPadHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   numberPadClear: { minHeight: 38, borderRadius: 10, backgroundColor: '#F4ECE8', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   numberPadClearText: { fontSize: 13, fontWeight: '900', color: '#8A554D' },
