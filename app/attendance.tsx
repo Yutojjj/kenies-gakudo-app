@@ -99,7 +99,7 @@ export default function AttendanceScreen() {
   const [kids, setKids] = useState<Kid[]>([]);
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
   
-  const [pastWeeks, setPastWeeks] = useState(12);
+  const [pastWeeks, setPastWeeks] = useState(2);
   const [futureWeeks, setFutureWeeks] = useState(1); 
   
   const scrollViewRef = useRef<ScrollView>(null);
@@ -350,6 +350,10 @@ export default function AttendanceScreen() {
     if (nextView === 'attendance' && currentView !== 'attendance') {
       attendanceTodayPositionedRef.current = false;
       setAttendanceViewReady(false);
+      setPastWeeks(2);
+      setFutureWeeks(1);
+      pendingHistoryPrependRef.current = null;
+      pendingFutureAppendRef.current = false;
       setAttendanceTodayY(null);
       setAttendanceResetToken(current => current + 1);
     }
@@ -579,7 +583,7 @@ export default function AttendanceScreen() {
         style={[styles.mainScroll, !attendanceViewReady && styles.attendanceViewPositioning]}
         contentContainerStyle={{ paddingBottom: 100 }}
         onScroll={handleAttendanceScroll}
-        {...(Platform.OS === 'web' ? {} : { onContentSizeChange: handleAttendanceContentSizeChange })}
+        onContentSizeChange={handleAttendanceContentSizeChange}
         scrollEventThrottle={32}
       >
         {datesToDisplay.map((date, index) => {
