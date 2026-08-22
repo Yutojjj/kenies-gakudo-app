@@ -253,8 +253,8 @@ export default function ShiftViewScreen() {
                       >
                         <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
                         <View style={styles.cellStaffTimeRow}>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>開 {assigned.start}</Text>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>終 {assigned.end}</Text>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}</Text>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>{assigned.end}</Text>
                         </View>
                       </View>
                     );
