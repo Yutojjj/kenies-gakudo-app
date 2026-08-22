@@ -27,8 +27,8 @@ export default function SwipeTabPager<T extends string>({
       const startX = evt.nativeEvent.pageX - gestureState.dx;
       return (
         (!edgeGuard || startX > 32) &&
-        Math.abs(gestureState.dx) > 34 &&
-        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.45
+        Math.abs(gestureState.dx) > 14 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.15
       );
     },
     onPanResponderMove: (_evt, gestureState) => {
@@ -39,14 +39,17 @@ export default function SwipeTabPager<T extends string>({
     onPanResponderRelease: (_evt, gestureState) => {
       const canMoveNext = gestureState.dx < 0 && next;
       const canMovePrev = gestureState.dx > 0 && prev;
-      const shouldMove = Math.abs(gestureState.dx) >= 72 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.45;
+      const horizontalIntent = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.15;
+      const commitDistance = Math.min(52, Math.max(44, width * 0.12));
+      const isQuickFlick = Math.abs(gestureState.vx) >= 0.42;
+      const shouldMove = horizontalIntent && (Math.abs(gestureState.dx) >= commitDistance || isQuickFlick);
 
       if (shouldMove && (canMoveNext || canMovePrev)) {
         const target = gestureState.dx < 0 ? -width : width;
         const targetTab = gestureState.dx < 0 ? next : prev;
         Animated.timing(dragX, {
           toValue: target,
-          duration: 130,
+          duration: 105,
           useNativeDriver: true,
         }).start(() => {
           dragX.setValue(0);
@@ -58,16 +61,16 @@ export default function SwipeTabPager<T extends string>({
       Animated.spring(dragX, {
         toValue: 0,
         useNativeDriver: true,
-        speed: 18,
-        bounciness: 4,
+        speed: 24,
+        bounciness: 2,
       }).start();
     },
     onPanResponderTerminate: () => {
       Animated.spring(dragX, {
         toValue: 0,
         useNativeDriver: true,
-        speed: 18,
-        bounciness: 4,
+        speed: 24,
+        bounciness: 2,
       }).start();
     },
   }), [active, dragX, edgeGuard, next, onChange, prev, width]);

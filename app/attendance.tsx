@@ -988,13 +988,13 @@ export default function AttendanceScreen() {
     const renderSchoolUsers = (school: string, compact = false, splitIntoTwoColumns = false, startFromRight = false) => {
       const schoolUsers = sortKidsByGrade(filteredBySchool[school] || []);
       const renderUserRows = (users: any[]) => users.map((user: any, idx: number) => (
-        <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
+        <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, splitIntoTwoColumns && styles.schoolInlineUserItemSplit, idx === users.length - 1 && !splitIntoTwoColumns && { borderBottomWidth: 0 }]}>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}>
             <View style={styles.userInfo}>
               <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
               {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
             </View>
-            <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+            <Ionicons name="chevron-forward" size={18} color="#8A9294" />
           </TouchableOpacity>
           {isAdmin && user.parentDocId && (
             <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
@@ -1004,7 +1004,7 @@ export default function AttendanceScreen() {
         </View>
       ));
       return (
-        <View style={[styles.schoolInlineResults, compact && styles.schoolInlineResultsCompact]}>
+        <View style={[styles.schoolInlineResults, compact && styles.schoolInlineResultsCompact, splitIntoTwoColumns && styles.schoolInlineResultsSplit]}>
           {schoolUsers.length === 0 ? (
             <Text style={styles.schoolInlineEmpty}>該当する利用者はいません</Text>
           ) : splitIntoTwoColumns ? (
@@ -1125,7 +1125,7 @@ export default function AttendanceScreen() {
                       <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
                       {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
                     </View>
-                    <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+                    <Ionicons name="chevron-forward" size={18} color="#8A9294" />
                   </TouchableOpacity>
                   {isAdmin && user.parentDocId && (
                     <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
@@ -1520,9 +1520,11 @@ const styles = StyleSheet.create({
   schoolAccordionHalfResult: { flex: 1, minWidth: 0 },
   schoolInlineResults: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   schoolInlineResultsCompact: { paddingHorizontal: 6 },
+  schoolInlineResultsSplit: { paddingHorizontal: 0, paddingVertical: 0, backgroundColor: 'transparent', borderWidth: 0, shadowOpacity: 0, elevation: 0 },
   schoolUsersTwoColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   schoolUsersColumn: { flex: 1, minWidth: 0 },
   schoolInlineUserItem: { minHeight: 52, paddingVertical: 8 },
+  schoolInlineUserItemSplit: { marginBottom: 6, paddingHorizontal: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E1E5E5', borderRadius: 8, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 2, elevation: 1 },
   schoolInlineEmpty: { paddingVertical: 18, textAlign: 'center', fontSize: 12, fontWeight: '700', color: COLORS.textLight },
   schoolCardActive: { borderWidth: 2, borderColor: COLORS.primary },
   schoolCardName: { fontSize: 13, fontWeight: '900', color: COLORS.text, textAlign: 'left' },
@@ -1536,9 +1538,7 @@ const styles = StyleSheet.create({
   userName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
   userGrade: { fontSize: 14, color: COLORS.textLight, fontWeight: 'normal' },
   userKana: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
-  editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   msgIconBtn: { padding: 10, marginLeft: 4 },
-  editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
   transportMonthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 18, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderColor: COLORS.border },
   transportMonthNavButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#D8D1CA' },
   transportMonthTitle: { minWidth: 150, textAlign: 'center', fontSize: 19, fontWeight: '900', color: COLORS.text },
