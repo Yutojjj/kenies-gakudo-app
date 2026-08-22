@@ -292,7 +292,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
-    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべての数値とミス数を入力してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべてのはやさとミス数を入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -315,7 +315,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
-    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべての数値とミス数を入力してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべてのはやさとミス数を入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -505,7 +505,7 @@ export default function TypingCertScreen() {
                 <Text style={[styles.clearAllStagesText, !hasStageData && styles.clearAllStagesTextDisabled]}>すべてクリア</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.stageGuide}>各ステージを押して、数値とミス数を順番に入力</Text>
+            <Text style={styles.stageGuide}>各ステージを押して、はやさとミス数を順番に入力</Text>
             <View style={styles.stageGrid}>
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
@@ -514,9 +514,9 @@ export default function TypingCertScreen() {
                       style={styles.stageValueButton}
                       onPress={() => openStageInput(i, 'value')}
                       activeOpacity={0.72}
-                      accessibilityLabel={`ステージ${i + 1}の数値を編集`}
+                      accessibilityLabel={`ステージ${i + 1}のはやさを編集`}
                     >
-                      <Text style={styles.stageInputCaption}>数値</Text>
+                      <Text style={styles.stageInputCaption}>はやさ</Text>
                       <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '入力'}</Text>
                     </TouchableOpacity>
                     <View style={styles.stageInputDivider} />
@@ -931,7 +931,7 @@ export default function TypingCertScreen() {
         <TouchableOpacity style={styles.stageClearOverlay} activeOpacity={1} onPress={() => setClearStagesVisible(false)}>
           <TouchableOpacity style={styles.stageClearDialog} activeOpacity={1} onPress={event => event.stopPropagation()}>
             <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
-            <Text style={styles.stageClearDescription}>8ステージ分の数値とミス数がすべて消去されます。</Text>
+            <Text style={styles.stageClearDescription}>8ステージ分のはやさとミス数がすべて消去されます。</Text>
             <View style={styles.stageClearActions}>
               <TouchableOpacity style={styles.stageClearCancel} onPress={() => setClearStagesVisible(false)} activeOpacity={0.75}>
                 <Text style={styles.stageClearCancelText}>キャンセル</Text>
@@ -955,7 +955,7 @@ export default function TypingCertScreen() {
             <View style={styles.numberPadHeader}>
               <View>
                 <Text style={styles.numberPadTitle}>
-                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}　${stageInputMode === 'value' ? '数値' : 'ミス数'}`}
+                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}　${stageInputMode === 'value' ? 'はやさ' : 'ミス数'}`}
                 </Text>
                 <Text style={styles.numberPadValue}>
                   {activeStageInput === null
