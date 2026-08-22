@@ -6,7 +6,7 @@ import { Image as CachedImage } from 'expo-image';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, where } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
+import { deleteObject, getDownloadURL, listAll, ref } from 'firebase/storage';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { memo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -14,12 +14,11 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
+import { enqueueAlbumUploads, getAlbumUploadQueueState, subscribeAlbumUploadQueue } from '../utils/albumUploadQueue';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const INITIAL_MEDIA_COUNT = 24;
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
 
 type AlbumMedia = {
   id: string;
@@ -124,23 +123,9 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
   const refreshAttemptedRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
     refreshAttemptedRef.current = false;
+    setImageUri(item.uri);
     setImageState('loading');
-    const storagePath = getStoragePath(item);
-    if (!storagePath) {
-      setImageUri(item.uri);
-      return () => { cancelled = true; };
-    }
-    getDownloadURL(ref(storage, storagePath))
-      .then(currentUri => {
-        if (!cancelled) setImageUri(currentUri);
-      })
-      .catch(error => {
-        console.warn('アルバム画像URLの取得に失敗しました', error);
-        if (!cancelled) setImageState('failed');
-      });
-    return () => { cancelled = true; };
   }, [item.uri, item.storagePath]);
 
   const retryImage = async () => {
@@ -194,25 +179,16 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
 
   return (
     <View style={styles.photo}>
-      {Platform.OS === 'web' ? (
-        <Image
-          source={{ uri: imageUri }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-          onLoad={() => setImageState('loaded')}
-          onError={handleImageError}
-        />
-      ) : (
-        <CachedImage
-          source={{ uri: imageUri }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="memory"
-          transition={160}
-          onLoad={() => setImageState('loaded')}
-          onError={handleImageError}
-        />
-      )}
+      <CachedImage
+        source={{ uri: imageUri }}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        recyclingKey={item.id}
+        transition={120}
+        onLoad={() => setImageState('loaded')}
+        onError={handleImageError}
+      />
       {imageState === 'loading' && (
         <View style={styles.mediaLoadingOverlay}>
           <ActivityIndicator size="small" color={COLORS.primary} />
@@ -223,14 +199,14 @@ const AlbumMediaThumbnail = memo(function AlbumMediaThumbnail({ item }: { item: 
 });
 
 function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: number; height: number }) {
-  const [currentUri, setCurrentUri] = useState('');
+  const [currentUri, setCurrentUri] = useState(item.uri);
   const [loadState, setLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const refreshAttemptedRef = useRef(false);
 
   const resolveMediaUri = async (forceReload = false) => {
+    if (!forceReload) return item.uri;
     const storagePath = getStoragePath(item);
     const freshUri = storagePath ? await getDownloadURL(ref(storage, storagePath)) : item.uri;
-    if (!forceReload) return freshUri;
     const separator = freshUri.includes('?') ? '&' : '?';
     return `${freshUri}${separator}reload=${Date.now()}`;
   };
@@ -238,7 +214,7 @@ function FullScreenMedia({ item, width, height }: { item: AlbumMedia; width: num
   useEffect(() => {
     let cancelled = false;
     refreshAttemptedRef.current = false;
-    setCurrentUri('');
+    setCurrentUri(item.uri);
     setLoadState('loading');
     resolveMediaUri()
       .then(uri => { if (!cancelled) setCurrentUri(uri); })
@@ -374,6 +350,7 @@ export default function AlbumScreen() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState(getAlbumUploadQueueState);
   const [isDownloading, setIsDownloading] = useState(false);
   const [mediaLoading, setMediaLoading] = useState(true);
   const [mediaLoadError, setMediaLoadError] = useState('');
@@ -424,6 +401,8 @@ export default function AlbumScreen() {
   const webDirectoryHandleRef = useRef<any>(null);
   const fullScreenDragStartIndexRef = useRef(0);
   const fullScreenProgrammaticScrollRef = useRef(false);
+
+  useEffect(() => subscribeAlbumUploadQueue(setUploadQueue), []);
 
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
@@ -477,12 +456,28 @@ export default function AlbumScreen() {
     AsyncStorage.getItem('unlockedEvents').then(res => {
       if (res && isMounted) { try { setUnlockedEvents(JSON.parse(res)); } catch {} }
     });
-    AsyncStorage.removeItem('albumMediaCacheV2').catch(() => {});
+    const albumCacheKey = `albumMediaCacheV3:${role || 'unknown'}:${name || 'unknown'}`;
+    let snapshotReceived = false;
+    AsyncStorage.getItem(albumCacheKey).then(cachedValue => {
+      if (!cachedValue || !isMounted || snapshotReceived) return;
+      try {
+        const cached = JSON.parse(cachedValue);
+        const isUsable = cached?.version === 1
+          && cached?.photos
+          && Date.now() - Number(cached.savedAt || 0) < 7 * 24 * 60 * 60 * 1000;
+        if (!isUsable) return;
+        setAlbumPhotos(cached.photos);
+        setMediaLoading(false);
+      } catch {
+        AsyncStorage.removeItem(albumCacheKey).catch(() => {});
+      }
+    });
 
     setMediaLoadError('');
     // メタデータだけを同期し、実画像・動画はセクションを開いた時に読み込む。
     const unsubPhotos = onSnapshot(collection(db, 'albums2'), (photosSnap) => {
       if (!isMounted) return;
+      snapshotReceived = true;
       const photosData: Record<string, AlbumMedia[]> = {};
       photosSnap.forEach(d => {
         const item = d.data();
@@ -500,6 +495,11 @@ export default function AlbumScreen() {
       setAlbumPhotos(photosData);
       setMediaLoading(false);
       setMediaLoadError('');
+      AsyncStorage.setItem(albumCacheKey, JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        photos: photosData,
+      })).catch(error => console.warn('アルバムキャッシュの保存に失敗しました', error));
     }, (e) => {
       console.warn('albums読み込みエラー:', e);
       if (!isMounted) return;
@@ -531,38 +531,6 @@ export default function AlbumScreen() {
   const toggleExpand = (key: string) => {
     setExpandedDates(prev => ({ ...prev, [key]: !prev[key] }));
     setVisibleMediaCounts(prev => prev[key] ? prev : { ...prev, [key]: INITIAL_MEDIA_COUNT });
-  };
-
-  const uploadAlbumAsset = async (asset: ImagePicker.ImagePickerAsset, category: string) => {
-    const mediaType: 'image' | 'video' = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
-    const maxBytes = mediaType === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-    if (asset.fileSize && asset.fileSize > maxBytes) {
-      const maxMb = Math.round(maxBytes / 1024 / 1024);
-      throw new Error(`${asset.fileName || (mediaType === 'video' ? '動画' : '画像')}は${maxMb}MB以下にしてください。`);
-    }
-
-    const response = await fetch(asset.uri);
-    const blob = await response.blob();
-    const nameExtension = asset.fileName?.split('.').pop()?.toLowerCase();
-    const mimeExtension = asset.mimeType?.split('/').pop()?.replace('quicktime', 'mov').replace('jpeg', 'jpg');
-    const extension = nameExtension || mimeExtension || (mediaType === 'video' ? 'mp4' : 'jpg');
-    const filename = `${mediaType}_${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
-    const storagePath = `albums/${filename}`;
-    const storageReference = ref(storage, storagePath);
-    await uploadBytes(storageReference, blob, asset.mimeType ? { contentType: asset.mimeType } : undefined);
-    const downloadUrl = await getDownloadURL(storageReference);
-    await addDoc(collection(db, 'albums2'), {
-      uri: downloadUrl,
-      storagePath,
-      mediaType,
-      mimeType: asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg'),
-      duration: asset.duration ?? null,
-      width: asset.width || null,
-      height: asset.height || null,
-      uploader: name || '不明',
-      category,
-      createdAt: serverTimestamp(),
-    });
   };
 
   const releasePickerAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
@@ -745,24 +713,17 @@ export default function AlbumScreen() {
 
     if (!result.canceled) {
       closeAddFlow();
-      setIsUploading(true);
-      try {
-        let uploadedCount = 0;
-        for (const asset of result.assets) {
-          await uploadAlbumAsset(asset, targetKey);
-          uploadedCount++;
-        }
-        if (Platform.OS === 'web') window.alert(`${targetTitle} に ${uploadedCount} 件保存しました`);
-        else Alert.alert('完了', `${targetTitle} に写真・動画を ${uploadedCount} 件保存しました`);
-      } catch (e: any) {
-        console.error('upload error:', e);
-        const msg = e?.message || String(e);
-        if (Platform.OS === 'web') window.alert('アップロード失敗: ' + msg);
-        else Alert.alert('エラー', 'アップロード失敗: ' + msg);
-      } finally {
-        releasePickerAssets(result.assets);
-        setIsUploading(false);
-      }
+      const assets = result.assets;
+      void enqueueAlbumUploads(assets, targetKey, name || '不明')
+        .then(({ uploadedCount, failedCount }) => {
+          if (failedCount === 0) return;
+          const message = `${targetTitle}: ${uploadedCount}件完了・${failedCount}件失敗`;
+          if (Platform.OS === 'web') console.warn(message);
+          else Alert.alert('一部アップロードできませんでした', message);
+        })
+        .finally(() => {
+          releasePickerAssets(assets);
+        });
     }
   };
 
@@ -833,22 +794,18 @@ export default function AlbumScreen() {
     if (!result || result.canceled) return 0;
 
     closeAddFlow();
-    setIsUploading(true);
-    
-    let count = 0;
+    const assets = result.assets;
     try {
-      for (const asset of result.assets) {
-        await uploadAlbumAsset(asset, category);
-        count++;
+      const uploadResult = await enqueueAlbumUploads(assets, category, name || '不明');
+      if (uploadResult.failedCount > 0) {
+        const message = `${uploadResult.uploadedCount}件完了・${uploadResult.failedCount}件失敗`;
+        if (Platform.OS === 'web') console.warn(message);
+        else Alert.alert('一部アップロードできませんでした', message);
       }
-    } catch (e: any) {
-      console.error('uploadPhotosToCategory error:', e?.message || e);
-      if (Platform.OS === 'web') window.alert('アップロード失敗: ' + (e?.message || String(e)));
-      else Alert.alert('エラー', 'アップロード失敗: ' + (e?.message || String(e)));
+      return uploadResult.uploadedCount;
     } finally {
-      releasePickerAssets(result.assets);
+      releasePickerAssets(assets);
     }
-    return count;
   };
 
   const handleCreateEvent = async () => {
@@ -971,6 +928,18 @@ export default function AlbumScreen() {
     return Array.from(new Set([...managedEventTitles, ...albumEventTitles]));
   };
 
+  const getCalendarEventItemsForDate = (dateStr: string) => {
+    const visibleAlbumEvents = getVisibleEventsForDate(dateStr);
+    return getCalendarEventTitlesForDate(dateStr).map(title => {
+      const uniqueMedia = new Map<string, AlbumMedia>();
+      visibleAlbumEvents
+        .filter(event => getEventDisplayName(event) === title)
+        .flatMap(event => albumPhotos[event.category] || [])
+        .forEach(item => uniqueMedia.set(item.id, item));
+      return { title, count: uniqueMedia.size };
+    });
+  };
+
   const getDailyMediaForDate = (dateStr: string) => (
     canViewDailyDate(dateStr) ? (albumPhotos[dateStr] || []) : []
   );
@@ -1008,7 +977,7 @@ export default function AlbumScreen() {
         media: getMediaForDate(dateStr),
         dailyMediaCount: dailyMedia.length,
         eventMediaCount: eventMedia.length,
-        eventTitles: getCalendarEventTitlesForDate(dateStr),
+        eventItems: getCalendarEventItemsForDate(dateStr),
         isToday: dateStr === getLocalDateString(new Date()),
       };
     });
@@ -1257,13 +1226,12 @@ export default function AlbumScreen() {
                             <Text style={styles.albumCalendarBadgeCount}>{cell.dailyMediaCount}件</Text>
                           </View>
                         )}
-                        {cell.eventTitles.slice(0, 1).map(eventTitle => (
-                          <View key={eventTitle} style={styles.albumCalendarEventBadge}>
-                            <Text style={styles.albumCalendarBadgeText}>{eventTitle}</Text>
-                            <Text style={styles.albumCalendarEventCount}>{cell.eventMediaCount}件</Text>
+                        {cell.eventItems.map(eventItem => (
+                          <View key={eventItem.title} style={styles.albumCalendarEventBadge}>
+                            <Text style={styles.albumCalendarBadgeText}>{eventItem.title}</Text>
+                            <Text style={styles.albumCalendarEventCount}>{eventItem.count}件</Text>
                           </View>
                         ))}
-                        {cell.eventTitles.length > 1 && <Text style={styles.albumCalendarMore}>ほか{cell.eventTitles.length - 1}件</Text>}
                       </TouchableOpacity>
                     );
                   })}
@@ -1309,6 +1277,19 @@ export default function AlbumScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {uploadQueue.active && (
+        <View style={styles.backgroundUploadBanner}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <View style={styles.backgroundUploadContent}>
+            <Text style={styles.backgroundUploadTitle}>写真・動画をアップロード中</Text>
+            <Text style={styles.backgroundUploadStatus}>{uploadQueue.message}　{uploadQueue.progress}%</Text>
+            <View style={styles.backgroundUploadTrack}>
+              <View style={[styles.backgroundUploadProgress, { width: `${uploadQueue.progress}%` }]} />
+            </View>
+          </View>
+        </View>
+      )}
 
       <View style={{ flex: 1 }}>
             <View style={styles.monthSelector}>
@@ -1417,13 +1398,22 @@ export default function AlbumScreen() {
                   </View>
                 )}
                 {selectedDateMedia.length > 0 ? (
-                  <ScrollView style={styles.dateAlbumMediaScroll} contentContainerStyle={styles.dateAlbumMediaGrid}>
-                    {selectedDateMedia.map((media, index) => (
-                      <TouchableOpacity key={media.id} style={styles.dateAlbumMediaItem} activeOpacity={0.8} onPress={() => openFullScreen(selectedDateMedia, index)}>
+                  <FlatList
+                    data={selectedDateMedia}
+                    style={styles.dateAlbumMediaScroll}
+                    contentContainerStyle={styles.dateAlbumMediaGrid}
+                    numColumns={3}
+                    initialNumToRender={12}
+                    maxToRenderPerBatch={12}
+                    windowSize={5}
+                    removeClippedSubviews={Platform.OS !== 'web'}
+                    keyExtractor={media => media.id}
+                    renderItem={({ item: media, index }) => (
+                      <TouchableOpacity style={styles.dateAlbumMediaItem} activeOpacity={0.8} onPress={() => openFullScreen(selectedDateMedia, index)}>
                         <AlbumMediaThumbnail item={media} />
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                    )}
+                  />
                 ) : (
                   <View style={styles.dateAlbumEmpty}>
                     <Ionicons name="images-outline" size={40} color="#B9C4C4" />
@@ -1931,7 +1921,7 @@ const styles = StyleSheet.create({
   calendarSaturdayText: { color: '#3D78C5' },
   albumCalendarGrid: { width: '100%', maxWidth: 760, borderLeftWidth: 1, borderColor: '#DCE5E5' },
   albumCalendarRow: { width: '100%', flexDirection: 'row', alignItems: 'stretch' },
-  albumCalendarCell: { flex: 1, minWidth: 0, minHeight: 78, paddingVertical: 6, paddingHorizontal: 0, backgroundColor: '#FFFFFF', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#DCE5E5' },
+  albumCalendarCell: { flex: 1, minWidth: 0, minHeight: 78, alignSelf: 'stretch', paddingVertical: 6, paddingHorizontal: 0, backgroundColor: '#FFFFFF', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#DCE5E5' },
   albumCalendarCellSelecting: { backgroundColor: '#F1FBFB', borderColor: '#9FD7D9' },
   albumCalendarCellActive: { backgroundColor: '#FBFEFE' },
   albumCalendarToday: { backgroundColor: '#FFF5C9' },
@@ -1943,7 +1933,12 @@ const styles = StyleSheet.create({
   albumCalendarBadgeText: { width: '100%', color: '#4A4141', fontSize: 9, lineHeight: 12, fontWeight: 'bold', flexShrink: 1, textAlign: 'center' },
   albumCalendarBadgeCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },
   albumCalendarEventCount: { width: '100%', marginTop: 2, color: '#333333', fontSize: 9, lineHeight: 12, fontWeight: '800', textAlign: 'center' },
-  albumCalendarMore: { marginTop: 1, paddingHorizontal: 3, color: '#8A8A8A', fontSize: 9 },
+  backgroundUploadBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 12, marginTop: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: '#EFF9FA', borderWidth: 1, borderColor: '#B8E2E4' },
+  backgroundUploadContent: { flex: 1, minWidth: 0 },
+  backgroundUploadTitle: { color: COLORS.text, fontSize: 13, fontWeight: 'bold' },
+  backgroundUploadStatus: { marginTop: 2, color: COLORS.textLight, fontSize: 11 },
+  backgroundUploadTrack: { height: 4, marginTop: 6, borderRadius: 2, overflow: 'hidden', backgroundColor: '#D7E8E9' },
+  backgroundUploadProgress: { height: '100%', borderRadius: 2, backgroundColor: COLORS.primary },
   calendarEmptyText: { marginTop: 20, color: COLORS.textLight, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
   addDateSelectionBanner: { alignSelf: 'center', marginTop: 8, marginBottom: 2, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, backgroundColor: '#DFF4F4', borderWidth: 1, borderColor: '#9FD7D9' },
   addDateSelectionBannerText: { color: '#176F73', fontSize: 13, fontWeight: 'bold' },
@@ -1967,7 +1962,7 @@ const styles = StyleSheet.create({
   dateAlbumEventBadge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 11, backgroundColor: '#EDE3F8' },
   dateAlbumEventBadgeText: { color: '#674F9C', fontSize: 11, fontWeight: 'bold' },
   dateAlbumMediaScroll: { flex: 1 },
-  dateAlbumMediaGrid: { flexDirection: 'row', flexWrap: 'wrap', padding: 2 },
+  dateAlbumMediaGrid: { padding: 2 },
   dateAlbumMediaItem: { width: '33.333%', aspectRatio: 1, padding: 1 },
   dateAlbumEmpty: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   dateAlbumEmptyTitle: { marginTop: 12, color: COLORS.text, fontSize: 15, fontWeight: 'bold', textAlign: 'center' },
