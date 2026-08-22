@@ -14,7 +14,12 @@ type ShiftType = '✕' | '午前✕' | '午後✕' | '○';
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
-export default function ShiftScreen() {
+type ShiftScreenProps = {
+  embedded?: boolean;
+  onClose?: () => void;
+};
+
+export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenProps = {}) {
   const router = useRouter();
   const { name: nameParam } = useLocalSearchParams<{ name: string }>();
   const [staffName, setStaffNameRaw] = useState((nameParam || '').trim());
@@ -325,30 +330,35 @@ export default function ShiftScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: embedded ? 0 : 16, borderBottomRightRadius: embedded ? 0 : 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity onPress={() => navigateHome(router)} style={{ marginRight: 12 }}>
-            <Ionicons name="chevron-back" size={24} color="#5D4037" />
-          </TouchableOpacity>
+          {!embedded && (
+            <TouchableOpacity onPress={() => navigateHome(router)} style={{ marginRight: 12 }}>
+              <Ionicons name="chevron-back" size={24} color="#5D4037" />
+            </TouchableOpacity>
+          )}
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#5D4037' }}>シフト提出</Text>
         </View>
-        {Object.keys(pendingChanges).length > 0 && (
-          <TouchableOpacity
-            style={{ backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginLeft: 8 }}
-            onPress={saveShifts}
-            disabled={saving}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-              {saving ? '保存中...' : `保存(${Object.keys(pendingChanges).length}件)`}
-            </Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={() => setSpreadsheetVisible(true)} style={styles.viewBoardBtn}>
-          <Ionicons name="grid-outline" size={18} color={COLORS.white} />
-          <Text style={styles.viewBoardBtnText}>シフト表を見る</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {Object.keys(pendingChanges).length > 0 && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#4CAF50', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }}
+              onPress={saveShifts}
+              disabled={saving}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+                {saving ? '保存中...' : `保存(${Object.keys(pendingChanges).length}件)`}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {embedded && (
+            <TouchableOpacity onPress={onClose} style={styles.embeddedCloseBtn} accessibilityLabel="閉じる">
+              <Ionicons name="close" size={28} color="#3D302C" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      <AdminShiftTabs active="create" />
+      {!embedded && <AdminShiftTabs active="create" />}
 
       {/* 種類選択ボタン（インライン3つ） */}
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#F8F8F8', borderBottomWidth: 1, borderColor: '#E0E0E0' }}>
@@ -487,7 +497,7 @@ export default function ShiftScreen() {
         </TouchableOpacity>
       )}
 
-      <AdminBottomNav active="shift" />
+      {!embedded && <AdminBottomNav active="shift" />}
 
       <Modal visible={spreadsheetVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.ssModalContainer}>
@@ -649,6 +659,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   viewBoardBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   viewBoardBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
+  embeddedCloseBtn: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
   stampBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFFDF5', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F3E5AB', marginTop: 10 },
   bannerText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   activeStampBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },

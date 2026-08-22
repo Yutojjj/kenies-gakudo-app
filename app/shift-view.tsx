@@ -3,23 +3,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
+import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import ShiftScreen from './shift';
 
 type Staff = { id: string; name: string };
 type AssignedStaff = { name: string; start: string; end: string };
 
 const SHIFT_CARD_COLORS = [
-  { bg: '#EAF8F1', border: '#8DD7B7' },
-  { bg: '#FFF0F4', border: '#F4A6BC' },
-  { bg: '#F0EEFF', border: '#B9A8F5' },
-  { bg: '#FFF3EA', border: '#F0B38B' },
-  { bg: '#EDF6FF', border: '#90C8F2' },
-  { bg: '#F2F8E8', border: '#B7D886' },
+  '#E6F7F1',
+  '#FFF0F4',
+  '#EEEAFE',
+  '#FFF1E7',
+  '#E8F4FF',
+  '#F1F8E4',
+  '#FFF7D9',
+  '#E7F7F8',
+  '#F8EAF5',
+  '#F3EFE6',
+  '#E9F0FB',
+  '#FDECE7',
 ];
 
 export default function ShiftViewScreen() {
@@ -27,12 +34,14 @@ export default function ShiftViewScreen() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [myName, setMyName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [identityLoaded, setIdentityLoaded] = useState(false);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const [submissionVisible, setSubmissionVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -41,7 +50,7 @@ export default function ShiftViewScreen() {
         setMyName(user.name || '');
         setIsAdmin(user.role === 'admin');
       }
-    });
+    }).finally(() => setIdentityLoaded(true));
 
     fetch('https://holidays-jp.github.io/api/v1/date.json')
       .then(r => r.json()).then(setPublicHolidays).catch(() => {});
@@ -106,7 +115,7 @@ export default function ShiftViewScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト確認</Text>
-        {isAdmin && (
+        {isAdmin ? (
           <View style={styles.adminHeaderActions}>
             <TouchableOpacity
               style={[styles.adminHeaderBtn, styles.settingsBtn]}
@@ -151,9 +160,23 @@ export default function ShiftViewScreen() {
               <Text style={styles.adminHeaderBtnText}>勤務時間</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : identityLoaded ? (
+          <View style={styles.staffHeaderActions}>
+            <TouchableOpacity
+              style={[styles.mineHeaderBtn, showOnlyMine && styles.mineHeaderBtnActive]}
+              onPress={() => setShowOnlyMine(!showOnlyMine)}
+            >
+              <Ionicons name={showOnlyMine ? 'people-outline' : 'person-outline'} size={17} color="#176E72" />
+              <Text style={styles.mineHeaderBtnText}>{showOnlyMine ? '全体表示' : '自分のみ'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.submitHeaderBtn} onPress={() => setSubmissionVisible(true)}>
+              <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.submitHeaderBtnText}>シフト提出</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
-      <AdminShiftTabs active="view" />
+      {isAdmin && <AdminShiftTabs active="view" />}
 
       {/* 月ナビゲーション */}
       <View style={styles.monthSelector}>
@@ -167,7 +190,7 @@ export default function ShiftViewScreen() {
       </View>
 
       {/* カレンダー */}
-      <ScrollView style={{ paddingHorizontal: 8 }}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
         {/* 曜日ヘッダー */}
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => (
@@ -214,18 +237,18 @@ export default function ShiftViewScreen() {
                 )}
 
                 <View style={{ flex: 1, marginTop: 3 }}>
-                  {displayStaff.map((staff, staffIndex) => {
+                  {displayStaff.map((staff) => {
                     const assigned = assignedList.find(s => s.name === staff.name);
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
-                    const colorSet = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+                    const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
+                    const staffBackground = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
                     return (
                       <View
                         key={staff.id}
                         style={[
                           styles.cellStaffRow,
-                          { backgroundColor: colorSet.bg, borderColor: colorSet.border },
-                          isMe && styles.cellStaffRowMe,
+                          { backgroundColor: staffBackground },
                         ]}
                       >
                         <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
@@ -244,16 +267,15 @@ export default function ShiftViewScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* 自分のみ表示ボタン（左下） */}
-      <TouchableOpacity
-        style={[styles.fab, showOnlyMine && styles.fabActive]}
-        onPress={() => setShowOnlyMine(!showOnlyMine)}
-        activeOpacity={0.85}
-      >
-        <Ionicons name={showOnlyMine ? 'people' : 'person'} size={20} color={COLORS.white} />
-        <Text style={styles.fabText}>{showOnlyMine ? '全体表示' : '自分のみ'}</Text>
-      </TouchableOpacity>
       <AdminBottomNav active="shift" />
+
+      <Modal visible={submissionVisible} transparent animationType="fade" onRequestClose={() => setSubmissionVisible(false)}>
+        <View style={styles.submissionOverlay}>
+          <View style={styles.submissionModal}>
+            <ShiftScreen embedded onClose={() => setSubmissionVisible(false)} />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -269,27 +291,33 @@ const styles = StyleSheet.create({
   pdfBtn: { backgroundColor: '#08AEB8' },
   workHoursBtn: { backgroundColor: '#6A4338' },
   adminHeaderBtnText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
+  staffHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  mineHeaderBtn: { minHeight: 40, paddingHorizontal: 11, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
+  mineHeaderBtnActive: { backgroundColor: '#D8F2F0', borderColor: '#62C5C8' },
+  mineHeaderBtnText: { fontSize: 12, fontWeight: '900', color: '#176E72' },
+  submitHeaderBtn: { minHeight: 40, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#08AEB8' },
+  submitHeaderBtnText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
-  calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
-  calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.text },
+  calendarScroll: { flex: 1 },
+  calendarContent: { width: '100%', paddingHorizontal: 0, paddingBottom: 100 },
+  calHeaderRow: { flexDirection: 'row', marginBottom: 4, paddingHorizontal: 2 },
+  calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCellEmpty: { width: '14.28%', minHeight: 90 },
-  calCell: { width: '14.28%', minHeight: 100, borderWidth: 0.5, borderColor: COLORS.border, padding: 4 },
+  calCellEmpty: { width: '14.28%', minHeight: 112 },
+  calCell: { width: '14.28%', minHeight: 126, borderWidth: 0.5, borderColor: COLORS.border, paddingHorizontal: 2, paddingVertical: 5 },
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  calDayText: { fontSize: 12, fontWeight: 'bold' },
-  cellCountText: { fontSize: 10, color: '#007A82', fontWeight: '900' },
+  calDayText: { fontSize: 17, fontWeight: 'bold' },
+  cellCountText: { fontSize: 13, color: '#007A82', fontWeight: '900' },
   eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
-  eventBadgeText: { fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
-  cellStaffRow: { marginBottom: 3, borderRadius: 5, paddingHorizontal: 3, paddingVertical: 2, minHeight: 36, borderWidth: 1 },
-  cellStaffRowMe: { backgroundColor: '#E7F8F3', borderWidth: 1.5, borderColor: '#00A176', minHeight: 36 },
-  cellStaffName: { fontSize: 9, fontWeight: '900', color: '#2E2A27', lineHeight: 12 },
+  eventBadgeText: { fontSize: 11, lineHeight: 14, color: '#5B3A00', fontWeight: '900' },
+  cellStaffRow: { marginBottom: 1, paddingHorizontal: 4, paddingVertical: 4, minHeight: 43 },
+  cellStaffName: { fontSize: 13, fontWeight: '900', color: '#2E2A27', lineHeight: 16 },
   cellStaffTimeRow: { marginTop: 1 },
-  cellStaffTime: { fontSize: 8, lineHeight: 11, fontWeight: '800' },
+  cellStaffTime: { fontSize: 11, lineHeight: 14, fontWeight: '800' },
   cellStaffStartTime: { color: COLORS.text },
   cellStaffEndTime: { color: COLORS.text },
   cellStaffTimeMe: { fontWeight: '900' },
-  fab: { position: 'absolute', bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14, right: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 30, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8, zIndex: 100 },
-  fabActive: { backgroundColor: COLORS.secondary },
-  fabText: { color: COLORS.white, fontWeight: 'bold', fontSize: 13, marginLeft: 6 },
+  submissionOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 12 },
+  submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
 });
