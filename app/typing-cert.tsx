@@ -126,6 +126,7 @@ export default function TypingCertScreen() {
   const [stageMisses, setStageMisses] = useState<string[]>(Array(STAGE_COUNT).fill(''));
   const [activeStageInput, setActiveStageInput] = useState<number | null>(null);
   const [stageInputMode, setStageInputMode] = useState<'value' | 'misses'>('value');
+  const [clearStagesVisible, setClearStagesVisible] = useState(false);
   const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
 
@@ -198,6 +199,9 @@ export default function TypingCertScreen() {
     return { avg, wpm: Math.round(avg * 60) };
   };
   const wpmResult = calcWPM();
+  const hasAllStageInputs = stageVals.every(value => Number.parseFloat(value) > 0)
+    && stageMisses.every(value => value.trim() !== '' && Number.parseInt(value, 10) >= 0);
+  const hasStageData = stageVals.some(value => value !== '') || stageMisses.some(value => value !== '');
 
   const pressCustomNumberKey = (key: string) => {
     if (activeStageInput === null) return;
@@ -213,9 +217,9 @@ export default function TypingCertScreen() {
     });
   };
 
-  const openStageInput = (index: number) => {
+  const openStageInput = (index: number, mode: 'value' | 'misses' = 'value') => {
     setActiveStageInput(index);
-    setStageInputMode('value');
+    setStageInputMode(mode);
   };
 
   const completeStageValue = () => setStageInputMode('misses');
@@ -228,6 +232,14 @@ export default function TypingCertScreen() {
     }
     setActiveStageInput(activeStageInput + 1);
     setStageInputMode('value');
+  };
+
+  const clearAllStages = () => {
+    setStageVals(Array(STAGE_COUNT).fill(''));
+    setStageMisses(Array(STAGE_COUNT).fill(''));
+    setActiveStageInput(null);
+    setStageInputMode('value');
+    setClearStagesVisible(false);
   };
 
   // ── 印刷ページを開く（aタグclickでポップアップブロック回避）
@@ -274,6 +286,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべての数値とミス数を入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -296,6 +309,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべての数値とミス数を入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -473,22 +487,44 @@ export default function TypingCertScreen() {
 
           {/* WPM計算 */}
           <View style={styles.card}>
-            <SectionHeader title="WPM計算" />
+            <View style={styles.stageSectionHeader}>
+              <Text style={[styles.sectionHeader, { marginBottom: 0 }]}>WPM計算</Text>
+              <TouchableOpacity
+                style={[styles.clearAllStagesButton, !hasStageData && styles.clearAllStagesButtonDisabled]}
+                onPress={() => setClearStagesVisible(true)}
+                disabled={!hasStageData}
+                activeOpacity={0.72}
+              >
+                <Ionicons name="trash-outline" size={15} color={hasStageData ? '#C24D61' : '#AEB5B8'} />
+                <Text style={[styles.clearAllStagesText, !hasStageData && styles.clearAllStagesTextDisabled]}>すべてクリア</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.stageGuide}>各ステージを押して、数値とミス数を順番に入力</Text>
             <View style={styles.stageGrid}>
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
-                  <TouchableOpacity
-                    style={styles.stageInput}
-                    onPress={() => openStageInput(i)}
-                    activeOpacity={0.72}
-                    accessibilityLabel={`ステージ${i + 1}の数値とミス数を入力`}
-                  >
-                    <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '入力'}</Text>
-                    <Text style={stageMisses[i] !== '' ? styles.stageMissValue : styles.stageMissPlaceholder}>
-                      ミス {stageMisses[i] !== '' ? stageMisses[i] : '—'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.stageInput}>
+                    <TouchableOpacity
+                      style={styles.stageValueButton}
+                      onPress={() => openStageInput(i, 'value')}
+                      activeOpacity={0.72}
+                      accessibilityLabel={`ステージ${i + 1}の数値を編集`}
+                    >
+                      <Text style={styles.stageInputCaption}>数値</Text>
+                      <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '入力'}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.stageInputDivider} />
+                    <TouchableOpacity
+                      style={styles.stageMissButton}
+                      onPress={() => openStageInput(i, 'misses')}
+                      activeOpacity={0.72}
+                      accessibilityLabel={`ステージ${i + 1}のミス数を編集`}
+                    >
+                      <Text style={stageMisses[i] !== '' ? styles.stageMissValue : styles.stageMissPlaceholder}>
+                        ミス {stageMisses[i] !== '' ? stageMisses[i] : '—'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
                 </View>
               ))}
@@ -885,6 +921,23 @@ export default function TypingCertScreen() {
         </Modal>
       )}
 
+      <Modal visible={clearStagesVisible} transparent animationType="fade" onRequestClose={() => setClearStagesVisible(false)}>
+        <TouchableOpacity style={styles.stageClearOverlay} activeOpacity={1} onPress={() => setClearStagesVisible(false)}>
+          <TouchableOpacity style={styles.stageClearDialog} activeOpacity={1} onPress={event => event.stopPropagation()}>
+            <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
+            <Text style={styles.stageClearDescription}>8ステージ分の数値とミス数がすべて消去されます。</Text>
+            <View style={styles.stageClearActions}>
+              <TouchableOpacity style={styles.stageClearCancel} onPress={() => setClearStagesVisible(false)} activeOpacity={0.75}>
+                <Text style={styles.stageClearCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.stageClearConfirm} onPress={clearAllStages} activeOpacity={0.75}>
+                <Text style={styles.stageClearConfirmText}>すべてクリア</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal
         visible={activeStageInput !== null}
         transparent
@@ -904,9 +957,19 @@ export default function TypingCertScreen() {
                     : (stageInputMode === 'value' ? stageVals[activeStageInput] : stageMisses[activeStageInput]) || '0'}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.numberPadClear} onPress={() => pressCustomNumberKey('clear')} activeOpacity={0.72}>
-                <Text style={styles.numberPadClearText}>クリア</Text>
-              </TouchableOpacity>
+              <View style={styles.numberPadHeaderActions}>
+                <TouchableOpacity style={styles.numberPadClear} onPress={() => pressCustomNumberKey('clear')} activeOpacity={0.72}>
+                  <Text style={styles.numberPadClearText}>クリア</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.numberPadCloseIcon}
+                  onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}
+                  activeOpacity={0.72}
+                  accessibilityLabel="数字入力を閉じる"
+                >
+                  <Ionicons name="close" size={29} color="#314A51" />
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.numberPadGrid}>
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', stageInputMode === 'value' ? '.' : 'empty'].map(key => (
@@ -1060,18 +1123,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 3, marginBottom: 6,
   },
   badgeText: { fontSize: 13, fontWeight: 'bold' },
+  stageSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  clearAllStagesButton: {
+    minHeight: 34, paddingHorizontal: 10, borderRadius: 9, flexDirection: 'row', gap: 4,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F3', borderWidth: 1, borderColor: '#F4C3CC',
+  },
+  clearAllStagesButtonDisabled: { backgroundColor: '#F3F4F4', borderColor: '#E3E6E7' },
+  clearAllStagesText: { fontSize: 11, fontWeight: '900', color: '#B64156' },
+  clearAllStagesTextDisabled: { color: '#AEB5B8' },
   stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   stageCell: { alignItems: 'center', minWidth: 72 },
   stageGuide: { marginBottom: 6, fontSize: 12, color: '#64748B', fontWeight: '700' },
   stageInput: {
-    borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 7, padding: 8,
-    fontSize: 14, textAlign: 'center', width: 82, minHeight: 58, backgroundColor: '#fff', color: '#1e3a5f',
-    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 8,
+    width: 86, minHeight: 78, overflow: 'hidden', backgroundColor: '#fff',
   },
+  stageValueButton: { minHeight: 48, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
+  stageMissButton: { minHeight: 29, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8FA' },
+  stageInputDivider: { height: 1, backgroundColor: '#DCE9F2' },
+  stageInputCaption: { marginBottom: 1, fontSize: 9, fontWeight: '800', color: '#7A8D98' },
   stageInputValue: { fontSize: 14, fontWeight: '800', color: '#1E3A5F' },
   stageInputPlaceholder: { fontSize: 14, color: '#BBBBBB' },
-  stageMissValue: { marginTop: 4, fontSize: 10, fontWeight: '800', color: '#D05067' },
-  stageMissPlaceholder: { marginTop: 4, fontSize: 10, color: '#A5ADB5' },
+  stageMissValue: { fontSize: 10, fontWeight: '800', color: '#D05067' },
+  stageMissPlaceholder: { fontSize: 10, color: '#A5ADB5' },
   stageLabel:  { fontSize: 10, color: '#94a3b8', marginTop: 2 },
   autoScoreBox: {
     width: 160, minHeight: 48, paddingHorizontal: 12, borderRadius: 10,
@@ -1079,6 +1153,15 @@ const styles = StyleSheet.create({
   },
   autoScoreValue: { fontSize: 22, fontWeight: '900', color: '#203F48' },
   autoScorePlaceholder: { fontSize: 11, fontWeight: '700', color: '#7B8D92', textAlign: 'center' },
+  stageClearOverlay: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(24,35,40,0.42)' },
+  stageClearDialog: { width: '100%', maxWidth: 390, padding: 20, borderRadius: 18, backgroundColor: '#FFFDF9' },
+  stageClearTitle: { fontSize: 18, fontWeight: '900', color: '#283F46', textAlign: 'center' },
+  stageClearDescription: { marginTop: 8, fontSize: 12, fontWeight: '700', color: '#748287', textAlign: 'center', lineHeight: 18 },
+  stageClearActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  stageClearCancel: { flex: 1, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECEEEF' },
+  stageClearCancelText: { fontSize: 14, fontWeight: '900', color: '#525B5E' },
+  stageClearConfirm: { flex: 1, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E95E74' },
+  stageClearConfirmText: { fontSize: 14, fontWeight: '900', color: '#FFFFFF' },
   numberPadBackdrop: { flex: 1, backgroundColor: 'rgba(24,35,40,0.38)', justifyContent: 'flex-end' },
   numberPadSheet: {
     width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: '#FFFDF9',
@@ -1088,8 +1171,13 @@ const styles = StyleSheet.create({
   numberPadHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 7, marginBottom: 10 },
   numberPadTitle: { fontSize: 12, fontWeight: '800', color: '#647B82', marginBottom: 2 },
   numberPadValue: { fontSize: 28, fontWeight: '900', color: '#223C44' },
+  numberPadHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   numberPadClear: { minHeight: 38, borderRadius: 10, backgroundColor: '#F4ECE8', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   numberPadClearText: { fontSize: 13, fontWeight: '900', color: '#8A554D' },
+  numberPadCloseIcon: {
+    width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#EAF3F4', borderWidth: 1, borderColor: '#C6DDE0',
+  },
   numberPadGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   numberPadKey: {
     width: '31.7%', height: 54, borderRadius: 13, backgroundColor: '#EFF7F8', borderWidth: 1, borderColor: '#C8E0E3',
