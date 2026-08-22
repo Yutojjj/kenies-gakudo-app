@@ -68,6 +68,7 @@ export default function TransportModal({
   const [showLastWeek, setShowLastWeek] = useState(false);
   const [lastWeekModalVisible, setLastWeekModalVisible] = useState(false);
   const [lastWeekEntries, setLastWeekEntries] = useState<StaffEntry[]>([]);
+  const [lastWeekCustomBlocks, setLastWeekCustomBlocks] = useState<CustomTransportBlock[]>([]);
   const [lastWeekLoading, setLastWeekLoading] = useState(false);
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
@@ -362,13 +363,20 @@ export default function TransportModal({
       const lwDateStr = `${lastWeekDate.getFullYear()}-${String(lastWeekDate.getMonth()+1).padStart(2,'0')}-${String(lastWeekDate.getDate()).padStart(2,'0')}`;
       const snap = await getDoc(doc(db, 'pickup_assignments', lwDateStr));
       if (snap.exists() && snap.data()?.entries) {
-        const parsed = JSON.parse(snap.data().entries);
-        setLastWeekEntries(parsed.entries || []);
+        const data = snap.data();
+        const rawEntries = typeof data.entries === 'string' ? JSON.parse(data.entries) : data.entries;
+        const rawCustomBlocks = data.customBlocks
+          ? (typeof data.customBlocks === 'string' ? JSON.parse(data.customBlocks) : data.customBlocks)
+          : [];
+        setLastWeekEntries(Array.isArray(rawEntries) ? rawEntries : (rawEntries?.entries || []));
+        setLastWeekCustomBlocks(Array.isArray(rawCustomBlocks) ? rawCustomBlocks : []);
       } else {
         setLastWeekEntries([]);
+        setLastWeekCustomBlocks([]);
       }
     } catch (e) {
       setLastWeekEntries([]);
+      setLastWeekCustomBlocks([]);
     } finally {
       setLastWeekLoading(false);
     }
@@ -414,6 +422,15 @@ export default function TransportModal({
       });
     }
     save(updated);
+  };
+
+  const formatLastWeekBlock = (blockKey: string) => {
+    const customBlock = lastWeekCustomBlocks.find(block => block.id === blockKey);
+    if (customBlock) return `${customBlock.time} ${customBlock.destination}`;
+    if (blockKey.startsWith('custom_')) return '追加した送迎先';
+    const match = blockKey.match(/^(.*)_(\d{1,2}:\d{2})$/);
+    if (match) return `${match[2]} ${match[1].replace(/_/g, ' ')}`;
+    return blockKey.replace(/_/g, ' ');
   };
 
   const getTimelinePrintRows = () => {
@@ -1680,7 +1697,7 @@ export default function TransportModal({
                         </View>
                         <View style={{ flex: 1 }}>
                           {trip.blockKeys.map((bk: string) => (
-                            <Text key={bk} style={{ fontSize: 13, lineHeight: 19, color: '#222222', fontWeight: '700' }}>• {bk.replace(/_/g, ' ')}</Text>
+                            <Text key={bk} style={{ fontSize: 13, lineHeight: 19, color: '#222222', fontWeight: '700' }}>• {formatLastWeekBlock(bk)}</Text>
                           ))}
                         </View>
                       </View>

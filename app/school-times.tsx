@@ -18,6 +18,7 @@ import {
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 
 const DAYS = ['月', '火', '水', '木', '金'];
 
@@ -63,21 +64,6 @@ export default function SchoolTimesScreen() {
   const [addTimeVisible, setAddTimeVisible] = useState(false);
   const [tempHour, setTempHour] = useState(15);
   const [tempMinute, setTempMinute] = useState(0);
-
-  const ST_ITEM_HEIGHT = 44;
-  const stHourScrollRef = React.useRef<any>(null);
-  const stMinScrollRef  = React.useRef<any>(null);
-
-  React.useEffect(() => {
-    if (!pickerVisible) return;
-    const timer = setTimeout(() => {
-      const hi = HOURS.indexOf(tempHour);
-      const mi = MINUTES.indexOf(tempMinute);
-      if (hi >= 0) stHourScrollRef.current?.scrollTo({ y: 53 + hi * ST_ITEM_HEIGHT, animated: false });
-      if (mi >= 0) stMinScrollRef.current?.scrollTo({ y: 53 + mi * ST_ITEM_HEIGHT, animated: false });
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [pickerVisible]);
 
   // 保存完了トースト
   const [saveToast, setSaveToast] = useState(false);
@@ -172,8 +158,7 @@ export default function SchoolTimesScreen() {
     setPickerVisible(false);
   };
 
-  const handleAddTime = async () => {
-    const newTimeStr = `${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`;
+  const handleAddTime = async (newTimeStr: string) => {
     if (masterTimes.includes(newTimeStr)) {
       Alert.alert('エラー', 'すでに登録されています');
       return;
@@ -356,56 +341,20 @@ export default function SchoolTimesScreen() {
         </View>
       </Modal>
 
-      {/* 新規時刻追加モーダル（完全独立） */}
-      <Modal visible={addTimeVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: 360 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>新しい時刻を追加</Text>
-              <TouchableOpacity onPress={() => setAddTimeVisible(false)}>
-                <Ionicons name="close" size={28} color={COLORS.textLight} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={{ textAlign: 'center', fontSize: 28, fontWeight: 'bold', color: COLORS.primary, marginBottom: 16 }}>
-              {String(tempHour).padStart(2, '0')}:{String(tempMinute).padStart(2, '0')}
-            </Text>
-
-            <View style={styles.addTimeContainer}>
-              <View style={styles.pickerColumns}>
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView ref={stHourScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
-                    <View style={{ height: 53 }} />
-                    {HOURS.map(h => (
-                      <TouchableOpacity key={`h-${h}`} style={[styles.pickerItem, tempHour === h && styles.pickerItemActive]} onPress={() => setTempHour(h)}>
-                        <Text style={[styles.pickerItemText, tempHour === h && styles.pickerItemTextActive]}>{h}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    <View style={{ height: 53 }} />
-                  </ScrollView>
-                </View>
-                <Text style={styles.pickerColon}>:</Text>
-                <View style={styles.pickerColumnWrapper}>
-                  <ScrollView ref={stMinScrollRef} style={styles.pickerScroll} showsVerticalScrollIndicator={false}>
-                    <View style={{ height: 53 }} />
-                    {MINUTES.map(m => (
-                      <TouchableOpacity key={`m-${m}`} style={[styles.pickerItem, tempMinute === m && styles.pickerItemActive]} onPress={() => setTempMinute(m)}>
-                        <Text style={[styles.pickerItemText, tempMinute === m && styles.pickerItemTextActive]}>{String(m).padStart(2, '0')}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    <View style={{ height: 53 }} />
-                  </ScrollView>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity style={[styles.addOptionSubmit, { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]} onPress={handleAddTime}>
-              <Ionicons name="add" size={20} color={COLORS.white} />
-              <Text style={{ color: COLORS.white, fontWeight: 'bold', marginLeft: 4, fontSize: 16 }}>候補に追加</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <CenteredTimePickerModal
+        visible={addTimeVisible}
+        value={`${String(tempHour).padStart(2, '0')}:${String(tempMinute).padStart(2, '0')}`}
+        title="新しい時刻を追加"
+        hours={HOURS}
+        minutes={MINUTES}
+        onClose={() => setAddTimeVisible(false)}
+        onConfirm={value => {
+          const [hour, minute] = value.split(':').map(Number);
+          setTempHour(hour);
+          setTempMinute(minute);
+          void handleAddTime(value);
+        }}
+      />
 
     </SafeAreaView>
   );

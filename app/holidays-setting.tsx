@@ -60,9 +60,9 @@ export default function HolidaysSettingScreen() {
     return () => unsubscribe();
   }, []);
 
-  const openCalendar = (target: 'start' | 'end') => {
-    setCalTarget(target);
-    setCalViewDate(target === 'start' ? new Date(startDateObj) : new Date(endDateObj));
+  const openCalendar = () => {
+    setCalTarget('start');
+    setCalViewDate(new Date(startDateObj));
     setCalVisible(true);
   };
 
@@ -70,12 +70,17 @@ export default function HolidaysSettingScreen() {
     const selected = new Date(calViewDate.getFullYear(), calViewDate.getMonth(), day);
     if (calTarget === 'start') {
       setStartDateObj(selected);
-      if (selected > endDateObj) setEndDateObj(selected);
-    } else {
       setEndDateObj(selected);
-      if (selected < startDateObj) setStartDateObj(selected);
+      setCalTarget('end');
+    } else {
+      if (selected < startDateObj) {
+        setStartDateObj(selected);
+        setEndDateObj(selected);
+        setCalTarget('end');
+      } else {
+        setEndDateObj(selected);
+      }
     }
-    setCalVisible(false);
   };
 
   const generateCalDays = () => {
@@ -212,18 +217,10 @@ export default function HolidaysSettingScreen() {
               <Text style={styles.label}>名称 (例: 夏休み, 祝日)</Text>
               <TextInput style={styles.input} value={periodName} onChangeText={setPeriodName} placeholder="期間の名称" placeholderTextColor="#BBBBBB" />
 
-              <Text style={styles.label}>開始日</Text>
-              <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('start')}>
+              <Text style={styles.label}>期間</Text>
+              <TouchableOpacity style={styles.datePickerBtn} onPress={openCalendar}>
                 <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.datePickerText}>{toDateStr(startDateObj)}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
-              </TouchableOpacity>
-
-              <Text style={styles.label}>終了日</Text>
-              <TouchableOpacity style={styles.datePickerBtn} onPress={() => openCalendar('end')}>
-                <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.datePickerText}>{toDateStr(endDateObj)}</Text>
-                <Ionicons name="chevron-down" size={16} color={COLORS.textLight} />
+                <Text style={styles.datePickerText}>{toDateStr(startDateObj)} 〜 {toDateStr(endDateObj)}</Text>
               </TouchableOpacity>
               <Text style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 20 }}>
                 ※1日だけの場合は、開始と終了を同じ日付にしてください。
@@ -255,11 +252,22 @@ export default function HolidaysSettingScreen() {
         <View style={styles.calOverlay}>
           <View style={styles.calContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{calTarget === 'start' ? '開始日' : '終了日'}を選択</Text>
+              <Text style={styles.modalTitle}>複数日程を選択</Text>
               <TouchableOpacity onPress={() => setCalVisible(false)}>
                 <Ionicons name="close" size={28} color={COLORS.textLight} />
               </TouchableOpacity>
             </View>
+            <View style={styles.rangeSummaryRow}>
+              <View style={[styles.rangeSummaryCard, calTarget === 'start' && styles.rangeSummaryCardActive]}>
+                <Text style={styles.rangeSummaryLabel}>開始日</Text>
+                <Text style={styles.rangeSummaryValue}>{toDateStr(startDateObj)}</Text>
+              </View>
+              <View style={[styles.rangeSummaryCard, calTarget === 'end' && styles.rangeSummaryCardActive]}>
+                <Text style={styles.rangeSummaryLabel}>終了日</Text>
+                <Text style={styles.rangeSummaryValue}>{toDateStr(endDateObj)}</Text>
+              </View>
+            </View>
+            <Text style={styles.rangePrompt}>{calTarget === 'start' ? '開始日を選択してください' : '終了日を選択してください'}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <TouchableOpacity onPress={() => setCalViewDate(new Date(calViewDate.getFullYear(), calViewDate.getMonth() - 1, 1))}>
                 <Ionicons name="chevron-back" size={24} color={COLORS.text} />
@@ -278,15 +286,16 @@ export default function HolidaysSettingScreen() {
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {generateCalDays().map((day, idx) => {
+                const dateKey = day !== null ? toDateStr(new Date(calViewDate.getFullYear(), calViewDate.getMonth(), day)) : '';
                 const isSelected = day !== null && (() => {
                   const d = new Date(calViewDate.getFullYear(), calViewDate.getMonth(), day!);
-                  const target = calTarget === 'start' ? startDateObj : endDateObj;
-                  return toDateStr(d) === toDateStr(target);
+                  return [toDateStr(startDateObj), toDateStr(endDateObj)].includes(toDateStr(d));
                 })();
+                const isInRange = !!day && dateKey >= toDateStr(startDateObj) && dateKey <= toDateStr(endDateObj);
                 return (
                   <TouchableOpacity
                     key={idx}
-                    style={[styles.calCell, !day && { borderWidth: 0 }, isSelected && styles.calCellSelected]}
+                    style={[styles.calCell, !day && { borderWidth: 0 }, isInRange && styles.calCellInRange, isSelected && styles.calCellSelected]}
                     disabled={!day}
                     onPress={() => day && selectCalDay(day)}
                   >
@@ -299,6 +308,9 @@ export default function HolidaysSettingScreen() {
                 );
               })}
             </View>
+            <TouchableOpacity style={styles.rangeConfirmBtn} onPress={() => setCalVisible(false)}>
+              <Text style={styles.rangeConfirmText}>日程を決定</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -336,8 +348,17 @@ const styles = StyleSheet.create({
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
   calOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   calContent: { width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24 },
+  rangeSummaryRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  rangeSummaryCard: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#D7E2E4', backgroundColor: '#F5FAFA' },
+  rangeSummaryCardActive: { borderColor: COLORS.primary, backgroundColor: '#E7F7F7' },
+  rangeSummaryLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: 'bold' },
+  rangeSummaryValue: { marginTop: 3, fontSize: 14, color: COLORS.text, fontWeight: '900' },
+  rangePrompt: { marginBottom: 12, color: COLORS.primary, fontSize: 15, fontWeight: '900', textAlign: 'center' },
   calHeaderRow: { flexDirection: 'row', marginBottom: 8 },
   calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
   calCell: { width: '14.2%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: COLORS.border },
+  calCellInRange: { backgroundColor: '#E9F8F8' },
   calCellSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  rangeConfirmBtn: { minHeight: 48, marginTop: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: COLORS.primary },
+  rangeConfirmText: { color: COLORS.white, fontSize: 15, fontWeight: '900' },
 });

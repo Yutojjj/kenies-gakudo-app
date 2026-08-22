@@ -1907,27 +1907,8 @@ export default function YearEventsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* タブ */}
-                <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderColor: '#EEE' }}>
-                  {(['list', 'add'] as const).map((t) => {
-                    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
-                    const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
-                    const extCount = (ev as any)?.externalParticipants?.length || 0;
-                    const total = parts.filter((p: any) => p.status === '参加').length + extCount;
-                    const label = t === 'list' ? `参加者メンバー（${total}名）` : '新規追加';
-                    return (
-                      <TouchableOpacity key={t}
-                        style={{ flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: mgmtParticipantTab === t ? COLORS.primary : 'transparent' }}
-                        onPress={() => setMgmtParticipantTab(t)}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: mgmtParticipantTab === t ? COLORS.primary : '#888' }}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* ── 参加者一覧タブ ── */}
-                {mgmtParticipantTab === 'list' && (() => {
+                {/* ── イベント内容・参加者一覧 ── */}
+                {(() => {
                   const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
                   const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
                   const attending = parts.filter((p: any) => p.status === '参加');
@@ -1994,7 +1975,15 @@ export default function YearEventsScreen() {
                       </View>
 
                       {/* 参加者一覧 */}
-                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginBottom: 10 }}>学童メンバー（{attending.length}名）</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333' }}>学童メンバー（{attending.length}名）</Text>
+                        <TouchableOpacity
+                          style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E7F7F7', borderWidth: 1, borderColor: '#9DDCDD' }}
+                          onPress={() => { setMgmtAddSubTab('user'); setMgmtParticipantTab('add'); }}
+                        >
+                          <Text style={{ color: COLORS.primary, fontSize: 13, fontWeight: '900' }}>追加する</Text>
+                        </TouchableOpacity>
+                      </View>
                       {attending.length === 0
                         ? <Text style={{ color: '#aaa', fontStyle: 'italic', marginBottom: 8 }}>まだ登録がありません</Text>
                         : attending.map((p: any) => (
@@ -2011,7 +2000,15 @@ export default function YearEventsScreen() {
                           </View>
                         ))
                       }
-                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginTop: 18, marginBottom: 10 }}>外部参加者（{extParts.length}名）</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }}>
+                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333' }}>外部参加者（{extParts.length}名）</Text>
+                        <TouchableOpacity
+                          style={{ minHeight: 36, paddingHorizontal: 14, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF3E8', borderWidth: 1, borderColor: '#F3C18E' }}
+                          onPress={() => { setMgmtAddSubTab('external'); setMgmtParticipantTab('add'); }}
+                        >
+                          <Text style={{ color: '#A65B18', fontSize: 13, fontWeight: '900' }}>追加する</Text>
+                        </TouchableOpacity>
+                      </View>
                       {extParts.length === 0
                         ? <Text style={{ color: '#aaa', fontStyle: 'italic', marginBottom: 8 }}>まだ登録がありません</Text>
                         : extParts.map((ext: any) => (
@@ -2033,9 +2030,20 @@ export default function YearEventsScreen() {
                   );
                 })()}
 
-                {/* ── 新規追加タブ ── */}
+                {/* ── 参加者追加ポップアップ ── */}
                 {mgmtParticipantTab === 'add' && (
-                  <View style={{ flex: 1 }}>
+                  <View style={{ ...StyleSheet.absoluteFillObject, zIndex: 20, backgroundColor: '#FFFFFF' }}>
+                    <View style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderColor: '#EEE' }}>
+                      <Text style={{ fontSize: 17, fontWeight: '900', color: '#333' }}>
+                        {mgmtAddSubTab === 'user' ? '利用者から追加' : '非利用者を追加'}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F3F3' }}
+                        onPress={() => setMgmtParticipantTab('list')}
+                      >
+                        <Ionicons name="close" size={25} color="#333" />
+                      </TouchableOpacity>
+                    </View>
                     {/* サブタブ */}
                     <View style={{ flexDirection: 'row', margin: 12, borderRadius: 10, backgroundColor: '#F2F2F2', padding: 3 }}>
                       {([['user', '利用者から追加'], ['external', '非利用者から追加']] as const).map(([key, label]) => (
