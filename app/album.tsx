@@ -14,6 +14,7 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db, storage } from '../firebase';
+import { useRequireRole } from '../hooks/useRequireRole';
 import { enqueueAlbumUploads, getAlbumUploadQueueState, subscribeAlbumUploadQueue } from '../utils/albumUploadQueue';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -370,7 +371,11 @@ const saveImageToDevice = async (uri: string): Promise<boolean> => {
 
 export default function AlbumScreen() {
   const router = useRouter();
-  const { role, name } = useLocalSearchParams<{ role: string, name: string }>();
+  const { name: nameParam } = useLocalSearchParams<{ role?: string, name?: string }>();
+  const { verified, checking, userInfo } = useRequireRole(['admin', 'staff', 'user']);
+  const role = userInfo?.role || '';
+  const name = role === 'user' ? (userInfo?.name || '') : (nameParam || userInfo?.name || '');
+  const canManageAlbum = role === 'admin' || role === 'staff';
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [userData, setUserData] = useState<any>(null);
@@ -386,6 +391,7 @@ export default function AlbumScreen() {
   const [dateJumpPicker, setDateJumpPicker] = useState<'year' | 'month' | null>(null);
   const [selectedAlbumDate, setSelectedAlbumDate] = useState<string | null>(null);
   const [selectedDateVisibleCount, setSelectedDateVisibleCount] = useState(INITIAL_MEDIA_COUNT);
+  const [expandedDateSectionKey, setExpandedDateSectionKey] = useState<string | null>(null);
   const [isChoosingAddDate, setIsChoosingAddDate] = useState(false);
   const [addMenuVisible, setAddMenuVisible] = useState(false);
   const [addTargetDate, setAddTargetDate] = useState<string | null>(null);
@@ -421,16 +427,28 @@ export default function AlbumScreen() {
 
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [bulkDeleteConfirmVisible, setBulkDeleteConfirmVisible] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const webGalleryResolverRef = useRef<((result: ImagePicker.ImagePickerResult) => void) | null>(null);
   const webDirectoryHandleRef = useRef<any>(null);
   const fullScreenDragStartIndexRef = useRef(0);
   const fullScreenProgrammaticScrollRef = useRef(false);
+  const mediaLongPressRef = useRef<string | null>(null);
+  const sectionLongPressRef = useRef<string | null>(null);
 
   useEffect(() => {
     setSelectedDateVisibleCount(INITIAL_MEDIA_COUNT);
+    setExpandedDateSectionKey(null);
+    setIsSelectMode(false);
+    setSelectedPhotoIds([]);
   }, [selectedAlbumDate]);
+
+  useEffect(() => {
+    setSelectedDateVisibleCount(INITIAL_MEDIA_COUNT);
+    setIsSelectMode(false);
+    setSelectedPhotoIds([]);
+  }, [expandedDateSectionKey]);
 
   const onScrollToIndexFailed = (info: { index: number, highestMeasuredFrameIndex: number, averageItemLength: number }) => {
     setTimeout(() => {
@@ -468,6 +486,7 @@ export default function AlbumScreen() {
   };
 
   useEffect(() => {
+    if (!verified) return;
     let isMounted = true;
     const fetchUser = async () => {
       if (role === 'user') {
@@ -561,7 +580,7 @@ export default function AlbumScreen() {
     }, (e) => console.warn('album_events読み込みエラー:', e));
 
     return () => { isMounted = false; unsubscribeUploadQueue(); unsubPhotos(); unsubEvents(); };
-  }, [role, name, mediaReloadKey]);
+  }, [verified, role, name, mediaReloadKey]);
 
   const toggleExpand = (key: string) => {
     setExpandedDates(prev => ({ ...prev, [key]: !prev[key] }));
@@ -743,6 +762,7 @@ export default function AlbumScreen() {
   };
 
   const pickImages = async (targetTitle: string, targetKey: string) => {
+    if (!canManageAlbum) return;
     const result = await launchAlbumMediaPicker();
     if (!result) return;
 
@@ -763,6 +783,7 @@ export default function AlbumScreen() {
   };
 
   const restoreFromStorage = async () => {
+    if (!canManageAlbum) return;
     if (Platform.OS === 'web') {
       if (!window.confirm('Storageのファイルを元にFirestoreを復元しますか？\n※既存データと重複する可能性があります')) return;
     } else {
@@ -825,6 +846,7 @@ export default function AlbumScreen() {
   };
 
   const uploadPhotosToCategory = async (category: string): Promise<number> => {
+    if (!canManageAlbum) return 0;
     const result = await launchAlbumMediaPicker();
     if (!result || result.canceled) return 0;
 
@@ -844,6 +866,7 @@ export default function AlbumScreen() {
   };
 
   const handleCreateEvent = async () => {
+    if (!canManageAlbum) return;
     if (!eventNameInput.trim()) return Alert.alert('エラー', 'イベント名を入力してください');
     const eventCode = generateEventCode();
     const dateStr = getLocalDateString(newEventDate);
@@ -872,6 +895,7 @@ export default function AlbumScreen() {
   };
 
   const handleAddToExistingEvent = async (ev: {id: string, name: string, category: string}) => {
+    if (!canManageAlbum) return;
     try {
       const uploaded = await uploadPhotosToCategory(ev.category);
       if (uploaded > 0) {
@@ -1040,11 +1064,9 @@ export default function AlbumScreen() {
   const activeMonthPagerKey = `${viewYear}-${String(viewMonth).padStart(2, '0')}`;
 
   const toggleSelectPhoto = (id: string) => {
-    if (selectedPhotoIds.includes(id)) {
-      setSelectedPhotoIds(selectedPhotoIds.filter(pid => pid !== id));
-    } else {
-      setSelectedPhotoIds([...selectedPhotoIds, id]);
-    }
+    setSelectedPhotoIds(current => current.includes(id)
+      ? current.filter(photoId => photoId !== id)
+      : [...current, id]);
   };
 
   const handleSelectAllInSection = (photos: any[]) => {
@@ -1097,20 +1119,13 @@ export default function AlbumScreen() {
   };
 
   const handleBulkDelete = () => {
+    if (!canManageAlbum) return;
     if (selectedPhotoIds.length === 0) return;
-    if (Platform.OS === 'web') {
-      if (window.confirm(`選択した ${selectedPhotoIds.length} 件の写真・動画を完全に削除しますか？`)) {
-        executeBulkDelete(selectedPhotoIds);
-      }
-      return;
-    }
-    Alert.alert('一括削除確認', `選択した ${selectedPhotoIds.length} 件の写真・動画を完全に削除しますか？`, [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => executeBulkDelete(selectedPhotoIds) }
-    ]);
+    setBulkDeleteConfirmVisible(true);
   };
 
   const handleSectionDelete = (sectionLabel: string, photos: any[], eventId?: string) => {
+    if (!canManageAlbum) return;
     if (Platform.OS === 'web') {
       if (window.confirm(`「${sectionLabel}」のアルバムを全て削除しますか？`)) {
         executeBulkDelete(photos.map(p => p.id));
@@ -1128,6 +1143,7 @@ export default function AlbumScreen() {
   };
 
   const executeBulkDelete = async (idsToDelete: string[]) => {
+    if (!canManageAlbum) return false;
     setLoading(true);
     try {
       const allPhotosFlat = Object.values(albumPhotos).flat();
@@ -1161,6 +1177,7 @@ export default function AlbumScreen() {
   };
 
   const executeEventAlbumDelete = async () => {
+    if (!canManageAlbum) return;
     const target = eventAlbumDeleteTarget;
     if (!target) return;
     const eventMedia = albumPhotos[target.category] || [];
@@ -1174,9 +1191,32 @@ export default function AlbumScreen() {
   };
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
-  const selectedDateMedia = selectedAlbumDate ? getMediaForDate(selectedAlbumDate) : [];
-  const visibleSelectedDateMedia = selectedDateMedia.slice(0, selectedDateVisibleCount);
   const selectedDateEvents = selectedAlbumDate ? getVisibleEventsForDate(selectedAlbumDate) : [];
+  const selectedDateSections = selectedAlbumDate ? [
+    {
+      key: `daily:${selectedAlbumDate}`,
+      label: '日常写真',
+      kind: 'daily' as const,
+      media: getDailyMediaForDate(selectedAlbumDate),
+      event: null,
+    },
+    ...selectedDateEvents.map(event => ({
+      key: `event:${event.id}`,
+      label: getEventDisplayName(event),
+      kind: 'event' as const,
+      media: albumPhotos[event.category] || [],
+      event,
+    })),
+  ].filter(section => section.kind === 'event' || section.media.length > 0) : [];
+  const expandedDateSection = selectedDateSections.find(section => section.key === expandedDateSectionKey) || null;
+  const selectedDateMedia = expandedDateSection?.media || [];
+  const visibleSelectedDateMedia = selectedDateMedia.slice(0, selectedDateVisibleCount);
+  const dateAlbumModalWidth = Math.min(windowWidth * 0.96, 900);
+  const dateAlbumMediaItemSize = Math.max(72, (dateAlbumModalWidth - 28) / 3);
+  const selectedDateMediaGridHeight = Math.min(
+    Math.ceil(visibleSelectedDateMedia.length / 3) * dateAlbumMediaItemSize + 4,
+    windowHeight * 0.48,
+  );
   const selectedDateIndex = selectedAlbumDate ? availableMediaDates.indexOf(selectedAlbumDate) : -1;
 
   const moveSelectedAlbumDate = (amount: number) => {
@@ -1287,6 +1327,16 @@ export default function AlbumScreen() {
     );
   };
 
+  if (checking || !verified) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.noDataBox}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       
@@ -1394,7 +1444,14 @@ export default function AlbumScreen() {
           <TouchableOpacity style={styles.dateAlbumModal} activeOpacity={1} onPress={() => {}}>
             <View style={styles.dateAlbumTopRow}>
               <Text style={styles.dateAlbumTitle}>写真・動画</Text>
-              <TouchableOpacity style={styles.dateAlbumCloseButton} onPress={() => setSelectedAlbumDate(null)}>
+              <TouchableOpacity style={styles.dateAlbumCloseButton} onPress={() => {
+                if (isSelectMode) {
+                  setIsSelectMode(false);
+                  setSelectedPhotoIds([]);
+                } else {
+                  setSelectedAlbumDate(null);
+                }
+              }}>
                 <Ionicons name="close" size={28} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -1417,48 +1474,104 @@ export default function AlbumScreen() {
                     <Ionicons name="chevron-forward" size={24} color={selectedDateIndex < 0 || selectedDateIndex >= availableMediaDates.length - 1 ? '#C8C8C8' : COLORS.text} />
                   </TouchableOpacity>
                 </View>
-                {selectedDateEvents.length > 0 && (
-                  <View style={styles.dateAlbumEventRow}>
-                    {selectedDateEvents.map(event => (
-                      <View key={event.id} style={styles.dateAlbumEventBadge}>
-                        <Text style={styles.dateAlbumEventBadgeText}>イベント　{getEventDisplayName(event)}</Text>
-                        {role !== 'user' && (
-                          <TouchableOpacity
-                            style={styles.dateAlbumEventDeleteButton}
-                            accessibilityLabel={`${getEventDisplayName(event)}を削除`}
-                            onPress={() => setEventAlbumDeleteTarget(event)}
+                {selectedDateSections.length > 0 ? (
+                  <View style={styles.dateAlbumSections}>
+                    {selectedDateSections.map(section => {
+                      const expanded = expandedDateSectionKey === section.key;
+                      return (
+                        <View key={section.key} style={[styles.dateAlbumSectionBlock, expanded && styles.dateAlbumSectionBlockExpanded]}>
+                          <View
+                            style={[
+                              styles.dateAlbumSectionHeader,
+                              section.kind === 'daily' ? styles.dateAlbumSectionDaily : styles.dateAlbumSectionEvent,
+                            ]}
                           >
-                            <Ionicons name="trash-outline" size={17} color={COLORS.danger} />
-                          </TouchableOpacity>
-                        )}
+                            <TouchableOpacity
+                              style={styles.dateAlbumSectionToggle}
+                              activeOpacity={0.75}
+                              delayLongPress={500}
+                              onLongPress={() => {
+                                if (!section.event || !canManageAlbum) return;
+                                sectionLongPressRef.current = section.key;
+                                setEventAlbumDeleteTarget(section.event);
+                              }}
+                              onPress={() => {
+                                if (sectionLongPressRef.current === section.key) {
+                                  sectionLongPressRef.current = null;
+                                  return;
+                                }
+                                setExpandedDateSectionKey(current => current === section.key ? null : section.key);
+                              }}
+                            >
+                              <View style={styles.dateAlbumSectionTextWrap}>
+                                <Text style={styles.dateAlbumSectionTitle}>{section.label}</Text>
+                                <Text style={styles.dateAlbumSectionCount}>{section.media.length}件</Text>
+                              </View>
+                              <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={21} color={COLORS.text} />
+                            </TouchableOpacity>
+                          </View>
+                          {expanded && section.media.length > 0 && (
+                            <FlatList
+                              data={visibleSelectedDateMedia}
+                              style={[styles.dateAlbumMediaScroll, { height: selectedDateMediaGridHeight }]}
+                              contentContainerStyle={[styles.dateAlbumMediaGrid, isSelectMode && styles.dateAlbumMediaGridSelecting]}
+                              numColumns={3}
+                              initialNumToRender={6}
+                              maxToRenderPerBatch={6}
+                              updateCellsBatchingPeriod={80}
+                              windowSize={3}
+                              removeClippedSubviews
+                              onEndReachedThreshold={0.35}
+                              onEndReached={() => {
+                                if (selectedDateVisibleCount < selectedDateMedia.length) {
+                                  setSelectedDateVisibleCount(count => Math.min(count + INITIAL_MEDIA_COUNT, selectedDateMedia.length));
+                                }
+                              }}
+                              keyExtractor={media => media.id}
+                              renderItem={({ item: media, index }) => (
+                                <TouchableOpacity
+                                  style={[styles.dateAlbumMediaItem, selectedPhotoIds.includes(media.id) && styles.dateAlbumMediaItemSelected]}
+                                  activeOpacity={0.8}
+                                  delayLongPress={450}
+                                  onLongPress={() => {
+                                    if (!canManageAlbum) return;
+                                    mediaLongPressRef.current = media.id;
+                                    setIsSelectMode(true);
+                                    setSelectedPhotoIds(current => current.includes(media.id) ? current : [...current, media.id]);
+                                  }}
+                                  onPress={() => {
+                                    if (mediaLongPressRef.current === media.id) {
+                                      mediaLongPressRef.current = null;
+                                      return;
+                                    }
+                                    if (isSelectMode) toggleSelectPhoto(media.id);
+                                    else openFullScreen(section.media, index);
+                                  }}
+                                >
+                                  <AlbumMediaThumbnail item={media} />
+                                  {selectedPhotoIds.includes(media.id) && (
+                                    <View style={styles.dateAlbumMediaSelectedMark}>
+                                      <Ionicons name="checkmark" size={18} color={COLORS.white} />
+                                    </View>
+                                  )}
+                                </TouchableOpacity>
+                              )}
+                            />
+                          )}
+                          {expanded && section.media.length === 0 && (
+                            <View style={styles.dateAlbumEmptyCompact}>
+                              <Text style={styles.dateAlbumEmptyCaption}>このアルバムにはまだ写真・動画がありません</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                    {!expandedDateSection && (
+                      <View style={styles.dateAlbumCollapsedHint}>
+                        <Text style={styles.dateAlbumCollapsedHintText}>見たいアルバムを押すと、そのすぐ下に写真・動画が表示されます</Text>
                       </View>
-                    ))}
-                  </View>
-                )}
-                {selectedDateMedia.length > 0 ? (
-                  <FlatList
-                    data={visibleSelectedDateMedia}
-                    style={styles.dateAlbumMediaScroll}
-                    contentContainerStyle={styles.dateAlbumMediaGrid}
-                    numColumns={3}
-                    initialNumToRender={6}
-                    maxToRenderPerBatch={6}
-                    updateCellsBatchingPeriod={80}
-                    windowSize={3}
-                    removeClippedSubviews
-                    onEndReachedThreshold={0.35}
-                    onEndReached={() => {
-                      if (selectedDateVisibleCount < selectedDateMedia.length) {
-                        setSelectedDateVisibleCount(count => Math.min(count + INITIAL_MEDIA_COUNT, selectedDateMedia.length));
-                      }
-                    }}
-                    keyExtractor={media => media.id}
-                    renderItem={({ item: media, index }) => (
-                      <TouchableOpacity style={styles.dateAlbumMediaItem} activeOpacity={0.8} onPress={() => openFullScreen(selectedDateMedia, index)}>
-                        <AlbumMediaThumbnail item={media} />
-                      </TouchableOpacity>
                     )}
-                  />
+                  </View>
                 ) : (
                   <View style={styles.dateAlbumEmpty}>
                     <Ionicons name="images-outline" size={40} color="#B9C4C4" />
@@ -1468,7 +1581,26 @@ export default function AlbumScreen() {
                 )}
               </>
             )}
-            {role !== 'user' && selectedAlbumDate && (
+            {isSelectMode && role !== 'user' && (
+              <View style={styles.dateAlbumSelectionBar}>
+                <TouchableOpacity style={styles.dateAlbumSelectionCancel} onPress={() => {
+                  setIsSelectMode(false);
+                  setSelectedPhotoIds([]);
+                }}>
+                  <Text style={styles.dateAlbumSelectionCancelText}>キャンセル</Text>
+                </TouchableOpacity>
+                <Text style={styles.dateAlbumSelectionCount}>{selectedPhotoIds.length}件選択中</Text>
+                <TouchableOpacity
+                  style={[styles.dateAlbumSelectionDelete, selectedPhotoIds.length === 0 && styles.dateAlbumSelectionDeleteDisabled]}
+                  disabled={selectedPhotoIds.length === 0}
+                  onPress={handleBulkDelete}
+                >
+                  <Ionicons name="trash-outline" size={19} color={COLORS.white} />
+                  <Text style={styles.dateAlbumSelectionDeleteText}>削除</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {!isSelectMode && role !== 'user' && selectedAlbumDate && (
               <TouchableOpacity
                 style={styles.dateAlbumFab}
                 accessibilityLabel="この日に追加"
@@ -1480,6 +1612,26 @@ export default function AlbumScreen() {
                 <Ionicons name="add" size={32} color="#FFFFFF" />
               </TouchableOpacity>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={bulkDeleteConfirmVisible} transparent animationType="fade" onRequestClose={() => setBulkDeleteConfirmVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setBulkDeleteConfirmVisible(false)}>
+          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} onPress={() => {}}>
+            <Text style={styles.eventAlbumDeleteTitle}>選択した写真・動画を削除</Text>
+            <Text style={styles.eventAlbumDeleteMessage}>{selectedPhotoIds.length}件を完全に削除しますか？</Text>
+            <View style={styles.eventAlbumDeleteActions}>
+              <TouchableOpacity style={styles.eventAlbumDeleteCancel} onPress={() => setBulkDeleteConfirmVisible(false)}>
+                <Text style={styles.eventAlbumDeleteCancelText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.eventAlbumDeleteConfirm} onPress={async () => {
+                setBulkDeleteConfirmVisible(false);
+                await executeBulkDelete([...selectedPhotoIds]);
+              }}>
+                <Text style={styles.eventAlbumDeleteConfirmText}>削除する</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -2008,6 +2160,19 @@ const styles = StyleSheet.create({
   dateAlbumNavButtonDisabled: { opacity: 0.45 },
   dateAlbumDateText: { minWidth: 0, flexShrink: 1, color: COLORS.text, fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
   dateAlbumFab: { position: 'absolute', right: 18, bottom: 18, zIndex: 20, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#184D50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.24, shadowRadius: 8, elevation: 8 },
+  dateAlbumSections: { flex: 1, gap: 7, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#FFFEFC' },
+  dateAlbumSectionBlock: { flexShrink: 0 },
+  dateAlbumSectionBlockExpanded: { minHeight: 0 },
+  dateAlbumSectionHeader: { minHeight: 50, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderRadius: 8 },
+  dateAlbumSectionDaily: { backgroundColor: '#FCE8EE', borderColor: '#F2BECF' },
+  dateAlbumSectionEvent: { backgroundColor: '#FFE8CC', borderColor: '#F2C486' },
+  dateAlbumSectionToggle: { flex: 1, minWidth: 0, minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 14, paddingRight: 10 },
+  dateAlbumSectionTextWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dateAlbumSectionTitle: { flexShrink: 1, color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
+  dateAlbumSectionCount: { color: COLORS.textLight, fontSize: 12, fontWeight: 'bold' },
+  dateAlbumEmptyCompact: { minHeight: 110, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  dateAlbumCollapsedHint: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  dateAlbumCollapsedHintText: { color: COLORS.textLight, fontSize: 13, lineHeight: 20, textAlign: 'center' },
   dateAlbumEventRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#FAF7FE' },
   dateAlbumEventBadge: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 5, paddingLeft: 9, paddingRight: 4, paddingVertical: 3, borderRadius: 11, backgroundColor: '#EDE3F8' },
   dateAlbumEventBadgeText: { color: '#674F9C', fontSize: 11, fontWeight: 'bold' },
@@ -2020,9 +2185,19 @@ const styles = StyleSheet.create({
   eventAlbumDeleteCancelText: { color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
   eventAlbumDeleteConfirm: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: COLORS.danger },
   eventAlbumDeleteConfirmText: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
-  dateAlbumMediaScroll: { flex: 1 },
+  dateAlbumMediaScroll: { flexGrow: 0, flexShrink: 0 },
   dateAlbumMediaGrid: { padding: 2 },
+  dateAlbumMediaGridSelecting: { paddingBottom: 76 },
   dateAlbumMediaItem: { width: '33.333%', aspectRatio: 1, padding: 1 },
+  dateAlbumMediaItemSelected: { opacity: 0.72 },
+  dateAlbumMediaSelectedMark: { position: 'absolute', top: 8, right: 8, zIndex: 5, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderWidth: 2, borderColor: COLORS.white },
+  dateAlbumSelectionBar: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 30, minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#FFFCF8', borderTopWidth: 1, borderColor: COLORS.border },
+  dateAlbumSelectionCancel: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10 },
+  dateAlbumSelectionCancelText: { color: COLORS.text, fontSize: 13, fontWeight: 'bold' },
+  dateAlbumSelectionCount: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  dateAlbumSelectionDelete: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 15, borderRadius: 8, backgroundColor: COLORS.danger },
+  dateAlbumSelectionDeleteDisabled: { opacity: 0.4 },
+  dateAlbumSelectionDeleteText: { color: COLORS.white, fontSize: 13, fontWeight: 'bold' },
   dateAlbumEmpty: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   dateAlbumEmptyTitle: { marginTop: 12, color: COLORS.text, fontSize: 15, fontWeight: 'bold', textAlign: 'center' },
   dateAlbumEmptyCaption: { marginTop: 6, color: COLORS.textLight, fontSize: 12, textAlign: 'center' },
