@@ -2,6 +2,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getStorage } = require("firebase-admin/storage");
 const webpush = require("web-push");
 
 initializeApp();
@@ -210,7 +211,39 @@ async function sendAnnouncementPush(accountIds, title, body, url) {
   return { sent, total: subscriptions.length };
 }
 
-// 予約されたお知らせを1分ごとに確認し、掲載時刻になったものだけ利用者へ通知する。
+function announcementStoragePathFromUrl(url) {
+  if (typeof url !== "string") return "";
+  const match = url.match(/\/o\/([^?]+)/);
+  if (!match) return "";
+  try {
+    const path = decodeURIComponent(match[1]);
+    return path.startsWith("announcements/") ? path : "";
+  } catch {
+    return "";
+  }
+}
+
+async function deleteExpiredAnnouncement(item) {
+  const data = item.data();
+  const paths = new Set();
+  const headerPath = data.headerImageStoragePath || announcementStoragePathFromUrl(data.headerImageUrl || data.imageUrl);
+  if (typeof headerPath === "string" && headerPath.startsWith("announcements/")) paths.add(headerPath);
+  (Array.isArray(data.referenceImages) ? data.referenceImages : []).forEach(image => {
+    if (image?.sourceAlbumId) return;
+    const path = image?.storagePath || announcementStoragePathFromUrl(image?.url);
+    if (typeof path === "string" && path.startsWith("announcements/")) paths.add(path);
+  });
+  (Array.isArray(data.retiredImageStoragePaths) ? data.retiredImageStoragePaths : []).forEach(path => {
+    if (typeof path === "string" && path.startsWith("announcements/")) paths.add(path);
+  });
+  const bucket = getStorage().bucket();
+  await Promise.all([...paths].map(path => bucket.file(path).delete().catch(error => {
+    if (error?.code !== 404) console.warn(`[announcement] image cleanup failed: ${path}`, error.message);
+  })));
+  await item.ref.delete();
+}
+
+// 予約されたお知らせを1分ごとに確認し、掲載開始時に通知、掲載終了後にデータと専用画像を削除する。
 exports.publishScheduledAnnouncements = onSchedule(
   {
     schedule: "every 1 minutes",
@@ -219,15 +252,18 @@ exports.publishScheduledAnnouncements = onSchedule(
   },
   async () => {
     const db = getFirestore();
+    const now = Date.now();
+    const expiredSnap = await db.collection("announcements").where("expiresAt", "<", new Date(now)).get();
+    await Promise.all(expiredSnap.docs.map(item => deleteExpiredAnnouncement(item)));
     const [announcementSnap, userSnap] = await Promise.all([
       db.collection("announcements").where("notificationSent", "==", false).get(),
       db.collection("accounts").where("role", "==", "user").get(),
     ]);
-    const now = Date.now();
     const accountIds = userSnap.docs.map(item => item.id);
     const due = announcementSnap.docs.filter(item => {
       const data = item.data();
-      return data.isActive !== false && data.publishAt?.toDate && data.publishAt.toDate().getTime() <= now;
+      const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate().getTime() : Infinity;
+      return data.isActive !== false && data.publishAt?.toDate && data.publishAt.toDate().getTime() <= now && expiresAt >= now;
     });
     await Promise.all(due.map(async item => {
       const data = item.data();

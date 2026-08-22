@@ -9,6 +9,7 @@ import { ActivityIndicator, Modal, Platform, Pressable, SafeAreaView, ScrollView
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
+import { navigateHome } from '../utils/navigationHome';
 
 // メニュー画面のヘッダーと同じベースカラー
 const THEME_COLOR = '#00C0C7';
@@ -63,16 +64,7 @@ export default function QrScanScreen() {
   // カメラの向きを管理するステート（初期値は外カメラ）
   const [facing, setFacing] = useState<'back' | 'front'>('back');
 
-  const goHome = async () => {
-    try {
-      const raw = await AsyncStorage.getItem('loggedInUser');
-      if (!raw) throw new Error('ログイン情報がありません');
-      JSON.parse(raw);
-      router.replace('/menu' as any);
-    } catch {
-      router.replace('/' as any);
-    }
-  };
+  const goHome = () => navigateHome(router);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {

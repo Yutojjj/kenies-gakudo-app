@@ -20,6 +20,7 @@ import {
 import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { clearNavigationReturnDestination, setNavigationReturnDestination } from '../utils/navigationHome';
 import { useRequireRole } from '../hooks/useRequireRole';
 
 type DialogState = {
@@ -102,6 +103,7 @@ export default function AdminMoreScreen() {
   const [gradeLoading, setGradeLoading] = useState(false);
 
   useEffect(() => {
+    clearNavigationReturnDestination();
     AsyncStorage.getItem('loggedInUser').then(raw => {
       if (!raw) return;
       try {
@@ -120,7 +122,8 @@ export default function AdminMoreScreen() {
     setDialog({ visible: true, title, message, confirm: true, onConfirm });
   };
 
-  const go = (pathname: string, params?: Record<string, string>) => {
+  const go = async (pathname: string, params?: Record<string, string>) => {
+    await setNavigationReturnDestination('admin-more');
     router.push(params ? ({ pathname, params } as any) : (pathname as any));
   };
   const goHome = () => {

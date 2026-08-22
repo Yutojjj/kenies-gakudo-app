@@ -29,6 +29,9 @@ type Announcement = {
   isActive?: boolean;
   notificationSent?: boolean;
   publishAt?: any;
+  expiresAt?: any;
+  headerImageStoragePath?: string | null;
+  retiredImageStoragePaths?: string[];
   createdAt?: any;
   createdBy?: string;
 };
@@ -139,10 +142,12 @@ export default function AnnouncementsScreen() {
   const [isPromotional, setIsPromotional] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [headerImageUrl, setHeaderImageUrl] = useState('');
+  const [headerImageStoragePath, setHeaderImageStoragePath] = useState<string | null>(null);
   const [localHeaderImageUri, setLocalHeaderImageUri] = useState('');
   const [cropImageUri, setCropImageUri] = useState('');
   const [referenceImages, setReferenceImages] = useState<AnnouncementImage[]>([]);
   const [localReferenceUris, setLocalReferenceUris] = useState<string[]>([]);
+  const [retiredImageStoragePaths, setRetiredImageStoragePaths] = useState<string[]>([]);
   const [photoSourceVisible, setPhotoSourceVisible] = useState(false);
   const [albumPickerVisible, setAlbumPickerVisible] = useState(false);
   const [albumLoading, setAlbumLoading] = useState(false);
@@ -151,9 +156,11 @@ export default function AnnouncementsScreen() {
   const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null);
   const [selectedAlbumMediaIds, setSelectedAlbumMediaIds] = useState<string[]>([]);
   const [publishDate, setPublishDate] = useState(() => new Date());
+  const [publishEndDate, setPublishEndDate] = useState(() => new Date());
   const [publishHour, setPublishHour] = useState(() => String(new Date().getHours()).padStart(2, '0'));
   const [publishMinute, setPublishMinute] = useState(() => String(Math.floor(new Date().getMinutes() / 5) * 5).padStart(2, '0'));
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarTarget, setCalendarTarget] = useState<'start' | 'end'>('start');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [timeVisible, setTimeVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -195,10 +202,13 @@ export default function AnnouncementsScreen() {
     setIsPromotional(false);
     setIsActive(true);
     setHeaderImageUrl('');
+    setHeaderImageStoragePath(null);
     setLocalHeaderImageUri('');
     setReferenceImages([]);
     setLocalReferenceUris([]);
+    setRetiredImageStoragePaths([]);
     setPublishDate(now);
+    setPublishEndDate(now);
     setCalendarMonth(now);
     setPublishHour(String(now.getHours()).padStart(2, '0'));
     setPublishMinute(String(Math.floor(now.getMinutes() / 5) * 5).padStart(2, '0'));
@@ -213,10 +223,13 @@ export default function AnnouncementsScreen() {
     setIsPromotional(!!item.isPromotional);
     setIsActive(item.isActive !== false);
     setHeaderImageUrl(item.headerImageUrl || item.imageUrl || '');
+    setHeaderImageStoragePath(item.headerImageStoragePath || null);
     setLocalHeaderImageUri('');
     setReferenceImages(Array.isArray(item.referenceImages) ? item.referenceImages.filter(image => image?.url) : []);
     setLocalReferenceUris([]);
+    setRetiredImageStoragePaths(Array.isArray(item.retiredImageStoragePaths) ? item.retiredImageStoragePaths : []);
     setPublishDate(date);
+    setPublishEndDate(item.expiresAt ? toDate(item.expiresAt) : date);
     setCalendarMonth(date);
     setPublishHour(String(date.getHours()).padStart(2, '0'));
     setPublishMinute(String(date.getMinutes()).padStart(2, '0'));
@@ -270,12 +283,18 @@ export default function AnnouncementsScreen() {
   const uploadAnnouncementImages = async () => {
     const header = localHeaderImageUri
       ? await uploadUri(localHeaderImageUri, 'header')
-      : { url: headerImageUrl };
+      : { url: headerImageUrl, storagePath: headerImageStoragePath };
     const uploadedReferences = await Promise.all(localReferenceUris.map(uri => uploadUri(uri, 'reference')));
     return {
       headerUrl: header.url || '',
+      headerStoragePath: header.storagePath || null,
       references: [...referenceImages, ...uploadedReferences],
     };
+  };
+
+  const retireAnnouncementImage = (image?: AnnouncementImage | null) => {
+    if (!image?.storagePath || image.sourceAlbumId) return;
+    setRetiredImageStoragePaths(current => Array.from(new Set([...current, image.storagePath as string])));
   };
 
   const openAlbumPicker = async () => {
@@ -347,9 +366,15 @@ export default function AnnouncementsScreen() {
     setSaving(true);
     setMessage('');
     try {
-      const uploadedImages = await uploadAnnouncementImages();
       const scheduled = new Date(publishDate);
       scheduled.setHours(Number(publishHour), Number(publishMinute), 0, 0);
+      const expiresAt = new Date(publishEndDate);
+      expiresAt.setHours(23, 59, 59, 999);
+      if (expiresAt.getTime() < scheduled.getTime()) {
+        setMessage('終了日は開始日時以降にしてください');
+        return;
+      }
+      const uploadedImages = await uploadAnnouncementImages();
       const publishImmediately = scheduled.getTime() <= Date.now();
       const existing = editingId ? items.find(item => item.id === editingId) : undefined;
       const existingPublishTime = existing ? toDate(existing.publishAt).getTime() : 0;
@@ -362,10 +387,13 @@ export default function AnnouncementsScreen() {
         content: content.trim(),
         imageUrl: uploadedImages.headerUrl,
         headerImageUrl: uploadedImages.headerUrl,
+        headerImageStoragePath: uploadedImages.headerStoragePath,
         referenceImages: uploadedImages.references,
+        retiredImageStoragePaths,
         isPromotional,
         isActive,
         publishAt: Timestamp.fromDate(scheduled),
+        expiresAt: Timestamp.fromDate(expiresAt),
         notificationSent: publishImmediately ? true : false,
         updatedAt: serverTimestamp(),
         updatedBy: name,
@@ -464,9 +492,14 @@ export default function AnnouncementsScreen() {
           <Text style={styles.label}>ヘッダー写真（任意）</Text>
           <Text style={styles.helperText}>利用者がお知らせを開いたとき、最上部に大きく表示されます</Text>
           <TouchableOpacity style={styles.headerImagePicker} onPress={pickHeaderImage}>
-            {(localHeaderImageUri || headerImageUrl) ? <Image source={{ uri: localHeaderImageUri || headerImageUrl }} style={styles.previewImage} /> : <><Ionicons name="crop-outline" size={30} color="#00AEB8" /><Text style={styles.imagePickerText}>選択して16:9にトリミング</Text></>}
+            {(localHeaderImageUri || headerImageUrl) ? <Image source={{ uri: localHeaderImageUri || headerImageUrl }} style={styles.previewImage} /> : <><Ionicons name="image-outline" size={30} color="#00AEB8" /><Text style={styles.imagePickerText}>画像を選択</Text></>}
           </TouchableOpacity>
-          {(localHeaderImageUri || headerImageUrl) ? <TouchableOpacity style={styles.removeImage} onPress={() => { setLocalHeaderImageUri(''); setHeaderImageUrl(''); }}><Text style={styles.removeImageText}>ヘッダー写真を外す</Text></TouchableOpacity> : null}
+          {(localHeaderImageUri || headerImageUrl) ? <TouchableOpacity style={styles.removeImage} onPress={() => {
+            retireAnnouncementImage({ url: headerImageUrl, storagePath: headerImageStoragePath });
+            setLocalHeaderImageUri('');
+            setHeaderImageUrl('');
+            setHeaderImageStoragePath(null);
+          }}><Text style={styles.removeImageText}>ヘッダー写真を外す</Text></TouchableOpacity> : null}
 
           <View style={styles.referenceHeadingRow}>
             <View style={{ flex: 1 }}>
@@ -483,7 +516,10 @@ export default function AnnouncementsScreen() {
               {referenceImages.map((image, index) => (
                 <View key={`${image.url}-${index}`} style={styles.referencePreviewWrap}>
                   <Image source={{ uri: image.url }} style={styles.referencePreview} />
-                  <TouchableOpacity style={styles.referenceRemove} onPress={() => setReferenceImages(current => current.filter((_, i) => i !== index))}><Ionicons name="close" size={17} color="#fff" /></TouchableOpacity>
+                  <TouchableOpacity style={styles.referenceRemove} onPress={() => {
+                    retireAnnouncementImage(image);
+                    setReferenceImages(current => current.filter((_, i) => i !== index));
+                  }}><Ionicons name="close" size={17} color="#fff" /></TouchableOpacity>
                 </View>
               ))}
               {localReferenceUris.map((uri, index) => (
@@ -495,17 +531,21 @@ export default function AnnouncementsScreen() {
             </ScrollView>
           ) : <View style={styles.referenceEmpty}><Text style={styles.referenceEmptyText}>参考写真はまだありません</Text></View>}
 
-          <Text style={styles.label}>掲載日時</Text>
+          <Text style={styles.label}>掲載期間</Text>
           <View style={styles.publishRow}>
-            <TouchableOpacity style={styles.publishButton} onPress={() => { setCalendarMonth(publishDate); setCalendarVisible(true); }}>
+            <TouchableOpacity style={styles.publishButton} onPress={() => { setCalendarTarget('start'); setCalendarMonth(publishDate); setCalendarVisible(true); }}>
               <Ionicons name="calendar-outline" size={20} color="#267A80" />
-              <Text style={styles.publishButtonText}>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text>
+              <View><Text style={styles.publishButtonCaption}>開始日</Text><Text style={styles.publishButtonText}>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text></View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.publishButton} onPress={() => setTimeVisible(true)}>
-              <Ionicons name="time-outline" size={20} color="#267A80" />
-              <Text style={styles.publishButtonText}>{publishHour}:{publishMinute}</Text>
+            <TouchableOpacity style={styles.publishButton} onPress={() => { setCalendarTarget('end'); setCalendarMonth(publishEndDate); setCalendarVisible(true); }}>
+              <Ionicons name="calendar-outline" size={20} color="#267A80" />
+              <View><Text style={styles.publishButtonCaption}>終了日</Text><Text style={styles.publishButtonText}>{publishEndDate.getFullYear()}年{publishEndDate.getMonth() + 1}月{publishEndDate.getDate()}日</Text></View>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity style={[styles.publishButton, styles.startTimeButton]} onPress={() => setTimeVisible(true)}>
+              <Ionicons name="time-outline" size={20} color="#267A80" />
+              <View><Text style={styles.publishButtonCaption}>開始時刻</Text><Text style={styles.publishButtonText}>{publishHour}:{publishMinute}</Text></View>
+          </TouchableOpacity>
 
           {editingId && <><Text style={styles.label}>利用者への表示</Text><TouchableOpacity style={[styles.visibilityButton, isActive && styles.visibilityButtonActive]} onPress={() => setIsActive(current => !current)}><Ionicons name={isActive ? 'eye-outline' : 'eye-off-outline'} size={20} color={isActive ? '#217A54' : '#7D7773'} /><Text style={[styles.visibilityText, isActive && styles.visibilityTextActive]}>{isActive ? '表示する' : '非表示にする'}</Text></TouchableOpacity></>}
           {!!message && <Text style={styles.errorMessage}>{message}</Text>}
@@ -520,12 +560,52 @@ export default function AnnouncementsScreen() {
       <Modal visible={calendarVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCalendarVisible(false)}>
           <TouchableWithoutFeedback><View style={styles.calendarCard}>
+            <View style={styles.rangeModalTitleRow}>
+              <Text style={styles.rangeModalTitle}>掲載期間を選択</Text>
+              <TouchableOpacity style={styles.rangeModalClose} onPress={() => setCalendarVisible(false)}><Ionicons name="close" size={28} color="#4D4641" /></TouchableOpacity>
+            </View>
+            <View style={styles.rangeSummaryRow}>
+              <TouchableOpacity style={[styles.rangeSummary, calendarTarget === 'start' && styles.rangeSummaryStartActive]} onPress={() => { setCalendarTarget('start'); setCalendarMonth(publishDate); }}>
+                <Text style={[styles.rangeSummaryCaption, calendarTarget === 'start' && styles.rangeSummaryStartText]}>開始日</Text>
+                <Text style={styles.rangeSummaryDate}>{publishDate.getFullYear()}-{String(publishDate.getMonth() + 1).padStart(2, '0')}-{String(publishDate.getDate()).padStart(2, '0')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.rangeSummary, calendarTarget === 'end' && styles.rangeSummaryEndActive]} onPress={() => { setCalendarTarget('end'); setCalendarMonth(publishEndDate); }}>
+                <Text style={[styles.rangeSummaryCaption, calendarTarget === 'end' && styles.rangeSummaryEndText]}>終了日</Text>
+                <Text style={styles.rangeSummaryDate}>{publishEndDate.getFullYear()}-{String(publishEndDate.getMonth() + 1).padStart(2, '0')}-{String(publishEndDate.getDate()).padStart(2, '0')}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.calendarTargetLabel}>{calendarTarget === 'start' ? '開始日を選択してください' : '終了日を選択してください'}</Text>
             <View style={styles.calendarHeader}>
               <TouchableOpacity style={styles.roundButton} onPress={() => setCalendarMonth(date => new Date(date.getFullYear(), date.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={22} color="#493B35" /></TouchableOpacity>
               <Text style={styles.calendarTitle}>{calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月</Text>
               <TouchableOpacity style={styles.roundButton} onPress={() => setCalendarMonth(date => new Date(date.getFullYear(), date.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={22} color="#493B35" /></TouchableOpacity>
             </View>
-            <View style={styles.calendarGrid}>{WEEKDAYS.map(day => <Text key={day} style={styles.weekday}>{day}</Text>)}{calendarDays.map((day, index) => day === null ? <View key={`empty-${index}`} style={styles.dayCell} /> : (() => { const candidate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day); const selected = dateKey(candidate) === dateKey(publishDate); return <TouchableOpacity key={day} style={[styles.dayCell, selected && styles.dayCellSelected]} onPress={() => { setPublishDate(candidate); setCalendarVisible(false); }}><Text style={[styles.dayText, selected && styles.dayTextSelected]}>{day}</Text></TouchableOpacity>; })())}</View>
+            <View style={styles.calendarGrid}>{WEEKDAYS.map(day => <Text key={day} style={styles.weekday}>{day}</Text>)}{calendarDays.map((day, index) => day === null ? <View key={`empty-${index}`} style={styles.dayCell} /> : (() => {
+              const candidate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+              const candidateTime = candidate.getTime();
+              const startTime = new Date(publishDate.getFullYear(), publishDate.getMonth(), publishDate.getDate()).getTime();
+              const endTime = new Date(publishEndDate.getFullYear(), publishEndDate.getMonth(), publishEndDate.getDate()).getTime();
+              const isStart = dateKey(candidate) === dateKey(publishDate);
+              const isEnd = dateKey(candidate) === dateKey(publishEndDate);
+              const isInRange = candidateTime > startTime && candidateTime < endTime;
+              return <TouchableOpacity key={day} style={[styles.dayCell, isInRange && styles.dayCellInRange, isStart && styles.dayCellStart, isEnd && styles.dayCellEnd]} onPress={() => {
+                if (calendarTarget === 'start') {
+                  setPublishDate(candidate);
+                  if (candidateTime > endTime) setPublishEndDate(candidate);
+                  setCalendarTarget('end');
+                  return;
+                }
+                if (candidateTime < startTime) {
+                  setPublishDate(candidate);
+                  setPublishEndDate(candidate);
+                  setCalendarTarget('end');
+                  return;
+                }
+                setPublishEndDate(candidate);
+                setCalendarVisible(false);
+                setTimeout(() => setTimeVisible(true), 160);
+              }}><Text style={[styles.dayText, (isStart || isEnd) && styles.dayTextSelected]}>{day}</Text></TouchableOpacity>;
+            })())}</View>
           </View></TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
@@ -608,7 +688,11 @@ export default function AnnouncementsScreen() {
         uri={cropImageUri}
         title="ヘッダー写真をトリミング"
         onCancel={() => setCropImageUri('')}
-        onDone={uri => { setLocalHeaderImageUri(uri); setCropImageUri(''); }}
+        onDone={uri => {
+          retireAnnouncementImage({ url: headerImageUrl, storagePath: headerImageStoragePath });
+          setLocalHeaderImageUri(uri);
+          setCropImageUri('');
+        }}
       />
     </SafeAreaView>
   );
@@ -662,6 +746,8 @@ const styles = StyleSheet.create({
   publishRow: { flexDirection: 'row', gap: 8 },
   publishButton: { flex: 1, minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: '#A8D9DC', backgroundColor: '#F2FBFB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 6 },
   publishButtonText: { fontSize: 12, fontWeight: '900', color: '#314D50', textAlign: 'center' },
+  publishButtonCaption: { marginBottom: 2, fontSize: 9, fontWeight: '800', color: '#668084', textAlign: 'center' },
+  startTimeButton: { flex: 0, alignSelf: 'flex-start', minWidth: 142, marginTop: 8, paddingHorizontal: 12 },
   visibilityButton: { minHeight: 46, borderRadius: 10, backgroundColor: '#F2F2F2', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   visibilityButtonActive: { backgroundColor: '#E8F8EF', borderWidth: 1, borderColor: '#A9DFC0' },
   visibilityText: { color: '#6F6965', fontWeight: '900' },
@@ -674,14 +760,28 @@ const styles = StyleSheet.create({
   empty: { flex: 1, minHeight: 240, alignItems: 'center', justifyContent: 'center', padding: 30 },
   emptyText: { marginTop: 10, color: '#8A9292', fontWeight: '800' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(30,25,22,0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
-  calendarCard: { width: '100%', maxWidth: 420, borderRadius: 18, backgroundColor: '#fff', padding: 14 },
-  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  calendarCard: { width: '100%', maxWidth: 440, borderRadius: 18, backgroundColor: '#fff', padding: 14 },
+  rangeModalTitleRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  rangeModalTitle: { fontSize: 20, fontWeight: '900', color: '#302B28' },
+  rangeModalClose: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  rangeSummaryRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  rangeSummary: { flex: 1, minHeight: 68, borderRadius: 11, borderWidth: 1, borderColor: '#D8DEDE', backgroundColor: '#FAFBFB', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  rangeSummaryStartActive: { borderColor: '#00AEB8', backgroundColor: '#E9F9FA' },
+  rangeSummaryEndActive: { borderColor: '#F0A22E', backgroundColor: '#FFF6E9' },
+  rangeSummaryCaption: { marginBottom: 4, fontSize: 10, fontWeight: '900', color: '#777' },
+  rangeSummaryStartText: { color: '#008B93' },
+  rangeSummaryEndText: { color: '#C97800' },
+  rangeSummaryDate: { fontSize: 15, fontWeight: '900', color: '#302C29' },
+  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   roundButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF6EC', borderWidth: 1, borderColor: '#EED7BE' },
   calendarTitle: { fontSize: 18, fontWeight: '900', color: '#352F2B' },
+  calendarTargetLabel: { marginBottom: 10, color: '#267A80', fontSize: 15, fontWeight: '900', textAlign: 'center' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   weekday: { width: '14.2857%', textAlign: 'center', paddingVertical: 7, fontSize: 12, fontWeight: '900', color: '#6F6965' },
   dayCell: { width: '14.2857%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
-  dayCellSelected: { backgroundColor: '#00AEB8' },
+  dayCellInRange: { backgroundColor: '#F6F0E5', borderRadius: 0 },
+  dayCellStart: { backgroundColor: '#00AEB8' },
+  dayCellEnd: { backgroundColor: '#F0A22E' },
   dayText: { fontSize: 14, fontWeight: '800', color: '#302C29' },
   dayTextSelected: { color: '#fff' },
   timeCard: { width: '100%', maxWidth: 330, maxHeight: 360, borderRadius: 18, backgroundColor: '#fff', padding: 18, overflow: 'hidden' },

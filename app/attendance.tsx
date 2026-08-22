@@ -50,6 +50,7 @@ const SCHOOL_GRADIENT_COLORS = [
   '#D8D1E8',
   '#E8C7D8',
 ];
+const SCHOOL_ACCENT_COLORS = ['#E97884', '#E99B48', '#E1B62A', '#6DBA59', '#65AAB6', '#5D96DC', '#4DA5B9', '#7E69B8', '#C16293'];
 
 // 固定の学校順序
 const FIXED_SCHOOL_ORDER = [
@@ -521,6 +522,18 @@ export default function AttendanceScreen() {
     return SCHOOL_GRADIENT_COLORS[Math.abs(hash) % SCHOOL_GRADIENT_COLORS.length];
   };
 
+  const getCardAccentColor = (str: string) => {
+    const orderedIndex = sortedSchoolNames.indexOf(str);
+    if (orderedIndex >= 0) {
+      const ratio = sortedSchoolNames.length <= 1 ? 0 : orderedIndex / (sortedSchoolNames.length - 1);
+      const colorIndex = Math.round(ratio * (SCHOOL_ACCENT_COLORS.length - 1));
+      return SCHOOL_ACCENT_COLORS[colorIndex];
+    }
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    return SCHOOL_ACCENT_COLORS[Math.abs(hash) % SCHOOL_ACCENT_COLORS.length];
+  };
+
   const getDateLayoutKey = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -593,6 +606,66 @@ export default function AttendanceScreen() {
               return schoolA.localeCompare(schoolB);
           });
 
+          const LESSON2_NAMES = ['スイミング', 'プログラミング', 'ダンス'];
+          const lesson1Entries = Object.entries(attendanceData.lessons)
+            .filter(([key]) => !LESSON2_NAMES.some(name => key.includes(name)))
+            .sort(([a], [b]) => a.localeCompare(b));
+          const lesson2Entries = Object.entries(attendanceData.lessons)
+            .filter(([key]) => LESSON2_NAMES.some(name => key.includes(name)))
+            .sort(([a], [b]) => a.localeCompare(b));
+          const cardModels = sortedAttendanceSchools.map(([schoolName, timesMap]) => ({
+            key: schoolName,
+            title: schoolName,
+            backgroundColor: getCardColor(schoolName),
+            accentColor: getCardAccentColor(schoolName),
+            type: 'school' as 'school' | 'lesson',
+            entries: Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, entryKids]) => ({
+              key: time,
+              time,
+              name: '',
+              kids: entryKids,
+            })),
+          }));
+          if (lesson1Entries.length > 0) {
+            cardModels.push({
+              key: 'lesson-1',
+              title: '習い事',
+              backgroundColor: '#EAF8F1',
+              accentColor: '#49B887',
+              type: 'lesson',
+              entries: lesson1Entries.map(([lessonKey, entryKids]) => {
+                const spaceIndex = lessonKey.indexOf(' ');
+                return {
+                  key: lessonKey,
+                  time: spaceIndex >= 0 ? lessonKey.substring(0, spaceIndex) : '',
+                  name: spaceIndex >= 0 ? lessonKey.substring(spaceIndex + 1) : lessonKey,
+                  kids: entryKids,
+                };
+              }),
+            });
+          }
+          if (lesson2Entries.length > 0) {
+            cardModels.push({
+              key: 'lesson-2',
+              title: '習い事2',
+              backgroundColor: '#F3E5F5',
+              accentColor: '#9A67B0',
+              type: 'lesson',
+              entries: lesson2Entries.map(([lessonKey, entryKids]) => {
+                const spaceIndex = lessonKey.indexOf(' ');
+                return {
+                  key: lessonKey,
+                  time: spaceIndex >= 0 ? lessonKey.substring(0, spaceIndex) : '',
+                  name: spaceIndex >= 0 ? lessonKey.substring(spaceIndex + 1) : lessonKey,
+                  kids: entryKids,
+                };
+              }),
+            });
+          }
+          const attendanceColumnCount = screenWidth <= 600 ? 2 : screenWidth < 1000 ? 3 : 4;
+          const attendanceColumns = Array.from({ length: attendanceColumnCount }, () => [] as typeof cardModels);
+          cardModels.forEach((card, cardIndex) => attendanceColumns[cardIndex % attendanceColumnCount].push(card));
+
           return (
             <View 
               key={dateKey} 
@@ -612,88 +685,45 @@ export default function AttendanceScreen() {
 
               {attendanceData.totalCount > 0 || hasLessons ? (
                 <View style={styles.schoolsGrid}>
-                  {sortedAttendanceSchools.map(([schoolName, timesMap]) => {
-                    const allKidsInSchool = Object.values(timesMap).flat();
-                    return (
-                      <View key={schoolName} style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: getCardColor(schoolName) }]}>
-                        <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: schoolName, kids: sortKidsByGrade(allKidsInSchool) })}>
-                          <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{schoolName}</Text>
-                        </TouchableOpacity>
-                        <View style={styles.timeGroupContainer}>
-                          {Object.entries(timesMap).sort(([a], [b]) => a.localeCompare(b)).map(([time, kids]) => {
-                             const hasManualOverride = kids.some(k => k.isManualOverride);
-                             const hasAnyMemo = kids.some(k => k.hasMemo);
-                             return (
-                              <TouchableOpacity key={time} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: schoolName, subtitle: `${time} 下校`, kids: sortKidsByGrade(kids) })}>
-                                {showKidNames ? (
-                                  <>
-                                    <View style={styles.timeHeaderRow}>
-                                      <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' 📝' : ''}</Text>
-                                      <Text style={styles.timeCountBadge}>{kids.length}名</Text>
-                                    </View>
-                                    <View style={styles.kidNamesContainer}>
-                                      {sortKidsByGrade(kids).map(k => (
-                                        <Text key={k.id} style={[styles.kidNameText, k.isManualOverride && { color: COLORS.danger }, k.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{k.hasMemo ? '📝' : ''}{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
-                                      ))}
-                                    </View>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]}>{time}{hasAnyMemo ? ' 📝' : ''}</Text>
-                                    <Text style={styles.timeCountText}>{kids.length}名</Text>
-                                  </>
-                                )}
-                              </TouchableOpacity>
-                             )
-                          })}
-                        </View>
-                      </View>
-                    );
-                  })}
-                  {hasLessons && (() => {
-                    // 習い事1（通常）と習い事2（スイミング・プログラミング・ダンス）に分離
-                    const LESSON2_NAMES = ['スイミング', 'プログラミング', 'ダンス'];
-                    const lesson1Entries = Object.entries(attendanceData.lessons)
-                      .filter(([key]) => !LESSON2_NAMES.some(n => key.includes(n)))
-                      .sort(([a], [b]) => a.localeCompare(b));
-                    const lesson2Entries = Object.entries(attendanceData.lessons)
-                      .filter(([key]) => LESSON2_NAMES.some(n => key.includes(n)))
-                      .sort(([a], [b]) => a.localeCompare(b));
-
-                    return (
-                      <>
-                        {lesson1Entries.length > 0 && (
-                          <View style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: '#EAF8F1' }]}>
-                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
-                              <Text style={styles.schoolNameText}>習い事</Text>
+                  {attendanceColumns.map((column, columnIndex) => (
+                    <View key={`attendance-column-${columnIndex}`} style={styles.attendanceSchoolColumn}>
+                      {column.map(card => {
+                        const allKids = card.entries.flatMap(entry => entry.kids);
+                        return (
+                          <View key={card.key} style={[styles.schoolCard, styles.schoolCardFluid]}>
+                            <TouchableOpacity style={[styles.schoolNameBtn, { backgroundColor: card.backgroundColor }]} onPress={() => setSchoolModalData({ date: dateLabel, title: card.title, kids: sortKidsByGrade(allKids) })}>
+                              <View style={[styles.schoolAccentLine, { backgroundColor: card.accentColor }]} />
+                              <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{card.title}</Text>
                             </TouchableOpacity>
                             <View style={styles.timeGroupContainer}>
-                              {lesson1Entries.map(([lessonKey, kids]) => {
-                                const spaceIdx = lessonKey.indexOf(' ');
-                                const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
-                                const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
+                              {card.entries.map((entry, entryIndex) => {
+                                const hasManualOverride = entry.kids.some(kid => kid.isManualOverride);
+                                const hasAnyMemo = entry.kids.some(kid => kid.hasMemo);
+                                const subtitle = card.type === 'school' ? `${entry.time} 下校` : entry.key;
                                 return (
-                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: '習い事', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
+                                  <TouchableOpacity key={entry.key} style={[styles.timeButton, entryIndex === card.entries.length - 1 && styles.timeButtonLast, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: card.title, subtitle, kids: sortKidsByGrade(entry.kids) })}>
                                     {showKidNames ? (
                                       <>
                                         <View style={styles.timeHeaderRow}>
-                                          <View>
-                                            <Text style={[styles.timeLabel, { fontWeight: 'bold' }]}>{lessonTime}</Text>
-                                            <Text style={styles.timeLabel} numberOfLines={1}>{lessonName}</Text>
+                                          <View style={styles.timeTitleGroup}>
+                                            <Text style={[styles.timeLabel, hasManualOverride && { color: COLORS.danger }]}>{entry.time}{hasAnyMemo ? ' 📝' : ''}</Text>
+                                            {!!entry.name && <Text style={styles.lessonNameText} numberOfLines={1}>{entry.name}</Text>}
                                           </View>
-                                          <Text style={[styles.timeCountBadge, { color: '#2F7D6D', backgroundColor: '#DDF4EA' }]}>{kids.length}名</Text>
+                                          <Text style={styles.timeCountBadge}>{entry.kids.length}名</Text>
                                         </View>
                                         <View style={styles.kidNamesContainer}>
-                                          {kids.map(k => (
-                                            <Text key={k.id} style={styles.kidNameText} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
+                                          {sortKidsByGrade(entry.kids).map(kid => (
+                                            <Text key={kid.id} style={[styles.kidNameText, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]} numberOfLines={1}>{kid.hasMemo ? '📝' : ''}{kid.name}{kid.grade ? `（${kid.grade}）` : ''}</Text>
                                           ))}
                                         </View>
                                       </>
                                     ) : (
                                       <>
-                                        <Text style={[styles.timeButtonText, { fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
-                                        <Text style={[styles.timeButtonText, { fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
-                                        <Text style={styles.timeCountText}>{kids.length}名</Text>
+                                        <View style={styles.compactTimeTextGroup}>
+                                          <Text style={[styles.timeButtonText, hasManualOverride && { color: COLORS.danger }]} numberOfLines={1}>{entry.time}{hasAnyMemo ? ' 📝' : ''}</Text>
+                                          {!!entry.name && <Text style={styles.compactLessonNameText} numberOfLines={1}>{entry.name}</Text>}
+                                        </View>
+                                        <Text style={styles.timeCountText}>{entry.kids.length}名</Text>
                                       </>
                                     )}
                                   </TouchableOpacity>
@@ -701,50 +731,10 @@ export default function AttendanceScreen() {
                               })}
                             </View>
                           </View>
-                        )}
-                        {lesson2Entries.length > 0 && (
-                          <View style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: '#F3E5F5' }]}>
-                            <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事2', kids: sortKidsByGrade(lesson2Entries.flatMap(([,kids]) => kids)) })}>
-                              <Text style={[styles.schoolNameText, { color: '#7B1FA2' }]}>習い事2</Text>
-                            </TouchableOpacity>
-                            <View style={styles.timeGroupContainer}>
-                              {lesson2Entries.map(([lessonKey, kids]) => {
-                                const spaceIdx = lessonKey.indexOf(' ');
-                                const lessonTime = spaceIdx >= 0 ? lessonKey.substring(0, spaceIdx) : '';
-                                const lessonName = spaceIdx >= 0 ? lessonKey.substring(spaceIdx + 1) : lessonKey;
-                                return (
-                                  <TouchableOpacity key={lessonKey} style={[styles.timeButton, showKidNames && styles.timeButtonExpanded]} onPress={() => setTimeModalData({ date: dateLabel, title: '習い事2', subtitle: lessonKey, kids: sortKidsByGrade(kids) })}>
-                                    {showKidNames ? (
-                                      <>
-                                        <View style={styles.timeHeaderRow}>
-                                          <View>
-                                            <Text style={[styles.timeLabel, { color: '#7B1FA2', fontWeight: 'bold' }]}>{lessonTime}</Text>
-                                            <Text style={[styles.timeLabel, { color: '#7B1FA2' }]} numberOfLines={1}>{lessonName}</Text>
-                                          </View>
-                                          <Text style={[styles.timeCountBadge, { color: '#7B1FA2' }]}>{kids.length}名</Text>
-                                        </View>
-                                        <View style={styles.kidNamesContainer}>
-                                          {kids.map(k => (
-                                            <Text key={k.id} style={[styles.kidNameText, { color: '#7B1FA2' }]} numberOfLines={1}>{k.name}{k.grade ? `（${k.grade}）` : ''}</Text>
-                                          ))}
-                                        </View>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Text style={[styles.timeButtonText, { color: '#7B1FA2', fontSize: 10 }]} numberOfLines={1}>{lessonTime}</Text>
-                                        <Text style={[styles.timeButtonText, { color: '#7B1FA2', fontSize: 9 }]} numberOfLines={1}>{lessonName}</Text>
-                                        <Text style={styles.timeCountText}>{kids.length}名</Text>
-                                      </>
-                                    )}
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </View>
-                          </View>
-                        )}
-                      </>
-                    );
-                  })()}
+                        );
+                      })}
+                    </View>
+                  ))}
                 </View>
               ) : (
                 <View style={styles.noDataBox}><Text style={styles.noDataText}>利用予定の児童はいません</Text></View>
@@ -1414,22 +1404,28 @@ const styles = StyleSheet.create({
 
   totalBadge: { marginLeft: 12, paddingHorizontal: 10, paddingVertical: 4 },
   totalBadgeText: { fontSize: 13, fontWeight: '900', color: COLORS.text },
-  schoolsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingTop: 10, paddingBottom: 14, gap: 8, borderBottomWidth: 1, borderColor: '#E1E4E5' },
-  schoolCard: { borderRadius: 8, padding: 7, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: '#E2DEDA' },
-  schoolCardMobile: { width: '48.7%' },
-  schoolCardWide: { width: '24.1%' },
-  schoolNameBtn: { alignItems: 'center', justifyContent: 'center', marginBottom: 7 },
-  schoolNameText: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
-  timeGroupContainer: { gap: 8 },
-  timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 3, borderWidth: 1, borderColor: '#E7E2DC' },
+  schoolsGrid: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 10, paddingTop: 10, paddingBottom: 14, gap: 8, borderBottomWidth: 1, borderColor: '#E1E4E5' },
+  attendanceSchoolColumn: { flex: 1, minWidth: 0, gap: 8 },
+  schoolCard: { overflow: 'hidden', borderRadius: 8, backgroundColor: COLORS.white, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: '#E2DEDA' },
+  schoolCardFluid: { width: '100%', alignSelf: 'flex-start' },
+  schoolNameBtn: { minHeight: 38, position: 'relative', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#E7E2DC' },
+  schoolAccentLine: { position: 'absolute', left: 0, top: 2, bottom: 2, width: 4, borderRadius: 3 },
+  schoolNameText: { fontSize: 14, fontWeight: '900', color: COLORS.text, textAlign: 'left' },
+  timeGroupContainer: { overflow: 'hidden', backgroundColor: COLORS.white },
+  timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
+  timeButtonLast: { borderBottomWidth: 0 },
   timeButtonExpanded: { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 8 },
   timeButtonText: { fontSize: 12, fontWeight: 'bold', color: COLORS.text },
   timeCountText: { fontSize: 12, fontWeight: '900', color: COLORS.text },
-  timeHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 6 },
+  timeHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: 6, gap: 5 },
+  timeTitleGroup: { flex: 1, minWidth: 0 },
   timeLabel: { fontSize: 11, fontWeight: '900', color: '#5D4037' },
+  lessonNameText: { marginTop: 2, fontSize: 11, fontWeight: '800', color: COLORS.text },
   timeCountBadge: { fontSize: 10, fontWeight: '900', color: COLORS.text, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   kidNamesContainer: { gap: 3, width: '100%' },
-  kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
+  kidNameText: { fontSize: 13, fontWeight: '600', color: COLORS.text, flex: 1 },
+  compactTimeTextGroup: { flex: 1, minWidth: 0 },
+  compactLessonNameText: { marginTop: 2, fontSize: 10, fontWeight: '800', color: COLORS.text },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
   statusDateNavigator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },

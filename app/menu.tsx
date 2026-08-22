@@ -166,6 +166,7 @@ type MenuAnnouncement = {
   isPromotional?: boolean;
   isActive?: boolean;
   publishAt?: any;
+  expiresAt?: any;
   createdAt?: any;
 };
 
@@ -450,7 +451,12 @@ export default function MenuScreen() {
         .map(item => ({ id: item.id, ...item.data() } as MenuAnnouncement))
         .filter(item => {
           const published = item.publishAt?.toDate ? item.publishAt.toDate() : new Date(item.publishAt || 0);
-          return item.isActive !== false && published.getTime() <= now && published.getTime() >= fiscalStart && published.getTime() < fiscalEnd;
+          const expires = item.expiresAt?.toDate ? item.expiresAt.toDate() : null;
+          return item.isActive !== false
+            && published.getTime() <= now
+            && (!expires || expires.getTime() >= now)
+            && published.getTime() >= fiscalStart
+            && published.getTime() < fiscalEnd;
         })
         .sort((a, b) => {
           const aDate = a.publishAt?.toDate ? a.publishAt.toDate() : new Date(a.publishAt || 0);

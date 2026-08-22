@@ -4,6 +4,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Image, ImageSourcePropType, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../firebase';
+import { clearNavigationReturnDestination } from '../utils/navigationHome';
 
 type AdminBottomNavActive = 'home' | 'attendance' | 'schedule' | 'event' | 'messages' | 'shift' | 'menu' | 'album';
 
@@ -55,7 +56,12 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
 
   if (!isAdmin && !isStaff && !isUser) return null;
 
+  const navigateFromBottom = async (action: () => void) => {
+    await clearNavigationReturnDestination();
+    action();
+  };
   const goHome = () => {
+    clearNavigationReturnDestination();
     router.push('/menu' as any);
   };
 
@@ -88,48 +94,48 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
           </TouchableOpacity>
         )}
         {isUser && (
-          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('schedule')}
             <Text style={[styles.text, { color: itemColor('schedule') }]}>スケジュール</Text>
           </TouchableOpacity>
         )}
         {(isAdmin || isStaff) && (
-          <TouchableOpacity style={styles.item} onPress={() => router.push('/attendance')} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push('/attendance'))} activeOpacity={0.78}>
             {renderIcon('attendance')}
             <Text style={[styles.text, { color: itemColor('attendance') }]}>出欠一覧</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.item} onPress={() => router.push(isUser ? ({ pathname: '/event-list', params: { name: adminName || '' } } as any) : ({ pathname: '/year-events', params: { role: isAdmin ? 'admin' : 'staff', tab: 'management' } } as any))} activeOpacity={0.78}>
+        <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push(isUser ? ({ pathname: '/event-list', params: { name: adminName || '' } } as any) : ({ pathname: '/year-events', params: { role: isAdmin ? 'admin' : 'staff', tab: 'management' } } as any)))} activeOpacity={0.78}>
           {renderIcon('event')}
           <Text style={[styles.text, { color: itemColor('event') }]}>イベント</Text>
         </TouchableOpacity>
         {!isAdmin && renderCenterHome()}
         {isUser && (
-          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
         )}
         {(isAdmin || isUser) && (
-          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any))} activeOpacity={0.78}>
             {renderIcon('messages')}
             <Text style={[styles.text, { color: itemColor('messages') }]}>メッセージ</Text>
             {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
           </TouchableOpacity>
         )}
         {!isUser && (
-          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('shift')}
             <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>
         )}
         {isAdmin ? (
-          <TouchableOpacity style={styles.item} onPress={() => router.push('/admin-more' as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push('/admin-more' as any))} activeOpacity={0.78}>
             {renderIcon('menu')}
             <Text style={[styles.text, { color: itemColor('menu') }]}>その他</Text>
           </TouchableOpacity>
         ) : !isUser ? (
-          <TouchableOpacity style={styles.item} onPress={() => router.push({ pathname: '/album', params: { role: 'staff', name: adminName || '' } } as any)} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/album', params: { role: 'staff', name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
           </TouchableOpacity>
