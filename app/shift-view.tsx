@@ -5,10 +5,10 @@ import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
-import { useMonthSwipe } from '../utils/useMonthSwipe';
 import ShiftScreen from './shift';
 import ShiftCreateScreen from './shift-create';
 
@@ -93,9 +93,9 @@ export default function ShiftViewScreen() {
 
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 
-  const generateDays = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+  const generateDays = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = new Date(year, month, 1).getDay();
     const days: ({ day: number; dateStr: string } | null)[] = [];
@@ -106,21 +106,91 @@ export default function ShiftViewScreen() {
     return days;
   };
 
-  const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
 
   const displayStaff = showOnlyMine
     ? allStaff.filter(s => s.name === myName)
     : allStaff;
-  const monthSwipeHandlers = useMonthSwipe({
-    enabled: !createVisible,
-    onMoveMonth: amount => {
-      setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1));
-    },
-  });
+  const renderMonthCalendar = (date: Date) => {
+    const days = generateDays(date);
+
+    return (
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
+        <View style={styles.calHeaderRow}>
+          {weeks.map((w, i) => (
+            <Text key={i} style={[styles.calWeekText, i === 0 && { color: 'red' }, i === 6 && { color: 'blue' }]}>{w}</Text>
+          ))}
+        </View>
+
+        <View style={styles.calGrid}>
+          {days.map((item, index) => {
+            if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
+
+            const d = new Date(item.dateStr);
+            const isSunday = d.getDay() === 0;
+            const isSaturday = d.getDay() === 6;
+            const isPublicHoliday = !!publicHolidays[item.dateStr];
+            const isEventDay = !!eventsData[item.dateStr];
+            const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
+
+            let dateColor = COLORS.text;
+            if (isSunday || isPublicHoliday) dateColor = 'red';
+            else if (isSaturday) dateColor = 'blue';
+
+            const visibleStaffNames = new Set(allStaff.map(staff => staff.name));
+            const assignedList = (assignedShifts[item.dateStr] || []).filter(shift => visibleStaffNames.has(shift.name));
+            const myShift = assignedList.find(s => s.name === myName);
+            const cellBg = myShift ? '#F3FBF6' : hPeriod?.color || COLORS.white;
+
+            return (
+              <View key={item.dateStr} style={[styles.calCell, { backgroundColor: cellBg }]}>
+                <View style={styles.cellTopRow}>
+                  <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
+                  {assignedList.length > 0 && (
+                    <Text style={styles.cellCountText}>{assignedList.length}名</Text>
+                  )}
+                </View>
+
+                {isEventDay && (
+                  <View style={styles.eventBadge}>
+                    <Text style={styles.eventBadgeText} numberOfLines={2}>
+                      {eventsData[item.dateStr].join('・')}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ flex: 1, marginTop: 3 }}>
+                  {displayStaff.map((staff) => {
+                    const assigned = assignedList.find(s => s.name === staff.name);
+                    if (!assigned) return null;
+                    const isMe = staff.name === myName;
+                    const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
+                    const staffBackground = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+                    return (
+                      <View
+                        key={staff.id}
+                        style={[styles.cellStaffRow, { backgroundColor: staffBackground }]}
+                      >
+                        <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
+                        <View style={styles.cellStaffTimeRow}>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}</Text>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>{assigned.end}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container} {...monthSwipeHandlers}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}>
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
@@ -178,83 +248,12 @@ export default function ShiftViewScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* カレンダー */}
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
-        {/* 曜日ヘッダー */}
-        <View style={styles.calHeaderRow}>
-          {weeks.map((w, i) => (
-            <Text key={i} style={[styles.calWeekText, i === 0 && { color: 'red' }, i === 6 && { color: 'blue' }]}>{w}</Text>
-          ))}
-        </View>
-
-        {/* カレンダーグリッド */}
-        <View style={styles.calGrid}>
-          {days.map((item, index) => {
-            if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
-
-            const d = new Date(item.dateStr);
-            const isSunday = d.getDay() === 0;
-            const isSaturday = d.getDay() === 6;
-            const isPublicHoliday = !!publicHolidays[item.dateStr];
-            const isEventDay = !!eventsData[item.dateStr];
-            const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
-
-            let dateColor = COLORS.text;
-            if (isSunday || isPublicHoliday) dateColor = 'red';
-            else if (isSaturday) dateColor = 'blue';
-
-            const visibleStaffNames = new Set(allStaff.map(staff => staff.name));
-            const assignedList = (assignedShifts[item.dateStr] || []).filter(shift => visibleStaffNames.has(shift.name));
-            const myShift = assignedList.find(s => s.name === myName);
-            const cellBg = myShift ? '#F3FBF6' : hPeriod?.color || COLORS.white;
-
-            return (
-              <View key={item.dateStr} style={[styles.calCell, { backgroundColor: cellBg }]}>
-                <View style={styles.cellTopRow}>
-                  <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
-                  {assignedList.length > 0 && (
-                    <Text style={styles.cellCountText}>{assignedList.length}名</Text>
-                  )}
-                </View>
-
-                {isEventDay && (
-                  <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      {eventsData[item.dateStr].join('・')}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={{ flex: 1, marginTop: 3 }}>
-                  {displayStaff.map((staff) => {
-                    const assigned = assignedList.find(s => s.name === staff.name);
-                    if (!assigned) return null;
-                    const isMe = staff.name === myName;
-                    const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
-                    const staffBackground = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
-                    return (
-                      <View
-                        key={staff.id}
-                        style={[
-                          styles.cellStaffRow,
-                          { backgroundColor: staffBackground },
-                        ]}
-                      >
-                        <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
-                        <View style={styles.cellStaffTimeRow}>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}</Text>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>{assigned.end}</Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      <SwipeMonthPager
+        currentDate={currentDate}
+        onChangeDate={setCurrentDate}
+        renderMonth={renderMonthCalendar}
+        enabled={!createVisible && !submissionVisible}
+      />
 
       <AdminBottomNav active="shift" />
 

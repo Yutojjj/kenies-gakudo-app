@@ -6,10 +6,11 @@ import { db, storage } from '../firebase';
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
-const MAX_IMAGE_LONG_EDGE = 1920;
-const IMAGE_UPLOAD_QUALITY = 0.78;
-const THUMBNAIL_WIDTH = 480;
+const MAX_IMAGE_LONG_EDGE = 1600;
+const IMAGE_UPLOAD_QUALITY = 0.74;
+const THUMBNAIL_WIDTH = 420;
 const THUMBNAIL_QUALITY = 0.68;
+const UPLOAD_CONCURRENCY = 2;
 
 export type AlbumUploadQueueState = {
   active: boolean;
@@ -58,8 +59,7 @@ const uploadAsset = async (
   asset: ImagePickerAsset,
   category: string,
   uploader: string,
-  itemIndex: number,
-  total: number,
+  onProgress: (progress: number) => void,
 ) => {
   const mediaType: 'image' | 'video' = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
   const maxBytes = mediaType === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
@@ -110,10 +110,7 @@ const uploadAsset = async (
       const isComplete = snapshot.bytesTransferred >= snapshot.totalBytes;
       if (!isComplete && now - lastProgressPublishedAt < 300) return;
       lastProgressPublishedAt = now;
-      publish({
-        progress: Math.round(((itemIndex + currentProgress) / total) * 100),
-        message: `${itemIndex + 1}/${total}件をアップロード中`,
-      });
+      onProgress(currentProgress);
     }, reject, () => resolve());
   });
 
@@ -170,25 +167,63 @@ export function enqueueAlbumUploads(
   const run = async (): Promise<UploadResult> => {
     const total = batchAssets.length;
     let uploadedCount = 0;
+    let processedCount = 0;
+    let nextIndex = 0;
     const errors: string[] = [];
+    const itemProgress = batchAssets.map(() => 0);
     publish({ active: true, total, completed: 0, failed: 0, progress: 0, message: `0/${total}件を準備中` });
 
-    for (let index = 0; index < batchAssets.length; index += 1) {
-      try {
-        await uploadAsset(batchAssets[index], category, uploader, index, total);
-        uploadedCount += 1;
-      } catch (error: any) {
-        console.error('album background upload error:', error);
-        errors.push(error?.message || String(error));
-      }
+    const publishBatchProgress = () => {
+      const progress = total > 0
+        ? Math.round((itemProgress.reduce((sum, value) => sum + value, 0) / total) * 100)
+        : 100;
       publish({
         completed: uploadedCount,
         failed: errors.length,
-        progress: Math.round(((index + 1) / total) * 100),
+        progress,
+        message: `${processedCount}/${total}件完了・アップロード中`,
       });
-    }
+    };
+
+    const worker = async () => {
+      while (nextIndex < batchAssets.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        try {
+          await uploadAsset(batchAssets[index], category, uploader, progress => {
+            itemProgress[index] = progress;
+            publishBatchProgress();
+          });
+          uploadedCount += 1;
+        } catch (error: any) {
+          console.error('album background upload error:', error);
+          errors.push(error?.message || String(error));
+        }
+        itemProgress[index] = 1;
+        processedCount += 1;
+        publishBatchProgress();
+      }
+    };
+
+    const workerCount = Math.min(UPLOAD_CONCURRENCY, Math.max(1, total));
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
     const failedCount = errors.length;
+    if (uploadedCount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(category)) {
+      try {
+        // 一括アップロードにつき通知依頼は1件だけ作る。
+        await addDoc(collection(db, 'album_notification_jobs'), {
+          dateKey: category,
+          uploadedCount,
+          uploader: uploader || '不明',
+          status: 'pending',
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        // メディアの保存は成功しているため、通知依頼の失敗だけを記録する。
+        console.warn('album notification job creation error:', error);
+      }
+    }
     publish({
       active: false,
       completed: uploadedCount,

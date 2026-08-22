@@ -8,11 +8,11 @@ import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'fi
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { navigateHome } from '../utils/navigationHome';
-import { useMonthSwipe } from '../utils/useMonthSwipe';
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
@@ -331,9 +331,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
   
-  const generateDays = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+  const generateDays = (date = currentDate) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfMonth(year, month);
     const days = [];
@@ -690,7 +690,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
 
 
-  const days = generateDays();
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
   const spreadsheetWeeks = generateWeeksForSpreadsheet();
   const workSummary = calcWorkSummary();
@@ -782,13 +781,92 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     }
   };
 
-  const monthSwipeHandlers = useMonthSwipe({
-    onMoveMonth: amount => setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1)),
-  });
+  const renderMonthCalendar = (date: Date) => {
+    const days = generateDays(date);
+
+    return (
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
+        <View style={styles.calHeaderRow}>
+          {weeks.map((w, i) => <Text key={i} style={[styles.calWeekText, i === 0 && {color: 'red'}, i === 6 && {color: 'blue'}]}>{w}</Text>)}
+        </View>
+
+        <View style={styles.calGrid}>
+          {days.map((item, index) => {
+            if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
+
+            const assignedCount = (assignedShifts[item.dateStr] || []).length;
+            const isEventDay = !!eventsData[item.dateStr];
+
+            let unavailableCount = 0;
+            allStaff.forEach(staff => {
+              const key = `${(staff.name || '').trim()}_${item.dateStr}`;
+              const req = requests[key];
+              if (req === '✕' || req === '午前✕' || req === '午後✕') unavailableCount++;
+            });
+            const availableCount = allStaff.length - unavailableCount;
+
+            const d = new Date(item.dateStr);
+            const isSunday = d.getDay() === 0;
+            const isSaturday = d.getDay() === 6;
+            const isPublicHoliday = !!publicHolidays[item.dateStr];
+
+            let dateColor = COLORS.text;
+            if (isSunday || isPublicHoliday) dateColor = 'red';
+            else if (isSaturday) dateColor = 'blue';
+
+            const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
+            return (
+              <TouchableOpacity key={item.dateStr} style={[styles.calCell, hPeriod?.color && { backgroundColor: hPeriod.color }]} onPress={() => openDayModal(item.dateStr)}>
+                <View style={styles.cellTopRow}>
+                  <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.availableCountText}>可:{availableCount}</Text>
+                    {assignedCount > 0 && <Text style={styles.cellCountText}>{assignedCount}名</Text>}
+                  </View>
+                </View>
+
+                {isEventDay && (
+                  <View style={styles.eventBadge}>
+                    <Text style={styles.eventBadgeText} numberOfLines={2}>
+                      {eventsData[item.dateStr].join('・')}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ flex: 1, marginTop: 3 }}>
+                  {(assignedShifts[item.dateStr] || []).map((st, i) => {
+                    const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === st.name));
+                    return (
+                      <View
+                        key={`${st.name}-${i}`}
+                        style={[
+                          styles.cellStaffRow,
+                          !showTimeInCalendar && styles.cellStaffRowCompact,
+                          { backgroundColor: SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length] },
+                        ]}
+                      >
+                        <Text style={styles.cellStaffName} numberOfLines={1}>{st.name}</Text>
+                        {showTimeInCalendar && (
+                          <View style={styles.cellStaffTimeRow}>
+                            <Text style={styles.cellStaffTime}>{st.start}</Text>
+                            <Text style={styles.cellStaffTime}>{st.end}</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    );
+  };
 
   if (checking || !verified) return null;
   return (
-    <SafeAreaView style={styles.container} {...monthSwipeHandlers}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => embedded ? onClose?.() : navigateHome(router)}>
           <Ionicons name={embedded ? 'close' : 'chevron-back'} size={embedded ? 26 : 24} color="#5D4037" />
@@ -875,82 +953,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </View>
       </View>
 
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
-        <View style={styles.calHeaderRow}>
-          {weeks.map((w, i) => <Text key={i} style={[styles.calWeekText, i === 0 && {color: 'red'}, i === 6 && {color: 'blue'}]}>{w}</Text>)}
-        </View>
-        
-        <View style={styles.calGrid}>
-          {days.map((item, index) => {
-            if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
-            
-            const assignedCount = (assignedShifts[item.dateStr] || []).length;
-            const isEventDay = !!eventsData[item.dateStr];
-            
-            let unavailableCount = 0;
-            allStaff.forEach(staff => {
-              const key = `${(staff.name || '').trim()}_${item.dateStr}`;
-              const req = requests[key];
-              if (req === '✕' || req === '午前✕' || req === '午後✕') unavailableCount++;
-            });
-            const availableCount = allStaff.length - unavailableCount;
-
-            const d = new Date(item.dateStr);
-            const isSunday = d.getDay() === 0;
-            const isSaturday = d.getDay() === 6;
-            const isPublicHoliday = !!publicHolidays[item.dateStr];
-
-            let dateColor = COLORS.text;
-            if (isSunday || isPublicHoliday) dateColor = 'red';
-            else if (isSaturday) dateColor = 'blue';
-
-            const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
-            return (
-              <TouchableOpacity key={item.dateStr} style={[styles.calCell, hPeriod?.color && { backgroundColor: hPeriod.color }]} onPress={() => openDayModal(item.dateStr)}>
-                <View style={styles.cellTopRow}>
-                  <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.availableCountText}>可:{availableCount}</Text>
-                    {assignedCount > 0 && <Text style={styles.cellCountText}>{assignedCount}名</Text>}
-                  </View>
-                </View>
-                
-                {isEventDay && (
-                  <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      {eventsData[item.dateStr].join('・')}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={{ flex: 1, marginTop: 3 }}>
-                  {(assignedShifts[item.dateStr] || []).map((st, i) => {
-                    const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === st.name));
-                    return (
-                      <View
-                        key={`${st.name}-${i}`}
-                        style={[
-                          styles.cellStaffRow,
-                          !showTimeInCalendar && styles.cellStaffRowCompact,
-                          { backgroundColor: SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length] },
-                        ]}
-                      >
-                        <Text style={styles.cellStaffName} numberOfLines={1}>{st.name}</Text>
-                        {showTimeInCalendar && (
-                          <View style={styles.cellStaffTimeRow}>
-                            <Text style={styles.cellStaffTime}>{st.start}</Text>
-                            <Text style={styles.cellStaffTime}>{st.end}</Text>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+      <SwipeMonthPager
+        currentDate={currentDate}
+        onChangeDate={setCurrentDate}
+        renderMonth={renderMonthCalendar}
+        enabled={!modalVisible && !settingsVisible && !monthActionConfirm}
+      />
 
       {/* ==========================================
           ★ 1画面完全フィットシフト表 (土日幅縮小版)

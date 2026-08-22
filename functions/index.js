@@ -1,5 +1,6 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
@@ -210,6 +211,88 @@ async function sendAnnouncementPush(accountIds, title, body, url) {
   }));
   return { sent, total: subscriptions.length };
 }
+
+const WEEKDAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
+
+function hasRegularUseOnWeekday(account, weekday) {
+  const isRegularOnDay = child => {
+    if (!child || (child.usageType || "定期利用") !== "定期利用") return false;
+    const days = child.days;
+    if (Array.isArray(days)) return days.includes(weekday);
+    return !!days?.[weekday];
+  };
+
+  if (isRegularOnDay(account)) return true;
+  return (Array.isArray(account.siblings) ? account.siblings : []).some(isRegularOnDay);
+}
+
+// 日常アルバムへの一括アップロード完了時、対象曜日の定期利用者へ1回だけ通知する。
+exports.notifyDailyAlbumUpload = onDocumentCreated(
+  {
+    document: "album_notification_jobs/{jobId}",
+    region: "asia-northeast1",
+  },
+  async event => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const db = getFirestore();
+    const jobRef = snapshot.ref;
+    const claimed = await db.runTransaction(async transaction => {
+      const fresh = await transaction.get(jobRef);
+      if (!fresh.exists || fresh.data().status !== "pending") return false;
+      transaction.update(jobRef, { status: "processing", processingAt: new Date() });
+      return true;
+    });
+    if (!claimed) return;
+
+    const job = snapshot.data();
+    const dateKey = String(job.dateKey || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      await jobRef.delete();
+      return;
+    }
+
+    try {
+      const [year, month, day] = dateKey.split("-").map(Number);
+      // Cloud Functions is UTC-based, so the album's calendar date is evaluated
+      // directly instead of converting Japanese midnight to the previous UTC day.
+      const weekday = WEEKDAY_NAMES[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+      const users = await db.collection("accounts").where("role", "==", "user").get();
+      const accountIds = users.docs
+        .filter(item => hasRegularUseOnWeekday(item.data(), weekday))
+        .map(item => item.id);
+
+      if (accountIds.length > 0) {
+        const result = await sendAnnouncementPush(
+          accountIds,
+          "アルバムが更新されました",
+          `${month}月${day}日（${weekday}）の写真・動画が追加されました。`,
+          `/album?role=user&date=${dateKey}`
+        );
+        await db.collection("notification_logs").add({
+          type: "daily_album",
+          dateKey,
+          weekday,
+          uploadedCount: Number(job.uploadedCount || 0),
+          accountIds,
+          sent: result.sent,
+          total: result.total,
+          sentAt: new Date(),
+        }).catch(() => {});
+      }
+
+      await jobRef.delete();
+    } catch (error) {
+      console.error(`[album notification] failed: ${event.params.jobId}`, error);
+      await jobRef.update({
+        status: "failed",
+        error: String(error?.message || error),
+        failedAt: new Date(),
+      }).catch(() => {});
+    }
+  }
+);
 
 function announcementStoragePathFromUrl(url) {
   if (typeof url !== "string") return "";
