@@ -1,4 +1,5 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const webpush = require("web-push");
@@ -166,5 +167,94 @@ exports.sendNotification = onRequest(
 
     console.log(`[push] 送信完了: ${sent}/${subscriptions.length}`);
     res.status(200).json({ sent, total: subscriptions.length });
+  }
+);
+
+async function sendAnnouncementPush(accountIds, title, body, url) {
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+  const vapidSubject = process.env.VAPID_SUBJECT;
+  if (!vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
+    throw new Error("VAPID env vars not set");
+  }
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+  const db = getFirestore();
+  const subscriptions = [];
+  await Promise.all(accountIds.map(async accountId => {
+    const devices = await db.collection("push_subscriptions_v2").doc(accountId).collection("devices").get();
+    devices.forEach(device => {
+      const data = device.data();
+      if (data.enabled !== false && data.subscription?.endpoint) {
+        subscriptions.push({ accountId, deviceId: device.id, subscription: data.subscription });
+      }
+    });
+  }));
+  const payload = JSON.stringify({
+    title,
+    body,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url },
+  });
+  let sent = 0;
+  await Promise.allSettled(subscriptions.map(async item => {
+    try {
+      await webpush.sendNotification(item.subscription, payload);
+      sent++;
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await db.collection("push_subscriptions_v2").doc(item.accountId).collection("devices").doc(item.deviceId).delete().catch(() => {});
+      }
+    }
+  }));
+  return { sent, total: subscriptions.length };
+}
+
+// 予約されたお知らせを1分ごとに確認し、掲載時刻になったものだけ利用者へ通知する。
+exports.publishScheduledAnnouncements = onSchedule(
+  {
+    schedule: "every 1 minutes",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    const db = getFirestore();
+    const [announcementSnap, userSnap] = await Promise.all([
+      db.collection("announcements").where("notificationSent", "==", false).get(),
+      db.collection("accounts").where("role", "==", "user").get(),
+    ]);
+    const now = Date.now();
+    const accountIds = userSnap.docs.map(item => item.id);
+    const due = announcementSnap.docs.filter(item => {
+      const data = item.data();
+      return data.isActive !== false && data.publishAt?.toDate && data.publishAt.toDate().getTime() <= now;
+    });
+    await Promise.all(due.map(async item => {
+      const data = item.data();
+      try {
+        // 重複起動したスケジューラーが同じ投稿を送らないよう、トランザクションで送信対象を確保する。
+        const claimed = await db.runTransaction(async transaction => {
+          const fresh = await transaction.get(item.ref);
+          if (!fresh.exists || fresh.data().notificationSent !== false) return false;
+          transaction.update(item.ref, { notificationSent: true, notificationProcessingAt: new Date() });
+          return true;
+        });
+        if (!claimed) return;
+        const result = await sendAnnouncementPush(
+          accountIds,
+          `お知らせ: ${String(data.subject || "お知らせ")}`.slice(0, 100),
+          String(data.content || "").slice(0, 500),
+          `/menu?announcementId=${item.id}`
+        );
+        await item.ref.update({
+          notificationSent: true,
+          notificationSentAt: new Date(),
+          notificationSentCount: result.sent,
+        });
+      } catch (error) {
+        console.error(`[announcement] failed: ${item.id}`, error);
+        await item.ref.update({ notificationSent: false, notificationErrorAt: new Date() }).catch(() => {});
+      }
+    }));
   }
 );

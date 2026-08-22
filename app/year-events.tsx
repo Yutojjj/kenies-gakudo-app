@@ -16,6 +16,7 @@ import {
   TextInput, TouchableOpacity, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import CropImageModal from '../components/CropImageModal';
 import { EventMediaThumbnail, EventMediaViewer } from '../components/EventMedia';
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
@@ -34,8 +35,9 @@ const customConfirm = (title: string, msg: string, onOk: () => void) => {
 };
 
 // ─── 型定義 ────────────────────────────────────────────────────
-type MainTab = 'year' | 'vacation' | 'management';
+type MainTab = 'year' | 'management';
 type VacTab = 'summer' | 'winter' | 'spring';
+type ContentMode = 'year' | VacTab;
 
 // リッチテキストのノード
 type RichSpan = { text: string; bold?: boolean; italic?: boolean; fontSize?: number; color?: string };
@@ -114,9 +116,9 @@ const VAC_MONTHS: Record<VacTab, number[]> = {
 };
 
 const TERM_COLORS = {
-  1: { bg: '#FFF8E1', border: '#FFD54F', text: '#F57F17', light: '#FFFDE7' },
-  2: { bg: '#E8F5E9', border: '#66BB6A', text: '#2E7D32', light: '#F1F8E9' },
-  3: { bg: '#E3F2FD', border: '#42A5F5', text: '#1565C0', light: '#E8F4FE' },
+  1: { bg: '#FFF0F3', border: '#F28C9A', text: '#D85C6B', light: '#FFF8F9' },
+  2: { bg: '#EDF8EF', border: '#62B978', text: '#438D54', light: '#F8FCF8' },
+  3: { bg: '#F4EFFA', border: '#A58BD3', text: '#7659A8', light: '#FBF9FD' },
 };
 
 const VAC_COLORS: Record<VacTab, { bg: string; border: string; text: string; label: string }> = {
@@ -126,6 +128,15 @@ const VAC_COLORS: Record<VacTab, { bg: string; border: string; text: string; lab
 };
 
 const MONTH_NAMES = ['', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
+const PERIOD_IMAGES = {
+  term1: require('../assets/event-periods/term-1.png'),
+  term2: require('../assets/event-periods/term-2.png'),
+  term3: require('../assets/event-periods/term-3.png'),
+  summer: require('../assets/event-periods/summer.png'),
+  winter: require('../assets/event-periods/winter.png'),
+  spring: require('../assets/event-periods/spring.png'),
+};
 
 // ─── リッチテキストレンダラー ───────────────────────────────────
 // RichDoc→HTML変換（表示用・共有）
@@ -570,8 +581,10 @@ export default function YearEventsScreen() {
   const [myParticipations, setMyParticipations] = useState<Record<string, string>>({});
   const [myAccountId, setMyAccountId] = useState<string | null>(null);
 
-  const [mainTab, setMainTab] = useState<MainTab>((tab as MainTab) || 'year');
-  const [vacTab, setVacTab] = useState<VacTab>('summer');
+  const [mainTab, setMainTab] = useState<MainTab>(tab === 'management' ? 'management' : 'year');
+  const [contentMode, setContentMode] = useState<ContentMode>(tab === 'vacation' ? 'summer' : 'year');
+  const [contentMenuOpen, setContentMenuOpen] = useState(false);
+  const vacTab: VacTab = contentMode === 'year' ? 'summer' : contentMode;
 
   // ── イベント管理タブ用state ──
   const [mgmtDate, setMgmtDate] = useState(new Date());
@@ -633,6 +646,8 @@ export default function YearEventsScreen() {
   const [albumLibraryLoading, setAlbumLibraryLoading] = useState(false);
   const [photoAddTarget, setPhotoAddTarget] = useState<'past' | 'cover'>('past');
   const [coverTargetEventId, setCoverTargetEventId] = useState<string | null>(null);
+  const [coverCropUri, setCoverCropUri] = useState('');
+  const [coverCropSourceAlbumId, setCoverCropSourceAlbumId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userInfo) return;
@@ -1135,22 +1150,31 @@ export default function YearEventsScreen() {
     if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] as any, quality: 0.8 });
     if (result.canceled || !result.assets[0]) return;
+    setCoverTargetEventId(eventId);
+    setCoverCropSourceAlbumId(null);
+    setCoverCropUri(result.assets[0].uri);
+  };
+
+  const saveCroppedEventCover = async (croppedUri: string) => {
+    const eventId = coverTargetEventId;
+    if (!eventId) return;
     setUploading(true);
     try {
-      const asset = result.assets[0];
-      const res = await fetch(asset.uri);
+      const res = await fetch(croppedUri);
       const blob = await res.blob();
-      const ext = (asset.mimeType || '').includes('png') ? 'png' : 'jpg';
-      const filename = `albums/event_cover_${eventId}_${Date.now()}.${ext}`;
+      const filename = `albums/event_cover_${eventId}_${Date.now()}.jpg`;
       const sref = storageRef(storage, filename);
-      await uploadBytes(sref, blob);
+      await uploadBytes(sref, blob, { contentType: 'image/jpeg' });
       const url = await getDownloadURL(sref);
-      await setDoc(doc(db, 'events', eventId), { coverImage: url, coverStoragePath: filename }, { merge: true });
+      await setDoc(doc(db, 'events', eventId), { coverImage: url, coverStoragePath: filename, coverSourceAlbumId: coverCropSourceAlbumId }, { merge: true });
+      setDetailEvent((current: any) => current?.id === eventId ? { ...current, coverImage: url, coverStoragePath: filename, coverSourceAlbumId: coverCropSourceAlbumId } : current);
     } catch (e: any) {
       console.error('cover upload error:', e);
       customAlert('エラー', e?.message || 'アップロードに失敗しました');
     }
     setUploading(false);
+    setCoverCropUri('');
+    setCoverCropSourceAlbumId(null);
   };
 
   // ─── 去年の写真アップロード ────────────────────────────────
@@ -1285,25 +1309,10 @@ export default function YearEventsScreen() {
     if (photoAddTarget === 'cover') {
       const photo = albumLibraryPhotos.find(item => selectedSet.has(item.id));
       if (!photo || !coverTargetEventId) return;
-      setUploading(true);
-      try {
-        await setDoc(doc(db, 'events', coverTargetEventId), {
-          coverImage: photo.uri,
-          coverStoragePath: null,
-          coverSourceAlbumId: photo.id,
-        }, { merge: true });
-        setDetailEvent((current: any) => current?.id === coverTargetEventId
-          ? { ...current, coverImage: photo.uri, coverStoragePath: null, coverSourceAlbumId: photo.id }
-          : current);
-        setAlbumPickerVisible(false);
-        setSelectedAlbumPhotoIds([]);
-        customAlert('完了', 'カバー写真を設定しました');
-      } catch (error: any) {
-        console.error('album cover reference error:', error);
-        customAlert('エラー', error?.message || 'カバー写真を設定できませんでした');
-      } finally {
-        setUploading(false);
-      }
+      setAlbumPickerVisible(false);
+      setSelectedAlbumPhotoIds([]);
+      setCoverCropSourceAlbumId(photo.id);
+      setCoverCropUri(photo.uri);
       return;
     }
 
@@ -1412,10 +1421,13 @@ export default function YearEventsScreen() {
               const evs = eventsForMonth(dataYear, m)
                 .filter(ev => (canEditEvents || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
               return (
-                <View key={m} style={[styles.monthCard, { flex: 1, borderColor: termColor.border, backgroundColor: termColor.light }]}>
+                <View key={m} style={[styles.monthCard, { flex: 1, borderTopColor: termColor.border }]}>
                   <Text style={[styles.monthCardLabel, { color: termColor.text }]}>{m}月</Text>
                   {evs.length === 0 ? (
-                    <Text style={styles.noEventText}>イベントなし</Text>
+                    <View style={styles.noEventBox}>
+                      <Ionicons name="camera-outline" size={21} color="#C7CAC7" />
+                      <Text style={styles.noEventText}>イベントなし</Text>
+                    </View>
                   ) : (
                     evs.map(ev => <EventChip key={ev.id} ev={ev} />)
                   )}
@@ -1456,7 +1468,7 @@ export default function YearEventsScreen() {
             </TouchableOpacity>
           </View>
         )}
-        <View style={styles.eventChipGradient}>
+        <View style={styles.eventChipCaption}>
           <Text style={styles.eventChipTitle} numberOfLines={2}>{ev.title}</Text>
           <Text style={styles.eventChipDate}>{formatDateWithDay(ev.dateStr)}</Text>
           {ev.hidden && <Text style={styles.hiddenBadge}>非表示</Text>}
@@ -1474,7 +1486,7 @@ export default function YearEventsScreen() {
     return (
       <View
         onLayout={e => { vacMonthRefs.current[`${vac}_${month}`] = e.nativeEvent.layout.y; }}
-        style={[styles.vacSection, { borderColor: vc.border }]}
+        style={[styles.vacSection, { borderTopColor: vc.border }]}
       >
         {/* 月ヘッダー + 詳細ボタン */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -1692,8 +1704,14 @@ export default function YearEventsScreen() {
 
   // ─── メインレンダリング ───────────────────────────────────
   const eventMainTabs: MainTab[] = canEditEvents
-    ? ['year', 'vacation', 'management']
-    : ['year', 'vacation'];
+    ? ['year', 'management']
+    : ['year'];
+  const contentModeLabels: Record<ContentMode, string> = {
+    year: '年行事',
+    summer: '夏休み',
+    winter: '冬休み',
+    spring: '春休み',
+  };
 
   if (checking || !verified || !eventPermissionLoaded) return null;
 
@@ -1710,14 +1728,11 @@ export default function YearEventsScreen() {
       {/* メインタブ */}
       <View style={styles.mainTabRow}>
         <TouchableOpacity style={[styles.mainTab, mainTab === 'year' && styles.mainTabActive]} onPress={() => setMainTab('year')}>
-          <Text style={[styles.mainTabText, mainTab === 'year' && styles.mainTabTextActive]}>年行事</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.mainTab, mainTab === 'vacation' && styles.mainTabActive]} onPress={() => setMainTab('vacation')}>
-          <Text style={[styles.mainTabText, mainTab === 'vacation' && styles.mainTabTextActive]}>長期休み</Text>
+          <Text style={[styles.mainTabText, mainTab === 'year' && styles.mainTabTextActive]}>イベント内容</Text>
         </TouchableOpacity>
         {canEditEvents && (
           <TouchableOpacity style={[styles.mainTab, mainTab === 'management' && styles.mainTabActive]} onPress={() => setMainTab('management')}>
-            <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>イベント管理</Text>
+            <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>カレンダー</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1728,81 +1743,78 @@ export default function YearEventsScreen() {
         onChange={setMainTab}
         renderTab={(currentTab) => (
           <>
-      {/* ── 年行事タブ ── */}
+      {/* ── イベント内容タブ ── */}
       {currentTab === 'year' && (
         <View style={{ flex: 1 }}>
-          {/* 学期ジャンプボタン */}
-          <View style={styles.termJumpRow}>
-            {([1, 2, 3] as const).map(t => (
-              <TouchableOpacity key={t} style={[styles.termJumpBtn, { borderColor: TERM_COLORS[t].border, backgroundColor: TERM_COLORS[t].bg }]}
-                onPress={() => {
-                  const offset = termOffsets.current[t] || 0;
-                  yearScrollRef.current?.scrollTo({ y: offset, animated: true });
-                }}>
-                <Text style={[styles.termJumpText, { color: TERM_COLORS[t].text }]}>{t}学期</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.contentSelectorArea}>
+            <TouchableOpacity style={styles.contentSelectorButton} onPress={() => setContentMenuOpen(open => !open)}>
+              <Text style={styles.contentSelectorButtonText}>{contentModeLabels[contentMode]}</Text>
+              <Ionicons name={contentMenuOpen ? 'chevron-up' : 'chevron-down'} size={18} color="#5D4037" />
+            </TouchableOpacity>
+            {contentMenuOpen && (
+              <View style={styles.contentSelectorMenu}>
+                {(['year', 'summer', 'winter', 'spring'] as ContentMode[]).map(mode => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.contentSelectorOption, contentMode === mode && styles.contentSelectorOptionActive]}
+                    onPress={() => { setContentMode(mode); setContentMenuOpen(false); }}
+                  >
+                    <Text style={[styles.contentSelectorOptionText, contentMode === mode && styles.contentSelectorOptionTextActive]}>
+                      {contentModeLabels[mode]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
-          <ScrollView ref={yearScrollRef} contentContainerStyle={{ padding: 14 }}>
+          {contentMode === 'year' ? (
+          <ScrollView ref={yearScrollRef} style={styles.eventContentBackground} contentContainerStyle={styles.eventContentScroll}>
             {([1, 2, 3] as const).map(term => {
               const tc = TERM_COLORS[term];
               const months = term === 1 ? TERM1_MONTHS : term === 2 ? TERM2_MONTHS : TERM3_MONTHS;
               return (
                 <View key={term}
                   onLayout={e => { termOffsets.current[term] = e.nativeEvent.layout.y; }}
-                  style={[styles.termSection, { borderLeftColor: tc.border, backgroundColor: tc.bg }]}>
-                  <Text style={[styles.termLabel, { color: tc.text }]}>{term}学期</Text>
-                  <Text style={styles.termMonthRange}>
-                    {months[0]}月 〜 {months[months.length - 1]}月
-                  </Text>
+                  style={[styles.termSection, { borderTopColor: tc.border }]}>
+                  <View style={styles.termHeadingRow}>
+                    <Image
+                      source={term === 1 ? PERIOD_IMAGES.term1 : term === 2 ? PERIOD_IMAGES.term2 : PERIOD_IMAGES.term3}
+                      style={styles.periodHeadingImage}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.termHeadingText}>
+                      <Text style={[styles.termLabel, { color: tc.text }]}>{term}学期</Text>
+                      <Text style={styles.termMonthRange}>
+                        {months[0]}月〜{months[months.length - 1]}月
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.termHeadingLine, { backgroundColor: tc.border }]} />
                   <MonthPair months={months} termColor={tc} />
                 </View>
               );
             })}
             <View style={{ height: 40 }} />
           </ScrollView>
-        </View>
-      )}
-
-      {/* ── 長期休みタブ ── */}
-      {currentTab === 'vacation' && (
-        <View style={{ flex: 1 }}>
-          {/* 休み種別タブ */}
-          <View style={styles.vacTabRow}>
-            {(['summer', 'winter', 'spring'] as VacTab[]).map(v => {
-              const vc = VAC_COLORS[v];
-              return (
-                <TouchableOpacity key={v}
-                  style={[styles.vacTab, vacTab === v && { backgroundColor: vc.bg, borderBottomColor: vc.border }]}
-                  onPress={() => setVacTab(v)}>
-                  <Text style={[styles.vacTabText, vacTab === v && { color: vc.text, fontWeight: 'bold' }]}>{vc.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* 月ジャンプボタン */}
-          <View style={styles.termJumpRow}>
-            {(getVacMonths(VAC_COLORS[vacTab].label).length > 0 ? getVacMonths(VAC_COLORS[vacTab].label) : VAC_MONTHS[vacTab]).map(m => {
-              const vc = VAC_COLORS[vacTab];
-              return (
-                <TouchableOpacity key={m}
-                  style={[styles.termJumpBtn, { borderColor: vc.border, backgroundColor: vc.bg }]}
-                  onPress={() => {
-                    const offset = vacMonthRefs.current[`${vacTab}_${m}`] || 0;
-                    vacScrollRef.current?.scrollTo({ y: offset, animated: true });
-                  }}>
-                  <Text style={[styles.termJumpText, { color: vc.text }]}>{m}月</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <ScrollView ref={vacScrollRef} contentContainerStyle={{ padding: 14 }}>
+          ) : (
+          <ScrollView ref={vacScrollRef} style={styles.eventContentBackground} contentContainerStyle={styles.eventContentScroll}>
+            <View style={styles.vacationHeadingBlock}>
+              <View style={styles.vacationScreenHeading}>
+                <Image source={PERIOD_IMAGES[vacTab]} style={styles.periodHeadingImage} resizeMode="contain" />
+                <View>
+                  <Text style={[styles.vacationScreenTitle, { color: VAC_COLORS[vacTab].text }]}>{VAC_COLORS[vacTab].label}</Text>
+                  <Text style={styles.vacationScreenRange}>
+                    {vacTab === 'summer' ? '7月〜8月' : vacTab === 'winter' ? '12月〜1月' : '3月〜4月'}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.vacationHeadingLine, { backgroundColor: VAC_COLORS[vacTab].border }]} />
+            </View>
             {(getVacMonths(VAC_COLORS[vacTab].label).length > 0 ? getVacMonths(VAC_COLORS[vacTab].label) : VAC_MONTHS[vacTab]).map(m => <VacMonthSection key={m} vac={vacTab} month={m} />)}
             <View style={{ height: 40 }} />
           </ScrollView>
+          )}
         </View>
       )}
 
@@ -2424,6 +2436,14 @@ export default function YearEventsScreen() {
         </View>
       </Modal>
 
+      <CropImageModal
+        visible={!!coverCropUri}
+        uri={coverCropUri}
+        title="イベントのカバー写真をトリミング"
+        onCancel={() => { setCoverCropUri(''); setCoverCropSourceAlbumId(null); }}
+        onDone={uri => void saveCroppedEventCover(uri)}
+      />
+
       {/* アップロードオーバーレイ */}
       {uploading && (
         <View style={styles.uploadOverlay}>
@@ -2451,6 +2471,16 @@ const styles = StyleSheet.create({
   mainTabActive: { borderBottomColor: COLORS.primary },
   mainTabText: { fontSize: 15, color: '#888', fontWeight: 'bold' },
   mainTabTextActive: { color: COLORS.primary },
+  contentSelectorArea: { position: 'relative', alignItems: 'flex-end', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', zIndex: 20, overflow: 'visible' },
+  contentSelectorButton: { minWidth: 132, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 9, paddingHorizontal: 14, backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E7D5C3' },
+  contentSelectorButtonText: { fontSize: 14, fontWeight: '900', color: '#4A3C35' },
+  contentSelectorMenu: { position: 'absolute', top: 54, right: 14, width: 180, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#DDD4CC', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 8, zIndex: 30 },
+  contentSelectorOption: { minHeight: 42, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderColor: '#EEE8E3' },
+  contentSelectorOptionActive: { backgroundColor: '#E9F8F8' },
+  contentSelectorOptionText: { fontSize: 14, fontWeight: '800', color: '#4D4743' },
+  contentSelectorOptionTextActive: { color: COLORS.primary },
+  eventContentBackground: { flex: 1, backgroundColor: '#F7F8F7' },
+  eventContentScroll: { padding: 12, paddingBottom: 40 },
 
   // 学期ジャンプ
   termJumpRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE' },
@@ -2458,29 +2488,35 @@ const styles = StyleSheet.create({
   termJumpText: { fontSize: 13, fontWeight: 'bold' },
 
   // 学期セクション
-  termSection: { borderLeftWidth: 4, borderRadius: 12, padding: 12, marginBottom: 16 },
-  termLabel: { fontSize: 18, fontWeight: 'bold', marginBottom: 2 },
-  termMonthRange: { fontSize: 12, color: '#888', marginBottom: 10 },
+  termSection: { borderWidth: 1, borderColor: '#E7E8E5', borderRadius: 9, padding: 10, marginBottom: 12, backgroundColor: '#FCFCFB', shadowColor: '#000', shadowOpacity: 0.035, shadowRadius: 5, elevation: 1 },
+  termHeadingRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8 },
+  periodHeadingImage: { width: 34, height: 34 },
+  termHeadingText: { flexShrink: 0 },
+  termHeadingLine: { width: '100%', height: 2, borderRadius: 1, marginBottom: 10 },
+  termLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 1 },
+  termMonthRange: { fontSize: 10, color: '#777' },
 
   // 月カード
-  monthCard: { borderWidth: 1.5, borderRadius: 12, padding: 10, minHeight: 80 },
-  monthCardLabel: { fontSize: 14, fontWeight: 'bold', marginBottom: 8 },
-  noEventText: { fontSize: 12, color: '#bbb', textAlign: 'center', paddingVertical: 10 },
+  monthCard: { borderWidth: 1, borderColor: '#E6E7E4', borderRadius: 7, padding: 7, minHeight: 156, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.025, shadowRadius: 3, elevation: 1 },
+  monthCardLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 6, color: '#3F3C39' },
+  noEventBox: { flex: 1, minHeight: 112, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  noEventText: { fontSize: 10, color: '#B5B8B5', textAlign: 'center' },
 
   // イベントチップ
-  eventChip: { borderRadius: 10, overflow: 'hidden', marginBottom: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  eventChip: { borderRadius: 6, overflow: 'hidden', marginBottom: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E6E6E3', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
   eventChipHeader: { padding: 8 },
-  eventCoverImgFull: { width: '100%', height: 130 },
+  eventCoverImgFull: { width: '100%', height: 92 },
   eventCoverPlaceholderFull: { width: '100%', height: 70, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   eventCoverImg: { width: 60, height: 60 },
   eventCoverPlaceholder: { width: 60, height: 60, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   eventChipInfo: { padding: 7, borderTopWidth: 1, borderColor: '#F0F0F0' },
   eventChipImgWrap: { position: 'relative' },
   eventChipGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.28)', paddingHorizontal: 6, paddingVertical: 3 },
+  eventChipCaption: { paddingHorizontal: 6, paddingVertical: 5, minHeight: 42, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEEB' },
   eventChipOverlay: { padding: 6, backgroundColor: 'rgba(0,0,0,0.42)' },
-  eventChipTitle: { fontSize: 10, fontWeight: '500', color: '#fff' },
-  eventChipDate: { fontSize: 9, color: 'rgba(255,255,255,0.82)' },
-  hiddenBadge: { fontSize: 10, color: '#ffcccc', fontWeight: 'bold', marginTop: 2 },
+  eventChipTitle: { fontSize: 10, fontWeight: '800', color: '#393633' },
+  eventChipDate: { fontSize: 8, color: '#85817D', marginTop: 2 },
+  hiddenBadge: { fontSize: 8, color: '#D15E6E', fontWeight: 'bold', marginTop: 2 },
   hiddenToggleBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, marginLeft: 6 },
   hiddenToggleBtnVisible: { backgroundColor: '#7BC67E' },
   hiddenToggleBtnHidden: { backgroundColor: COLORS.danger },
@@ -2497,7 +2533,12 @@ const styles = StyleSheet.create({
   vacTabText: { fontSize: 14, color: '#888', fontWeight: 'bold' },
 
   // 長期休みセクション
-  vacSection: { borderWidth: 1.5, borderRadius: 12, padding: 12, marginBottom: 12, backgroundColor: '#fff' },
+  vacationHeadingBlock: { marginBottom: 10 },
+  vacationScreenHeading: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2, marginBottom: 1 },
+  vacationHeadingLine: { width: '100%', height: 2, borderRadius: 1 },
+  vacationScreenTitle: { fontSize: 17, fontWeight: '900' },
+  vacationScreenRange: { fontSize: 10, color: '#777', marginTop: 1 },
+  vacSection: { borderWidth: 1, borderColor: '#E6E7E4', borderRadius: 8, padding: 10, marginBottom: 10, backgroundColor: '#FCFCFB', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
   vacMonthLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
 
   // チラシ

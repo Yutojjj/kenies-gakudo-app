@@ -75,6 +75,7 @@ const QUICK_MENU_IMAGES = {
   logout: require('../assets/quick-menu/logout.png'),
   scheduleChanges: require('../assets/quick-menu/schedule-changes.png'),
   userList: require('../assets/quick-menu/user-list.png'),
+  announcements: require('../assets/menu/today-message-illust.png'),
 };
 
 const TODAY_TASK_IMAGES = {
@@ -107,9 +108,10 @@ type AdminQuickKey =
   | 'qrUpdater'
   | 'scheduleChanges'
   | 'accountList'
-  | 'accountCreate';
+  | 'accountCreate'
+  | 'announcements';
 
-const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['attendance', 'pickup', 'shift', 'messages', 'events', 'album'];
+const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['attendance', 'pickup', 'shift', 'messages', 'events', 'album', 'announcements'];
 
 type StaffQuickKey =
   | 'attendance'
@@ -123,8 +125,9 @@ type StaffQuickKey =
   | 'typing'
   | 'qrScan'
   | 'password'
-  | 'logout';
-const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album'];
+  | 'logout'
+  | 'announcements';
+const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'announcements'];
 
 const STAFF_COLORS = [
   '#00AEB8','#4A90E2','#7E9CF5','#8A63D2','#F06292',
@@ -151,6 +154,24 @@ type MenuEventItem = {
   deadlineDate?: string;
   hidden?: boolean;
   coverImage?: string | null;
+};
+
+type MenuAnnouncement = {
+  id: string;
+  subject: string;
+  content: string;
+  imageUrl?: string;
+  headerImageUrl?: string;
+  referenceImages?: { url: string; storagePath?: string | null; sourceAlbumId?: string | null }[];
+  isPromotional?: boolean;
+  isActive?: boolean;
+  publishAt?: any;
+  createdAt?: any;
+};
+
+const announcementDate = (value: any) => {
+  const date = value?.toDate ? value.toDate() : new Date(value || Date.now());
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
 const customAlert = (title: string, message?: string) => {
@@ -280,7 +301,7 @@ function DecoBackground() {
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { role: roleParam, name: nameParam } = useLocalSearchParams<{ role: string; name: string }>();
+  const { role: roleParam, name: nameParam, announcementId } = useLocalSearchParams<{ role: string; name: string; announcementId?: string }>();
   const [role, setRole] = useState(roleParam || '');
   const [name, setName] = useState(nameParam || '');
   const [authChecked, setAuthChecked] = useState(false);
@@ -407,11 +428,66 @@ export default function MenuScreen() {
   const [menuEventDetails, setMenuEventDetails] = useState<Record<string, boolean>>({});
   const [menuEventParticipations, setMenuEventParticipations] = useState<Record<string, string>>({});
   const [menuEventIndex, setMenuEventIndex] = useState(0);
+  const [announcements, setAnnouncements] = useState<MenuAnnouncement[]>([]);
+  const [announcementListVisible, setAnnouncementListVisible] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
+  const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
+  const [accountId, setAccountId] = useState<string>('');
+  const promotionCheckedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (role !== 'user') {
+      setAnnouncements([]);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'announcements'), snap => {
+      const now = Date.now();
+      const current = new Date(now);
+      const fiscalStartYear = current.getMonth() >= 3 ? current.getFullYear() : current.getFullYear() - 1;
+      const fiscalStart = new Date(fiscalStartYear, 3, 1).getTime();
+      const fiscalEnd = new Date(fiscalStartYear + 1, 3, 1).getTime();
+      const next = snap.docs
+        .map(item => ({ id: item.id, ...item.data() } as MenuAnnouncement))
+        .filter(item => {
+          const published = item.publishAt?.toDate ? item.publishAt.toDate() : new Date(item.publishAt || 0);
+          return item.isActive !== false && published.getTime() <= now && published.getTime() >= fiscalStart && published.getTime() < fiscalEnd;
+        })
+        .sort((a, b) => {
+          const aDate = a.publishAt?.toDate ? a.publishAt.toDate() : new Date(a.publishAt || 0);
+          const bDate = b.publishAt?.toDate ? b.publishAt.toDate() : new Date(b.publishAt || 0);
+          return bDate.getTime() - aDate.getTime();
+        });
+      setAnnouncements(next);
+      if (announcementId) {
+        const direct = next.find(item => item.id === announcementId);
+        if (direct) setSelectedAnnouncement(direct);
+      }
+    });
+    return unsub;
+  }, [role, announcementId]);
+
+  useEffect(() => {
+    if (role !== 'user' || announcements.length === 0) return;
+    const promo = announcements.find(item => item.isPromotional && !promotionCheckedRef.current.has(item.id));
+    if (!promo) return;
+    promotionCheckedRef.current.add(promo.id);
+    const seenKey = `announcementPromoSeen:${accountId || name || 'user'}:${promo.id}`;
+    AsyncStorage.getItem(seenKey).then(seen => {
+      if (!seen) setPromotionalAnnouncement(promo);
+    });
+  }, [role, announcements, accountId, name]);
+
+  const closePromotionalAnnouncement = async () => {
+    if (promotionalAnnouncement) {
+      const seenKey = `announcementPromoSeen:${accountId || name || 'user'}:${promotionalAnnouncement.id}`;
+      await AsyncStorage.setItem(seenKey, '1');
+    }
+    setPromotionalAnnouncement(null);
+  };
 
   // 通知許可バナー
   const [pushState, setPushState] = useState<'granted' | 'denied' | 'default' | 'unsupported' | 'ios-not-standalone' | null>(null);
   const [pushRequesting, setPushRequesting] = useState(false);
-  const [accountId, setAccountId] = useState<string>('');
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
@@ -511,9 +587,10 @@ export default function MenuScreen() {
             'attendance', 'todayStatus', 'pickup', 'shift', 'messages', 'events', 'album',
             'schoolTimes', 'holidays', 'lessons', 'regularUsers', 'userList', 'gradeChange',
             'paidTransport', 'shiftPeriod', 'staffHours', 'password', 'survey',
-            'typing', 'qrScan', 'qrUpdater', 'accountList', 'accountCreate',
+            'typing', 'qrScan', 'qrUpdater', 'accountList', 'accountCreate', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as AdminQuickKey)) as AdminQuickKey[];
+          if (!next.includes('announcements')) next.push('announcements');
           if (next.length > 0) setAdminQuickVisibleKeys(next);
         }
       } catch {}
@@ -564,9 +641,10 @@ export default function MenuScreen() {
         if (Array.isArray(parsed)) {
           const allowed = new Set<StaffQuickKey>([
             'attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'userList',
-            'typing', 'qrScan', 'password', 'logout',
+            'typing', 'qrScan', 'password', 'logout', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as StaffQuickKey)) as StaffQuickKey[];
+          if (!next.includes('announcements')) next.push('announcements');
           if (next.length > 0) setStaffQuickVisibleKeys(next);
         }
       } catch {}
@@ -1393,10 +1471,11 @@ export default function MenuScreen() {
     onPress: () => void;
   }[] = [
     { key: 'attendance', label: '出欠一覧', icon: 'people', color: '#F05172', bg: '#FFE1E8', image: QUICK_MENU_IMAGES.attendance, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/attendance') },
-    { key: 'todayStatus', label: '本日の登所', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
+    { key: 'todayStatus', label: '出席記録', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
     { key: 'pickup', label: '送迎管理', icon: 'car', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
     { key: 'shift', label: 'シフト管理', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
+    { key: 'announcements', label: 'お知らせ', icon: 'bulb-outline', color: '#D98213', bg: '#FFF0CB', image: QUICK_MENU_IMAGES.announcements, cardBg: '#FFF8E8', borderColor: '#F2C982', onPress: () => router.push({ pathname: '/announcements', params: { role: role || 'admin', name: name || '' } } as any) },
     { key: 'events', label: 'イベント管理', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || '', tab: 'management' } } as any) },
     { key: 'album', label: 'アルバム', icon: 'image', color: '#4A90E2', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.album, cardBg: '#DDF3FF', borderColor: '#8FD1F5', onPress: () => router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any) },
     { key: 'schoolTimes', label: '学校別下校時刻', icon: 'school-outline', color: '#00AEB8', bg: '#DFF8FA', image: QUICK_MENU_IMAGES.schoolTimes, cardBg: '#EFFFFC', borderColor: '#7DDAD6', onPress: () => router.push('/school-times') },
@@ -1438,10 +1517,11 @@ export default function MenuScreen() {
     onPress: () => void;
   }[] = [
     { key: 'attendance', label: '出欠一覧', icon: 'people', color: '#F05172', bg: '#FFE1E8', image: QUICK_MENU_IMAGES.attendance, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/attendance') },
-    { key: 'todayStatus', label: '本日の登所', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
+    { key: 'todayStatus', label: '出席記録', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
     { key: 'pickup', label: '送迎管理', icon: 'car', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
     { key: 'events', label: 'イベント', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || 'staff', tab: 'management' } } as any) },
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
+    { key: 'announcements', label: 'お知らせ', icon: 'bulb-outline', color: '#D98213', bg: '#FFF0CB', image: QUICK_MENU_IMAGES.announcements, cardBg: '#FFF8E8', borderColor: '#F2C982', onPress: () => router.push({ pathname: '/announcements', params: { role: role || 'staff', name: name || '' } } as any) },
     { key: 'shift', label: 'シフト', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
     { key: 'album', label: 'アルバム', icon: 'image', color: '#4A90E2', bg: '#EAF7FF', image: QUICK_MENU_IMAGES.album, cardBg: '#DDF3FF', borderColor: '#8FD1F5', onPress: () => router.push({ pathname: '/album', params: { role: role || 'staff', name: name || '' } } as any) },
     { key: 'userList', label: '利用者一覧', icon: 'list-outline', color: '#2D8B79', bg: '#DFF5EE', image: QUICK_MENU_IMAGES.userList, cardBg: '#EFFAF5', borderColor: '#9DD8C6', onPress: () => router.push({ pathname: '/attendance', params: { view: 'schoolUsers' } } as any) },
@@ -1645,6 +1725,24 @@ export default function MenuScreen() {
             </View>
           </View>
           </Animated.View>
+        )}
+
+        {role === 'user' && (
+          <View style={styles.userAnnouncementTopRow}>
+            <TouchableOpacity
+              style={styles.userAnnouncementButton}
+              onPress={() => setAnnouncementListVisible(true)}
+              activeOpacity={0.82}
+            >
+              <View style={styles.userAnnouncementBulb}>
+                <Ionicons name="bulb-outline" size={21} color="#9A650A" />
+              </View>
+              <Text style={styles.userAnnouncementButtonText}>お知らせ</Text>
+              {announcements.length > 0 && (
+                <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{announcements.length > 99 ? '99+' : announcements.length}</Text></View>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
@@ -3202,6 +3300,98 @@ export default function MenuScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={announcementListVisible} transparent animationType="fade">
+        <TouchableOpacity style={styles.announcementOverlay} activeOpacity={1} onPress={() => setAnnouncementListVisible(false)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.announcementListCard}>
+              <View style={styles.announcementModalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="bulb-outline" size={23} color="#A66A10" />
+                  <Text style={styles.announcementModalTitle}>お知らせ一覧</Text>
+                </View>
+                <TouchableOpacity style={styles.announcementCloseButton} onPress={() => setAnnouncementListVisible(false)}>
+                  <Ionicons name="close" size={27} color="#3E3430" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.announcementListContent} showsVerticalScrollIndicator={false}>
+                {announcements.length === 0 ? (
+                  <View style={styles.announcementEmpty}>
+                    <Ionicons name="bulb-outline" size={42} color="#CCD1D1" />
+                    <Text style={styles.announcementEmptyText}>現在のお知らせはありません</Text>
+                  </View>
+                ) : announcements.map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.announcementListItem}
+                    onPress={() => { setAnnouncementListVisible(false); setSelectedAnnouncement(item); }}
+                    activeOpacity={0.82}
+                  >
+                    <View style={styles.announcementListBody}>
+                      <Text style={styles.announcementListDate}>{announcementDate(item.publishAt || item.createdAt)}</Text>
+                      <Text style={styles.announcementListSubject} numberOfLines={2}>{item.subject}</Text>
+                    </View>
+                    {(item.headerImageUrl || item.imageUrl) ? (
+                      <Image source={{ uri: item.headerImageUrl || item.imageUrl }} style={styles.announcementListImage} />
+                    ) : (
+                      <View style={styles.announcementListImageEmpty}><Ionicons name="bulb-outline" size={25} color="#C5A05E" /></View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={!!selectedAnnouncement} transparent animationType="fade">
+        <TouchableOpacity style={styles.announcementOverlay} activeOpacity={1} onPress={() => setSelectedAnnouncement(null)}>
+          <TouchableWithoutFeedback>
+            <View style={styles.announcementDetailCard}>
+              <View style={styles.announcementModalHeader}>
+                <Text style={styles.announcementDetailHeader}>お知らせ</Text>
+                <TouchableOpacity style={styles.announcementCloseButton} onPress={() => setSelectedAnnouncement(null)}>
+                  <Ionicons name="close" size={27} color="#3E3430" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {(selectedAnnouncement?.headerImageUrl || selectedAnnouncement?.imageUrl) ? <Image source={{ uri: selectedAnnouncement.headerImageUrl || selectedAnnouncement.imageUrl }} style={styles.announcementDetailImage} resizeMode="cover" /> : null}
+                <View style={styles.announcementDetailBody}>
+                  <Text style={styles.announcementDetailDate}>{selectedAnnouncement ? announcementDate(selectedAnnouncement.publishAt || selectedAnnouncement.createdAt) : ''}</Text>
+                  <Text style={styles.announcementDetailSubject}>{selectedAnnouncement?.subject}</Text>
+                  <View style={styles.announcementDetailDivider} />
+                  <Text style={styles.announcementDetailContent}>{selectedAnnouncement?.content}</Text>
+                  {!!selectedAnnouncement?.referenceImages?.length && <>
+                    <Text style={styles.announcementReferenceTitle}>参考写真</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.announcementReferenceRow}>
+                      {selectedAnnouncement.referenceImages.map((image, index) => <Image key={`${image.url}-${index}`} source={{ uri: image.url }} style={styles.announcementReferenceImage} resizeMode="cover" />)}
+                    </ScrollView>
+                  </>}
+                </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={!!promotionalAnnouncement} transparent animationType="fade">
+        <View style={styles.promotionOverlay}>
+          <View style={styles.promotionCard}>
+            <TouchableOpacity style={styles.promotionClose} onPress={closePromotionalAnnouncement}>
+              <Ionicons name="close" size={28} color="#3C332F" />
+            </TouchableOpacity>
+            {(promotionalAnnouncement?.headerImageUrl || promotionalAnnouncement?.imageUrl) ? <Image source={{ uri: promotionalAnnouncement.headerImageUrl || promotionalAnnouncement.imageUrl }} style={styles.promotionImage} resizeMode="cover" /> : null}
+            <ScrollView contentContainerStyle={styles.promotionBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.promotionLabel}><Ionicons name="bulb" size={15} color="#8B5C09" /><Text style={styles.promotionLabelText}>お知らせ</Text></View>
+              <Text style={styles.promotionSubject}>{promotionalAnnouncement?.subject}</Text>
+              <Text style={styles.promotionContent}>{promotionalAnnouncement?.content}</Text>
+              {!!promotionalAnnouncement?.referenceImages?.length && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionReferenceRow}>{promotionalAnnouncement.referenceImages.map((image, index) => <Image key={`${image.url}-${index}`} source={{ uri: image.url }} style={styles.promotionReferenceImage} resizeMode="cover" />)}</ScrollView>}
+              <TouchableOpacity style={styles.promotionDone} onPress={closePromotionalAnnouncement}><Text style={styles.promotionDoneText}>確認しました</Text></TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={appDialog.visible} transparent animationType="fade">
         <View style={styles.appDialogOverlay}>
           <View style={styles.appDialogBox}>
@@ -3331,6 +3521,71 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
+  userAnnouncementTopRow: {
+    minHeight: 54,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    alignItems: 'flex-end',
+  },
+  userAnnouncementButton: {
+    minHeight: 42,
+    borderRadius: 21,
+    paddingLeft: 5,
+    paddingRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#FFF5D7',
+    borderWidth: 1,
+    borderColor: '#EBCB7B',
+    shadowColor: '#7A623B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  userAnnouncementBulb: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE8A3' },
+  userAnnouncementButtonText: { fontSize: 13, fontWeight: '900', color: '#4B3A2D' },
+  userAnnouncementBadge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E84A4A' },
+  userAnnouncementBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
+  announcementOverlay: { flex: 1, backgroundColor: 'rgba(25,22,20,0.48)', alignItems: 'center', justifyContent: 'center', padding: 14 },
+  announcementListCard: { width: '100%', maxWidth: 520, maxHeight: '82%', borderRadius: 18, backgroundColor: '#FFFDFB', overflow: 'hidden' },
+  announcementDetailCard: { width: '100%', maxWidth: 560, maxHeight: '88%', borderRadius: 18, backgroundColor: '#FFFDFB', overflow: 'hidden' },
+  announcementModalHeader: { minHeight: 58, paddingLeft: 18, paddingRight: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#EEE5DE' },
+  announcementModalTitle: { fontSize: 19, fontWeight: '900', color: '#332C28' },
+  announcementDetailHeader: { fontSize: 17, fontWeight: '900', color: '#5D4A3E' },
+  announcementCloseButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  announcementListContent: { padding: 10 },
+  announcementListItem: { minHeight: 92, flexDirection: 'row', alignItems: 'center', marginBottom: 8, padding: 10, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E8DED5' },
+  announcementListBody: { flex: 1, paddingRight: 10 },
+  announcementListDate: { fontSize: 10, fontWeight: '800', color: '#8C8179' },
+  announcementListSubject: { marginTop: 5, fontSize: 15, lineHeight: 21, fontWeight: '900', color: '#312C29' },
+  announcementListImage: { width: 76, height: 70, borderRadius: 9, backgroundColor: '#EFF1F1' },
+  announcementListImageEmpty: { width: 76, height: 70, borderRadius: 9, backgroundColor: '#FFF3D5', alignItems: 'center', justifyContent: 'center' },
+  announcementEmpty: { minHeight: 230, alignItems: 'center', justifyContent: 'center' },
+  announcementEmptyText: { marginTop: 10, fontSize: 13, fontWeight: '800', color: '#929797' },
+  announcementDetailImage: { width: '100%', height: 230, backgroundColor: '#EFF1F1' },
+  announcementDetailBody: { padding: 18, paddingBottom: 28 },
+  announcementDetailDate: { fontSize: 11, fontWeight: '800', color: '#8E8279' },
+  announcementDetailSubject: { marginTop: 8, fontSize: 22, lineHeight: 29, fontWeight: '900', color: '#2F2926' },
+  announcementDetailDivider: { height: 2, width: 46, backgroundColor: '#E9BB58', marginVertical: 15 },
+  announcementDetailContent: { fontSize: 15, lineHeight: 25, color: '#423B37' },
+  announcementReferenceTitle: { marginTop: 22, marginBottom: 8, color: '#4B403A', fontSize: 14, fontWeight: '900' },
+  announcementReferenceRow: { gap: 9, paddingRight: 10 },
+  announcementReferenceImage: { width: 180, height: 132, borderRadius: 10, backgroundColor: '#EEF1F1' },
+  promotionOverlay: { flex: 1, backgroundColor: 'rgba(22,19,17,0.64)', alignItems: 'center', justifyContent: 'center', padding: 14 },
+  promotionCard: { width: '100%', maxWidth: 560, maxHeight: '92%', borderRadius: 22, backgroundColor: '#FFFDF9', overflow: 'hidden', position: 'relative' },
+  promotionClose: { position: 'absolute', top: 10, right: 10, zIndex: 3, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.92)' },
+  promotionImage: { width: '100%', height: 280, backgroundColor: '#F0F1F1' },
+  promotionBody: { padding: 20, paddingBottom: 24 },
+  promotionLabel: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: '#FFF0BC' },
+  promotionLabelText: { color: '#805406', fontSize: 11, fontWeight: '900' },
+  promotionSubject: { marginTop: 12, fontSize: 24, lineHeight: 32, fontWeight: '900', color: '#312B27' },
+  promotionContent: { marginTop: 13, fontSize: 15, lineHeight: 25, color: '#463E39' },
+  promotionReferenceRow: { gap: 9, paddingTop: 18, paddingRight: 10 },
+  promotionReferenceImage: { width: 190, height: 140, borderRadius: 11, backgroundColor: '#EEF1F1' },
+  promotionDone: { marginTop: 22, minHeight: 50, borderRadius: 13, backgroundColor: '#00AEB8', alignItems: 'center', justifyContent: 'center' },
+  promotionDoneText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   userPaidQuickSection: {
     marginHorizontal: 12,
     marginTop: 12,

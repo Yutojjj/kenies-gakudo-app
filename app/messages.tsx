@@ -418,6 +418,7 @@ export default function MessagesScreen() {
   const [allowMemberCall, setAllowMemberCall] = useState(true);
 
   const [manageMembersModalVisible, setManageMembersModalVisible] = useState(false);
+  const [deleteConversationTarget, setDeleteConversationTarget] = useState<ConvDoc | null>(null);
   const [managingConv, setManagingConv] = useState<ConvDoc | null>(null);
   const [managingParticipants, setManagingParticipants] = useState<string[]>([]);
   const [memberMgmtSearch, setMemberMgmtSearch] = useState('');
@@ -732,25 +733,20 @@ export default function MessagesScreen() {
   };
 
   const handleDeleteConversation = (conv: ConvDoc) => {
-    if (Platform.OS === 'web') {
-      if (window.confirm(`「${conv.name || 'トーク'}」を完全に削除しますか？\n（復元できません）`)) {
-        deleteDoc(doc(db, 'conversations', conv.id)).then(() => {
-          if (activeConv?.id === conv.id) goBack();
-        }).catch(() => window.alert('削除に失敗しました。'));
-      }
-      return;
+    setDeleteConversationTarget(conv);
+  };
+
+  const confirmDeleteConversation = async () => {
+    const target = deleteConversationTarget;
+    if (!target) return;
+    try {
+      await deleteDoc(doc(db, 'conversations', target.id));
+      setDeleteConversationTarget(null);
+      if (activeConv?.id === target.id) goBack();
+    } catch (e) {
+      if (Platform.OS === 'web') window.alert('削除に失敗しました。');
+      else Alert.alert('エラー', '削除に失敗しました。');
     }
-    Alert.alert('削除確認', `「${conv.name || 'トーク'}」を完全に削除しますか？\n（復元できません）`, [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: async () => {
-        try {
-          await deleteDoc(doc(db, 'conversations', conv.id));
-          if (activeConv?.id === conv.id) goBack();
-        } catch (e) {
-          Alert.alert('エラー', '削除に失敗しました。');
-        }
-      }}
-    ]);
   };
 
   const openCreateGroupModal = async () => {
@@ -1122,7 +1118,14 @@ export default function MessagesScreen() {
             const unread = hasUnread(item);
             const displayName = resolveConvName(item.id, item.name);
             return (
-              <TouchableOpacity key={item.id} style={styles.convRow} onPress={() => openChat(item)} activeOpacity={0.75}>
+              <TouchableOpacity
+                key={item.id}
+                style={styles.convRow}
+                onPress={() => openChat(item)}
+                onLongPress={isAdmin ? () => handleDeleteConversation(item) : undefined}
+                delayLongPress={650}
+                activeOpacity={0.75}
+              >
                 <View style={[styles.convAvatar, isGroupItem && styles.convAvatarGroup]}>
                   <Ionicons name={isGroupItem ? 'people' : 'person'} size={22} color="#fff" />
                 </View>
@@ -1145,11 +1148,6 @@ export default function MessagesScreen() {
                     <Ionicons name="settings-outline" size={20} color={COLORS.primary} />
                   </TouchableOpacity>
                 )}
-                {isAdmin && (
-                  <TouchableOpacity onPress={() => handleDeleteConversation(item)} style={{ padding: 8, marginLeft: 4 }}>
-                    <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
-                  </TouchableOpacity>
-                )}
               </TouchableOpacity>
             );
           })}
@@ -1158,6 +1156,25 @@ export default function MessagesScreen() {
             </>
           )}
         />
+
+        <Modal visible={!!deleteConversationTarget} transparent animationType="fade" onRequestClose={() => setDeleteConversationTarget(null)}>
+          <TouchableOpacity style={styles.deleteConfirmOverlay} activeOpacity={1} onPress={() => setDeleteConversationTarget(null)}>
+            <TouchableOpacity style={styles.deleteConfirmCard} activeOpacity={1} onPress={() => {}}>
+              <Text style={styles.deleteConfirmTitle}>トークを削除しますか？</Text>
+              <Text style={styles.deleteConfirmMessage}>
+                「{deleteConversationTarget?.name || 'トーク'}」を削除します。削除後は元に戻せません。
+              </Text>
+              <View style={styles.deleteConfirmActions}>
+                <TouchableOpacity style={styles.deleteCancelButton} onPress={() => setDeleteConversationTarget(null)}>
+                  <Text style={styles.deleteCancelText}>キャンセル</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteSubmitButton} onPress={confirmDeleteConversation}>
+                  <Text style={styles.deleteSubmitText}>削除する</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}
         <Modal visible={createGroupModalVisible} transparent={true} animationType="slide">
@@ -1629,6 +1646,15 @@ const styles = StyleSheet.create({
 
   // モーダル強化 (縦スクロール・ゆったり配置)
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  deleteConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  deleteConfirmCard: { width: '100%', maxWidth: 420, borderRadius: 16, backgroundColor: '#fff', padding: 22, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
+  deleteConfirmTitle: { fontSize: 19, fontWeight: '900', color: '#2B2522', textAlign: 'center' },
+  deleteConfirmMessage: { marginTop: 12, fontSize: 14, lineHeight: 21, color: '#665F5B', textAlign: 'center' },
+  deleteConfirmActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  deleteCancelButton: { flex: 1, minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F1F1' },
+  deleteCancelText: { fontSize: 14, fontWeight: '800', color: '#4F4A47' },
+  deleteSubmitButton: { flex: 1, minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E85C58' },
+  deleteSubmitText: { fontSize: 14, fontWeight: '900', color: '#fff' },
   createGroupModalContentFull: { width: '100%', height: '90%', backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   modalHeaderInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   modalSubLabel: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginBottom: 12, marginTop: 8 },

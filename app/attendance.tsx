@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import SwipeTabPager from '../components/SwipeTabPager';
@@ -104,6 +104,8 @@ export default function AttendanceScreen() {
   
   const scrollViewRef = useRef<ScrollView>(null);
   const attendanceTodayPositionedRef = useRef(false);
+  const attendanceAutoPositioningRef = useRef(false);
+  const [attendanceResetToken, setAttendanceResetToken] = useState(0);
   const attendanceScrollYRef = useRef(0);
   const attendanceContentHeightRef = useRef(0);
   const pendingHistoryPrependRef = useRef<{ height: number; scrollY: number } | null>(null);
@@ -148,6 +150,8 @@ export default function AttendanceScreen() {
 
   const [activeSchools, setActiveSchools] = useState<string[]>([]);
   const [todayEntries, setTodayEntries] = useState<Record<string, boolean>>({});
+  const [statusDate, setStatusDate] = useState(() => new Date());
+  const [statusDatePicker, setStatusDatePicker] = useState<'month' | 'day' | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -312,9 +316,8 @@ export default function AttendanceScreen() {
   }, []);
 
   useEffect(() => {
-    // 今日の入室ログを取得
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    // 選択日の入室ログを取得
+    const dateStr = `${statusDate.getFullYear()}-${String(statusDate.getMonth()+1).padStart(2,'0')}-${String(statusDate.getDate()).padStart(2,'0')}`;
     const unsub = onSnapshot(
       query(collection(db, 'entry_logs'), where('dateStr', '==', dateStr)),
       (snap) => {
@@ -326,7 +329,7 @@ export default function AttendanceScreen() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [statusDate]);
 
   const datesToDisplay = useMemo(() => {
     const arr = [];
@@ -342,18 +345,47 @@ export default function AttendanceScreen() {
     return arr;
   }, [pastWeeks, futureWeeks]);
 
+  const changeAttendanceView = useCallback((nextView: ViewMode) => {
+    if (nextView === 'attendance' && currentView !== 'attendance') {
+      attendanceTodayPositionedRef.current = false;
+      setAttendanceTodayY(null);
+      setAttendanceResetToken(current => current + 1);
+    }
+    setCurrentView(nextView);
+  }, [currentView]);
+
   useEffect(() => {
     if (currentView !== 'attendance') {
-      attendanceTodayPositionedRef.current = false;
+      attendanceAutoPositioningRef.current = false;
       return;
     }
     if (attendanceTodayPositionedRef.current) return;
-    if (attendanceTodayY === null) return;
+    if (Platform.OS !== 'web' && attendanceTodayY === null) return;
+    attendanceAutoPositioningRef.current = true;
     attendanceTodayPositionedRef.current = true;
-    requestAnimationFrame(() => {
-      scrollViewRef.current?.scrollTo({ y: Math.max(0, attendanceTodayY - 8), animated: false });
-    });
-  }, [currentView, attendanceTodayY]);
+
+    const scrollToToday = () => {
+      if (Platform.OS === 'web') {
+        const todayElements = Array.from(document.querySelectorAll<HTMLElement>(
+          `#attendance-day-${getDateLayoutKey(new Date())}`,
+        ));
+        const todayElement = todayElements.find(element => element.offsetHeight > 0);
+        todayElement?.scrollIntoView({ block: 'start', behavior: 'auto' });
+        return;
+      }
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, (attendanceTodayY ?? 0) - 8), animated: false });
+    };
+    const firstFrame = requestAnimationFrame(scrollToToday);
+    const afterPagerSettles = setTimeout(scrollToToday, 180);
+    const finishPositioning = setTimeout(() => {
+      attendanceAutoPositioningRef.current = false;
+    }, 420);
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      clearTimeout(afterPagerSettles);
+      clearTimeout(finishPositioning);
+    };
+  }, [attendanceResetToken, currentView, attendanceTodayY]);
 
   const handleAttendanceScroll = (event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
@@ -363,6 +395,7 @@ export default function AttendanceScreen() {
     if (
       scrollY <= 48 &&
       attendanceTodayPositionedRef.current &&
+      !attendanceAutoPositioningRef.current &&
       !pendingHistoryPrependRef.current
     ) {
       pendingHistoryPrependRef.current = {
@@ -524,7 +557,7 @@ export default function AttendanceScreen() {
         style={styles.mainScroll}
         contentContainerStyle={{ paddingBottom: 100 }}
         onScroll={handleAttendanceScroll}
-        onContentSizeChange={handleAttendanceContentSizeChange}
+        {...(Platform.OS === 'web' ? {} : { onContentSizeChange: handleAttendanceContentSizeChange })}
         scrollEventThrottle={32}
       >
         {datesToDisplay.map((date, index) => {
@@ -563,6 +596,7 @@ export default function AttendanceScreen() {
           return (
             <View 
               key={dateKey} 
+              nativeID={`attendance-day-${dateKey}`}
               style={[styles.daySection, isToday && styles.daySectionToday]}
               onLayout={(e) => { 
                 if (isToday) setAttendanceTodayY(e.nativeEvent.layout.y);
@@ -581,7 +615,7 @@ export default function AttendanceScreen() {
                   {sortedAttendanceSchools.map(([schoolName, timesMap]) => {
                     const allKidsInSchool = Object.values(timesMap).flat();
                     return (
-                      <View key={schoolName} style={[styles.schoolCard, { backgroundColor: getCardColor(schoolName) }]}>
+                      <View key={schoolName} style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: getCardColor(schoolName) }]}>
                         <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: schoolName, kids: sortKidsByGrade(allKidsInSchool) })}>
                           <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{schoolName}</Text>
                         </TouchableOpacity>
@@ -629,7 +663,7 @@ export default function AttendanceScreen() {
                     return (
                       <>
                         {lesson1Entries.length > 0 && (
-                          <View style={[styles.schoolCard, { backgroundColor: '#EAF8F1' }]}>
+                          <View style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: '#EAF8F1' }]}>
                             <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事', kids: sortKidsByGrade(lesson1Entries.flatMap(([,kids]) => kids)) })}>
                               <Text style={styles.schoolNameText}>習い事</Text>
                             </TouchableOpacity>
@@ -669,7 +703,7 @@ export default function AttendanceScreen() {
                           </View>
                         )}
                         {lesson2Entries.length > 0 && (
-                          <View style={[styles.schoolCard, { backgroundColor: '#F3E5F5' }]}>
+                          <View style={[styles.schoolCard, screenWidth <= 600 ? styles.schoolCardMobile : styles.schoolCardWide, { backgroundColor: '#F3E5F5' }]}>
                             <TouchableOpacity style={styles.schoolNameBtn} onPress={() => setSchoolModalData({ date: dateLabel, title: '習い事2', kids: sortKidsByGrade(lesson2Entries.flatMap(([,kids]) => kids)) })}>
                               <Text style={[styles.schoolNameText, { color: '#7B1FA2' }]}>習い事2</Text>
                             </TouchableOpacity>
@@ -724,15 +758,16 @@ export default function AttendanceScreen() {
   );
 
   const renderTodayStatusView = () => {
-    const today = new Date();
-    const attendanceData = getAttendanceForDay(today);
+    const selectedDate = statusDate;
+    const attendanceData = getAttendanceForDay(selectedDate);
+    const selectedMonthDays = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
     const schoolChildColumns = screenWidth >= 1400 ? 4 : screenWidth >= 800 ? 3 : 2;
     const statusCardWidth = `${(100 / schoolChildColumns) - 1.2}%` as any;
     
     const expectedKids: Kid[] = [];
     const addedIds = new Set<string>();
     
-    // 今日の利用予定の子を全員取得
+    // 選択日の利用予定の子を全員取得
     Object.values(attendanceData.schools).forEach(timeMap => {
       Object.values(timeMap).forEach(kids => {
         kids.forEach(k => {
@@ -829,11 +864,32 @@ export default function AttendanceScreen() {
     };
 
     return (
+      <View style={{ flex: 1 }}>
       <ScrollView style={styles.mainScroll}>
         <View style={{ paddingHorizontal: 10, paddingTop: 10, paddingBottom: ADMIN_BOTTOM_NAV_HEIGHT + 12 }}>
+          <View style={styles.statusDateNavigator}>
+            <TouchableOpacity style={styles.statusDateArrow} onPress={() => setStatusDate(current => {
+              const next = new Date(current); next.setDate(current.getDate() - 1); return next;
+            })}>
+              <Ionicons name="chevron-back" size={22} color="#5D4037" />
+            </TouchableOpacity>
+            <View style={styles.statusDateSelectors}>
+              <TouchableOpacity style={styles.statusDateSelectButton} onPress={() => setStatusDatePicker('month')}>
+                <Text style={styles.statusDateSelectText}>{selectedDate.getFullYear()}年 {selectedDate.getMonth() + 1}月</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.statusDateSelectButton} onPress={() => setStatusDatePicker('day')}>
+                <Text style={styles.statusDateSelectText}>{selectedDate.getDate()}日（{DAY_NAMES[selectedDate.getDay()]}）</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.statusDateArrow} onPress={() => setStatusDate(current => {
+              const next = new Date(current); next.setDate(current.getDate() + 1); return next;
+            })}>
+              <Ionicons name="chevron-forward" size={22} color="#5D4037" />
+            </TouchableOpacity>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
             <Text style={{ fontSize: 17, fontWeight: '900', color: '#222222' }}>
-              {today.getMonth()+1}月{today.getDate()}日の登所状況
+              {selectedDate.getMonth()+1}月{selectedDate.getDate()}日の出席記録
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={{ paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#F1AAAA' }}>
@@ -851,6 +907,56 @@ export default function AttendanceScreen() {
 
         </View>
       </ScrollView>
+      <Modal visible={statusDatePicker !== null} transparent animationType="fade" onRequestClose={() => setStatusDatePicker(null)}>
+        <TouchableWithoutFeedback onPress={() => setStatusDatePicker(null)}>
+          <View style={styles.statusPickerOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.statusPickerCard}>
+                <View style={styles.statusPickerHeader}>
+                  <Text style={styles.statusPickerTitle}>
+                    {statusDatePicker === 'month' ? `${selectedDate.getFullYear()}年の月を選択` : `${selectedDate.getMonth() + 1}月の日付を選択`}
+                  </Text>
+                  <TouchableOpacity style={styles.statusPickerClose} onPress={() => setStatusDatePicker(null)}>
+                    <Ionicons name="close" size={25} color="#433B36" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.statusPickerGrid}>
+                  {(statusDatePicker === 'month'
+                    ? Array.from({ length: 12 }, (_, index) => index + 1)
+                    : Array.from({ length: selectedMonthDays }, (_, index) => index + 1)
+                  ).map(value => {
+                    const selected = statusDatePicker === 'month'
+                      ? value === selectedDate.getMonth() + 1
+                      : value === selectedDate.getDate();
+                    const candidateDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), value);
+                    return (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.statusPickerOption, selected && styles.statusPickerOptionSelected]}
+                        onPress={() => {
+                          if (statusDatePicker === 'month') {
+                            const monthIndex = value - 1;
+                            const maxDay = new Date(selectedDate.getFullYear(), monthIndex + 1, 0).getDate();
+                            setStatusDate(new Date(selectedDate.getFullYear(), monthIndex, Math.min(selectedDate.getDate(), maxDay)));
+                          } else {
+                            setStatusDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), value));
+                          }
+                          setStatusDatePicker(null);
+                        }}
+                      >
+                        <Text style={[styles.statusPickerOptionText, selected && styles.statusPickerOptionTextSelected]}>
+                          {statusDatePicker === 'month' ? `${value}月` : `${value}日（${DAY_NAMES[candidateDate.getDay()]}）`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+      </View>
     );
   };
 
@@ -876,28 +982,34 @@ export default function AttendanceScreen() {
       filteredBySchool[s].push(u);
     });
 
-    const renderSchoolUsers = (school: string, compact = false) => {
-      const schoolUsers = filteredBySchool[school] || [];
+    const renderSchoolUsers = (school: string, compact = false, splitIntoTwoColumns = false, startFromRight = false) => {
+      const schoolUsers = sortKidsByGrade(filteredBySchool[school] || []);
+      const renderUserRows = (users: any[]) => users.map((user: any, idx: number) => (
+        <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}>
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+              {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
+            </View>
+            <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+          </TouchableOpacity>
+          {isAdmin && user.parentDocId && (
+            <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ));
       return (
         <View style={[styles.schoolInlineResults, compact && styles.schoolInlineResultsCompact]}>
           {schoolUsers.length === 0 ? (
             <Text style={styles.schoolInlineEmpty}>該当する利用者はいません</Text>
-          ) : sortKidsByGrade(schoolUsers).map((user: any, idx: number) => (
-            <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === schoolUsers.length - 1 && { borderBottomWidth: 0 }]}>
-              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                  {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
-                </View>
-                <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-              </TouchableOpacity>
-              {isAdmin && user.parentDocId && (
-                <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
-                </TouchableOpacity>
-              )}
+          ) : splitIntoTwoColumns ? (
+            <View style={styles.schoolUsersTwoColumns}>
+              <View style={styles.schoolUsersColumn}>{renderUserRows(schoolUsers.filter((_, index) => index % 2 === (startFromRight ? 1 : 0)))}</View>
+              <View style={styles.schoolUsersColumn}>{renderUserRows(schoolUsers.filter((_, index) => index % 2 === (startFromRight ? 0 : 1)))}</View>
             </View>
-          ))}
+          ) : renderUserRows(schoolUsers)}
         </View>
       );
     };
@@ -950,7 +1062,7 @@ export default function AttendanceScreen() {
                 {pair.length === 1 && <View style={styles.schoolAccordionHeaderPlaceholder} />}
               </View>
 
-              {activePair.length === 1 && renderSchoolUsers(activePair[0])}
+              {activePair.length === 1 && renderSchoolUsers(activePair[0], false, true, pair.indexOf(activePair[0]) === 1)}
               {activePair.length === 2 && (
                 <View style={styles.schoolAccordionResultsRow}>
                   {activePair.map(school => (
@@ -1090,6 +1202,7 @@ export default function AttendanceScreen() {
                     key={dateStr}
                     style={[
                       styles.transportCalendarCell,
+                      !isWritten && styles.transportCalendarCellUnwritten,
                       isToday && styles.transportCalendarCellToday,
                     ]}
                     onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
@@ -1149,21 +1262,21 @@ export default function AttendanceScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '利用者一覧' : currentView === 'todayStatus' ? '本日の登所' : '送迎一覧'}
+          {currentView === 'attendance' ? '出欠一覧' : currentView === 'schoolUsers' ? '利用者一覧' : currentView === 'todayStatus' ? '出席記録' : '送迎一覧'}
         </Text>
       </View>
 
       <View style={styles.tabNavigation}>
-        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'attendance' && styles.tabNavBtnActive]} onPress={() => setCurrentView('attendance')}>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'attendance' && styles.tabNavBtnActive]} onPress={() => changeAttendanceView('attendance')}>
           <Text style={[styles.tabNavText, currentView === 'attendance' && styles.tabNavTextActive]}>出欠一覧</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'todayStatus' && styles.tabNavBtnActive]} onPress={() => setCurrentView('todayStatus')}>
-          <Text style={[styles.tabNavText, currentView === 'todayStatus' && styles.tabNavTextActive]}>本日の登所</Text>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'todayStatus' && styles.tabNavBtnActive]} onPress={() => changeAttendanceView('todayStatus')}>
+          <Text style={[styles.tabNavText, currentView === 'todayStatus' && styles.tabNavTextActive]}>出席記録</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'schoolUsers' && styles.tabNavBtnActive]} onPress={() => setCurrentView('schoolUsers')}>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'schoolUsers' && styles.tabNavBtnActive]} onPress={() => changeAttendanceView('schoolUsers')}>
           <Text style={[styles.tabNavText, currentView === 'schoolUsers' && styles.tabNavTextActive]}>利用者一覧</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'transport' && styles.tabNavBtnActive]} onPress={() => setCurrentView('transport')}>
+        <TouchableOpacity style={[styles.tabNavBtn, currentView === 'transport' && styles.tabNavBtnActive]} onPress={() => changeAttendanceView('transport')}>
           <Text style={[styles.tabNavText, currentView === 'transport' && styles.tabNavTextActive]}>送迎一覧</Text>
         </TouchableOpacity>
       </View>
@@ -1171,7 +1284,7 @@ export default function AttendanceScreen() {
       <SwipeTabPager
         tabs={attendanceTabOrder}
         active={currentView}
-        onChange={setCurrentView}
+        onChange={changeAttendanceView}
         renderTab={renderAttendanceTab}
       />
 
@@ -1289,21 +1402,23 @@ const styles = StyleSheet.create({
   tabSwipeArea: { flex: 1 },
 
   mainScroll: { flex: 1, backgroundColor: '#F8F9FA' },
-  daySection: { marginBottom: 32 },
-  daySectionToday: { backgroundColor: '#FFFBEA', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#F2CF66', paddingVertical: 8 },
-  dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8, flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 6, paddingHorizontal: 8 },
-  dayHeaderText: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
-  attendanceTodayBadge: { marginRight: 8, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#F1B94A' },
-  attendanceTodayBadgeText: { color: '#3D321E', fontSize: 12, fontWeight: '900' },
+  daySection: { marginBottom: 0, backgroundColor: '#F8F9FA' },
+  daySectionToday: { backgroundColor: '#FFFBEA', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#E5C557' },
+  dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#E1E4E5', gap: 6 },
+  dayHeaderText: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  attendanceTodayBadge: { marginRight: 2, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, backgroundColor: '#00AEB8' },
+  attendanceTodayBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '900' },
   
   eventBadgeLarge: { backgroundColor: '#7B4E8E', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 12 },
   eventBadgeTextLarge: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
 
   totalBadge: { marginLeft: 12, paddingHorizontal: 10, paddingVertical: 4 },
   totalBadgeText: { fontSize: 13, fontWeight: '900', color: COLORS.text },
-  schoolsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
-  schoolCard: { width: '31.3%', borderRadius: 12, marginHorizontal: '1%', marginBottom: 12, padding: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  schoolNameBtn: { alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  schoolsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingTop: 10, paddingBottom: 14, gap: 8, borderBottomWidth: 1, borderColor: '#E1E4E5' },
+  schoolCard: { borderRadius: 8, padding: 7, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: '#E2DEDA' },
+  schoolCardMobile: { width: '48.7%' },
+  schoolCardWide: { width: '24.1%' },
+  schoolNameBtn: { alignItems: 'center', justifyContent: 'center', marginBottom: 7 },
   schoolNameText: { fontSize: 13, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
   timeGroupContainer: { gap: 8 },
   timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 3, borderWidth: 1, borderColor: '#E7E2DC' },
@@ -1317,6 +1432,21 @@ const styles = StyleSheet.create({
   kidNameText: { fontSize: 11, fontWeight: '600', color: COLORS.text, flex: 1 },
   noDataBox: { marginHorizontal: 16, padding: 16, backgroundColor: COLORS.white, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderStyle: 'dashed' },
   noDataText: { color: COLORS.textLight, fontSize: 13 },
+  statusDateNavigator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },
+  statusDateArrow: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E6D8CA' },
+  statusDateSelectors: { flexDirection: 'row', gap: 6, flexShrink: 1 },
+  statusDateSelectButton: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#EEF9FA', borderWidth: 1, borderColor: '#A8DEE1' },
+  statusDateSelectText: { fontSize: 14, fontWeight: '900', color: '#2B2927', textAlign: 'center' },
+  statusPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.46)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  statusPickerCard: { width: '100%', maxWidth: 500, maxHeight: '78%', borderRadius: 16, backgroundColor: '#fff', padding: 16 },
+  statusPickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  statusPickerTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: '#2B2927', textAlign: 'center', marginLeft: 38 },
+  statusPickerClose: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  statusPickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, justifyContent: 'center' },
+  statusPickerOption: { width: '22%', minHeight: 42, borderRadius: 8, backgroundColor: '#F5F6F6', borderWidth: 1, borderColor: '#E1E4E4', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  statusPickerOptionSelected: { backgroundColor: '#00AEB8', borderColor: '#008C94' },
+  statusPickerOptionText: { fontSize: 12, fontWeight: '800', color: '#34312F', textAlign: 'center' },
+  statusPickerOptionTextSelected: { color: '#fff' },
   
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxHeight: '70%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24, elevation: 10 },
@@ -1340,6 +1470,8 @@ const styles = StyleSheet.create({
   schoolAccordionHalfResult: { flex: 1, minWidth: 0 },
   schoolInlineResults: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   schoolInlineResultsCompact: { paddingHorizontal: 6 },
+  schoolUsersTwoColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  schoolUsersColumn: { flex: 1, minWidth: 0 },
   schoolInlineUserItem: { minHeight: 52, paddingVertical: 8 },
   schoolInlineEmpty: { paddingVertical: 18, textAlign: 'center', fontSize: 12, fontWeight: '700', color: COLORS.textLight },
   schoolCardActive: { borderColor: COLORS.primary },
@@ -1366,16 +1498,17 @@ const styles = StyleSheet.create({
   transportSaturdayText: { color: '#2869B0' },
   transportCalendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   transportCalendarCell: { width: '14.2857%', minHeight: 82, padding: 5, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#E2E7E7', backgroundColor: COLORS.white },
+  transportCalendarCellUnwritten: { backgroundColor: '#FFF0F3' },
   transportCalendarCellToday: { backgroundColor: '#FFF5C9', borderWidth: 2, borderColor: '#E7B83F' },
   transportCalendarDateRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
   transportCalendarDate: { fontSize: 14, fontWeight: '900', color: COLORS.text },
   transportTodayLabel: { fontSize: 8, fontWeight: '900', color: '#7A5510', backgroundColor: '#FFE59A', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2 },
   transportStatusBadge: { marginTop: 8, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 2, alignItems: 'center' },
   transportStatusWritten: { backgroundColor: '#E2F5EA' },
-  transportStatusEmpty: { backgroundColor: '#F1F1F1' },
+  transportStatusEmpty: { backgroundColor: '#FFDCE4' },
   transportStatusText: { fontSize: 10, fontWeight: '900', textAlign: 'center' },
   transportStatusWrittenText: { color: '#247A43' },
-  transportStatusEmptyText: { color: '#777777' },
+  transportStatusEmptyText: { color: '#A63F58' },
   fab: {
     position: 'absolute',
     bottom: ADMIN_BOTTOM_NAV_HEIGHT + 16,
