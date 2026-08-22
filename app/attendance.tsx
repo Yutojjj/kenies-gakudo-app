@@ -38,7 +38,6 @@ type ViewMode = 'attendance' | 'todayStatus' | 'schoolUsers' | 'transport';
 
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const PASTEL_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8'];
-const BG_COLORS = ['#EAF8F1', '#FCE4EC', '#F0EEFF', '#FFF3EA', '#EDF6FF', '#F2F8E8', '#F6EEF8', '#EEF7F6'];
 const SCHOOL_GRADIENT_COLORS = [
   '#F7C8CC',
   '#F9DFC0',
@@ -84,7 +83,7 @@ export default function AttendanceScreen() {
   
   const [currentView, setCurrentView] = useState<ViewMode>('attendance');
   const [userListSearch, setUserListSearch] = useState('');
-  const [userListFilterDow, setUserListFilterDow] = useState('');
+  const [userListFilterDows, setUserListFilterDows] = useState<string[]>([]);
   const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
   const [allStaffList, setAllStaffList] = useState<string[]>([]);
   const [transportCalendarMonth, setTransportCalendarMonth] = useState(() => {
@@ -107,6 +106,7 @@ export default function AttendanceScreen() {
   const attendanceTodayPositionedRef = useRef(false);
   const attendanceAutoPositioningRef = useRef(false);
   const [attendanceResetToken, setAttendanceResetToken] = useState(0);
+  const [attendanceViewReady, setAttendanceViewReady] = useState(false);
   const attendanceScrollYRef = useRef(0);
   const attendanceContentHeightRef = useRef(0);
   const pendingHistoryPrependRef = useRef<{ height: number; scrollY: number } | null>(null);
@@ -349,6 +349,7 @@ export default function AttendanceScreen() {
   const changeAttendanceView = useCallback((nextView: ViewMode) => {
     if (nextView === 'attendance' && currentView !== 'attendance') {
       attendanceTodayPositionedRef.current = false;
+      setAttendanceViewReady(false);
       setAttendanceTodayY(null);
       setAttendanceResetToken(current => current + 1);
     }
@@ -358,6 +359,7 @@ export default function AttendanceScreen() {
   useEffect(() => {
     if (currentView !== 'attendance') {
       attendanceAutoPositioningRef.current = false;
+      setAttendanceViewReady(false);
       return;
     }
     if (attendanceTodayPositionedRef.current) return;
@@ -378,12 +380,17 @@ export default function AttendanceScreen() {
     };
     const firstFrame = requestAnimationFrame(scrollToToday);
     const afterPagerSettles = setTimeout(scrollToToday, 180);
+    const revealToday = setTimeout(() => {
+      scrollToToday();
+      requestAnimationFrame(() => setAttendanceViewReady(true));
+    }, 220);
     const finishPositioning = setTimeout(() => {
       attendanceAutoPositioningRef.current = false;
     }, 420);
     return () => {
       cancelAnimationFrame(firstFrame);
       clearTimeout(afterPagerSettles);
+      clearTimeout(revealToday);
       clearTimeout(finishPositioning);
     };
   }, [attendanceResetToken, currentView, attendanceTodayY]);
@@ -567,7 +574,7 @@ export default function AttendanceScreen() {
     <>
       <ScrollView
         ref={scrollViewRef}
-        style={styles.mainScroll}
+        style={[styles.mainScroll, !attendanceViewReady && styles.attendanceViewPositioning]}
         contentContainerStyle={{ paddingBottom: 100 }}
         onScroll={handleAttendanceScroll}
         {...(Platform.OS === 'web' ? {} : { onContentSizeChange: handleAttendanceContentSizeChange })}
@@ -953,17 +960,17 @@ export default function AttendanceScreen() {
   const renderSchoolUsersView = () => {
     const DOW = ['月','火','水','木','金'];
     const allUsers = Object.values(groupedUsersBySchool).flat();
-    const hasFilter = !!(userListSearch || userListFilterDow || activeSchools.length > 0);
+    const hasFilter = !!(userListSearch || userListFilterDows.length > 0 || activeSchools.length > 0);
 
-    const filtered = allUsers.filter((u: any) => {
+    const matchingUsers = allUsers.filter((u: any) => {
       if (userListSearch) {
         const q = userListSearch.toLowerCase();
         if (!u.name?.toLowerCase().includes(q) && !u.nicknameKana?.toLowerCase().includes(q)) return false;
       }
-      if (userListFilterDow && !u.days?.[userListFilterDow]) return false;
-      if (activeSchools.length > 0 && !activeSchools.includes(u.school)) return false;
+      if (userListFilterDows.length > 0 && !userListFilterDows.some(day => u.days?.[day])) return false;
       return true;
     });
+    const filtered = matchingUsers.filter((u: any) => activeSchools.length === 0 || activeSchools.includes(u.school));
 
     const filteredBySchool: Record<string, any[]> = {};
     filtered.forEach((u: any) => {
@@ -1018,14 +1025,27 @@ export default function AttendanceScreen() {
         )}
       </View>
       {/* 曜日フィルター */}
-      <View style={{ flexDirection:'row', gap:8, paddingHorizontal:12, marginBottom:10, flexWrap:'wrap' }}>
-        {DOW.map(d => (
-          <TouchableOpacity key={d} style={{ paddingHorizontal:14, paddingVertical:7, borderRadius:10, backgroundColor:userListFilterDow===d ? COLORS.primary : '#F5F5F5', borderWidth:1, borderColor:userListFilterDow===d ? COLORS.primary : '#DDD' }} onPress={() => setUserListFilterDow(userListFilterDow===d ? '' : d)}>
-            <Text style={{ fontSize:13, fontWeight:'bold', color:userListFilterDow===d ? '#fff':'#555' }}>{d}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.userFilterSection}>
+        <Text style={styles.userFilterLabel}>曜日で絞り込む</Text>
+        <View style={styles.userDowSegment}>
+          {DOW.map(d => {
+            const isSelected = userListFilterDows.includes(d);
+            return (
+              <TouchableOpacity key={d} style={[styles.userDowOption, isSelected && styles.userDowOptionActive]} onPress={() => setUserListFilterDows(current => current.includes(d) ? current.filter(day => day !== d) : [...current, d])}>
+                <Text style={[styles.userDowText, isSelected && styles.userDowTextActive]}>{d}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
-      {/* 学校カード（アイコンなし・低め） */}
+      <View style={styles.schoolSearchHeading}>
+        <View style={styles.schoolSearchTitleGroup}>
+          <Ionicons name="business-outline" size={20} color="#008E96" />
+          <Text style={styles.schoolSearchTitle}>学校から探す</Text>
+        </View>
+        <Text style={styles.schoolSearchCount}>{sortedSchoolNames.length}校</Text>
+      </View>
+      {/* 学校カード */}
       <View style={styles.gridContainer}>
         {Array.from({ length: Math.ceil(sortedSchoolNames.length / 2) }, (_, rowIndex) => {
           const pair = sortedSchoolNames.slice(rowIndex * 2, rowIndex * 2 + 2);
@@ -1034,17 +1054,26 @@ export default function AttendanceScreen() {
             <View key={`school-row-${rowIndex}`} style={styles.schoolAccordionRow}>
               <View style={styles.schoolAccordionHeaderRow}>
                 {pair.map((school, pairIndex) => {
-                  const index = rowIndex * 2 + pairIndex;
                   const isActive = activeSchools.includes(school);
+                  const schoolUsersCount = matchingUsers.filter((user: any) => user.school === school).length;
+                  const schoolBackground = getCardColor(school);
+                  const schoolAccent = getCardAccentColor(school);
                   return (
                     <TouchableOpacity
                       key={school}
-                      style={[styles.schoolAccordionHeader, { backgroundColor: BG_COLORS[index % BG_COLORS.length] }, isActive && styles.schoolCardActive]}
+                      style={[styles.schoolAccordionHeader, isActive && styles.schoolCardActive]}
                       onPress={() => setActiveSchools(current =>
                         isActive ? current.filter(item => item !== school) : [...current, school]
                       )}
                     >
-                      <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
+                      <View style={[styles.schoolCardAccent, { backgroundColor: schoolAccent }]} />
+                      <View style={[styles.schoolIconCircle, { backgroundColor: schoolBackground }]}>
+                        <Ionicons name="business-outline" size={18} color={schoolAccent} />
+                      </View>
+                      <View style={styles.schoolCardTextGroup}>
+                        <Text style={styles.schoolCardName} numberOfLines={2}>{school}</Text>
+                        <Text style={styles.schoolCardUserCount}>利用者：{schoolUsersCount}名</Text>
+                      </View>
                       <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color="#6D7375" />
                     </TouchableOpacity>
                   );
@@ -1069,9 +1098,9 @@ export default function AttendanceScreen() {
 
       {/* 学校を選択した場合は、その学校カードの直下へ結果を表示する */}
       {activeSchools.length > 0 ? null : !hasFilter ? (
-        <View style={{ alignItems:'center', marginTop:32 }}>
-          <Ionicons name="search-outline" size={40} color="#DDD" />
-          <Text style={{ color:'#BBB', marginTop:8, fontSize:13 }}>名前・曜日・学校で絞り込んでください</Text>
+        <View style={styles.schoolListHint}>
+          <Ionicons name="information-circle" size={18} color="#77BF48" />
+          <Text style={styles.schoolListHintText}>学校名をタップすると、利用者一覧が表示されます</Text>
         </View>
       ) : filtered.length === 0 ? (
         <View style={{ alignItems:'center', marginTop:32 }}>
@@ -1187,12 +1216,13 @@ export default function AttendanceScreen() {
                 const isWritten = hasTransportEntry(dateStr);
                 const isHoliday = !!publicHolidays[dateStr] || date.getDay() === 0;
                 const isSaturday = date.getDay() === 6;
+                const isNonWorkingDay = isHoliday || isSaturday;
                 return (
                   <TouchableOpacity
                     key={dateStr}
                     style={[
                       styles.transportCalendarCell,
-                      !isWritten && styles.transportCalendarCellUnwritten,
+                      !isWritten && !isNonWorkingDay && styles.transportCalendarCellUnwritten,
                       isToday && styles.transportCalendarCellToday,
                     ]}
                     onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
@@ -1208,11 +1238,13 @@ export default function AttendanceScreen() {
                       </Text>
                       {isToday && <Text style={styles.transportTodayLabel}>今日</Text>}
                     </View>
-                    <View style={[styles.transportStatusBadge, isWritten ? styles.transportStatusWritten : styles.transportStatusEmpty]}>
-                      <Text style={[styles.transportStatusText, isWritten ? styles.transportStatusWrittenText : styles.transportStatusEmptyText]}>
-                        {isWritten ? '記入済み' : '未記入'}
-                      </Text>
-                    </View>
+                    {!isNonWorkingDay && (
+                      <View style={[styles.transportStatusBadge, isWritten ? styles.transportStatusWritten : styles.transportStatusEmpty]}>
+                        <Text style={[styles.transportStatusText, isWritten ? styles.transportStatusWrittenText : styles.transportStatusEmptyText]}>
+                          {isWritten ? '記入済み' : '未記入'}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -1392,6 +1424,7 @@ const styles = StyleSheet.create({
   tabSwipeArea: { flex: 1 },
 
   mainScroll: { flex: 1, backgroundColor: '#F8F9FA' },
+  attendanceViewPositioning: { opacity: 0 },
   daySection: { marginBottom: 0, backgroundColor: '#F8F9FA' },
   daySectionToday: { backgroundColor: '#FFFBEA', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#E5C557' },
   dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#E1E4E5', gap: 6 },
@@ -1456,11 +1489,26 @@ const styles = StyleSheet.create({
 
   centerBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   instruction: { padding: 16, color: COLORS.textLight, fontWeight: 'bold', textAlign: 'center', marginTop: 8 },
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 12 },
+  userFilterSection: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12 },
+  userFilterLabel: { marginBottom: 7, fontSize: 12, fontWeight: '900', color: '#008E96' },
+  userDowSegment: { overflow: 'hidden', flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: '#00AEB8', backgroundColor: COLORS.white },
+  userDowOption: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: '#9EDDE0' },
+  userDowOptionActive: { backgroundColor: '#008E96' },
+  userDowText: { fontSize: 13, fontWeight: '900', color: COLORS.text },
+  userDowTextActive: { color: COLORS.white },
+  schoolSearchHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  schoolSearchTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  schoolSearchTitle: { fontSize: 16, fontWeight: '900', color: COLORS.text },
+  schoolSearchCount: { fontSize: 13, fontWeight: '800', color: COLORS.textLight },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 4 },
   schoolCardList: { width: '46%', margin: '2%', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
   schoolAccordionRow: { width: '100%', paddingHorizontal: '2%', marginBottom: 8 },
   schoolAccordionHeaderRow: { flexDirection: 'row', gap: 10 },
-  schoolAccordionHeader: { flex: 1, minHeight: 44, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 2, borderColor: 'transparent' },
+  schoolAccordionHeader: { overflow: 'hidden', flex: 1, minHeight: 72, borderRadius: 8, paddingVertical: 9, paddingLeft: 15, paddingRight: 10, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#E1E5E5', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  schoolCardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5 },
+  schoolIconCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  schoolCardTextGroup: { flex: 1, minWidth: 0 },
+  schoolCardUserCount: { marginTop: 3, fontSize: 11, fontWeight: '800', color: '#008E96' },
   schoolAccordionHeaderPlaceholder: { flex: 1 },
   schoolAccordionResultsRow: { flexDirection: 'row', gap: 10 },
   schoolAccordionHalfResult: { flex: 1, minWidth: 0 },
@@ -1470,8 +1518,10 @@ const styles = StyleSheet.create({
   schoolUsersColumn: { flex: 1, minWidth: 0 },
   schoolInlineUserItem: { minHeight: 52, paddingVertical: 8 },
   schoolInlineEmpty: { paddingVertical: 18, textAlign: 'center', fontSize: 12, fontWeight: '700', color: COLORS.textLight },
-  schoolCardActive: { borderColor: COLORS.primary },
-  schoolCardName: { fontSize: 11, fontWeight: 'bold', color: COLORS.text, textAlign: 'center' },
+  schoolCardActive: { borderWidth: 2, borderColor: COLORS.primary },
+  schoolCardName: { fontSize: 13, fontWeight: '900', color: COLORS.text, textAlign: 'left' },
+  schoolListHint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginHorizontal: 12, marginTop: 4, marginBottom: 18, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: '#F1F9FB' },
+  schoolListHintText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: '#657173', textAlign: 'center' },
   listSection: { backgroundColor: COLORS.white, borderTopWidth: 1, borderColor: COLORS.border, padding: 16, minHeight: 400 },
   listSectionTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginBottom: 16, textAlign: 'center' },
   userListItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
