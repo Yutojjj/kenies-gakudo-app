@@ -87,7 +87,7 @@ export default function UserListScreen() {
               <TouchableOpacity 
                 key={user.id} 
                 style={[styles.userListItem, idx === groupedUsers[activeSchool].length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}
+                onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}
               >
                 <View style={styles.userIconCircle}>
                   <Ionicons name="person" size={20} color={COLORS.primary} />

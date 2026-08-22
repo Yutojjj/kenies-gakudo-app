@@ -69,7 +69,7 @@ const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
 export default function ScheduleScreen() {
   const router = useRouter();
   // リストなどから飛んできたときに対象となる児童の名前（同じ名前の兄弟などは一意のIDで判定します）
-  const { name, dateStr: initialDateStr, openEdit } = useLocalSearchParams<{ name: string; dateStr?: string; openEdit?: string }>();
+  const { name, dateStr: initialDateStr, openEdit, backTo } = useLocalSearchParams<{ name: string; dateStr?: string; openEdit?: string; backTo?: string }>();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [children, setChildren] = useState<ChildInfo[]>([]);
@@ -172,6 +172,11 @@ export default function ScheduleScreen() {
   }, [lessonAddVisible]);
 
   const goHome = () => {
+    if (backTo === 'previous') {
+      if (router.canGoBack()) router.back();
+      else router.replace('/user-list' as any);
+      return;
+    }
     router.replace('/menu' as any);
   };
 

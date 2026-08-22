@@ -86,7 +86,10 @@ export default function AttendanceScreen() {
   const [userListFilterDow, setUserListFilterDow] = useState('');
   const [pickupAssignments, setPickupAssignments] = useState<Record<string, any>>({});
   const [allStaffList, setAllStaffList] = useState<string[]>([]);
-  const [transportWeekOffset, setTransportWeekOffset] = useState(0);
+  const [transportCalendarMonth, setTransportCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [selectedTransportDate, setSelectedTransportDate] = useState<string | null>(null);
   const [transportModalVisible, setTransportModalVisible] = useState(false);
   const initialTransportOpenedRef = useRef(false);
@@ -96,13 +99,16 @@ export default function AttendanceScreen() {
   const [kids, setKids] = useState<Kid[]>([]);
   const [masterSchools, setMasterSchools] = useState<string[]>([]);
   
-  const [pastWeeks, setPastWeeks] = useState(0);   
+  const [pastWeeks, setPastWeeks] = useState(12);
   const [futureWeeks, setFutureWeeks] = useState(1); 
   
   const scrollViewRef = useRef<ScrollView>(null);
-  const scrollYRef = useRef(0);
-  const preserveScrollRef = useRef<{ anchorKey: string; anchorY: number; scrollY: number } | null>(null);
-  const [layouts, setLayouts] = useState<Record<string, number>>({});
+  const attendanceTodayPositionedRef = useRef(false);
+  const attendanceScrollYRef = useRef(0);
+  const attendanceContentHeightRef = useRef(0);
+  const pendingHistoryPrependRef = useRef<{ height: number; scrollY: number } | null>(null);
+  const pendingFutureAppendRef = useRef(false);
+  const [attendanceTodayY, setAttendanceTodayY] = useState<number | null>(null);
 
   const [schoolModalData, setSchoolModalData] = useState<{ date: string, title: string, kids: Kid[] } | null>(null);
   const [timeModalData, setTimeModalData] = useState<{ date: string, title: string, subtitle: string, kids: Kid[] } | null>(null);
@@ -124,11 +130,8 @@ export default function AttendanceScreen() {
     const parsed = new Date(`${target}T00:00:00`);
     if (isNaN(parsed.getTime())) return;
     initialTransportOpenedRef.current = true;
-    const today = new Date();
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const targetOnly = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-    const diffDays = Math.floor((targetOnly.getTime() - todayOnly.getTime()) / (24 * 60 * 60 * 1000));
-    setTransportWeekOffset(Math.floor(diffDays / 7));
+    setTransportCalendarMonth(new Date(targetOnly.getFullYear(), targetOnly.getMonth(), 1));
     setCurrentView('transport');
     setSelectedTransportDate(target);
     setTimeout(() => setTransportModalVisible(true), 250);
@@ -339,6 +342,60 @@ export default function AttendanceScreen() {
     return arr;
   }, [pastWeeks, futureWeeks]);
 
+  useEffect(() => {
+    if (currentView !== 'attendance') {
+      attendanceTodayPositionedRef.current = false;
+      return;
+    }
+    if (attendanceTodayPositionedRef.current) return;
+    if (attendanceTodayY === null) return;
+    attendanceTodayPositionedRef.current = true;
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: Math.max(0, attendanceTodayY - 8), animated: false });
+    });
+  }, [currentView, attendanceTodayY]);
+
+  const handleAttendanceScroll = (event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const viewportHeight = event.nativeEvent.layoutMeasurement.height;
+    const contentHeight = event.nativeEvent.contentSize.height;
+    attendanceScrollYRef.current = scrollY;
+    if (
+      scrollY <= 48 &&
+      attendanceTodayPositionedRef.current &&
+      !pendingHistoryPrependRef.current
+    ) {
+      pendingHistoryPrependRef.current = {
+        height: attendanceContentHeightRef.current,
+        scrollY,
+      };
+      setPastWeeks(current => current + 4);
+    }
+    if (
+      contentHeight - (scrollY + viewportHeight) <= 120 &&
+      attendanceTodayPositionedRef.current &&
+      !pendingFutureAppendRef.current
+    ) {
+      pendingFutureAppendRef.current = true;
+      setFutureWeeks(current => current + 4);
+    }
+  };
+
+  const handleAttendanceContentSizeChange = (_width: number, height: number) => {
+    const previousHeight = attendanceContentHeightRef.current;
+    const pending = pendingHistoryPrependRef.current;
+    attendanceContentHeightRef.current = height;
+    if (pendingFutureAppendRef.current && height > previousHeight) {
+      pendingFutureAppendRef.current = false;
+    }
+    if (!pending || height <= pending.height) return;
+    pendingHistoryPrependRef.current = null;
+    const nextY = pending.scrollY + (height - pending.height);
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: nextY, animated: false });
+    });
+  };
+
   const getCalculatedTime = (dateStr: string, kid: Kid) => {
     const d = new Date(dateStr);
     const dayOfWeekStr = DAY_NAMES[d.getDay()];
@@ -438,46 +495,6 @@ export default function AttendanceScreen() {
     return `${y}-${m}-${d}`;
   };
 
-  const keepAnchorInPlace = (anchorKey: string, nextY: number) => {
-    const target = preserveScrollRef.current;
-    if (!target || target.anchorKey !== anchorKey) return;
-    const delta = nextY - target.anchorY;
-    if (Math.abs(delta) < 20) return;
-    requestAnimationFrame(() => {
-      scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: Math.max(0, target.scrollY + delta), animated: false });
-      }, 50);
-    });
-    preserveScrollRef.current = null;
-  };
-
-  const scrollToDate = (dateKey: string) => {
-    const y = layouts[dateKey];
-    if (y !== undefined && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: y - 10, animated: true });
-    }
-  };
-
-  const handleLoadPastWeek = () => {
-    const firstDate = datesToDisplay[0];
-    const anchorKey = getDateLayoutKey(firstDate);
-    preserveScrollRef.current = {
-      anchorKey,
-      anchorY: layouts[anchorKey] || 0,
-      scrollY: scrollYRef.current,
-    };
-    setPastWeeks(prev => prev + 1);
-  };
-
-  useEffect(() => {
-    const target = preserveScrollRef.current;
-    if (!target) return;
-    const nextAnchorY = layouts[target.anchorKey];
-    if (nextAnchorY === undefined) return;
-    keepAnchorInPlace(target.anchorKey, nextAnchorY);
-  }, [layouts, pastWeeks]);
-
   const groupedUsersBySchool = useMemo(() => {
     const grouped: Record<string, Kid[]> = {};
     kids.forEach(k => {
@@ -502,51 +519,14 @@ export default function AttendanceScreen() {
 
   const renderAttendanceView = () => (
     <>
-      <View style={styles.topNav}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topNavScroll}>
-          {datesToDisplay.map((d, index) => {
-            const y = d.getFullYear();
-            const m = d.getMonth() + 1;
-            const day = d.getDate();
-            const dateStrForHoliday = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayOfWeek = d.getDay();
-            const dayStr = DAY_NAMES[dayOfWeek];
-            const dateKey = getDateLayoutKey(d);
-            const isToday = d.toDateString() === new Date().toDateString();
-            
-            const isSaturday = dayOfWeek === 6;
-            const isSunday = dayOfWeek === 0;
-            const isPublicHoliday = !!publicHolidays[dateStrForHoliday];
-            
-            let textColorStyle = {};
-            if (!isToday) {
-              if (isSaturday) textColorStyle = { color: '#1E5AA8' };
-              if (isSunday || isPublicHoliday) textColorStyle = { color: '#D32F2F' };
-            }
-
-            return (
-              <TouchableOpacity key={index} style={[styles.navDateBtn, isToday && styles.navDateBtnToday]} onPress={() => scrollToDate(dateKey)}>
-                <Text style={[styles.navDateText, isToday && styles.navDateTextToday, textColorStyle]}>
-                  {m}/{day}({dayStr})
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       <ScrollView
         ref={scrollViewRef}
         style={styles.mainScroll}
         contentContainerStyle={{ paddingBottom: 100 }}
-        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
-        scrollEventThrottle={16}
+        onScroll={handleAttendanceScroll}
+        onContentSizeChange={handleAttendanceContentSizeChange}
+        scrollEventThrottle={32}
       >
-        <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadPastWeek}>
-          <Ionicons name="arrow-up-circle-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.loadMoreText}>さらに過去の1週間分を表示</Text>
-        </TouchableOpacity>
-
         {datesToDisplay.map((date, index) => {
           const m = date.getMonth() + 1;
           const day = date.getDate();
@@ -563,6 +543,7 @@ export default function AttendanceScreen() {
           
           const isSaturday = dayOfWeek === 6;
           const isSunday = dayOfWeek === 0;
+          const isToday = dateKey === getDateLayoutKey(new Date());
           let headerColorStyle = {};
           if (isSaturday) headerColorStyle = { color: 'blue' };
           if (isSunday || isPublicHoliday) headerColorStyle = { color: 'red' };
@@ -582,14 +563,13 @@ export default function AttendanceScreen() {
           return (
             <View 
               key={dateKey} 
-              style={styles.daySection} 
+              style={[styles.daySection, isToday && styles.daySectionToday]}
               onLayout={(e) => { 
-                const currentY = e.nativeEvent.layout.y;
-                setLayouts(prev => ({ ...prev, [dateKey]: currentY })); 
-                keepAnchorInPlace(dateKey, currentY);
+                if (isToday) setAttendanceTodayY(e.nativeEvent.layout.y);
               }}
             >
               <View style={[styles.dayHeaderContainer, Platform.OS === 'web' && ({ position: 'sticky', top: 0, zIndex: 10 } as any)]}>
+                {isToday && <View style={styles.attendanceTodayBadge}><Text style={styles.attendanceTodayBadgeText}>今日</Text></View>}
                 <Text style={[styles.dayHeaderText, headerColorStyle]}>{m}月{day}日 ({dayStr})</Text>
                 {isPublicHoliday && <Text style={{ color: 'red', marginLeft: 8, fontSize: 12, fontWeight: 'bold' }}>{publicHolidays[dateStr]}</Text>}
                 {eventTitle && <View style={styles.eventBadgeLarge}><Text style={styles.eventBadgeTextLarge}>{eventTitle}</Text></View>}
@@ -739,10 +719,6 @@ export default function AttendanceScreen() {
           );
         })}
 
-        <TouchableOpacity style={styles.loadMoreBtn} onPress={() => setFutureWeeks(prev => prev + 1)}>
-          <Ionicons name="arrow-down-circle-outline" size={20} color="#7B4E8E" />
-          <Text style={styles.loadMoreText}>さらに次の1週間分を表示</Text>
-        </TouchableOpacity>
       </ScrollView>
     </>
   );
@@ -900,6 +876,32 @@ export default function AttendanceScreen() {
       filteredBySchool[s].push(u);
     });
 
+    const renderSchoolUsers = (school: string, compact = false) => {
+      const schoolUsers = filteredBySchool[school] || [];
+      return (
+        <View style={[styles.schoolInlineResults, compact && styles.schoolInlineResultsCompact]}>
+          {schoolUsers.length === 0 ? (
+            <Text style={styles.schoolInlineEmpty}>該当する利用者はいません</Text>
+          ) : sortKidsByGrade(schoolUsers).map((user: any, idx: number) => (
+            <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === schoolUsers.length - 1 && { borderBottomWidth: 0 }]}>
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
+                  {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
+                </View>
+                <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
+              </TouchableOpacity>
+              {isAdmin && user.parentDocId && (
+                <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </View>
+      );
+    };
+
     return (
     <ScrollView style={styles.mainScroll}>
       {/* 検索バー */}
@@ -923,40 +925,37 @@ export default function AttendanceScreen() {
       </View>
       {/* 学校カード（アイコンなし・低め） */}
       <View style={styles.gridContainer}>
-        {sortedSchoolNames.map((school, index) => {
-          const isActive = activeSchools.includes(school);
-          const bgColor = BG_COLORS[index % BG_COLORS.length];
-          const schoolUsers = filteredBySchool[school] || [];
+        {Array.from({ length: Math.ceil(sortedSchoolNames.length / 2) }, (_, rowIndex) => {
+          const pair = sortedSchoolNames.slice(rowIndex * 2, rowIndex * 2 + 2);
+          const activePair = pair.filter(school => activeSchools.includes(school));
           return (
-            <View key={school} style={styles.schoolAccordionItem}>
-              <TouchableOpacity
-                style={[styles.schoolCardList, styles.schoolAccordionButton, { backgroundColor: bgColor }, isActive && styles.schoolCardActive]}
-                onPress={() => setActiveSchools(current =>
-                  isActive ? current.filter(item => item !== school) : [...current, school]
-                )}
-              >
-                <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
-                <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color="#6D7375" />
-              </TouchableOpacity>
-
-              {isActive && (
-                <View style={styles.schoolInlineResults}>
-                  {schoolUsers.length === 0 ? (
-                    <Text style={styles.schoolInlineEmpty}>該当する利用者はいません</Text>
-                  ) : sortKidsByGrade(schoolUsers).map((user: any, idx: number) => (
-                    <View key={user.id} style={[styles.userListItem, styles.schoolInlineUserItem, idx === schoolUsers.length - 1 && { borderBottomWidth: 0 }]}>
-                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
-                        <View style={styles.userInfo}>
-                          <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
-                          {user.days && <Text style={{ fontSize:11, color:'#5B9BD5' }}>{DOW.filter(d => user.days[d]).join('・')}</Text>}
-                        </View>
-                        <View style={styles.editBadge}><Ionicons name="calendar-outline" size={14} color={COLORS.white} /><Text style={styles.editBadgeText}>編集</Text></View>
-                      </TouchableOpacity>
-                      {isAdmin && user.parentDocId && (
-                        <TouchableOpacity style={styles.msgIconBtn} onPress={() => router.push({ pathname: '/messages', params: { conversationId: `direct_${user.parentDocId}`, conversationName: user.name } } as any)}>
-                          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#4682B4" />
-                        </TouchableOpacity>
+            <View key={`school-row-${rowIndex}`} style={styles.schoolAccordionRow}>
+              <View style={styles.schoolAccordionHeaderRow}>
+                {pair.map((school, pairIndex) => {
+                  const index = rowIndex * 2 + pairIndex;
+                  const isActive = activeSchools.includes(school);
+                  return (
+                    <TouchableOpacity
+                      key={school}
+                      style={[styles.schoolAccordionHeader, { backgroundColor: BG_COLORS[index % BG_COLORS.length] }, isActive && styles.schoolCardActive]}
+                      onPress={() => setActiveSchools(current =>
+                        isActive ? current.filter(item => item !== school) : [...current, school]
                       )}
+                    >
+                      <Text style={[styles.schoolCardName, { textAlign:'center', fontSize:12 }]} numberOfLines={2}>{school}</Text>
+                      <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={16} color="#6D7375" />
+                    </TouchableOpacity>
+                  );
+                })}
+                {pair.length === 1 && <View style={styles.schoolAccordionHeaderPlaceholder} />}
+              </View>
+
+              {activePair.length === 1 && renderSchoolUsers(activePair[0])}
+              {activePair.length === 2 && (
+                <View style={styles.schoolAccordionResultsRow}>
+                  {activePair.map(school => (
+                    <View key={school} style={styles.schoolAccordionHalfResult}>
+                      {renderSchoolUsers(school, true)}
                     </View>
                   ))}
                 </View>
@@ -983,7 +982,7 @@ export default function AttendanceScreen() {
               <Text style={[styles.listSectionTitle, { fontSize:12 }]}>{school}</Text>
               {sortKidsByGrade(users).map((user: any, idx: number) => (
                 <View key={user.id} style={[styles.userListItem, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
-                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name } } as any)}>
+                  <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => router.push({ pathname: '/schedule', params: { name: user.name, backTo: 'previous' } } as any)}>
                     <View style={styles.userIconCircle}><Ionicons name="person" size={20} color={COLORS.primary} /></View>
                     <View style={styles.userInfo}>
                       <Text style={styles.userName}>{user.name} <Text style={styles.userGrade}>({user.grade || '学年未定'})</Text></Text>
@@ -1006,17 +1005,34 @@ export default function AttendanceScreen() {
     );
   };
 
-  const transportDates = (() => {
-    const dates = [];
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i + transportWeekOffset * 7);
-      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      dates.push({ date: d, dateStr: ds });
-    }
-    return dates;
-  })();
+  const transportCalendarDates = useMemo(() => {
+    const year = transportCalendarMonth.getFullYear();
+    const month = transportCalendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cellCount = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+    return Array.from({ length: cellCount }, (_, index) => {
+      const day = index - firstDay + 1;
+      if (day < 1 || day > daysInMonth) return null;
+      const date = new Date(year, month, day);
+      return { date, dateStr: getDateLayoutKey(date) };
+    });
+  }, [transportCalendarMonth]);
+
+  const hasTransportEntry = (dateStr: string) => {
+    const savedData = pickupAssignments[dateStr];
+    if (!savedData) return false;
+    try {
+      const parsed = typeof savedData.entries === 'string'
+        ? JSON.parse(savedData.entries)
+        : savedData.entries;
+      if (Array.isArray(parsed?.entries) && parsed.entries.length > 0) return true;
+    } catch {}
+    return Object.entries(savedData).some(([key, value]) =>
+      key !== 'entries' && typeof value === 'string' && value.trim().length > 0
+    );
+  };
 
   const savePickupAssignment = async (dateStr: string, blockKey: string, staffName: string) => {
     const docRef = doc(db, 'pickup_assignments', dateStr);
@@ -1024,71 +1040,81 @@ export default function AttendanceScreen() {
   };
 
   const renderTransportView = () => {
+    const todayKey = getDateLayoutKey(new Date());
     return (
       <View style={{ flex: 1 }}>
-        <View style={styles.weekNav}>
-          <TouchableOpacity style={styles.weekNavBtn} onPress={() => setTransportWeekOffset(w => w - 1)}>
-            <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
-            <Text style={styles.weekNavText}>前の週</Text>
+        <View style={styles.transportMonthNav}>
+          <TouchableOpacity
+            style={styles.transportMonthNavButton}
+            onPress={() => setTransportCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+          >
+            <Ionicons name="chevron-back" size={23} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.weekNavTitle}>
-            {transportWeekOffset === 0 ? '今週' : transportWeekOffset > 0 ? `${transportWeekOffset}週間後` : `${-transportWeekOffset}週間前`}
+          <Text style={styles.transportMonthTitle}>
+            {transportCalendarMonth.getFullYear()}年 {transportCalendarMonth.getMonth() + 1}月
           </Text>
-          <TouchableOpacity style={styles.weekNavBtn} onPress={() => setTransportWeekOffset(w => w + 1)}>
-            <Text style={styles.weekNavText}>次の週</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+          <TouchableOpacity
+            style={styles.transportMonthNavButton}
+            onPress={() => setTransportCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+          >
+            <Ionicons name="chevron-forward" size={23} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 12, gap: 10 }}>
-          {transportDates.map(({ date, dateStr }) => {
-            const today = new Date();
-            const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-            const isToday = dateStr === todayStr;
-            const shiftStaffList = assignedShifts[dateStr] || [];
-            const att = getAttendanceForDay(date);
-            const totalBlocks = Object.keys(att.schools).reduce((acc, s) => acc + Object.keys(att.schools[s]).length, 0)
-              + Object.keys(att.lessons || {}).length;
-            const savedData = pickupAssignments[dateStr];
-            let assignedCount = 0;
-            try {
-              if (savedData?.entries) {
-                const parsed = JSON.parse(savedData.entries);
-                assignedCount = new Set((parsed.entries || []).flatMap((e: any) =>
-                  (e.trips || []).flatMap((t: any) => (t.blockKeys || []).filter((k: string) => k !== 'other'))
-                )).size;
-              }
-            } catch {}
-            const isPH = !!publicHolidays[dateStr];
-            const isSun = date.getDay() === 0, isSat = date.getDay() === 6;
-            const bgColor = isToday ? '#EAFBFC' : (isPH||isSun) ? '#FFF0F0' : isSat ? '#F0F6FF' : COLORS.white;
-            const dowColor = (isPH||isSun) ? '#CC0000' : isSat ? '#0055CC' : COLORS.text;
-
-            return (
-              <TouchableOpacity
-                key={dateStr}
-                style={[styles.transportDateCard, { backgroundColor: bgColor }, isToday && styles.transportDateCardToday]}
-                onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.transportDateCardLeft}>
-                  <Text style={[styles.transportDateNum, { color: dowColor }]}>{date.getMonth()+1}/{date.getDate()}</Text>
-                  <Text style={[styles.transportDow, { color: dowColor }]}>({DAY_NAMES[date.getDay()]})</Text>
-                  {isToday && <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>今日</Text></View>}
-                </View>
-                <View style={styles.transportDateCardRight}>
-                  <Text style={styles.transportStaffCount}>出勤スタッフ: {shiftStaffList.length}名</Text>
-                  {totalBlocks === 0 ? null : assignedCount >= totalBlocks
-                    ? <Text style={styles.transportDoneText}>✅ 記入済み</Text>
-                    : assignedCount > 0
-                      ? <Text style={styles.transportProgressText}>{assignedCount}/{totalBlocks}件入力済み</Text>
-                      : <Text style={styles.transportEmptyText}>未入力</Text>
-                  }
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
-              </TouchableOpacity>
-            );
-          })}
+        <ScrollView contentContainerStyle={styles.transportCalendarScroll}>
+          <View style={styles.transportCalendar}>
+            <View style={styles.transportWeekdayRow}>
+              {DAY_NAMES.map((dayName, index) => (
+                <Text
+                  key={dayName}
+                  style={[
+                    styles.transportWeekdayText,
+                    index === 0 && styles.transportSundayText,
+                    index === 6 && styles.transportSaturdayText,
+                  ]}
+                >
+                  {dayName}
+                </Text>
+              ))}
+            </View>
+            <View style={styles.transportCalendarGrid}>
+              {transportCalendarDates.map((item, index) => {
+                if (!item) return <View key={`empty-${index}`} style={styles.transportCalendarCell} />;
+                const { date, dateStr } = item;
+                const isToday = dateStr === todayKey;
+                const isWritten = hasTransportEntry(dateStr);
+                const isHoliday = !!publicHolidays[dateStr] || date.getDay() === 0;
+                const isSaturday = date.getDay() === 6;
+                return (
+                  <TouchableOpacity
+                    key={dateStr}
+                    style={[
+                      styles.transportCalendarCell,
+                      isToday && styles.transportCalendarCellToday,
+                    ]}
+                    onPress={() => { setSelectedTransportDate(dateStr); setTransportModalVisible(true); }}
+                    activeOpacity={0.78}
+                  >
+                    <View style={styles.transportCalendarDateRow}>
+                      <Text style={[
+                        styles.transportCalendarDate,
+                        isHoliday && styles.transportSundayText,
+                        isSaturday && styles.transportSaturdayText,
+                      ]}>
+                        {date.getDate()}
+                      </Text>
+                      {isToday && <Text style={styles.transportTodayLabel}>今日</Text>}
+                    </View>
+                    <View style={[styles.transportStatusBadge, isWritten ? styles.transportStatusWritten : styles.transportStatusEmpty]}>
+                      <Text style={[styles.transportStatusText, isWritten ? styles.transportStatusWrittenText : styles.transportStatusEmptyText]}>
+                        {isWritten ? '記入済み' : '未記入'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </ScrollView>
 
         {selectedTransportDate && (
@@ -1154,14 +1180,10 @@ export default function AttendanceScreen() {
           style={[styles.fab, showKidNames && styles.fabActive]}
           onPress={() => setShowKidNames(!showKidNames)}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={showKidNames ? '人数表示に切り替える' : '名前表示に切り替える'}
         >
-          <View style={styles.fabIconWrap}>
-            <Ionicons name="swap-vertical" size={19} color={COLORS.white} />
-          </View>
-          <View>
-            <Text style={styles.fabText}>表示切替</Text>
-            <Text style={styles.fabSubText}>{showKidNames ? '名前表示中' : '人数表示中'}</Text>
-          </View>
+          <Ionicons name={showKidNames ? 'people-outline' : 'calculator-outline'} size={25} color={COLORS.white} />
         </TouchableOpacity>
       )}
 
@@ -1182,7 +1204,7 @@ export default function AttendanceScreen() {
                 <ScrollView style={styles.modalList}>
                   {schoolModalData.kids.map(kid => (
                     <View key={kid.id} style={styles.modalListItem}>
-                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setSchoolModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name, backTo: 'previous' } } as any); }}>
                         <Ionicons name="person" size={16} color={COLORS.primary} />
                         <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '📝' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
@@ -1224,7 +1246,7 @@ export default function AttendanceScreen() {
                 <ScrollView style={styles.modalList}>
                   {timeModalData.kids.map(kid => (
                     <View key={kid.id} style={styles.modalListItem}>
-                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name } } as any); }}>
+                      <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => { setTimeModalData(null); router.push({ pathname: '/schedule', params: { name: kid.name, backTo: 'previous' } } as any); }}>
                         <Ionicons name="time" size={16} color={COLORS.info} />
                         <Text style={[styles.modalItemName, kid.isManualOverride && { color: COLORS.danger }, kid.hasMemo && { fontWeight: 'bold' }]}>{kid.hasMemo ? '📝' : ''}{kid.name}</Text>
                         <Text style={styles.modalItemSub}>{kid.grade}</Text>
@@ -1266,18 +1288,13 @@ const styles = StyleSheet.create({
   tabNavTextActive: { fontSize: 13, fontWeight: '900', color: '#007A82' },
   tabSwipeArea: { flex: 1 },
 
-  topNav: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 10 },
-  topNavScroll: { paddingHorizontal: 12, alignItems: 'center' },
-  navDateBtn: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, backgroundColor: '#F3F1EF', marginHorizontal: 4 },
-  navDateBtnToday: { backgroundColor: '#00AEB8' },
-  navDateText: { fontSize: 16, fontWeight: '900', color: '#6F6A66' },
-  navDateTextToday: { color: COLORS.white },
   mainScroll: { flex: 1, backgroundColor: '#F8F9FA' },
-  loadMoreBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.white, margin: 16, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#7B4E8E', borderStyle: 'dashed' },
-  loadMoreText: { color: '#7B4E8E', fontWeight: '900', fontSize: 14, marginLeft: 8 },
   daySection: { marginBottom: 32 },
+  daySectionToday: { backgroundColor: '#FFFBEA', borderTopWidth: 2, borderBottomWidth: 2, borderColor: '#F2CF66', paddingVertical: 8 },
   dayHeaderContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8, flexWrap: 'wrap', backgroundColor: '#F8F9FA', paddingVertical: 6, paddingHorizontal: 8 },
   dayHeaderText: { fontSize: 22, fontWeight: 'bold', color: COLORS.text },
+  attendanceTodayBadge: { marginRight: 8, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: '#F1B94A' },
+  attendanceTodayBadgeText: { color: '#3D321E', fontSize: 12, fontWeight: '900' },
   
   eventBadgeLarge: { backgroundColor: '#7B4E8E', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 12 },
   eventBadgeTextLarge: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
@@ -1315,9 +1332,14 @@ const styles = StyleSheet.create({
   instruction: { padding: 16, color: COLORS.textLight, fontWeight: 'bold', textAlign: 'center', marginTop: 8 },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 12 },
   schoolCardList: { width: '46%', margin: '2%', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
-  schoolAccordionItem: { width: '46%', margin: '2%', alignSelf: 'flex-start' },
-  schoolAccordionButton: { width: '100%', margin: 0, minHeight: 44, flexDirection: 'row', gap: 8 },
+  schoolAccordionRow: { width: '100%', paddingHorizontal: '2%', marginBottom: 8 },
+  schoolAccordionHeaderRow: { flexDirection: 'row', gap: 10 },
+  schoolAccordionHeader: { flex: 1, minHeight: 44, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 2, borderColor: 'transparent' },
+  schoolAccordionHeaderPlaceholder: { flex: 1 },
+  schoolAccordionResultsRow: { flexDirection: 'row', gap: 10 },
+  schoolAccordionHalfResult: { flex: 1, minWidth: 0 },
   schoolInlineResults: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  schoolInlineResultsCompact: { paddingHorizontal: 6 },
   schoolInlineUserItem: { minHeight: 52, paddingVertical: 8 },
   schoolInlineEmpty: { paddingVertical: 18, textAlign: 'center', fontSize: 12, fontWeight: '700', color: COLORS.textLight },
   schoolCardActive: { borderColor: COLORS.primary },
@@ -1333,35 +1355,37 @@ const styles = StyleSheet.create({
   editBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   msgIconBtn: { padding: 10, marginLeft: 4 },
   editBadgeText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
-  weekNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.white, borderBottomWidth: 1, borderColor: COLORS.border },
-  weekNavBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  weekNavText: { fontSize: 13, color: COLORS.primary, fontWeight: 'bold' },
-  weekNavTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
-  transportDateCard: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  transportDateCardToday: { borderColor: COLORS.primary, borderWidth: 2 },
-  transportDateCardLeft: { alignItems: 'center', marginRight: 16, minWidth: 56 },
-  transportDateCardRight: { flex: 1 },
-  transportDateNum: { fontSize: 22, fontWeight: 'bold' },
-  transportDow: { fontSize: 13, fontWeight: 'bold' },
-  transportStaffCount: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
-  transportDoneText: { fontSize: 12, color: '#4CAF50', fontWeight: 'bold', marginTop: 2 },
-  transportProgressText: { fontSize: 12, color: '#FF9800', fontWeight: 'bold', marginTop: 2 },
-  transportEmptyText: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
-  todayBadge: { marginTop: 4, backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  todayBadgeText: { fontSize: 10, color: COLORS.white, fontWeight: 'bold' },
+  transportMonthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 18, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderColor: COLORS.border },
+  transportMonthNavButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#D8D1CA' },
+  transportMonthTitle: { minWidth: 150, textAlign: 'center', fontSize: 19, fontWeight: '900', color: COLORS.text },
+  transportCalendarScroll: { padding: 10, paddingBottom: ADMIN_BOTTOM_NAV_HEIGHT + 18 },
+  transportCalendar: { width: '100%', maxWidth: 820, alignSelf: 'center', backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, borderColor: '#DDE3E3', overflow: 'hidden' },
+  transportWeekdayRow: { flexDirection: 'row', backgroundColor: '#F4F7F7', borderBottomWidth: 1, borderColor: '#DDE3E3' },
+  transportWeekdayText: { width: '14.2857%', paddingVertical: 9, textAlign: 'center', fontSize: 12, fontWeight: '900', color: COLORS.text },
+  transportSundayText: { color: '#D34242' },
+  transportSaturdayText: { color: '#2869B0' },
+  transportCalendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  transportCalendarCell: { width: '14.2857%', minHeight: 82, padding: 5, borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#E2E7E7', backgroundColor: COLORS.white },
+  transportCalendarCellToday: { backgroundColor: '#FFF5C9', borderWidth: 2, borderColor: '#E7B83F' },
+  transportCalendarDateRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
+  transportCalendarDate: { fontSize: 14, fontWeight: '900', color: COLORS.text },
+  transportTodayLabel: { fontSize: 8, fontWeight: '900', color: '#7A5510', backgroundColor: '#FFE59A', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2 },
+  transportStatusBadge: { marginTop: 8, borderRadius: 7, paddingVertical: 5, paddingHorizontal: 2, alignItems: 'center' },
+  transportStatusWritten: { backgroundColor: '#E2F5EA' },
+  transportStatusEmpty: { backgroundColor: '#F1F1F1' },
+  transportStatusText: { fontSize: 10, fontWeight: '900', textAlign: 'center' },
+  transportStatusWrittenText: { color: '#247A43' },
+  transportStatusEmptyText: { color: '#777777' },
   fab: {
     position: 'absolute',
-    bottom: ADMIN_BOTTOM_NAV_HEIGHT + 14,
-    right: 14,
-    minWidth: 136,
+    bottom: ADMIN_BOTTOM_NAV_HEIGHT + 16,
+    right: 16,
+    width: 54,
     height: 54,
     borderRadius: 27,
     backgroundColor: '#00AEB8',
-    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 13,
     shadowColor: '#007A82',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.24,
@@ -1370,24 +1394,4 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   fabActive: { backgroundColor: '#4A90E2', shadowColor: '#2D69A3' },
-  fabIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    lineHeight: 16,
-  },
-  fabSubText: {
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 10,
-    fontWeight: '800',
-    lineHeight: 13,
-  },
 });
