@@ -157,6 +157,7 @@ export default function EventListScreen() {
   const [pastPhotos, setPastPhotos] = useState<Record<string, PastPhoto[]>>({});
   const [previewPhotos, setPreviewPhotos] = useState<PastPhoto[] | null>(null);
   const [previewIdx, setPreviewIdx] = useState(0);
+  const [participationConfirm, setParticipationConfirm] = useState<{ eventId: string; isJoined: boolean } | null>(null);
 
   // 詳細タブ内のサブタブ
   const [detailSubTab, setDetailSubTab] = useState<'year' | 'vacation'>('year');
@@ -327,19 +328,28 @@ export default function EventListScreen() {
   };
 
   // 詳細モーダルのイベント参加ボタン（自分自身の参加状態）
-  const toggleMyParticipation = async (eventId: string) => {
+  const toggleMyParticipation = (eventId: string) => {
     if (!myAccountId) return;
-    const docId = `${eventId}_${myAccountId}`;
     const isJoined = myParticipations[eventId] === '参加';
+    setParticipationConfirm({ eventId, isJoined });
+  };
+
+  const confirmMyParticipation = async () => {
+    if (!myAccountId || !participationConfirm) return;
+    const { eventId, isJoined } = participationConfirm;
+    const docId = `${eventId}_${myAccountId}`;
+    setParticipationConfirm(null);
     if (isJoined) {
-      customConfirm('参加を取り消す', 'このイベントの参加を取り消しますか？', async () => {
-        await deleteDoc(doc(db, 'event_participants', docId));
-      });
-    } else {
-      customConfirm('参加する', 'このイベントに参加しますか？', async () => {
-        await setDoc(doc(db, 'event_participants', docId), { eventId, childId: myAccountId, childName: name || '', status: '参加', updatedAt: new Date() });
-      });
+      await deleteDoc(doc(db, 'event_participants', docId));
+      return;
     }
+    await setDoc(doc(db, 'event_participants', docId), {
+      eventId,
+      childId: myAccountId,
+      childName: name || '',
+      status: '参加',
+      updatedAt: new Date(),
+    });
   };
 
   const openDetail = (ev: EventItem) => {
@@ -576,7 +586,7 @@ export default function EventListScreen() {
                               summary === '不参加' && { color: '#E53935' },
                               summary === 'mixed' && { color: '#FF9800' },
                             ]}>
-                              {summary === 'mixed' ? '一部参加' : summary}
+                              {summary === 'mixed' ? '一部申し込み済み' : summary === '参加' ? '申し込み済み' : summary}
                             </Text>
                           )}
                         </View>
@@ -765,7 +775,7 @@ export default function EventListScreen() {
       />
 
       {/* ══ イベント詳細モーダル ═══════════════════════════════ */}
-      <Modal visible={detailOpen} animationType="slide">
+      <Modal visible={detailOpen} animationType="none">
         {detailEvent && (
           <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF0F3' }}>
             <View style={styles.detailHeader}>
@@ -780,14 +790,14 @@ export default function EventListScreen() {
                 >
                   <Ionicons name={myParticipations[detailEvent.id] === '参加' ? 'checkmark-circle' : 'add-circle-outline'} size={15} color="#fff" />
                   <Text style={{ fontSize: 11, marginLeft: 3, color: '#fff', fontWeight: 'bold' }}>
-                    {myParticipations[detailEvent.id] === '参加' ? '参加中' : '参加する'}
+                    {myParticipations[detailEvent.id] === '参加' ? '申し込み済み' : '参加する'}
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {detailEvent.coverImage && (
-              <Image source={{ uri: detailEvent.coverImage }} style={{ width: '100%', height: 180 }} resizeMode="cover" />
+              <Image source={{ uri: detailEvent.coverImage }} style={styles.detailCover} resizeMode="cover" />
             )}
 
             <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
@@ -799,12 +809,10 @@ export default function EventListScreen() {
                   <View style={{ flex: 1 }} />
                   <Ionicons name={secDesc ? 'chevron-up' : 'chevron-down'} size={18} color="#4A90C4" />
                 </TouchableOpacity>
-                {secDesc && (
-                  <View style={[styles.sectionBody, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }]}>
-                    <Text style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>{formatDateWithDay(detailEvent.dateStr)}</Text>
+                <View style={[styles.sectionBody, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }, !secDesc && { display: 'none' }]}>
+                    <Text style={styles.detailDateText}>{formatDateWithDay(detailEvent.dateStr)}</Text>
                     {detailDet?.description ? <RichText doc={detailDet.description} /> : <Text style={styles.emptyText}>説明はまだありません</Text>}
-                  </View>
-                )}
+                </View>
               </View>
 
               {/* 持ち込み・参加費 */}
@@ -815,11 +823,9 @@ export default function EventListScreen() {
                   <View style={{ flex: 1 }} />
                   <Ionicons name={secItems ? 'chevron-up' : 'chevron-down'} size={18} color="#4A9A6A" />
                 </TouchableOpacity>
-                {secItems && (
-                  <View style={[styles.sectionBody, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }]}>
+                <View style={[styles.sectionBody, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }, !secItems && { display: 'none' }]}>
                     {detailDet?.items ? <RichText doc={detailDet.items} /> : <Text style={styles.emptyText}>情報はまだありません</Text>}
-                  </View>
-                )}
+                </View>
               </View>
               {/* 去年の写真 */}
               <View style={[styles.section, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
@@ -827,33 +833,63 @@ export default function EventListScreen() {
                   <Ionicons name="images-outline" size={18} color="#8A5BB5" />
                   <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
                   <View style={{ flex: 1 }} />
-                  <Text style={{ fontSize: 12, color: '#8A5BB5', marginRight: 4 }}>{detailPhotos.length}件</Text>
+                  <Text style={[styles.photoCount, { color: '#8A5BB5' }]}>{detailPhotos.length}件</Text>
                   <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
                 </TouchableOpacity>
-                {secPhotos && (
-                  <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
+                <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
                     {detailPhotos.length === 0
                       ? <Text style={styles.emptyText}>写真・動画はまだありません</Text>
                       : (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        <View style={styles.photoGrid}>
                           {detailPhotos.map((p, idx) => (
-                            <TouchableOpacity key={p.id} style={{ position: 'relative' }}
+                            <TouchableOpacity key={p.id} style={styles.photoThumbWrap}
                               onPress={() => { setPreviewPhotos(detailPhotos); setPreviewIdx(idx); }}
                             >
-                              <EventMediaThumbnail media={p} style={{ width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' }} />
+                              <EventMediaThumbnail media={p} style={styles.photoThumb} />
                             </TouchableOpacity>
                           ))}
                         </View>
                       )
                     }
-                  </View>
-                )}
+                </View>
               </View>
 
               <View style={{ height: 40 }} />
             </ScrollView>
           </SafeAreaView>
         )}
+      </Modal>
+
+      <Modal visible={!!participationConfirm} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.confirmOverlay}
+          activeOpacity={1}
+          onPress={() => setParticipationConfirm(null)}
+        >
+          <TouchableOpacity style={styles.confirmCard} activeOpacity={1} onPress={() => {}}>
+            <Text style={styles.confirmTitle}>
+              {participationConfirm?.isJoined ? '申し込みを取り消す' : 'イベントに申し込む'}
+            </Text>
+            <Text style={styles.confirmMessage}>
+              {participationConfirm?.isJoined
+                ? 'このイベントへの申し込みを取り消しますか？'
+                : 'このイベントに申し込みますか？'}
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => setParticipationConfirm(null)}>
+                <Text style={styles.confirmCancelText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmSubmitBtn, participationConfirm?.isJoined && styles.confirmRemoveBtn]}
+                onPress={confirmMyParticipation}
+              >
+                <Text style={styles.confirmSubmitText}>
+                  {participationConfirm?.isJoined ? '取り消す' : '申し込む'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* 写真フルスクリーンプレビュー */}
@@ -983,14 +1019,30 @@ const styles = StyleSheet.create({
   flyerBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
 
   // 詳細モーダル
-  detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', gap: 10 },
-  detailTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: '#5D4037' },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', gap: 8 },
+  detailTitle: { flex: 1, fontSize: 17, fontWeight: 'bold', color: '#5D4037' },
+  detailCover: { width: '100%', height: 180, backgroundColor: '#EEE' },
   joinBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
   joinBtnActive: { backgroundColor: '#4CAF50' },
   joinBtnInactive: { backgroundColor: COLORS.primary },
-  section: { borderRadius: 10, borderWidth: 1, overflow: 'hidden' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: 'bold', flex: 1 },
-  sectionBody: { padding: 12, borderTopWidth: 1 },
-  emptyText: { fontSize: 13, color: '#BDBDBD', fontStyle: 'italic' },
+  section: { borderRadius: 14, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 3, borderWidth: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
+  sectionTitle: { fontSize: 15, fontWeight: 'bold', flex: 1 },
+  sectionBody: { padding: 14, paddingTop: 12, borderTopWidth: 1 },
+  detailDateText: { fontSize: 14, fontWeight: 'bold', color: '#5D4037', marginBottom: 6 },
+  photoCount: { fontSize: 12, marginRight: 4 },
+  emptyText: { fontSize: 13, color: '#BDBDBD', fontStyle: 'italic', textAlign: 'center', paddingVertical: 12 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  photoThumbWrap: { position: 'relative' },
+  photoThumb: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' },
+  confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(44, 38, 36, 0.45)' },
+  confirmCard: { width: '100%', maxWidth: 420, borderRadius: 16, padding: 20, backgroundColor: '#FFFDF9', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, elevation: 8 },
+  confirmTitle: { color: '#3F3531', fontSize: 19, fontWeight: 'bold', textAlign: 'center' },
+  confirmMessage: { marginTop: 10, color: '#625752', fontSize: 14, lineHeight: 22, textAlign: 'center' },
+  confirmActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  confirmCancelBtn: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#F1EFEC' },
+  confirmCancelText: { color: '#625D59', fontSize: 14, fontWeight: 'bold' },
+  confirmSubmitBtn: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: COLORS.primary },
+  confirmRemoveBtn: { backgroundColor: '#E86A78' },
+  confirmSubmitText: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
 });
