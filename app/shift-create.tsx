@@ -12,6 +12,7 @@ import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { navigateHome } from '../utils/navigationHome';
+import { useMonthSwipe } from '../utils/useMonthSwipe';
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
@@ -162,7 +163,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [loading, setLoading] = useState(false);
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
   
-  const [showTimeInCalendar, setShowTimeInCalendar] = useState(true);
+  const showTimeInCalendar = true;
 
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [staffListLoaded, setStaffListLoaded] = useState(false);
@@ -781,6 +782,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     }
   };
 
+  const monthSwipeHandlers = useMonthSwipe({
+    onMoveMonth: amount => setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1)),
+  });
+
   if (checking || !verified) return null;
   return (
     <SafeAreaView style={styles.container}>
@@ -870,7 +875,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </View>
       </View>
 
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent} {...monthSwipeHandlers}>
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => <Text key={i} style={[styles.calWeekText, i === 0 && {color: 'red'}, i === 6 && {color: 'blue'}]}>{w}</Text>)}
         </View>

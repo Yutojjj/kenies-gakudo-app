@@ -8,6 +8,7 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import { useMonthSwipe } from '../utils/useMonthSwipe';
 import ShiftScreen from './shift';
 import ShiftCreateScreen from './shift-create';
 
@@ -111,6 +112,9 @@ export default function ShiftViewScreen() {
   const displayStaff = showOnlyMine
     ? allStaff.filter(s => s.name === myName)
     : allStaff;
+  const monthSwipeHandlers = useMonthSwipe({
+    onMoveMonth: amount => setCurrentDate(date => new Date(date.getFullYear(), date.getMonth() + amount, 1)),
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -172,7 +176,7 @@ export default function ShiftViewScreen() {
       </View>
 
       {/* カレンダー */}
-      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent} {...monthSwipeHandlers}>
         {/* 曜日ヘッダー */}
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => (
