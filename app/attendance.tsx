@@ -365,7 +365,6 @@ export default function AttendanceScreen() {
     if (attendanceTodayPositionedRef.current) return;
     if (Platform.OS !== 'web' && attendanceTodayY === null) return;
     attendanceAutoPositioningRef.current = true;
-    attendanceTodayPositionedRef.current = true;
 
     const scrollToToday = () => {
       if (Platform.OS === 'web') {
@@ -373,24 +372,27 @@ export default function AttendanceScreen() {
           `#attendance-day-${getDateLayoutKey(new Date())}`,
         ));
         const todayElement = todayElements.find(element => element.offsetHeight > 0);
-        todayElement?.scrollIntoView({ block: 'start', behavior: 'auto' });
+        if (!todayElement) return;
+        todayElement.scrollIntoView({ block: 'start', behavior: 'auto' });
+        attendanceTodayPositionedRef.current = true;
+        requestAnimationFrame(() => setAttendanceViewReady(true));
         return;
       }
+      if (attendanceTodayY === null) return;
       scrollViewRef.current?.scrollTo({ y: Math.max(0, (attendanceTodayY ?? 0) - 8), animated: false });
+      attendanceTodayPositionedRef.current = true;
+      requestAnimationFrame(() => setAttendanceViewReady(true));
     };
     const firstFrame = requestAnimationFrame(scrollToToday);
     const afterPagerSettles = setTimeout(scrollToToday, 180);
-    const revealToday = setTimeout(() => {
-      scrollToToday();
-      requestAnimationFrame(() => setAttendanceViewReady(true));
-    }, 220);
+    const revealFallback = setTimeout(() => setAttendanceViewReady(true), 500);
     const finishPositioning = setTimeout(() => {
       attendanceAutoPositioningRef.current = false;
     }, 420);
     return () => {
       cancelAnimationFrame(firstFrame);
       clearTimeout(afterPagerSettles);
-      clearTimeout(revealToday);
+      clearTimeout(revealFallback);
       clearTimeout(finishPositioning);
     };
   }, [attendanceResetToken, currentView, attendanceTodayY]);
