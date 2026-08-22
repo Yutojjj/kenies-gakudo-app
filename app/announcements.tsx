@@ -532,20 +532,29 @@ export default function AnnouncementsScreen() {
           ) : <View style={styles.referenceEmpty}><Text style={styles.referenceEmptyText}>参考写真はまだありません</Text></View>}
 
           <Text style={styles.label}>掲載期間</Text>
-          <View style={styles.publishRow}>
-            <TouchableOpacity style={styles.publishButton} onPress={() => { setCalendarTarget('start'); setCalendarMonth(publishDate); setCalendarVisible(true); }}>
-              <Ionicons name="calendar-outline" size={20} color="#267A80" />
-              <View><Text style={styles.publishButtonCaption}>開始日</Text><Text style={styles.publishButtonText}>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text></View>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.publishButton} onPress={() => { setCalendarTarget('end'); setCalendarMonth(publishEndDate); setCalendarVisible(true); }}>
-              <Ionicons name="calendar-outline" size={20} color="#267A80" />
-              <View><Text style={styles.publishButtonCaption}>終了日</Text><Text style={styles.publishButtonText}>{publishEndDate.getFullYear()}年{publishEndDate.getMonth() + 1}月{publishEndDate.getDate()}日</Text></View>
+          <View style={styles.publishScheduleCard}>
+            <View style={styles.publishPeriodRow}>
+              <TouchableOpacity style={styles.publishDateButton} onPress={() => { setCalendarTarget('start'); setCalendarMonth(publishDate); setCalendarVisible(true); }}>
+                <View style={styles.publishDateContent}>
+                  <Text style={styles.publishFieldLabel}>開始日</Text>
+                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text><Ionicons name="chevron-down" size={14} color="#267A80" /></View>
+                </View>
+              </TouchableOpacity>
+              <Text style={styles.publishRangeSeparator}>〜</Text>
+              <TouchableOpacity style={styles.publishDateButton} onPress={() => { setCalendarTarget('end'); setCalendarMonth(publishEndDate); setCalendarVisible(true); }}>
+                <View style={styles.publishDateContent}>
+                  <Text style={styles.publishFieldLabel}>終了日</Text>
+                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishEndDate.getFullYear()}年{publishEndDate.getMonth() + 1}月{publishEndDate.getDate()}日</Text><Ionicons name="chevron-down" size={14} color="#267A80" /></View>
+                </View>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.publishScheduleDivider} />
+            <TouchableOpacity style={styles.publishTimeButton} onPress={() => setTimeVisible(true)}>
+                <Text style={styles.publishTimeLabel}>開始時刻</Text>
+                <Text style={styles.publishTimeText}>{publishHour}:{publishMinute}〜</Text>
+                <Ionicons name="chevron-down" size={14} color="#267A80" />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.publishButton, styles.startTimeButton]} onPress={() => setTimeVisible(true)}>
-              <Ionicons name="time-outline" size={20} color="#267A80" />
-              <View><Text style={styles.publishButtonCaption}>開始時刻</Text><Text style={styles.publishButtonText}>{publishHour}:{publishMinute}</Text></View>
-          </TouchableOpacity>
 
           {editingId && <><Text style={styles.label}>利用者への表示</Text><TouchableOpacity style={[styles.visibilityButton, isActive && styles.visibilityButtonActive]} onPress={() => setIsActive(current => !current)}><Ionicons name={isActive ? 'eye-outline' : 'eye-off-outline'} size={20} color={isActive ? '#217A54' : '#7D7773'} /><Text style={[styles.visibilityText, isActive && styles.visibilityTextActive]}>{isActive ? '表示する' : '非表示にする'}</Text></TouchableOpacity></>}
           {!!message && <Text style={styles.errorMessage}>{message}</Text>}
@@ -743,11 +752,18 @@ const styles = StyleSheet.create({
   referenceRemove: { position: 'absolute', top: 4, right: 4, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(38,31,28,0.72)' },
   referenceEmpty: { minHeight: 72, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D5DBDB', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FAFBFB' },
   referenceEmptyText: { color: '#969B9B', fontSize: 12, fontWeight: '700' },
-  publishRow: { flexDirection: 'row', gap: 8 },
-  publishButton: { flex: 1, minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: '#A8D9DC', backgroundColor: '#F2FBFB', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 6 },
-  publishButtonText: { fontSize: 12, fontWeight: '900', color: '#314D50', textAlign: 'center' },
-  publishButtonCaption: { marginBottom: 2, fontSize: 9, fontWeight: '800', color: '#668084', textAlign: 'center' },
-  startTimeButton: { flex: 0, alignSelf: 'flex-start', minWidth: 142, marginTop: 8, paddingHorizontal: 12 },
+  publishScheduleCard: { overflow: 'hidden', borderRadius: 10, borderWidth: 1, borderColor: '#A8D9DC', backgroundColor: '#F2FBFB' },
+  publishPeriodRow: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 48, paddingHorizontal: 6 },
+  publishDateButton: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 4 },
+  publishDateContent: { flex: 1, minWidth: 0, alignItems: 'center' },
+  publishFieldLabel: { marginBottom: 2, fontSize: 9, fontWeight: '800', color: '#668084' },
+  publishDateValueRow: { width: '100%', minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  publishDateText: { flexShrink: 1, fontSize: 13, fontWeight: '900', color: '#314D50', textAlign: 'center' },
+  publishRangeSeparator: { fontSize: 17, fontWeight: '900', color: '#6B7778' },
+  publishScheduleDivider: { height: 1, marginHorizontal: 14, backgroundColor: '#CDE6E8' },
+  publishTimeButton: { alignSelf: 'center', minWidth: 148, minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12 },
+  publishTimeLabel: { fontSize: 12, fontWeight: '800', color: '#668084' },
+  publishTimeText: { fontSize: 14, fontWeight: '900', color: '#314D50' },
   visibilityButton: { minHeight: 46, borderRadius: 10, backgroundColor: '#F2F2F2', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   visibilityButtonActive: { backgroundColor: '#E8F8EF', borderWidth: 1, borderColor: '#A9DFC0' },
   visibilityText: { color: '#6F6965', fontWeight: '900' },
