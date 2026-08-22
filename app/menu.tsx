@@ -430,7 +430,6 @@ export default function MenuScreen() {
   const [staffQuickVisibleKeys, setStaffQuickVisibleKeys] = useState<StaffQuickKey[]>(DEFAULT_STAFF_QUICK_KEYS);
   const [quickReorderRole, setQuickReorderRole] = useState<'admin' | 'staff' | null>(null);
   const suppressQuickPressRef = useRef(false);
-  const quickLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
@@ -1159,8 +1158,11 @@ export default function MenuScreen() {
 
     if (quickVisibleCount <= 0) return;
 
-    quickItemAnims.forEach(anim => anim.setValue(0));
-    Animated.stagger(
+    quickItemAnims.forEach((anim, index) => {
+      anim.stopAnimation();
+      anim.setValue(index < quickVisibleCount ? 0 : 1);
+    });
+    const animation = Animated.stagger(
       58,
       quickItemAnims.slice(0, quickVisibleCount).map(anim =>
         Animated.spring(anim, {
@@ -1170,7 +1172,15 @@ export default function MenuScreen() {
           bounciness: 8,
         })
       )
-    ).start();
+    );
+    animation.start(({ finished }) => {
+      if (finished) quickItemAnims.slice(0, quickVisibleCount).forEach(anim => anim.setValue(1));
+    });
+
+    return () => {
+      animation.stop();
+      quickItemAnims.forEach(anim => anim.setValue(1));
+    };
   }, [role, adminQuickVisibleKeys.length, staffQuickVisibleKeys.length]);
 
   useEffect(() => {
@@ -1618,22 +1628,7 @@ export default function MenuScreen() {
     setQuickReorderRole(targetRole);
   };
 
-  const startQuickLongPress = (targetRole: 'admin' | 'staff') => {
-    if (quickLongPressTimerRef.current) clearTimeout(quickLongPressTimerRef.current);
-    quickLongPressTimerRef.current = setTimeout(() => {
-      quickLongPressTimerRef.current = null;
-      openQuickReorder(targetRole);
-    }, 500);
-  };
-
-  const cancelQuickLongPress = () => {
-    if (!quickLongPressTimerRef.current) return;
-    clearTimeout(quickLongPressTimerRef.current);
-    quickLongPressTimerRef.current = null;
-  };
-
   const closeQuickReorder = () => {
-    cancelQuickLongPress();
     suppressQuickPressRef.current = false;
     setQuickReorderRole(null);
   };
@@ -1669,11 +1664,10 @@ export default function MenuScreen() {
   const quickItemAnimatedStyle = (index: number) => {
     const anim = quickItemAnims[index] || quickItemAnims[0];
     return {
-      opacity: anim,
       transform: [
-        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) },
-        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
-        { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
+        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) },
+        { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+        { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
       ],
     };
   };
@@ -2369,8 +2363,8 @@ export default function MenuScreen() {
                     quickItemAnimatedStyle(index),
                   ]}
                   onPress={() => handleQuickCardPress(item.onPress)}
-                  onPressIn={() => startQuickLongPress('admin')}
-                  onPressOut={cancelQuickLongPress}
+                  onLongPress={() => openQuickReorder('admin')}
+                  delayLongPress={550}
                   accessibilityRole="button"
                   accessibilityLabel={item.label}
                   accessibilityHint="長押しで並び替え"
@@ -2405,8 +2399,8 @@ export default function MenuScreen() {
                     quickItemAnimatedStyle(index),
                   ]}
                   onPress={() => handleQuickCardPress(item.onPress)}
-                  onPressIn={() => startQuickLongPress('staff')}
-                  onPressOut={cancelQuickLongPress}
+                  onLongPress={() => openQuickReorder('staff')}
+                  delayLongPress={550}
                   accessibilityRole="button"
                   accessibilityLabel={item.label}
                   accessibilityHint="長押しで並び替え"

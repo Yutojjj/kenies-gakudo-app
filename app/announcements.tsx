@@ -134,8 +134,8 @@ export default function AnnouncementsScreen() {
   const params = useLocalSearchParams<{ role?: string; name?: string }>();
   const [role, setRole] = useState(params.role || '');
   const [name, setName] = useState(params.name || '');
-  const [tab, setTab] = useState<'edit' | 'create'>('edit');
   const [items, setItems] = useState<Announcement[]>([]);
+  const [formVisible, setFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
@@ -233,8 +233,19 @@ export default function AnnouncementsScreen() {
     setCalendarMonth(date);
     setPublishHour(String(date.getHours()).padStart(2, '0'));
     setPublishMinute(String(date.getMinutes()).padStart(2, '0'));
-    setTab('create');
     setMessage('');
+    setFormVisible(true);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setFormVisible(true);
+  };
+
+  const closeForm = () => {
+    if (saving) return;
+    setFormVisible(false);
+    resetForm();
   };
 
   const requestPhotoPermission = async () => {
@@ -423,7 +434,7 @@ export default function AnnouncementsScreen() {
         }
       }
       resetForm();
-      setTab('edit');
+      setFormVisible(false);
       setMessage('保存しました');
     } catch (error: any) {
       setMessage(error?.message || '保存できませんでした');
@@ -447,17 +458,7 @@ export default function AnnouncementsScreen() {
         <View style={styles.backButton} />
       </View>
 
-      <View style={styles.tabs}>
-        <TouchableOpacity style={[styles.tab, tab === 'edit' && styles.tabActive]} onPress={() => setTab('edit')}>
-          <Text style={[styles.tabText, tab === 'edit' && styles.tabTextActive]}>編集する</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, tab === 'create' && styles.tabActive]} onPress={() => { resetForm(); setTab('create'); }}>
-          <Text style={[styles.tabText, tab === 'create' && styles.tabTextActive]}>作成する</Text>
-        </TouchableOpacity>
-      </View>
-
-      {tab === 'edit' ? (
-        <ScrollView contentContainerStyle={styles.listContent}>
+      <ScrollView contentContainerStyle={styles.listContent}>
           {!!message && <Text style={styles.successMessage}>{message}</Text>}
           {items.length === 0 ? (
             <View style={styles.empty}><Ionicons name="bulb-outline" size={42} color="#C2C9C9" /><Text style={styles.emptyText}>お知らせはまだありません</Text></View>
@@ -475,13 +476,27 @@ export default function AnnouncementsScreen() {
               {(item.headerImageUrl || item.imageUrl) ? <Image source={{ uri: item.headerImageUrl || item.imageUrl }} style={styles.itemImage} /> : <View style={styles.itemImageEmpty}><Ionicons name="image-outline" size={24} color="#BBC4C4" /></View>}
             </TouchableOpacity>
           ))}
-        </ScrollView>
-      ) : (
-        <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>宣伝として表示</Text>
+      </ScrollView>
+
+      <TouchableOpacity style={styles.fab} onPress={openCreateForm} activeOpacity={0.86} accessibilityRole="button" accessibilityLabel="お知らせを作成">
+        <Ionicons name="add" size={34} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal visible={formVisible} transparent animationType="fade" onRequestClose={closeForm}>
+        <TouchableOpacity style={styles.formModalOverlay} activeOpacity={1} onPress={closeForm}>
+          <TouchableWithoutFeedback>
+            <View style={styles.formModalCard}>
+              <View style={styles.formModalHeader}>
+                <Text style={styles.formModalTitle}>{editingId ? 'お知らせを編集' : 'お知らせを作成'}</Text>
+                <TouchableOpacity style={styles.formModalClose} onPress={closeForm} accessibilityRole="button" accessibilityLabel="閉じる">
+                  <Ionicons name="close" size={30} color="#332F2C" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.label}>宣伝告知</Text>
           <View style={styles.segmented}>
-            <TouchableOpacity style={[styles.segment, !isPromotional && styles.segmentActive]} onPress={() => setIsPromotional(false)}><Text style={[styles.segmentText, !isPromotional && styles.segmentTextActive]}>いいえ</Text></TouchableOpacity>
-            <TouchableOpacity style={[styles.segment, isPromotional && styles.segmentActive]} onPress={() => setIsPromotional(true)}><Text style={[styles.segmentText, isPromotional && styles.segmentTextActive]}>はい</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.segment, !isPromotional && styles.segmentActive]} onPress={() => setIsPromotional(false)}><Text style={[styles.segmentText, !isPromotional && styles.segmentTextActive]}>しない</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.segment, isPromotional && styles.segmentActive]} onPress={() => setIsPromotional(true)}><Text style={[styles.segmentText, isPromotional && styles.segmentTextActive]}>する</Text></TouchableOpacity>
           </View>
 
           <Text style={styles.label}>件名</Text>
@@ -532,37 +547,50 @@ export default function AnnouncementsScreen() {
           ) : <View style={styles.referenceEmpty}><Text style={styles.referenceEmptyText}>参考写真はまだありません</Text></View>}
 
           <Text style={styles.label}>掲載期間</Text>
-          <View style={styles.publishScheduleCard}>
+          <TouchableOpacity
+            style={styles.publishScheduleCard}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel="掲載期間を設定"
+            onPress={() => {
+              setCalendarTarget('start');
+              setCalendarMonth(publishDate);
+              setCalendarVisible(true);
+            }}
+          >
             <View style={styles.publishPeriodRow}>
-              <TouchableOpacity style={styles.publishDateButton} onPress={() => { setCalendarTarget('start'); setCalendarMonth(publishDate); setCalendarVisible(true); }}>
+              <View style={styles.publishDateButton}>
                 <View style={styles.publishDateContent}>
                   <Text style={styles.publishFieldLabel}>開始日</Text>
-                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text><Ionicons name="chevron-down" size={14} color="#267A80" /></View>
+                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishDate.getFullYear()}年{publishDate.getMonth() + 1}月{publishDate.getDate()}日</Text></View>
                 </View>
-              </TouchableOpacity>
+              </View>
               <Text style={styles.publishRangeSeparator}>〜</Text>
-              <TouchableOpacity style={styles.publishDateButton} onPress={() => { setCalendarTarget('end'); setCalendarMonth(publishEndDate); setCalendarVisible(true); }}>
+              <View style={styles.publishDateButton}>
                 <View style={styles.publishDateContent}>
                   <Text style={styles.publishFieldLabel}>終了日</Text>
-                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishEndDate.getFullYear()}年{publishEndDate.getMonth() + 1}月{publishEndDate.getDate()}日</Text><Ionicons name="chevron-down" size={14} color="#267A80" /></View>
+                  <View style={styles.publishDateValueRow}><Text style={styles.publishDateText} numberOfLines={1} adjustsFontSizeToFit>{publishEndDate.getFullYear()}年{publishEndDate.getMonth() + 1}月{publishEndDate.getDate()}日</Text></View>
                 </View>
-              </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.publishScheduleDivider} />
-            <TouchableOpacity style={styles.publishTimeButton} onPress={() => setTimeVisible(true)}>
+            <View style={styles.publishTimeButton}>
                 <Text style={styles.publishTimeLabel}>開始時刻</Text>
                 <Text style={styles.publishTimeText}>{publishHour}:{publishMinute}〜</Text>
                 <Ionicons name="chevron-down" size={14} color="#267A80" />
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
 
           {editingId && <><Text style={styles.label}>利用者への表示</Text><TouchableOpacity style={[styles.visibilityButton, isActive && styles.visibilityButtonActive]} onPress={() => setIsActive(current => !current)}><Ionicons name={isActive ? 'eye-outline' : 'eye-off-outline'} size={20} color={isActive ? '#217A54' : '#7D7773'} /><Text style={[styles.visibilityText, isActive && styles.visibilityTextActive]}>{isActive ? '表示する' : '非表示にする'}</Text></TouchableOpacity></>}
           {!!message && <Text style={styles.errorMessage}>{message}</Text>}
           <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={saveAnnouncement} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>{editingId ? '変更を保存する' : '投稿する'}</Text>}
           </TouchableOpacity>
-        </ScrollView>
-      )}
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
 
       <AdminBottomNav active="home" />
 
@@ -712,13 +740,14 @@ const styles = StyleSheet.create({
   header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderColor: '#EEE3D8' },
   backButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '900', color: '#3E302A' },
-  tabs: { flexDirection: 'row', margin: 10, backgroundColor: '#EEF2F2', borderRadius: 12, padding: 3 },
-  tab: { flex: 1, minHeight: 43, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
-  tabActive: { backgroundColor: '#00AEB8' },
-  tabText: { fontSize: 14, fontWeight: '900', color: '#657173' },
-  tabTextActive: { color: '#fff' },
-  listContent: { padding: 12, paddingBottom: 110 },
-  formContent: { padding: 14, paddingBottom: 130 },
+  listContent: { padding: 12, paddingBottom: 170 },
+  formContent: { padding: 14, paddingBottom: 30 },
+  fab: { position: 'absolute', right: 18, bottom: 88, zIndex: 8, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: '#00AEB8', shadowColor: '#294B4D', shadowOpacity: 0.24, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 7 },
+  formModalOverlay: { flex: 1, padding: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(30,25,22,0.52)' },
+  formModalCard: { width: '100%', maxWidth: 720, height: '92%', maxHeight: 900, overflow: 'hidden', borderRadius: 18, backgroundColor: '#FFF9F2' },
+  formModalHeader: { minHeight: 64, paddingLeft: 18, paddingRight: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#E8DED4', backgroundColor: '#FFF' },
+  formModalTitle: { flex: 1, fontSize: 20, fontWeight: '900', color: '#332F2C' },
+  formModalClose: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   itemCard: { flexDirection: 'row', minHeight: 112, marginBottom: 10, padding: 12, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E7DCD1', shadowColor: '#715B4A', shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 },
   itemBody: { flex: 1, paddingRight: 10 },
   itemBadges: { flexDirection: 'row', gap: 6, minHeight: 20 },
