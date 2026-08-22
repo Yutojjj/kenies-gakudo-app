@@ -310,6 +310,11 @@ export default function MenuScreen() {
   const [todayPickup, setTodayPickup] = useState<Record<string, any>>({});
   const [pickupEntryStatus, setPickupEntryStatus] = useState<TransportEntryStatus | null>(null);
   const [staffPlanDate, setStaffPlanDate] = useState(new Date());
+  const [pickupDatePickerVisible, setPickupDatePickerVisible] = useState(false);
+  const [pickupCalendarMonth, setPickupCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [paidTransportCount, setPaidTransportCount] = useState(0);
   const [isPaidTransportMember, setIsPaidTransportMember] = useState(false);
   const [signModalVisible, setSignModalVisible] = useState(false);
@@ -423,6 +428,9 @@ export default function MenuScreen() {
   const [adminQuickVisibleKeys, setAdminQuickVisibleKeys] = useState<AdminQuickKey[]>(DEFAULT_ADMIN_QUICK_KEYS);
   const [staffQuickEditorVisible, setStaffQuickEditorVisible] = useState(false);
   const [staffQuickVisibleKeys, setStaffQuickVisibleKeys] = useState<StaffQuickKey[]>(DEFAULT_STAFF_QUICK_KEYS);
+  const [quickReorderRole, setQuickReorderRole] = useState<'admin' | 'staff' | null>(null);
+  const suppressQuickPressRef = useRef(false);
+  const quickLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
   const [scheduleDate, setScheduleDate] = useState(new Date());
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
@@ -1524,7 +1532,10 @@ export default function MenuScreen() {
     { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/form') },
   ];
 
-  const visibleAdminQuickOptions = adminQuickOptions.filter(item => adminQuickVisibleKeys.includes(item.key));
+  const visibleAdminQuickOptions = adminQuickVisibleKeys.flatMap(key => {
+    const item = adminQuickOptions.find(option => option.key === key);
+    return item ? [item] : [];
+  });
   const toggleAdminQuickKey = async (key: AdminQuickKey) => {
     const next = adminQuickVisibleKeys.includes(key)
       ? adminQuickVisibleKeys.filter(item => item !== key)
@@ -1557,7 +1568,63 @@ export default function MenuScreen() {
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
     { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', image: QUICK_MENU_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: handleLogout },
   ];
-  const visibleStaffQuickOptions = staffQuickOptions.filter(item => staffQuickVisibleKeys.includes(item.key));
+  const visibleStaffQuickOptions = staffQuickVisibleKeys.flatMap(key => {
+    const item = staffQuickOptions.find(option => option.key === key);
+    return item ? [item] : [];
+  });
+
+  const openQuickReorder = (targetRole: 'admin' | 'staff') => {
+    suppressQuickPressRef.current = true;
+    setQuickReorderRole(targetRole);
+  };
+
+  const startQuickLongPress = (targetRole: 'admin' | 'staff') => {
+    if (quickLongPressTimerRef.current) clearTimeout(quickLongPressTimerRef.current);
+    quickLongPressTimerRef.current = setTimeout(() => {
+      quickLongPressTimerRef.current = null;
+      openQuickReorder(targetRole);
+    }, 500);
+  };
+
+  const cancelQuickLongPress = () => {
+    if (!quickLongPressTimerRef.current) return;
+    clearTimeout(quickLongPressTimerRef.current);
+    quickLongPressTimerRef.current = null;
+  };
+
+  const closeQuickReorder = () => {
+    cancelQuickLongPress();
+    suppressQuickPressRef.current = false;
+    setQuickReorderRole(null);
+  };
+
+  const handleQuickCardPress = (onPress: () => void) => {
+    if (suppressQuickPressRef.current) {
+      suppressQuickPressRef.current = false;
+      return;
+    }
+    onPress();
+  };
+
+  const moveAdminQuickKey = async (key: AdminQuickKey, offset: -1 | 1) => {
+    const index = adminQuickVisibleKeys.indexOf(key);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= adminQuickVisibleKeys.length) return;
+    const next = [...adminQuickVisibleKeys];
+    [next[index], next[target]] = [next[target], next[index]];
+    setAdminQuickVisibleKeys(next);
+    await AsyncStorage.setItem('adminQuickVisibleKeys', JSON.stringify(next));
+  };
+
+  const moveStaffQuickKey = async (key: StaffQuickKey, offset: -1 | 1) => {
+    const index = staffQuickVisibleKeys.indexOf(key);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= staffQuickVisibleKeys.length) return;
+    const next = [...staffQuickVisibleKeys];
+    [next[index], next[target]] = [next[target], next[index]];
+    setStaffQuickVisibleKeys(next);
+    await AsyncStorage.setItem('staffQuickVisibleKeys', JSON.stringify(next));
+  };
 
   const quickItemAnimatedStyle = (index: number) => {
     const anim = quickItemAnims[index] || quickItemAnims[0];
@@ -1754,24 +1821,6 @@ export default function MenuScreen() {
           </Animated.View>
         )}
 
-        {role === 'user' && (
-          <View style={styles.userAnnouncementTopRow}>
-            <TouchableOpacity
-              style={styles.userAnnouncementButton}
-              onPress={() => setAnnouncementListVisible(true)}
-              activeOpacity={0.82}
-            >
-              <View style={styles.userAnnouncementBulb}>
-                <Ionicons name="bulb-outline" size={21} color="#9A650A" />
-              </View>
-              <Text style={styles.userAnnouncementButtonText}>お知らせ</Text>
-              {announcements.length > 0 && (
-                <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{announcements.length > 99 ? '99+' : announcements.length}</Text></View>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
         {(role === 'staff' || role === 'admin') && (
           <View style={styles.staffTodaySection}>
@@ -1801,7 +1850,18 @@ export default function MenuScreen() {
                   >
                     <Ionicons name="chevron-back" size={16} color="#6D5A4D" />
                   </TouchableOpacity>
-                  <Text style={styles.staffDateText}>{formatMenuDateLabel(staffPlanDate)}</Text>
+                  <TouchableOpacity
+                    style={styles.staffDatePickerButton}
+                    onPress={() => {
+                      setPickupCalendarMonth(new Date(staffPlanDate.getFullYear(), staffPlanDate.getMonth(), 1));
+                      setPickupDatePickerVisible(true);
+                    }}
+                    activeOpacity={0.78}
+                    accessibilityRole="button"
+                    accessibilityLabel="日付をカレンダーから選ぶ"
+                  >
+                    <Text style={styles.staffDateText}>{formatMenuDateLabel(staffPlanDate)}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.staffDateButton}
                     onPress={() => setStaffPlanDate(prev => addDays(prev, 1))}
@@ -1991,6 +2051,18 @@ export default function MenuScreen() {
                   <View style={styles.todayPlanTitleBar} />
                   <Text style={styles.todayPlanTitle}>本日の予定</Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.userAnnouncementButton}
+                  onPress={() => setAnnouncementListVisible(true)}
+                  activeOpacity={0.82}
+                  accessibilityRole="button"
+                  accessibilityLabel="お知らせを開く"
+                >
+                  <Ionicons name="bulb-outline" size={23} color="#8A5B08" />
+                  {announcements.length > 0 && (
+                    <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{announcements.length > 99 ? '99+' : announcements.length}</Text></View>
+                  )}
+                </TouchableOpacity>
               </View>
               <View style={styles.todayPlanHeaderTop}>
                 <View style={styles.todayPlanDateWrap}>
@@ -2235,7 +2307,12 @@ export default function MenuScreen() {
                     styles.quickFeatureCard,
                     quickItemAnimatedStyle(index),
                   ]}
-                  onPress={item.onPress}
+                  onPress={() => handleQuickCardPress(item.onPress)}
+                  onPressIn={() => startQuickLongPress('admin')}
+                  onPressOut={cancelQuickLongPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  accessibilityHint="長押しで並び替え"
                   activeOpacity={0.82}
                 >
                   {item.image ? (
@@ -2266,7 +2343,12 @@ export default function MenuScreen() {
                     styles.quickFeatureCard,
                     quickItemAnimatedStyle(index),
                   ]}
-                  onPress={item.onPress}
+                  onPress={() => handleQuickCardPress(item.onPress)}
+                  onPressIn={() => startQuickLongPress('staff')}
+                  onPressOut={cancelQuickLongPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  accessibilityHint="長押しで並び替え"
                   activeOpacity={0.82}
                 >
                   {item.image ? (
@@ -2527,6 +2609,122 @@ export default function MenuScreen() {
         />
       )}
 
+      <Modal
+        visible={pickupDatePickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickupDatePickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickupDatePickerBackdrop}
+          activeOpacity={1}
+          onPress={() => setPickupDatePickerVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.pickupDatePickerCard}>
+              <View style={styles.pickupDatePickerHeader}>
+                <View>
+                  <Text style={styles.pickupDatePickerTitle}>日付を選択</Text>
+                  <Text style={styles.pickupDatePickerSub}>送迎担当を確認する日を選んでください</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerClose}
+                  onPress={() => setPickupDatePickerVisible(false)}
+                  activeOpacity={0.78}
+                >
+                  <Ionicons name="close" size={24} color="#4A403A" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pickupDatePickerMonthRow}>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerNav}
+                  onPress={() => setPickupCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="chevron-back" size={21} color="#6D5A4D" />
+                </TouchableOpacity>
+                <Text style={styles.pickupDatePickerMonthText}>
+                  {pickupCalendarMonth.getFullYear()}年 {pickupCalendarMonth.getMonth() + 1}月
+                </Text>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerNav}
+                  onPress={() => setPickupCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="chevron-forward" size={21} color="#6D5A4D" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.pickupDatePickerWeekRow}>
+                {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                  <Text
+                    key={day}
+                    style={[
+                      styles.pickupDatePickerWeekText,
+                      index === 0 && styles.pickupDatePickerSunday,
+                      index === 6 && styles.pickupDatePickerSaturday,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.pickupDatePickerGrid}>
+                {(() => {
+                  const year = pickupCalendarMonth.getFullYear();
+                  const month = pickupCalendarMonth.getMonth();
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const cells: (number | null)[] = [
+                    ...Array(firstDay).fill(null),
+                    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+                  ];
+                  while (cells.length % 7 !== 0) cells.push(null);
+                  const selectedKey = makeDateStr(staffPlanDate);
+                  const todayKey = makeDateStr(new Date());
+
+                  return cells.map((day, index) => {
+                    if (!day) return <View key={`empty-${index}`} style={styles.pickupDatePickerCell} />;
+                    const date = new Date(year, month, day);
+                    const dateKey = makeDateStr(date);
+                    const isSelected = dateKey === selectedKey;
+                    const isToday = dateKey === todayKey;
+                    const dayOfWeek = date.getDay();
+                    return (
+                      <TouchableOpacity
+                        key={dateKey}
+                        style={[
+                          styles.pickupDatePickerCell,
+                          isToday && styles.pickupDatePickerTodayCell,
+                          isSelected && styles.pickupDatePickerSelectedCell,
+                        ]}
+                        onPress={() => {
+                          setStaffPlanDate(date);
+                          setPickupDatePickerVisible(false);
+                        }}
+                        activeOpacity={0.72}
+                      >
+                        <Text style={[
+                          styles.pickupDatePickerDayText,
+                          dayOfWeek === 0 && styles.pickupDatePickerSunday,
+                          dayOfWeek === 6 && styles.pickupDatePickerSaturday,
+                          isSelected && styles.pickupDatePickerSelectedText,
+                        ]}>
+                          {day}
+                        </Text>
+                        {isToday && !isSelected && <View style={styles.pickupDatePickerTodayDot} />}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={adminShiftMenuVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminShiftMenuVisible(false)}>
           <TouchableWithoutFeedback>
@@ -2640,6 +2838,91 @@ export default function MenuScreen() {
               })}
               <View style={{ height: 8 }} />
             </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={quickReorderRole !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeQuickReorder}
+      >
+        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={closeQuickReorder}>
+          <TouchableWithoutFeedback>
+            <View style={styles.quickReorderSheet}>
+              <View style={styles.simpleModalHeader}>
+                <View>
+                  <Text style={styles.simpleModalTitle}>クイックメニューの並び替え</Text>
+                  <Text style={styles.simpleModalSub}>矢印を押すと表示位置が変わります</Text>
+                </View>
+                <TouchableOpacity style={styles.simpleModalClose} onPress={closeQuickReorder} activeOpacity={0.8}>
+                  <Ionicons name="close" size={22} color="#7A6254" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.quickReorderList} showsVerticalScrollIndicator={false}>
+                {quickReorderRole === 'admin'
+                  ? visibleAdminQuickOptions.map((item, index) => (
+                    <View key={item.key} style={styles.quickReorderRow}>
+                      {item.image ? (
+                        <Image source={item.image} style={styles.quickReorderImage} resizeMode="contain" />
+                      ) : (
+                        <View style={[styles.quickEditorIcon, { backgroundColor: item.bg }]}>
+                          <Ionicons name={item.icon} size={21} color={item.color} />
+                        </View>
+                      )}
+                      <Text style={styles.quickReorderText}>{item.label}</Text>
+                      <TouchableOpacity
+                        style={[styles.quickReorderButton, index === 0 && styles.quickReorderButtonDisabled]}
+                        disabled={index === 0}
+                        onPress={() => moveAdminQuickKey(item.key, -1)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name="chevron-up" size={22} color={index === 0 ? '#C8C1BB' : '#167B87'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.quickReorderButton, index === visibleAdminQuickOptions.length - 1 && styles.quickReorderButtonDisabled]}
+                        disabled={index === visibleAdminQuickOptions.length - 1}
+                        onPress={() => moveAdminQuickKey(item.key, 1)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name="chevron-down" size={22} color={index === visibleAdminQuickOptions.length - 1 ? '#C8C1BB' : '#167B87'} />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                  : visibleStaffQuickOptions.map((item, index) => (
+                    <View key={item.key} style={styles.quickReorderRow}>
+                      {item.image ? (
+                        <Image source={item.image} style={styles.quickReorderImage} resizeMode="contain" />
+                      ) : (
+                        <View style={[styles.quickEditorIcon, { backgroundColor: item.bg }]}>
+                          <Ionicons name={item.icon} size={21} color={item.color} />
+                        </View>
+                      )}
+                      <Text style={styles.quickReorderText}>{item.label}</Text>
+                      <TouchableOpacity
+                        style={[styles.quickReorderButton, index === 0 && styles.quickReorderButtonDisabled]}
+                        disabled={index === 0}
+                        onPress={() => moveStaffQuickKey(item.key, -1)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name="chevron-up" size={22} color={index === 0 ? '#C8C1BB' : '#167B87'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.quickReorderButton, index === visibleStaffQuickOptions.length - 1 && styles.quickReorderButtonDisabled]}
+                        disabled={index === visibleStaffQuickOptions.length - 1}
+                        onPress={() => moveStaffQuickKey(item.key, 1)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name="chevron-down" size={22} color={index === visibleStaffQuickOptions.length - 1 ? '#C8C1BB' : '#167B87'} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+              </ScrollView>
+              <TouchableOpacity style={styles.quickReorderDoneButton} onPress={closeQuickReorder} activeOpacity={0.82}>
+                <Text style={styles.quickReorderDoneText}>完了</Text>
+              </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>
         </TouchableOpacity>
@@ -3573,20 +3856,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
-  userAnnouncementTopRow: {
-    minHeight: 54,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    alignItems: 'flex-end',
-  },
   userAnnouncementButton: {
-    minHeight: 42,
+    width: 42,
+    height: 42,
     borderRadius: 21,
-    paddingLeft: 5,
-    paddingRight: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    justifyContent: 'center',
     backgroundColor: '#FFF5D7',
     borderWidth: 1,
     borderColor: '#EBCB7B',
@@ -3596,9 +3871,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
-  userAnnouncementBulb: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE8A3' },
-  userAnnouncementButtonText: { fontSize: 13, fontWeight: '900', color: '#4B3A2D' },
-  userAnnouncementBadge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E84A4A' },
+  userAnnouncementBadge: { position: 'absolute', top: -4, right: -4, minWidth: 19, height: 19, borderRadius: 10, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E84A4A' },
   userAnnouncementBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
   announcementOverlay: { flex: 1, backgroundColor: 'rgba(25,22,20,0.48)', alignItems: 'center', justifyContent: 'center', padding: 14 },
   announcementListCard: { width: '100%', maxWidth: 520, maxHeight: '82%', borderRadius: 18, backgroundColor: '#FFFDFB', overflow: 'hidden' },
@@ -4020,6 +4293,66 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#3F302B',
   },
+  quickReorderSheet: {
+    width: '100%',
+    maxWidth: 430,
+    maxHeight: '82%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+  },
+  quickReorderList: {
+    marginTop: 2,
+  },
+  quickReorderRow: {
+    minHeight: 62,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E8DDD2',
+    backgroundColor: '#FFFDF9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 9,
+    marginBottom: 8,
+  },
+  quickReorderImage: {
+    width: 46,
+    height: 46,
+  },
+  quickReorderText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#332B27',
+  },
+  quickReorderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF8F9',
+    borderWidth: 1,
+    borderColor: '#A6DDE1',
+  },
+  quickReorderButtonDisabled: {
+    backgroundColor: '#F5F2EF',
+    borderColor: '#E3DDD7',
+  },
+  quickReorderDoneButton: {
+    minHeight: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#19AEB7',
+    marginTop: 6,
+  },
+  quickReorderDoneText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+  },
   adminActionSheet: {
     width: '100%',
     maxWidth: 420,
@@ -4294,6 +4627,96 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#6D5A4D',
   },
+  staffDatePickerButton: {
+    minHeight: 40,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#FFF3DD',
+    borderWidth: 1,
+    borderColor: '#EFCF9D',
+  },
+  pickupDatePickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 25, 22, 0.48)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  pickupDatePickerCard: {
+    width: '100%',
+    maxWidth: 390,
+    borderRadius: 20,
+    padding: 18,
+    backgroundColor: '#FFFDF9',
+    borderWidth: 1,
+    borderColor: '#EDDDC8',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  pickupDatePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  pickupDatePickerTitle: { fontSize: 19, fontWeight: '900', color: '#332C28' },
+  pickupDatePickerSub: { marginTop: 3, fontSize: 11, fontWeight: '700', color: '#817268' },
+  pickupDatePickerClose: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F1E8',
+  },
+  pickupDatePickerMonthRow: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 7,
+  },
+  pickupDatePickerNav: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7E9',
+    borderWidth: 1,
+    borderColor: '#EFD9B8',
+  },
+  pickupDatePickerMonthText: { fontSize: 18, fontWeight: '900', color: '#332C28' },
+  pickupDatePickerWeekRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E3E8E8' },
+  pickupDatePickerWeekText: {
+    width: '14.2857%',
+    paddingVertical: 8,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#5B554F',
+  },
+  pickupDatePickerGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: 5 },
+  pickupDatePickerCell: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+  },
+  pickupDatePickerDayText: { fontSize: 14, fontWeight: '800', color: '#332C28' },
+  pickupDatePickerSunday: { color: '#E34F59' },
+  pickupDatePickerSaturday: { color: '#3479C8' },
+  pickupDatePickerTodayCell: { backgroundColor: '#FFF3C4' },
+  pickupDatePickerSelectedCell: { backgroundColor: '#13AEB5' },
+  pickupDatePickerSelectedText: { color: '#FFFFFF' },
+  pickupDatePickerTodayDot: { width: 4, height: 4, marginTop: 2, borderRadius: 2, backgroundColor: '#D3A222' },
   pickupToggleBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFF3E0', borderRadius: 12, borderWidth: 1, borderColor: '#FFCC80' },
   pickupToggleBtnText: { fontSize: 12, fontWeight: 'bold', color: '#007A82' },
   
@@ -4352,6 +4775,7 @@ const styles = StyleSheet.create({
   todayPlanTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   todayPlanHeaderTop: {

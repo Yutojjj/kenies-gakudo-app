@@ -706,7 +706,6 @@ export default function AttendanceScreen() {
                         return (
                           <View key={card.key} style={[styles.schoolCard, styles.schoolCardFluid]}>
                             <TouchableOpacity style={[styles.schoolNameBtn, { backgroundColor: card.backgroundColor }]} onPress={() => setSchoolModalData({ date: dateLabel, title: card.title, kids: sortKidsByGrade(allKids) })}>
-                              <View style={[styles.schoolAccentLine, { backgroundColor: card.accentColor }]} />
                               <Text style={styles.schoolNameText} numberOfLines={2} adjustsFontSizeToFit>{card.title}</Text>
                             </TouchableOpacity>
                             <View style={styles.timeGroupContainer}>
@@ -782,15 +781,6 @@ export default function AttendanceScreen() {
         });
       });
     });
-    Object.values(attendanceData.lessons).forEach(kids => {
-      kids.forEach(k => {
-        if (!addedIds.has(k.id)) {
-          expectedKids.push(k);
-          addedIds.add(k.id);
-        }
-      });
-    });
-
     expectedKids.sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade) || a.name.localeCompare(b.name, 'ja'));
 
     const arrivedKids = expectedKids.filter(k => todayEntries[k.parentDocId || k.id] || todayEntries[k.id]);
@@ -1450,9 +1440,8 @@ const styles = StyleSheet.create({
   attendanceSchoolColumn: { flex: 1, minWidth: 0, gap: 8 },
   schoolCard: { overflow: 'hidden', borderRadius: 8, backgroundColor: COLORS.white, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: '#E2DEDA' },
   schoolCardFluid: { width: '100%', alignSelf: 'flex-start' },
-  schoolNameBtn: { minHeight: 38, position: 'relative', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#E7E2DC' },
-  schoolAccentLine: { position: 'absolute', left: 0, top: 2, bottom: 2, width: 4, borderRadius: 3 },
-  schoolNameText: { fontSize: 14, fontWeight: '900', color: COLORS.text, textAlign: 'left' },
+  schoolNameBtn: { minHeight: 38, position: 'relative', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#E7E2DC' },
+  schoolNameText: { flex: 1, fontSize: 14, fontWeight: '900', color: COLORS.text, textAlign: 'center' },
   timeGroupContainer: { overflow: 'hidden', backgroundColor: COLORS.white },
   timeButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.white, paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
   timeButtonLast: { borderBottomWidth: 0 },
@@ -1502,9 +1491,9 @@ const styles = StyleSheet.create({
   userFilterLabel: { marginBottom: 7, fontSize: 12, fontWeight: '900', color: '#008E96' },
   userDowSegment: { overflow: 'hidden', flexDirection: 'row', borderRadius: 8, borderWidth: 1, borderColor: '#00AEB8', backgroundColor: COLORS.white },
   userDowOption: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: '#9EDDE0' },
-  userDowOptionActive: { backgroundColor: '#008E96' },
+  userDowOptionActive: { backgroundColor: '#70C9E8' },
   userDowText: { fontSize: 13, fontWeight: '900', color: COLORS.text },
-  userDowTextActive: { color: COLORS.white },
+  userDowTextActive: { color: '#163F52' },
   schoolSearchHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
   schoolSearchTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   schoolSearchTitle: { fontSize: 16, fontWeight: '900', color: COLORS.text },

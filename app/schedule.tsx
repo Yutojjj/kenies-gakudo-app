@@ -1242,7 +1242,7 @@ export default function ScheduleScreen() {
                 <View style={styles.pickupHeroTop}>
                   <View style={styles.pickupHeroLabel}>
                     <Ionicons name="car-outline" size={18} color="#F59E0B" />
-                    <Text style={styles.pickupHeroLabelText}>学校へお迎え</Text>
+                    <Text style={styles.pickupHeroLabelText}>学校へのお迎え・利用開始時刻</Text>
                   </View>
                   <TouchableOpacity style={styles.scheduleEditPill} onPress={() => openTimePicker('pickup', getCellData(selectedDateStr).pickupTime || '15:00')}>
                     <Text style={styles.scheduleEditPillText}>編集</Text>

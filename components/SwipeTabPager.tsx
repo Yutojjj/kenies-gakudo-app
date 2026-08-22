@@ -78,9 +78,9 @@ export default function SwipeTabPager<T extends string>({
   return (
     <View style={styles.wrap} {...panResponder.panHandlers}>
       <Animated.View style={[styles.track, { width: width * 3, transform: [{ translateX: Animated.add(dragX, -width) }] }]}>
-        <View style={[styles.page, { width }]}>{prev ? renderTab(prev) : null}</View>
-        <View style={[styles.page, { width }]}>{renderTab(active)}</View>
-        <View style={[styles.page, { width }]}>{next ? renderTab(next) : null}</View>
+        <View key={prev ? `prev-${prev}` : 'prev-empty'} style={[styles.page, { width }]}>{prev ? renderTab(prev) : null}</View>
+        <View key={`active-${active}`} style={[styles.page, { width }]}>{renderTab(active)}</View>
+        <View key={next ? `next-${next}` : 'next-empty'} style={[styles.page, { width }]}>{next ? renderTab(next) : null}</View>
       </Animated.View>
     </View>
   );
