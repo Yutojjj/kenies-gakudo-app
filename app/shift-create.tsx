@@ -17,6 +17,21 @@ import { navigateHome } from '../utils/navigationHome';
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
 
+const SHIFT_CARD_COLORS = [
+  '#A9DFD1',
+  '#F3B1C3',
+  '#C9BEF2',
+  '#F2BE9B',
+  '#A8D2F0',
+  '#BCD99B',
+  '#F2D783',
+  '#9ED9DE',
+  '#D8ADD0',
+  '#D2C4A7',
+  '#B3C7E5',
+  '#EAB2A7',
+];
+
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 const SHIFT_WHEEL_ITEM_HEIGHT = 40;
@@ -886,7 +901,7 @@ export default function ShiftCreateScreen() {
         </View>
       </View>
 
-      <ScrollView style={{ paddingHorizontal: 8 }}>
+      <ScrollView style={styles.calendarScroll} contentContainerStyle={styles.calendarContent}>
         <View style={styles.calHeaderRow}>
           {weeks.map((w, i) => <Text key={i} style={[styles.calWeekText, i === 0 && {color: 'red'}, i === 6 && {color: 'blue'}]}>{w}</Text>)}
         </View>
@@ -934,12 +949,28 @@ export default function ShiftCreateScreen() {
                   </View>
                 )}
 
-                <View style={{ flex: 1, marginTop: 4 }}>
-                  {(assignedShifts[item.dateStr] || []).map((st, i) => (
-                    <Text key={i} style={styles.cellStaffText}>
-                      {st.name}{showTimeInCalendar ? `\n${st.start}-${st.end}` : ''}
-                    </Text>
-                  ))}
+                <View style={{ flex: 1, marginTop: 3 }}>
+                  {(assignedShifts[item.dateStr] || []).map((st, i) => {
+                    const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === st.name));
+                    return (
+                      <View
+                        key={`${st.name}-${i}`}
+                        style={[
+                          styles.cellStaffRow,
+                          !showTimeInCalendar && styles.cellStaffRowCompact,
+                          { backgroundColor: SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length] },
+                        ]}
+                      >
+                        <Text style={styles.cellStaffName} numberOfLines={1}>{st.name}</Text>
+                        {showTimeInCalendar && (
+                          <View style={styles.cellStaffTimeRow}>
+                            <Text style={styles.cellStaffTime}>{st.start}</Text>
+                            <Text style={styles.cellStaffTime}>{st.end}</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               </TouchableOpacity>
             );
@@ -1036,8 +1067,7 @@ export default function ShiftCreateScreen() {
                             const req = requests[`${(staff.name||'').trim()}_${day.dateStr}`];
                             
                             if (assigned) {
-                              // ★ 縦に伸びすぎないように「開:〇〇 \n 終:〇〇」の2行にまとめる
-                              content = `開:${assigned.start}\n終:${assigned.end}`; 
+                              content = `${assigned.start}\n${assigned.end}`;
                               bgColor = '#FFD700'; 
                               isBold = true;
                             } else if (req) {
@@ -1733,25 +1763,28 @@ const styles = StyleSheet.create({
   monthAutoReviewSection: { marginBottom: 16 },
   monthAutoReviewTimes: { flex: 1, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'flex-end' },
 
-  calHeaderRow: { flexDirection: 'row', marginBottom: 4 },
-  calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 13, fontWeight: 'bold' },
+  calendarScroll: { flex: 1 },
+  calendarContent: { width: '100%', paddingHorizontal: 0, paddingBottom: 100 },
+  calHeaderRow: { flexDirection: 'row', marginBottom: 4, paddingHorizontal: 2 },
+  calWeekText: { width: '14.2%', textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: COLORS.text },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   
-  calCellEmpty: { width: '14.28%', minHeight: 80 },
-  calCell: { width: '14.28%', minHeight: 90, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  calCellEmpty: { width: '14.28%', minHeight: 112 },
+  calCell: { width: '14.28%', minHeight: 126, borderWidth: 0.5, borderColor: COLORS.border, paddingHorizontal: 2, paddingVertical: 5, backgroundColor: COLORS.white },
   
   cellTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  calDayText: { fontSize: 12, fontWeight: 'bold' },
-  availableCountText: { fontSize: 9, color: COLORS.textLight, marginBottom: 2 },
-  cellCountText: { fontSize: 10, color: COLORS.primary, fontWeight: 'bold' },
+  calDayText: { fontSize: 17, fontWeight: 'bold' },
+  availableCountText: { fontSize: 11, color: COLORS.textLight, marginBottom: 1, fontWeight: '700' },
+  cellCountText: { fontSize: 13, color: '#007A82', fontWeight: '900' },
   
-  cellStaffText: { fontSize: 9, color: '#333', marginBottom: 4, lineHeight: 12 },
-  cellStaffRow: { marginBottom: 3, backgroundColor: '#F0F8FF', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2 },
-  cellStaffName: { fontSize: 9, fontWeight: 'bold', color: '#333', lineHeight: 12 },
-  cellStaffTime: { fontSize: 8, color: COLORS.primary, lineHeight: 11 },
+  cellStaffRow: { marginBottom: 1, paddingHorizontal: 4, paddingVertical: 4, minHeight: 43 },
+  cellStaffRowCompact: { minHeight: 25, paddingVertical: 4 },
+  cellStaffName: { fontSize: 13, fontWeight: '900', color: '#171717', lineHeight: 16 },
+  cellStaffTimeRow: { marginTop: 1 },
+  cellStaffTime: { fontSize: 11, lineHeight: 14, fontWeight: '700', color: '#171717' },
   
   eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
-  eventBadgeText: { fontSize: 9, lineHeight: 11, color: '#5B3A00', fontWeight: '900' },
+  eventBadgeText: { fontSize: 11, lineHeight: 14, color: '#5B3A00', fontWeight: '900' },
   dayEventCard: { marginBottom: 18, padding: 14, borderRadius: 10, backgroundColor: '#FFF8DF', borderWidth: 1, borderColor: '#EBCB73' },
   dayEventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 7 },
   dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },
