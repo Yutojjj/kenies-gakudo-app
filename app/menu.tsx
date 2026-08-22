@@ -1839,20 +1839,31 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            <Animated.View style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}>
+            <AnimatedTouchableOpacity
+              style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
+              onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
+              activeOpacity={0.94}
+              accessibilityRole="button"
+              accessibilityLabel={`${formatMenuDateLabel(staffPlanDate)}の送迎担当を編集`}
+            >
               <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
                   <TouchableOpacity
                     style={styles.staffDateButton}
-                    onPress={() => setStaffPlanDate(prev => addDays(prev, -1))}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setStaffPlanDate(prev => addDays(prev, -1));
+                    }}
                     activeOpacity={0.75}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    <Ionicons name="chevron-back" size={16} color="#6D5A4D" />
+                    <Ionicons name="chevron-back" size={22} color="#6D5A4D" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.staffDatePickerButton}
-                    onPress={() => {
+                    onPress={(event) => {
+                      event.stopPropagation();
                       setPickupCalendarMonth(new Date(staffPlanDate.getFullYear(), staffPlanDate.getMonth(), 1));
                       setPickupDatePickerVisible(true);
                     }}
@@ -1864,25 +1875,24 @@ export default function MenuScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.staffDateButton}
-                    onPress={() => setStaffPlanDate(prev => addDays(prev, 1))}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setStaffPlanDate(prev => addDays(prev, 1));
+                    }}
                     activeOpacity={0.75}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    <Ionicons name="chevron-forward" size={16} color="#6D5A4D" />
+                    <Ionicons name="chevron-forward" size={22} color="#6D5A4D" />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={[styles.staffSectionEditBtn, styles.staffCardEditBtn]}
-                  onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
-                  activeOpacity={0.82}
-                >
-                  <Ionicons name="pencil-outline" size={13} color="#007A82" />
-                  <Text style={styles.staffSectionEditText}>編集する</Text>
-                </TouchableOpacity>
               </View>
               <View style={styles.pickupInlineActions}>
                 <TouchableOpacity
                   style={[styles.pickupInlineActionBtn, styles.pickupInlineAttendanceBtn]}
-                  onPress={() => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any);
+                  }}
                   activeOpacity={0.82}
                 >
                   <Ionicons name="checkmark-done-outline" size={15} color="#247A5A" />
@@ -1890,7 +1900,10 @@ export default function MenuScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
-                  onPress={() => openPickupOverviewAction('view')}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openPickupOverviewAction('view');
+                  }}
                   disabled={pickupOverviewLoadingAction !== null}
                   activeOpacity={0.82}
                 >
@@ -1906,7 +1919,10 @@ export default function MenuScreen() {
                     styles.pickupEntryWarning,
                     pickupEntryStatus === 'partial' ? styles.pickupEntryWarningPartial : styles.pickupEntryWarningEmpty,
                   ]}
-                  onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate), view: 'transport' } } as any)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate), view: 'transport' } } as any);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Ionicons
@@ -1928,7 +1944,10 @@ export default function MenuScreen() {
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
               <TouchableOpacity
                 style={styles.pickupExpandToggle}
-                onPress={togglePickupInlineOverview}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  togglePickupInlineOverview();
+                }}
                 disabled={pickupOverviewLoadingAction !== null}
                 activeOpacity={0.78}
               >
@@ -1937,7 +1956,7 @@ export default function MenuScreen() {
                   : <Ionicons name={showAllPickup ? 'chevron-up' : 'chevron-down'} size={17} color="#007A82" />}
                 <Text style={styles.pickupExpandToggleText}>{showAllPickup ? '折りたたむ' : '全体を見る'}</Text>
               </TouchableOpacity>
-            </Animated.View>
+            </AnimatedTouchableOpacity>
           </View>
         )}
 
@@ -4611,9 +4630,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   staffDateButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFF7E6',
