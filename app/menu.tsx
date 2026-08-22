@@ -1831,7 +1831,7 @@ export default function MenuScreen() {
               </View>
               {(role === 'staff' || role === 'admin') && (
                 <TouchableOpacity ref={noticeButtonRef} style={styles.staffSectionMemoBtn} onPress={openNoticePopover} activeOpacity={0.82}>
-                  <Ionicons name="pencil-outline" size={14} color="#7B4E8E" />
+                  <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
                   <Text style={styles.staffSectionMemoText}>メモを追加</Text>
                   {(todayMemos.length + adminNotices.length) > 0 && (
                     <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
@@ -1846,7 +1846,36 @@ export default function MenuScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${formatMenuDateLabel(staffPlanDate)}の送迎担当を編集`}
             >
-              <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
+              <View style={styles.staffPickupTopRow}>
+                <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
+                <View style={styles.pickupInlineActions}>
+                  <TouchableOpacity
+                    style={[styles.pickupInlineActionBtn, styles.pickupInlineAttendanceBtn]}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any);
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <Ionicons name="checkmark-done-outline" size={15} color="#247A5A" />
+                    <Text style={styles.pickupInlineAttendanceText}>登所一覧</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      openPickupOverviewAction('view');
+                    }}
+                    disabled={pickupOverviewLoadingAction !== null}
+                    activeOpacity={0.82}
+                  >
+                    {pickupOverviewLoadingAction === 'view'
+                      ? <ActivityIndicator size="small" color="#245E96" />
+                      : <Ionicons name="open-outline" size={15} color="#245E96" />}
+                    <Text style={styles.pickupInlineOverviewText}>送迎一覧</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
                   <TouchableOpacity
@@ -1885,33 +1914,6 @@ export default function MenuScreen() {
                     <Ionicons name="chevron-forward" size={22} color="#6D5A4D" />
                   </TouchableOpacity>
                 </View>
-              </View>
-              <View style={styles.pickupInlineActions}>
-                <TouchableOpacity
-                  style={[styles.pickupInlineActionBtn, styles.pickupInlineAttendanceBtn]}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any);
-                  }}
-                  activeOpacity={0.82}
-                >
-                  <Ionicons name="checkmark-done-outline" size={15} color="#247A5A" />
-                  <Text style={styles.pickupInlineAttendanceText}>登所一覧</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    openPickupOverviewAction('view');
-                  }}
-                  disabled={pickupOverviewLoadingAction !== null}
-                  activeOpacity={0.82}
-                >
-                  {pickupOverviewLoadingAction === 'view'
-                    ? <ActivityIndicator size="small" color="#245E96" />
-                    : <Ionicons name="open-outline" size={15} color="#245E96" />}
-                  <Text style={styles.pickupInlineOverviewText}>送迎一覧</Text>
-                </TouchableOpacity>
               </View>
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
                 <TouchableOpacity
@@ -4407,12 +4409,12 @@ const styles = StyleSheet.create({
   pickupInlineActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 7,
-    marginBottom: 10,
+    alignItems: 'center',
+    gap: 6,
   },
   pickupInlineActionBtn: {
     minHeight: 36,
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -4771,6 +4773,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
     color: '#4A342B',
+  },
+  staffPickupTopRow: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 8,
   },
 
