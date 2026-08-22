@@ -577,7 +577,6 @@ export default function AnnouncementsScreen() {
             <View style={styles.publishTimeButton}>
                 <Text style={styles.publishTimeLabel}>開始時刻</Text>
                 <Text style={styles.publishTimeText}>{publishHour}:{publishMinute}〜</Text>
-                <Ionicons name="chevron-down" size={14} color="#267A80" />
             </View>
           </TouchableOpacity>
 

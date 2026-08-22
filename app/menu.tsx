@@ -645,8 +645,7 @@ export default function MenuScreen() {
             'typing', 'qrScan', 'qrUpdater', 'accountList', 'accountCreate', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as AdminQuickKey)) as AdminQuickKey[];
-          if (!next.includes('announcements')) next.push('announcements');
-          if (next.length > 0) setAdminQuickVisibleKeys(next);
+          setAdminQuickVisibleKeys(next);
         }
       } catch {}
     });
@@ -699,8 +698,7 @@ export default function MenuScreen() {
             'typing', 'qrScan', 'password', 'logout', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as StaffQuickKey)) as StaffQuickKey[];
-          if (!next.includes('announcements')) next.push('announcements');
-          if (next.length > 0) setStaffQuickVisibleKeys(next);
+          setStaffQuickVisibleKeys(next);
         }
       } catch {}
     });
