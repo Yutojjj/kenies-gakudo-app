@@ -440,11 +440,51 @@ export default function MenuScreen() {
   const [menuEventParticipations, setMenuEventParticipations] = useState<Record<string, string>>({});
   const [menuEventIndex, setMenuEventIndex] = useState(0);
   const [announcements, setAnnouncements] = useState<MenuAnnouncement[]>([]);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
+  const [announcementReadsLoaded, setAnnouncementReadsLoaded] = useState(false);
   const [announcementListVisible, setAnnouncementListVisible] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
   const promotionCheckedRef = useRef<Set<string>>(new Set());
+  const announcementReadOwner = accountId || name || 'user';
+  const announcementReadStorageKey = `announcementReadIds:${announcementReadOwner}`;
+  const unreadAnnouncementCount = announcementReadsLoaded
+    ? announcements.filter(item => !readAnnouncementIds.includes(item.id)).length
+    : 0;
+
+  useEffect(() => {
+    if (role !== 'user') {
+      setReadAnnouncementIds([]);
+      setAnnouncementReadsLoaded(false);
+      return;
+    }
+
+    let active = true;
+    setAnnouncementReadsLoaded(false);
+    AsyncStorage.getItem(announcementReadStorageKey).then(raw => {
+      if (!active) return;
+      try {
+        const parsed = raw ? JSON.parse(raw) : [];
+        setReadAnnouncementIds(Array.isArray(parsed) ? parsed.filter(value => typeof value === 'string') : []);
+      } catch {
+        setReadAnnouncementIds([]);
+      }
+      setAnnouncementReadsLoaded(true);
+    });
+
+    return () => { active = false; };
+  }, [role, announcementReadStorageKey]);
+
+  useEffect(() => {
+    if (role !== 'user' || !announcementReadsLoaded || !selectedAnnouncement) return;
+    setReadAnnouncementIds(current => {
+      if (current.includes(selectedAnnouncement.id)) return current;
+      const next = [...current, selectedAnnouncement.id].slice(-300);
+      void AsyncStorage.setItem(announcementReadStorageKey, JSON.stringify(next));
+      return next;
+    });
+  }, [role, announcementReadsLoaded, selectedAnnouncement, announcementReadStorageKey]);
 
   useEffect(() => {
     if (role !== 'user') {
@@ -2080,8 +2120,8 @@ export default function MenuScreen() {
                   accessibilityLabel="お知らせを開く"
                 >
                   <Ionicons name="bulb-outline" size={23} color="#8A5B08" />
-                  {announcements.length > 0 && (
-                    <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{announcements.length > 99 ? '99+' : announcements.length}</Text></View>
+                  {unreadAnnouncementCount > 0 && (
+                    <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</Text></View>
                   )}
                 </TouchableOpacity>
               </View>
