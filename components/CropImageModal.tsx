@@ -21,6 +21,13 @@ const touchDistance = (touches: readonly any[]) => {
   const dy = touches[0].pageY - touches[1].pageY;
   return Math.sqrt(dx * dx + dy * dy);
 };
+const touchCenter = (touches: readonly any[]) => {
+  if (touches.length < 2) return { x: 0, y: 0 };
+  return {
+    x: (touches[0].locationX + touches[1].locationX) / 2,
+    y: (touches[0].locationY + touches[1].locationY) / 2,
+  };
+};
 
 export default function CropImageModal({ visible, uri, title = '写真をトリミング', onCancel, onDone }: Props) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -31,7 +38,9 @@ export default function CropImageModal({ visible, uri, title = '写真をトリ�
   const [saving, setSaving] = useState(false);
   const scaleRef = useRef(1);
   const offsetRef = useRef({ x: 0, y: 0 });
-  const gestureStart = useRef({ scale: 1, x: 0, y: 0, distance: 0 });
+  const frameRef = useRef<any>(null);
+  const gestureStart = useRef({ scale: 1, x: 0, y: 0, distance: 0, focalX: 0, focalY: 0 });
+  const pinchingRef = useRef(false);
 
   const frameWidth = Math.min(windowWidth - 36, 680);
   const frameHeight = Math.min(frameWidth * 9 / 16, windowHeight * 0.5);
@@ -55,6 +64,22 @@ export default function CropImageModal({ visible, uri, title = '写真をトリ�
     commitOffset(clamp(next.x, -maxX, maxX), clamp(next.y, -maxY, maxY));
   };
 
+  const zoomAt = (requestedScale: number, focalX = frameSize.width / 2, focalY = frameSize.height / 2) => {
+    const previousScale = scaleRef.current;
+    const nextScale = clamp(requestedScale, 1, 4);
+    if (Math.abs(nextScale - previousScale) < 0.001) return;
+
+    const centerX = frameSize.width / 2;
+    const centerY = frameSize.height / 2;
+    const ratio = nextScale / previousScale;
+    const nextOffset = {
+      x: focalX - centerX - (focalX - centerX - offsetRef.current.x) * ratio,
+      y: focalY - centerY - (focalY - centerY - offsetRef.current.y) * ratio,
+    };
+    commitScale(nextScale);
+    clampOffset(nextScale, nextOffset);
+  };
+
   useEffect(() => {
     if (!visible || !uri) return;
     commitScale(1);
@@ -62,44 +87,95 @@ export default function CropImageModal({ visible, uri, title = '写真をトリ�
     Image.getSize(uri, (width, height) => setImageSize({ width, height }), () => setImageSize({ width: 1, height: 1 }));
   }, [visible, uri]);
 
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') return;
+    const element = frameRef.current as HTMLElement | null;
+    if (!element?.addEventListener) return;
+
+    const preventPageZoom = (event: Event) => event.preventDefault();
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = element.getBoundingClientRect();
+      const focalX = clamp(event.clientX - rect.left, 0, frameSize.width);
+      const focalY = clamp(event.clientY - rect.top, 0, frameSize.height);
+      const factor = Math.exp(-event.deltaY * 0.0025);
+      zoomAt(scaleRef.current * factor, focalX, focalY);
+    };
+
+    element.addEventListener('wheel', onWheel, { passive: false });
+    element.addEventListener('gesturestart', preventPageZoom, { passive: false });
+    element.addEventListener('gesturechange', preventPageZoom, { passive: false });
+    element.addEventListener('gestureend', preventPageZoom, { passive: false });
+    return () => {
+      element.removeEventListener('wheel', onWheel);
+      element.removeEventListener('gesturestart', preventPageZoom);
+      element.removeEventListener('gesturechange', preventPageZoom);
+      element.removeEventListener('gestureend', preventPageZoom);
+    };
+  }, [visible, frameSize.width, frameSize.height, imageSize.width, imageSize.height]);
+
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: event => {
+      const touches = event.nativeEvent.touches;
+      const focal = touchCenter(touches);
       gestureStart.current = {
         scale: scaleRef.current,
         x: offsetRef.current.x,
         y: offsetRef.current.y,
-        distance: touchDistance(event.nativeEvent.touches),
+        distance: touchDistance(touches),
+        focalX: focal.x,
+        focalY: focal.y,
       };
+      pinchingRef.current = touches.length >= 2;
     },
     onPanResponderMove: (event, gesture) => {
       const touches = event.nativeEvent.touches;
       if (touches.length >= 2) {
         const distance = touchDistance(touches);
-        const initial = gestureStart.current.distance || distance;
-        commitScale(gestureStart.current.scale * (distance / initial));
-      } else {
+        const focal = touchCenter(touches);
+        if (!pinchingRef.current || !gestureStart.current.distance) {
+          gestureStart.current = {
+            scale: scaleRef.current,
+            x: offsetRef.current.x,
+            y: offsetRef.current.y,
+            distance,
+            focalX: focal.x,
+            focalY: focal.y,
+          };
+          pinchingRef.current = true;
+          return;
+        }
+        const nextScale = clamp(gestureStart.current.scale * (distance / gestureStart.current.distance), 1, 4);
+        const ratio = nextScale / gestureStart.current.scale;
+        const centerX = frameSize.width / 2;
+        const centerY = frameSize.height / 2;
+        commitScale(nextScale);
+        clampOffset(nextScale, {
+          x: focal.x - centerX - (gestureStart.current.focalX - centerX - gestureStart.current.x) * ratio,
+          y: focal.y - centerY - (gestureStart.current.focalY - centerY - gestureStart.current.y) * ratio,
+        });
+      } else if (!pinchingRef.current) {
         commitOffset(gestureStart.current.x + gesture.dx, gestureStart.current.y + gesture.dy);
       }
     },
-    onPanResponderRelease: () => clampOffset(),
-    onPanResponderTerminate: () => clampOffset(),
+    onPanResponderRelease: () => {
+      pinchingRef.current = false;
+      clampOffset();
+    },
+    onPanResponderTerminate: () => {
+      pinchingRef.current = false;
+      clampOffset();
+    },
+    onPanResponderTerminationRequest: () => false,
   }), [frameSize.width, frameSize.height, imageSize.width, imageSize.height]);
 
   const displaySize = useMemo(() => {
     const base = Math.max(frameSize.width / imageSize.width, frameSize.height / imageSize.height);
     return { width: imageSize.width * base * scale, height: imageSize.height * base * scale };
   }, [frameSize, imageSize, scale]);
-
-  const nudge = (x: number, y: number) => {
-    commitOffset(offsetRef.current.x + x, offsetRef.current.y + y);
-    requestAnimationFrame(() => clampOffset());
-  };
-  const zoom = (amount: number) => {
-    commitScale(scaleRef.current + amount);
-    requestAnimationFrame(() => clampOffset());
-  };
 
   const crop = async () => {
     if (!uri || saving) return;
@@ -132,8 +208,17 @@ export default function CropImageModal({ visible, uri, title = '写真をトリ�
             <Text style={styles.title}>{title}</Text>
             <TouchableOpacity style={styles.close} onPress={onCancel}><Ionicons name="close" size={29} color="#302B28" /></TouchableOpacity>
           </View>
-          <Text style={styles.guide}>{Platform.OS === 'web' ? 'ボタンまたはドラッグで位置を調整してください' : '二本指で拡大・縮小、指で画像を動かせます'}</Text>
-          <View style={[styles.frame, { width: frameWidth, height: frameHeight }]} onLayout={onFrameLayout} {...panResponder.panHandlers}>
+          <Text style={styles.guide}>{Platform.OS === 'web' ? 'ドラッグで位置を調整、ホイールまたは二本指で拡大・縮小できます' : '二本指で拡大・縮小、指で画像を動かせます'}</Text>
+          <View
+            ref={frameRef}
+            style={[
+              styles.frame,
+              { width: frameWidth, height: frameHeight },
+              Platform.OS === 'web' ? ({ touchAction: 'none', overscrollBehavior: 'contain' } as any) : null,
+            ]}
+            onLayout={onFrameLayout}
+            {...panResponder.panHandlers}
+          >
             <Image
               source={{ uri }}
               style={{ width: displaySize.width, height: displaySize.height, transform: [{ translateX: offset.x }, { translateY: offset.y }] }}
@@ -144,15 +229,6 @@ export default function CropImageModal({ visible, uri, title = '写真をトリ�
             <View pointerEvents="none" style={[styles.gridLineVertical, { left: '66.666%' }]} />
             <View pointerEvents="none" style={[styles.gridLineHorizontal, { top: '33.333%' }]} />
             <View pointerEvents="none" style={[styles.gridLineHorizontal, { top: '66.666%' }]} />
-          </View>
-          <View style={styles.controls}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => zoom(-0.15)}><Ionicons name="remove" size={24} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => nudge(0, 16)}><Ionicons name="arrow-up" size={22} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => nudge(16, 0)}><Ionicons name="arrow-back" size={22} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => nudge(-16, 0)}><Ionicons name="arrow-forward" size={22} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => nudge(0, -16)}><Ionicons name="arrow-down" size={22} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => zoom(0.15)}><Ionicons name="add" size={24} color="#275F63" /></TouchableOpacity>
-            <TouchableOpacity style={styles.resetButton} onPress={() => { commitScale(1); commitOffset(0, 0); }}><Text style={styles.resetText}>リセット</Text></TouchableOpacity>
           </View>
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancel} onPress={onCancel}><Text style={styles.cancelText}>キャンセル</Text></TouchableOpacity>
@@ -175,10 +251,6 @@ const styles = StyleSheet.create({
   frameBorder: { ...StyleSheet.absoluteFillObject, borderWidth: 3, borderColor: '#fff' },
   gridLineVertical: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.5)' },
   gridLineHorizontal: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.5)' },
-  controls: { marginTop: 13, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  controlButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8F7F7', borderWidth: 1, borderColor: '#B4DDDF' },
-  resetButton: { height: 42, paddingHorizontal: 14, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F1F1' },
-  resetText: { color: '#5D5956', fontSize: 12, fontWeight: '900' },
   actions: { width: '100%', marginTop: 15, flexDirection: 'row', gap: 10 },
   cancel: { minHeight: 48, paddingHorizontal: 18, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F0' },
   cancelText: { color: '#5F5955', fontSize: 13, fontWeight: '900' },
