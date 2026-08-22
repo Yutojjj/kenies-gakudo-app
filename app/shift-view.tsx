@@ -15,18 +15,18 @@ type Staff = { id: string; name: string };
 type AssignedStaff = { name: string; start: string; end: string };
 
 const SHIFT_CARD_COLORS = [
-  '#E6F7F1',
-  '#FFF0F4',
-  '#EEEAFE',
-  '#FFF1E7',
-  '#E8F4FF',
-  '#F1F8E4',
-  '#FFF7D9',
-  '#E7F7F8',
-  '#F8EAF5',
-  '#F3EFE6',
-  '#E9F0FB',
-  '#FDECE7',
+  '#A9DFD1',
+  '#F3B1C3',
+  '#C9BEF2',
+  '#F2BE9B',
+  '#A8D2F0',
+  '#BCD99B',
+  '#F2D783',
+  '#9ED9DE',
+  '#D8ADD0',
+  '#D2C4A7',
+  '#B3C7E5',
+  '#EAB2A7',
 ];
 
 export default function ShiftViewScreen() {
@@ -253,8 +253,8 @@ export default function ShiftViewScreen() {
                       >
                         <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
                         <View style={styles.cellStaffTimeRow}>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>開:{assigned.start}</Text>
-                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>終:{assigned.end}</Text>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>開 {assigned.start}</Text>
+                          <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>終 {assigned.end}</Text>
                         </View>
                       </View>
                     );
@@ -312,12 +312,12 @@ const styles = StyleSheet.create({
   eventBadge: { backgroundColor: '#FFF1C9', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 3, marginTop: 2, borderWidth: 1, borderColor: '#F0C56B' },
   eventBadgeText: { fontSize: 11, lineHeight: 14, color: '#5B3A00', fontWeight: '900' },
   cellStaffRow: { marginBottom: 1, paddingHorizontal: 4, paddingVertical: 4, minHeight: 43 },
-  cellStaffName: { fontSize: 13, fontWeight: '900', color: '#2E2A27', lineHeight: 16 },
+  cellStaffName: { fontSize: 13, fontWeight: '900', color: '#171717', lineHeight: 16 },
   cellStaffTimeRow: { marginTop: 1 },
-  cellStaffTime: { fontSize: 11, lineHeight: 14, fontWeight: '800' },
-  cellStaffStartTime: { color: COLORS.text },
-  cellStaffEndTime: { color: COLORS.text },
-  cellStaffTimeMe: { fontWeight: '900' },
+  cellStaffTime: { fontSize: 11, lineHeight: 14, fontWeight: '700' },
+  cellStaffStartTime: { color: '#171717' },
+  cellStaffEndTime: { color: '#171717' },
+  cellStaffTimeMe: { fontWeight: '700' },
   submissionOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 12 },
   submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
 });
