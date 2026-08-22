@@ -17,7 +17,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert, Modal, Platform, SafeAreaView, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
-  ActivityIndicator, FlatList, useWindowDimensions,
+  ActivityIndicator, FlatList,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import SwipeTabPager from '../components/SwipeTabPager';
@@ -55,6 +55,8 @@ interface Cert {
   score: string;
   wpm: number;
   result: Result;
+  stageValues?: string[];
+  stageMisses?: number[];
   createdAt: any;
 }
 
@@ -62,7 +64,7 @@ interface Cert {
 const GRADES = Array.from({ length: 11 }, (_, i) => i + 1);
 const STAR_LABEL: Record<Star, string> = { kuro: '黒★', aka: '赤★', ki: '黄★' };
 const STAR_COLOR: Record<Star, string> = { kuro: '#212121', aka: '#C62828', ki: '#F9A825' };
-const MAX_STAGES = 10;
+const STAGE_COUNT = 8;
 const PASSING_SCORE = 90;
 const TYPING_TABS: TypingTab[] = ['create', 'students', 'history'];
 
@@ -103,8 +105,6 @@ function SectionHeader({ title }: { title: string }) {
 export default function TypingCertScreen() {
   const { verified, checking } = useRequireRole(['admin', 'staff']);
   const router = useRouter();
-  const { width: screenWidth } = useWindowDimensions();
-  const useCustomNumberPad = screenWidth <= 768;
 
   // ── タブ
   const [tab, setTab] = useState<TypingTab>('create');
@@ -122,9 +122,10 @@ export default function TypingCertScreen() {
   const [star, setStar]             = useState<Star>('kuro');
   const [grade, setGrade]           = useState(3);
   const [score, setScore]           = useState('');
-  const [stageCount, setStageCount] = useState(8);
-  const [stageVals, setStageVals]   = useState<string[]>(Array(8).fill(''));
+  const [stageVals, setStageVals]   = useState<string[]>(Array(STAGE_COUNT).fill(''));
+  const [stageMisses, setStageMisses] = useState<string[]>(Array(STAGE_COUNT).fill(''));
   const [activeStageInput, setActiveStageInput] = useState<number | null>(null);
+  const [stageInputMode, setStageInputMode] = useState<'value' | 'misses'>('value');
   const [result, setResult]         = useState<Result>('fail');
   const [saving, setSaving]         = useState(false);
 
@@ -143,7 +144,7 @@ export default function TypingCertScreen() {
   const [newCertifierName, setNewCertifierName] = useState('');
 
   // ── ピッカーモーダル（ドロップダウン代替）
-  type PickerTarget = 'student' | 'certifier' | 'star' | 'grade' | 'stageCount' | 'newStar' | 'newGrade' | null;
+  type PickerTarget = 'student' | 'certifier' | 'star' | 'grade' | 'newStar' | 'newGrade' | null;
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
 
   useEffect(() => {
@@ -151,6 +152,16 @@ export default function TypingCertScreen() {
     const passed = score.trim() !== '' && Number.isFinite(numericScore) && numericScore >= PASSING_SCORE;
     setResult(passed ? 'pass' : 'fail');
   }, [score]);
+
+  useEffect(() => {
+    const hasMissInput = stageMisses.some(value => value.trim() !== '');
+    if (!hasMissInput) {
+      setScore('');
+      return;
+    }
+    const totalMisses = stageMisses.reduce((sum, value) => sum + (Number.parseInt(value, 10) || 0), 0);
+    setScore(String(Math.max(0, 100 - totalMisses)));
+  }, [stageMisses]);
 
   // ── Firestore 購読
   useEffect(() => {
@@ -179,17 +190,6 @@ export default function TypingCertScreen() {
     setPickerTarget(null);
   };
 
-  // ── ステージ数変更
-  const handleStageCount = (n: number) => {
-    setStageCount(n);
-    setStageVals(prev => {
-      const next = [...prev];
-      while (next.length < n) next.push('');
-      return next.slice(0, n);
-    });
-    setPickerTarget(null);
-  };
-
   // ── WPM計算
   const calcWPM = () => {
     const vals = stageVals.map(v => parseFloat(v)).filter(v => !isNaN(v) && v > 0);
@@ -201,15 +201,33 @@ export default function TypingCertScreen() {
 
   const pressCustomNumberKey = (key: string) => {
     if (activeStageInput === null) return;
-    setStageVals(prev => {
+    const update = stageInputMode === 'value' ? setStageVals : setStageMisses;
+    update(prev => {
       const next = [...prev];
       const current = next[activeStageInput] || '';
       if (key === 'clear') next[activeStageInput] = '';
       else if (key === 'backspace') next[activeStageInput] = current.slice(0, -1);
-      else if (key === '.') next[activeStageInput] = current.includes('.') ? current : current ? `${current}.` : '0.';
-      else if (current.length < 7) next[activeStageInput] = current === '0' ? key : `${current}${key}`;
+      else if (key === '.' && stageInputMode === 'value') next[activeStageInput] = current.includes('.') ? current : current ? `${current}.` : '0.';
+      else if (/^\d$/.test(key) && current.length < 7) next[activeStageInput] = current === '0' ? key : `${current}${key}`;
       return next;
     });
+  };
+
+  const openStageInput = (index: number) => {
+    setActiveStageInput(index);
+    setStageInputMode('value');
+  };
+
+  const completeStageValue = () => setStageInputMode('misses');
+
+  const moveToNextStage = () => {
+    if (activeStageInput === null || activeStageInput >= STAGE_COUNT - 1) {
+      setActiveStageInput(null);
+      setStageInputMode('value');
+      return;
+    }
+    setActiveStageInput(activeStageInput + 1);
+    setStageInputMode('value');
   };
 
   // ── 印刷ページを開く（aタグclickでポップアップブロック回避）
@@ -226,6 +244,7 @@ export default function TypingCertScreen() {
     certifierName: string,
     certDate: string, certStar: Star, certGrade: number,
     certScore: string, certWpm: number, certResult: Result,
+    certStageValues: string[], certStageMisses: string[],
   ) => {
     await addDoc(collection(db, 'typing_certs'), {
       studentName: student.name,
@@ -236,6 +255,8 @@ export default function TypingCertScreen() {
       score: certScore,
       wpm: certWpm,
       result: certResult,
+      stageValues: certStageValues,
+      stageMisses: certStageMisses.map(value => Number.parseInt(value, 10) || 0),
       createdAt: serverTimestamp(),
     });
     // 合格のときのみ受講者の級・星を更新
@@ -258,10 +279,11 @@ export default function TypingCertScreen() {
     try {
       await saveCertAndUpdateStudent(
         student, certifier?.name || '', date, star, grade, score, wpmResult.wpm, result,
+        stageVals, stageMisses,
       );
       alert$('保存完了', '認定書を記録しました');
       setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
-      setScore(''); setStageVals(Array(stageCount).fill('')); setResult('fail');
+      setScore(''); setStageVals(Array(STAGE_COUNT).fill('')); setStageMisses(Array(STAGE_COUNT).fill('')); setResult('fail');
     } catch (e) {
       alert$('エラー', '保存に失敗しました');
     } finally {
@@ -279,6 +301,7 @@ export default function TypingCertScreen() {
     try {
       await saveCertAndUpdateStudent(
         student, certifier?.name || '', date, star, grade, score, wpmResult.wpm, result,
+        stageVals, stageMisses,
       );
     } catch (e) {
       alert$('エラー', '保存に失敗しました');
@@ -287,7 +310,7 @@ export default function TypingCertScreen() {
     }
     setSaving(false);
     setSelStudentId(''); setSelCertifierId(''); setDate(todayStr());
-    setScore(''); setStageVals(Array(stageCount).fill('')); setResult('fail');
+    setScore(''); setStageVals(Array(STAGE_COUNT).fill('')); setStageMisses(Array(STAGE_COUNT).fill('')); setResult('fail');
     openPrintPage({
       result,
       name: student.name,
@@ -441,54 +464,31 @@ export default function TypingCertScreen() {
 
             {/* 得点 */}
             <Text style={[styles.fieldLabel, { marginTop: 12 }]}>得点</Text>
-            <TextInput
-              style={[styles.input, { width: 120 }]}
-              value={score}
-              onChangeText={setScore}
-              keyboardType="numeric"
-              placeholder="例: 85"
-              placeholderTextColor="#bbb"
-            />
+            <View style={styles.autoScoreBox}>
+              <Text style={score ? styles.autoScoreValue : styles.autoScorePlaceholder}>
+                {score ? `${score}点` : 'ミス数を入力すると自動計算されます'}
+              </Text>
+            </View>
           </View>
 
           {/* WPM計算 */}
           <View style={styles.card}>
             <SectionHeader title="WPM計算" />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <Text style={styles.fieldLabel}>ステージ数</Text>
-              <TouchableOpacity style={[styles.selector, { minWidth: 80, marginBottom: 0 }]} onPress={() => setPickerTarget('stageCount')}>
-                <Text style={styles.selectorText}>{stageCount}</Text>
-                <Ionicons name="chevron-down" size={18} color="#888" />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 11, color: '#94a3b8' }}>各ステージの 秒/タイプ数 を入力</Text>
-            </View>
+            <Text style={styles.stageGuide}>各ステージを押して、数値とミス数を順番に入力</Text>
             <View style={styles.stageGrid}>
               {stageVals.map((v, i) => (
                 <View key={i} style={styles.stageCell}>
-                  {useCustomNumberPad ? (
-                    <TouchableOpacity
-                      style={styles.stageInput}
-                      onPress={() => setActiveStageInput(i)}
-                      activeOpacity={0.72}
-                      accessibilityLabel={`ステージ${i + 1}の数値を入力`}
-                    >
-                      <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '1.23'}</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TextInput
-                      style={styles.stageInput}
-                      value={v}
-                      onChangeText={val => {
-                        const next = [...stageVals];
-                        next[i] = val.replace(/,/g, '.');
-                        setStageVals(next);
-                      }}
-                      keyboardType="decimal-pad"
-                      inputMode="decimal"
-                      placeholder="1.23"
-                      placeholderTextColor="#bbb"
-                    />
-                  )}
+                  <TouchableOpacity
+                    style={styles.stageInput}
+                    onPress={() => openStageInput(i)}
+                    activeOpacity={0.72}
+                    accessibilityLabel={`ステージ${i + 1}の数値とミス数を入力`}
+                  >
+                    <Text style={v ? styles.stageInputValue : styles.stageInputPlaceholder}>{v || '入力'}</Text>
+                    <Text style={stageMisses[i] !== '' ? styles.stageMissValue : styles.stageMissPlaceholder}>
+                      ミス {stageMisses[i] !== '' ? stageMisses[i] : '—'}
+                    </Text>
+                  </TouchableOpacity>
                   <Text style={styles.stageLabel}>ステージ{i + 1}</Text>
                 </View>
               ))}
@@ -886,20 +886,22 @@ export default function TypingCertScreen() {
       )}
 
       <Modal
-        visible={useCustomNumberPad && activeStageInput !== null}
+        visible={activeStageInput !== null}
         transparent
         animationType="slide"
-        onRequestClose={() => setActiveStageInput(null)}
+        onRequestClose={() => { setActiveStageInput(null); setStageInputMode('value'); }}
       >
-        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} onPress={() => setActiveStageInput(null)}>
+        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
           <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} onPress={event => event.stopPropagation()}>
             <View style={styles.numberPadHeader}>
               <View>
                 <Text style={styles.numberPadTitle}>
-                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}`}
+                  {activeStageInput === null ? '' : `ステージ${activeStageInput + 1}　${stageInputMode === 'value' ? '数値' : 'ミス数'}`}
                 </Text>
                 <Text style={styles.numberPadValue}>
-                  {activeStageInput === null ? '0' : stageVals[activeStageInput] || '0'}
+                  {activeStageInput === null
+                    ? '0'
+                    : (stageInputMode === 'value' ? stageVals[activeStageInput] : stageMisses[activeStageInput]) || '0'}
                 </Text>
               </View>
               <TouchableOpacity style={styles.numberPadClear} onPress={() => pressCustomNumberKey('clear')} activeOpacity={0.72}>
@@ -907,23 +909,42 @@ export default function TypingCertScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.numberPadGrid}>
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', '.'].map(key => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.numberPadKey, key === '.' && styles.numberPadDecimalKey]}
-                  onPress={() => pressCustomNumberKey(key)}
-                  activeOpacity={0.68}
-                  accessibilityLabel={key === 'backspace' ? '一文字削除' : key === '.' ? '小数点' : key}
-                >
-                  {key === 'backspace'
-                    ? <Ionicons name="backspace-outline" size={25} color="#355B66" />
-                    : <Text style={styles.numberPadKeyText}>{key}</Text>}
-                </TouchableOpacity>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', stageInputMode === 'value' ? '.' : 'empty'].map(key => (
+                key === 'empty'
+                  ? <View key={key} style={styles.numberPadKeyPlaceholder} />
+                  : (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.numberPadKey, key === '.' && styles.numberPadDecimalKey]}
+                      onPress={() => pressCustomNumberKey(key)}
+                      activeOpacity={0.68}
+                      accessibilityLabel={key === 'backspace' ? '一文字削除' : key === '.' ? '小数点' : key}
+                    >
+                      {key === 'backspace'
+                        ? <Ionicons name="backspace-outline" size={25} color="#355B66" />
+                        : <Text style={styles.numberPadKeyText}>{key}</Text>}
+                    </TouchableOpacity>
+                  )
               ))}
             </View>
-            <TouchableOpacity style={styles.numberPadDone} onPress={() => setActiveStageInput(null)} activeOpacity={0.78}>
-              <Text style={styles.numberPadDoneText}>完了</Text>
-            </TouchableOpacity>
+            {stageInputMode === 'value' ? (
+              <TouchableOpacity style={styles.numberPadDone} onPress={completeStageValue} activeOpacity={0.78}>
+                <Text style={styles.numberPadDoneText}>完了</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.numberPadActionRow}>
+                <TouchableOpacity
+                  style={styles.numberPadClose}
+                  onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}
+                  activeOpacity={0.78}
+                >
+                  <Text style={styles.numberPadCloseText}>閉じる</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.numberPadDone, styles.numberPadNext]} onPress={moveToNextStage} activeOpacity={0.78}>
+                  <Text style={styles.numberPadDoneText}>次へ</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -937,7 +958,7 @@ export default function TypingCertScreen() {
                : pickerTarget === 'certifier' ? '認定者を選択'
                : pickerTarget === 'star' || pickerTarget === 'newStar' ? '星の色を選択'
                : pickerTarget === 'grade' || pickerTarget === 'newGrade' ? '級を選択'
-               : 'ステージ数を選択'}
+               : '選択してください'}
             </Text>
             <ScrollView style={{ maxHeight: 320 }}>
               {/* 受講者 - 曜日フィルター付き */}
@@ -991,12 +1012,6 @@ export default function TypingCertScreen() {
                   <Text style={styles.pickerItemText}>{g}級</Text>
                 </TouchableOpacity>
               ))}
-              {/* ステージ数 */}
-              {pickerTarget === 'stageCount' && Array.from({ length: MAX_STAGES }, (_, i) => i + 1).map(n => (
-                <TouchableOpacity key={n} style={styles.pickerItem} onPress={() => handleStageCount(n)}>
-                  <Text style={styles.pickerItemText}>{n}</Text>
-                </TouchableOpacity>
-              ))}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -1047,14 +1062,23 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 13, fontWeight: 'bold' },
   stageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   stageCell: { alignItems: 'center', minWidth: 72 },
+  stageGuide: { marginBottom: 6, fontSize: 12, color: '#64748B', fontWeight: '700' },
   stageInput: {
     borderWidth: 1.5, borderColor: '#bfdbfe', borderRadius: 7, padding: 8,
-    fontSize: 14, textAlign: 'center', width: 72, minHeight: 38, backgroundColor: '#fff', color: '#1e3a5f',
+    fontSize: 14, textAlign: 'center', width: 82, minHeight: 58, backgroundColor: '#fff', color: '#1e3a5f',
     alignItems: 'center', justifyContent: 'center',
   },
   stageInputValue: { fontSize: 14, fontWeight: '800', color: '#1E3A5F' },
   stageInputPlaceholder: { fontSize: 14, color: '#BBBBBB' },
+  stageMissValue: { marginTop: 4, fontSize: 10, fontWeight: '800', color: '#D05067' },
+  stageMissPlaceholder: { marginTop: 4, fontSize: 10, color: '#A5ADB5' },
   stageLabel:  { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+  autoScoreBox: {
+    width: 160, minHeight: 48, paddingHorizontal: 12, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFF7F8', borderWidth: 1.5, borderColor: '#B6DDE0',
+  },
+  autoScoreValue: { fontSize: 22, fontWeight: '900', color: '#203F48' },
+  autoScorePlaceholder: { fontSize: 11, fontWeight: '700', color: '#7B8D92', textAlign: 'center' },
   numberPadBackdrop: { flex: 1, backgroundColor: 'rgba(24,35,40,0.38)', justifyContent: 'flex-end' },
   numberPadSheet: {
     width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: '#FFFDF9',
@@ -1071,10 +1095,15 @@ const styles = StyleSheet.create({
     width: '31.7%', height: 54, borderRadius: 13, backgroundColor: '#EFF7F8', borderWidth: 1, borderColor: '#C8E0E3',
     alignItems: 'center', justifyContent: 'center',
   },
+  numberPadKeyPlaceholder: { width: '31.7%', height: 54 },
   numberPadDecimalKey: { backgroundColor: '#E2F3F5', borderColor: '#A9D7DB' },
   numberPadKeyText: { fontSize: 23, fontWeight: '900', color: '#284952' },
   numberPadDone: { height: 50, borderRadius: 13, backgroundColor: '#00AEB8', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
   numberPadDoneText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
+  numberPadActionRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  numberPadClose: { flex: 1, height: 50, borderRadius: 13, backgroundColor: '#ECEEEF', alignItems: 'center', justifyContent: 'center' },
+  numberPadCloseText: { color: '#535B5E', fontSize: 15, fontWeight: '900' },
+  numberPadNext: { flex: 1, marginTop: 0 },
   wpmResult:   { backgroundColor: '#eff6ff', borderRadius: 8, padding: 10, marginTop: 8 },
   wpmResultText: { fontSize: 14, color: '#1d4ed8', fontWeight: '600' },
   resultBtn: {
