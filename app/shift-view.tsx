@@ -5,11 +5,11 @@ import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
-import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
 import ShiftScreen from './shift';
+import ShiftCreateScreen from './shift-create';
 
 type Staff = { id: string; name: string };
 type AssignedStaff = { name: string; start: string; end: string };
@@ -42,6 +42,7 @@ export default function ShiftViewScreen() {
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [submissionVisible, setSubmissionVisible] = useState(false);
+  const [createVisible, setCreateVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -121,20 +122,6 @@ export default function ShiftViewScreen() {
         {isAdmin ? (
           <View style={styles.adminHeaderActions}>
             <TouchableOpacity
-              style={[styles.adminHeaderBtn, styles.settingsBtn]}
-              onPress={() => router.push({
-                pathname: '/shift-create',
-                params: {
-                  openSettings: '1',
-                  year: String(currentDate.getFullYear()),
-                  month: String(currentDate.getMonth() + 1),
-                },
-              } as any)}
-            >
-              <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.adminHeaderBtnText}>設定</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.adminHeaderBtn, styles.pdfBtn]}
               onPress={() => router.push({
                 pathname: '/shift-create',
@@ -149,18 +136,11 @@ export default function ShiftViewScreen() {
               <Text style={styles.adminHeaderBtnText}>PDF出力</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.adminHeaderBtn, styles.workHoursBtn]}
-              onPress={() => router.push({
-                pathname: '/shift-create',
-                params: {
-                  openWorkSummary: '1',
-                  year: String(currentDate.getFullYear()),
-                  month: String(currentDate.getMonth() + 1),
-                },
-              } as any)}
+              style={[styles.adminHeaderBtn, styles.createBtn]}
+              onPress={() => setCreateVisible(true)}
             >
-              <Ionicons name="time-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.adminHeaderBtnText}>勤務時間</Text>
+              <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.adminHeaderBtnText}>作成する</Text>
             </TouchableOpacity>
           </View>
         ) : identityLoaded ? (
@@ -179,7 +159,6 @@ export default function ShiftViewScreen() {
           </View>
         ) : null}
       </View>
-      {isAdmin && <AdminShiftTabs active="view" />}
 
       {/* 月ナビゲーション */}
       <View style={styles.monthSelector}>
@@ -279,6 +258,18 @@ export default function ShiftViewScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={createVisible} transparent animationType="fade" onRequestClose={() => setCreateVisible(false)}>
+        <View style={styles.createOverlay}>
+          <View style={styles.createModal}>
+            <ShiftCreateScreen
+              embedded
+              initialDate={currentDate}
+              onClose={() => setCreateVisible(false)}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -290,9 +281,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   adminHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   adminHeaderBtn: { minHeight: 38, paddingHorizontal: 9, borderRadius: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  settingsBtn: { backgroundColor: '#78909C' },
   pdfBtn: { backgroundColor: '#08AEB8' },
-  workHoursBtn: { backgroundColor: '#6A4338' },
+  createBtn: { backgroundColor: '#2D8BE8' },
   adminHeaderBtnText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   staffHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   mineHeaderBtn: { minHeight: 40, paddingHorizontal: 11, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
@@ -323,4 +313,6 @@ const styles = StyleSheet.create({
   cellStaffTimeMe: { fontWeight: '700' },
   submissionOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 12 },
   submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
+  createOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 10 },
+  createModal: { width: '100%', maxWidth: 1180, height: '96%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
 });

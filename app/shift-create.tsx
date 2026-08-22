@@ -8,7 +8,6 @@ import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'fi
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
-import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
@@ -134,7 +133,13 @@ function ShiftTimeWheel({
   );
 }
 
-export default function ShiftCreateScreen() {
+type ShiftCreateScreenProps = {
+  embedded?: boolean;
+  initialDate?: Date;
+  onClose?: () => void;
+};
+
+export default function ShiftCreateScreen({ embedded = false, initialDate, onClose }: ShiftCreateScreenProps = {}) {
   const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
@@ -146,6 +151,7 @@ export default function ShiftCreateScreen() {
     month?: string;
   }>();
   const [currentDate, setCurrentDate] = useState(() => {
+    if (initialDate) return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
     const year = Number(routeYear);
     const month = Number(routeMonth);
     return Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12
@@ -779,24 +785,19 @@ export default function ShiftCreateScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigateHome(router)}><Ionicons name="chevron-back" size={24} color="#5D4037" /></TouchableOpacity>
+        <TouchableOpacity style={styles.backBtn} onPress={() => embedded ? onClose?.() : navigateHome(router)}>
+          <Ionicons name={embedded ? 'close' : 'chevron-back'} size={embedded ? 26 : 24} color="#5D4037" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => setSettingsVisible(true)} style={[styles.pdfBtn, { backgroundColor: '#78909C' }]}>
-            <Ionicons name="settings-outline" size={20} color={COLORS.white} />
-            <Text style={styles.pdfBtnText}>設定</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
-            <Ionicons name="document-text" size={20} color={COLORS.white} />
-            <Text style={styles.pdfBtnText}>PDF出力</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.pdfBtn, { backgroundColor: '#5D4037' }]} onPress={openWorkSummaryModal}>
-            <Ionicons name="time-outline" size={20} color={COLORS.white} />
-            <Text style={styles.pdfBtnText}>勤務時間</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.pdfBtn, styles.headerAutoFillBtn]}
+          onPress={() => setMonthActionConfirm('autoFill')}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="pencil-outline" size={19} color={COLORS.white} />}
+          <Text style={styles.pdfBtnText}>自動入力</Text>
+        </TouchableOpacity>
       </View>
-      <AdminShiftTabs active="create" />
 
       {/* ⑥ 勤務時間サマリーポップアップ */}
       <Modal visible={workSummaryVisible} transparent animationType="fade">
@@ -862,16 +863,6 @@ export default function ShiftCreateScreen() {
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
           <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
-        </View>
-        <View style={styles.monthActionRow}>
-          <TouchableOpacity style={styles.toggleTimeBtn} onPress={() => setShowTimeInCalendar(!showTimeInCalendar)}>
-            <Ionicons name={showTimeInCalendar ? "eye-off" : "eye"} size={15} color={COLORS.primary} />
-            <Text style={styles.toggleTimeText}>{showTimeInCalendar ? '時間を隠す' : '時間も表示'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.monthAutoFillBtn} onPress={() => setMonthActionConfirm('autoFill')} disabled={loading}>
-            {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="pencil-outline" size={15} color="#FFFFFF" />}
-            <Text style={styles.monthActionText}>自動入力</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.monthDeleteBtn} onPress={() => setMonthActionConfirm('delete')} disabled={loading}>
             <Ionicons name="trash-outline" size={15} color="#B93E48" />
             <Text style={styles.monthDeleteText}>削除</Text>
@@ -1676,7 +1667,7 @@ export default function ShiftCreateScreen() {
         </View>
       </Modal>
 
-      <AdminBottomNav active="shift" />
+      {!embedded && <AdminBottomNav active="shift" />}
     </SafeAreaView>
   );
 }
@@ -1689,6 +1680,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
+  headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#36A9B5' },
   workSummaryControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: '#EEE7E3' },
   workSummaryTabs: { flexDirection: 'row', alignSelf: 'center', width: '100%', maxWidth: 320, padding: 4, borderRadius: 12, backgroundColor: '#F0ECE9' },
   workSummaryTab: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
@@ -1700,14 +1692,14 @@ const styles = StyleSheet.create({
   workSummaryPeriodText: { minWidth: 130, textAlign: 'center', fontSize: 16, fontWeight: '900', color: '#3F302B' },
   
   monthSelector: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
-  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
 
   monthActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },
   toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
   monthAutoFillBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#36A9B5', borderWidth: 1, borderColor: '#258C96' },
-  monthDeleteBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
+  monthDeleteBtn: { minHeight: 36, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
   monthActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   monthDeleteText: { color: '#B93E48', fontSize: 12, fontWeight: '900' },
   monthConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 20 },
