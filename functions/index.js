@@ -402,6 +402,15 @@ function tokyoTimeKey(date) {
   }).format(date).replace(".", ":");
 }
 
+function timeToMinutes(time) {
+  const match = String(time || "").match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
 // スタッフ本人が有効にした勤務通知を、指定時刻に各端末へ送る。
 // lastSentDateKeyで同じ勤務日への重複通知を防ぐ。
 exports.sendStaffShiftReminders = onSchedule(
@@ -415,13 +424,19 @@ exports.sendStaffShiftReminders = onSchedule(
     const now = new Date();
     const todayKey = tokyoDateKey(now);
     const currentTime = tokyoTimeKey(now);
+    const currentMinutes = timeToMinutes(currentTime);
     const settingsSnap = await db.collection("staff_shift_notification_settings")
       .where("enabled", "==", true)
       .get();
 
     await Promise.all(settingsSnap.docs.map(async settingDoc => {
       const setting = settingDoc.data();
-      if (String(setting.time || "") !== currentTime) return;
+      const scheduledMinutes = timeToMinutes(setting.time);
+      if (currentMinutes === null || scheduledMinutes === null) return;
+      // Schedulerは実行時刻が数分ずれることがあるため、設定時刻から10分以内を対象にする。
+      // lastSentDateKeyで同じ勤務日の二重送信を防ぐ。
+      const minutesSinceScheduled = currentMinutes - scheduledMinutes;
+      if (minutesSinceScheduled < 0 || minutesSinceScheduled >= 10) return;
 
       const accountId = String(setting.accountId || settingDoc.id || "");
       const staffName = String(setting.staffName || "");
