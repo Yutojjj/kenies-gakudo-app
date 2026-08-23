@@ -196,6 +196,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [availableStaff, setAvailableStaff] = useState<Staff[]>([]);
   const [unavailableStaff, setUnavailableStaff] = useState<{name: string, type: string}[]>([]);
   const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
+  const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
   const [workSummaryDate, setWorkSummaryDate] = useState(currentDate);
   const [workHoursVisible, setWorkHoursVisible] = useState(false);
@@ -214,6 +215,16 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [newEndMinute, setNewEndMinute] = useState(30);
 
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
+
+  const submissionStatusRows = allStaff.map((staff) => {
+    const monthPrefix = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-`;
+    const submitted = Object.keys(requests).some((key) => {
+      const prefix = `${staff.name}_`;
+      return key.startsWith(prefix) && key.slice(prefix.length).startsWith(monthPrefix);
+    });
+    return { ...staff, submitted };
+  });
+  const submittedCount = submissionStatusRows.filter((staff) => staff.submitted).length;
 
   useEffect(() => {
     let staffList: Staff[] = [];
@@ -873,6 +884,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <TouchableOpacity
+          style={[styles.pdfBtn, styles.submissionStatusBtn]}
+          onPress={() => setSubmissionStatusVisible(true)}
+          disabled={loading}
+        >
+          <Text style={styles.pdfBtnText}>シフト提出状況</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.pdfBtn, styles.headerAutoFillBtn]}
           onPress={() => setMonthActionConfirm('autoFill')}
           disabled={loading}
@@ -881,6 +899,71 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           <Text style={styles.pdfBtnText}>自動入力</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={submissionStatusVisible} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.submissionStatusOverlay}
+          activeOpacity={1}
+          onPress={() => setSubmissionStatusVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.submissionStatusPanel}
+            activeOpacity={1}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.submissionStatusHeader}>
+              <View>
+                <Text style={styles.submissionStatusTitle}>シフト提出状況</Text>
+                <Text style={styles.submissionStatusMonth}>
+                  {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.submissionStatusClose}
+                onPress={() => setSubmissionStatusVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#5D4037" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.submissionStatusSummary}>
+              <Text style={styles.submissionStatusSummaryText}>提出済み {submittedCount}名</Text>
+              <Text style={styles.submissionStatusSummaryText}>未提出 {submissionStatusRows.length - submittedCount}名</Text>
+            </View>
+
+            <ScrollView
+              style={styles.submissionStatusScroll}
+              contentContainerStyle={styles.submissionStatusScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {submissionStatusRows.map((staff) => (
+                <View key={staff.id} style={styles.submissionStatusRow}>
+                  <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
+                  <View style={[
+                    styles.submissionStatusBadge,
+                    staff.submitted ? styles.submissionStatusSubmitted : styles.submissionStatusMissing,
+                  ]}>
+                    <Ionicons
+                      name={staff.submitted ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={18}
+                      color={staff.submitted ? '#278A4A' : '#B06A33'}
+                    />
+                    <Text style={[
+                      styles.submissionStatusBadgeText,
+                      staff.submitted ? styles.submissionStatusSubmittedText : styles.submissionStatusMissingText,
+                    ]}>
+                      {staff.submitted ? '提出済み' : '未提出'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              {submissionStatusRows.length === 0 && (
+                <Text style={styles.submissionStatusEmpty}>スタッフ情報を読み込み中です</Text>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ⑥ 勤務時間サマリーポップアップ */}
       <Modal visible={workSummaryVisible} transparent animationType="fade">
@@ -1693,7 +1776,27 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
+  submissionStatusBtn: { minHeight: 40, paddingHorizontal: 8, backgroundColor: '#6C8795' },
   headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#36A9B5' },
+  submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
+  submissionStatusTitle: { fontSize: 18, fontWeight: '900', color: '#3B302B' },
+  submissionStatusMonth: { marginTop: 3, fontSize: 13, fontWeight: '800', color: '#76665E' },
+  submissionStatusClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0E2' },
+  submissionStatusSummary: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#FAFCFC', borderBottomWidth: 1, borderBottomColor: '#E8EEEE' },
+  submissionStatusSummaryText: { fontSize: 13, fontWeight: '900', color: '#4B5A5D' },
+  submissionStatusScroll: { flexGrow: 0 },
+  submissionStatusScrollContent: { paddingHorizontal: 14, paddingVertical: 8 },
+  submissionStatusRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
+  submissionStatusStaffName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#252525' },
+  submissionStatusBadge: { minWidth: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
+  submissionStatusSubmitted: { backgroundColor: '#E7F6EA' },
+  submissionStatusMissing: { backgroundColor: '#FFF1E7' },
+  submissionStatusBadgeText: { fontSize: 13, fontWeight: '900' },
+  submissionStatusSubmittedText: { color: '#278A4A' },
+  submissionStatusMissingText: { color: '#B06A33' },
+  submissionStatusEmpty: { padding: 24, textAlign: 'center', color: '#8A9698', fontWeight: '700' },
   workSummaryControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: '#EEE7E3' },
   workSummaryTabs: { flexDirection: 'row', alignSelf: 'center', width: '100%', maxWidth: 320, padding: 4, borderRadius: 12, backgroundColor: '#F0ECE9' },
   workSummaryTab: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
