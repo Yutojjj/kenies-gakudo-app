@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../constants/theme';
+import { playUiSound } from '../utils/uiSounds';
 
 const ITEM_HEIGHT = 48;
 const VISIBLE_ITEMS = 5;
@@ -44,6 +47,7 @@ export default function CenteredTimePickerModal({
   const [minute, setMinute] = useState(minutes[0] ?? 0);
   const hourRef = useRef<ScrollView>(null);
   const minuteRef = useRef<ScrollView>(null);
+  const suppressTickUntilRef = useRef(0);
 
   const settle = (
     offset: number,
@@ -63,6 +67,7 @@ export default function CenteredTimePickerModal({
     const nextMinute = minutes.includes(rawMinute) ? rawMinute : (minutes[0] ?? 0);
     setHour(nextHour);
     setMinute(nextMinute);
+    suppressTickUntilRef.current = Date.now() + 220;
     const timer = setTimeout(() => {
       hourRef.current?.scrollTo({ y: Math.max(0, hours.indexOf(nextHour)) * ITEM_HEIGHT, animated: false });
       minuteRef.current?.scrollTo({ y: Math.max(0, minutes.indexOf(nextMinute)) * ITEM_HEIGHT, animated: false });
@@ -85,13 +90,19 @@ export default function CenteredTimePickerModal({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         snapToOffsets={values.map((_, index) => index * ITEM_HEIGHT)}
-        snapToAlignment="start"
+        snapToAlignment="center"
         disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
         onScroll={event => {
           const index = nearestIndex(event.nativeEvent.contentOffset.y, values.length);
-          if (values[index] !== selected) setter(values[index]);
+          if (values[index] !== selected) {
+            setter(values[index]);
+            if (Date.now() >= suppressTickUntilRef.current) {
+              playUiSound('tick');
+              if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+            }
+          }
         }}
         onMomentumScrollEnd={event => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
         onScrollEndDrag={event => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
@@ -103,6 +114,8 @@ export default function CenteredTimePickerModal({
             activeOpacity={0.7}
             onPress={() => {
               setter(item);
+              playUiSound('tick');
+              if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
               ref.current?.scrollTo({ y: values.indexOf(item) * ITEM_HEIGHT, animated: true });
             }}
           >
@@ -163,14 +176,14 @@ const styles = StyleSheet.create({
   closeButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F5' },
   valueText: { marginVertical: 8, color: COLORS.primary, fontSize: 28, fontWeight: '900', textAlign: 'center' },
   wheels: { height: WHEEL_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  selectionFrame: { position: 'absolute', left: 18, right: 18, top: WHEEL_PADDING, height: ITEM_HEIGHT, borderRadius: 10, backgroundColor: '#DFF4F4', borderWidth: 1, borderColor: '#8ED5D8' },
+  selectionFrame: { position: 'absolute', left: 18, right: 18, top: (WHEEL_HEIGHT - ITEM_HEIGHT) / 2, height: ITEM_HEIGHT, borderRadius: 10, backgroundColor: '#FFF5D6', borderWidth: 1, borderColor: '#F4D778' },
   wheelColumn: { width: 104, height: WHEEL_HEIGHT },
   wheelScroll: { flex: 1 },
   wheelContent: { paddingVertical: WHEEL_PADDING },
   wheelItem: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
   wheelItemText: { color: '#858585', fontSize: 21, fontWeight: '700' },
-  wheelItemTextSelected: { color: '#173D40', fontSize: 25, fontWeight: '900' },
-  colon: { zIndex: 2, width: 28, color: COLORS.text, fontSize: 25, fontWeight: '900', textAlign: 'center' },
+  wheelItemTextSelected: { color: '#D6A91E', fontSize: 25, fontWeight: '900' },
+  colon: { zIndex: 2, width: 28, color: COLORS.textLight, fontSize: 25, fontWeight: '900', textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   cancelButton: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#F2F2F2' },
   cancelText: { color: COLORS.text, fontSize: 15, fontWeight: 'bold' },

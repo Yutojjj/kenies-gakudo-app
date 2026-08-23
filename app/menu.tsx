@@ -1578,7 +1578,7 @@ export default function MenuScreen() {
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'qrUpdater', label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', image: QUICK_MENU_IMAGES.qrUpdater, cardBg: '#EFFFFC', borderColor: '#91D9DE', onPress: () => router.push('/admin/qr-updater' as any) },
-    { key: 'scheduleChanges', label: 'スケジュール変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
+    { key: 'scheduleChanges', label: '変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
     { key: 'accountList', label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/list') },
     { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/form') },
   ];
@@ -1617,7 +1617,7 @@ export default function MenuScreen() {
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
-    { key: 'scheduleChanges', label: 'スケジュール変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
+    { key: 'scheduleChanges', label: '変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
     { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', image: QUICK_MENU_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: handleLogout },
   ];
   const visibleStaffQuickOptions = staffQuickVisibleKeys.flatMap(key => {
