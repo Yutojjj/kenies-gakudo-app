@@ -1383,15 +1383,6 @@ export default function AlbumScreen() {
         <Text style={styles.headerTitle}>
           {isSelectMode ? `${selectedPhotoIds.length}件選択中` : 'アルバム'}
         </Text>
-        {!isSelectMode && role === 'user' && (
-          <TouchableOpacity style={styles.headerCodeButton} onPress={() => {
-            setUnlockTargetEventId(null);
-            setUnlockCodeInput('');
-            setUnlockModalVisible(true);
-          }}>
-            <Text style={styles.headerCodeButtonText}>イベントコード</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <AlbumUploadProgress />
