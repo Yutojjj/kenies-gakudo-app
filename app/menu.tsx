@@ -112,7 +112,7 @@ type AdminQuickKey =
   | 'accountCreate'
   | 'announcements';
 
-const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['attendance', 'pickup', 'shift', 'messages', 'events', 'album', 'announcements'];
+const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['attendance', 'pickup', 'shift', 'messages', 'events', 'album', 'announcements', 'scheduleChanges'];
 
 type StaffQuickKey =
   | 'attendance'
@@ -127,8 +127,9 @@ type StaffQuickKey =
   | 'qrScan'
   | 'password'
   | 'logout'
+  | 'scheduleChanges'
   | 'announcements';
-const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'announcements'];
+const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'announcements', 'scheduleChanges'];
 
 const STAFF_COLORS = [
   '#00AEB8','#4A90E2','#7E9CF5','#8A63D2','#F06292',
@@ -644,7 +645,7 @@ export default function MenuScreen() {
             'attendance', 'todayStatus', 'pickup', 'shift', 'messages', 'events', 'album',
             'schoolTimes', 'holidays', 'lessons', 'regularUsers', 'userList', 'gradeChange',
             'paidTransport', 'shiftPeriod', 'staffHours', 'password', 'survey',
-            'typing', 'qrScan', 'qrUpdater', 'accountList', 'accountCreate', 'announcements',
+            'typing', 'qrScan', 'qrUpdater', 'scheduleChanges', 'accountList', 'accountCreate', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as AdminQuickKey)) as AdminQuickKey[];
           setAdminQuickVisibleKeys(next);
@@ -697,7 +698,7 @@ export default function MenuScreen() {
         if (Array.isArray(parsed)) {
           const allowed = new Set<StaffQuickKey>([
             'attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'userList',
-            'typing', 'qrScan', 'password', 'logout', 'announcements',
+            'typing', 'qrScan', 'password', 'logout', 'scheduleChanges', 'announcements',
           ]);
           const next = parsed.filter((key: string) => allowed.has(key as StaffQuickKey)) as StaffQuickKey[];
           setStaffQuickVisibleKeys(next);
@@ -1577,7 +1578,7 @@ export default function MenuScreen() {
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'qrUpdater', label: 'QRコード一括更新', icon: 'sync-outline', color: '#0097A7', bg: '#DCF7FA', image: QUICK_MENU_IMAGES.qrUpdater, cardBg: '#EFFFFC', borderColor: '#91D9DE', onPress: () => router.push('/admin/qr-updater' as any) },
-    { key: 'scheduleChanges', label: '変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.scheduleChanges, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
+    { key: 'scheduleChanges', label: 'スケジュール変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
     { key: 'accountList', label: 'アカウント管理', icon: 'person-circle-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/list') },
     { key: 'accountCreate', label: 'アカウント作成', icon: 'person-add-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.account, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/account/form') },
   ];
@@ -1616,6 +1617,7 @@ export default function MenuScreen() {
     { key: 'typing', label: 'タイピング検定', icon: 'keypad-outline', color: '#F05172', bg: '#FFE4EA', image: QUICK_MENU_IMAGES.typing, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/typing-cert' as any) },
     { key: 'qrScan', label: '入室QRリーダー', icon: 'qr-code-outline', color: '#7B61FF', bg: '#ECE7FF', image: QUICK_MENU_IMAGES.qrScan, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push('/qr-scan' as any) },
     { key: 'password', label: 'パスワード変更', icon: 'lock-closed-outline', color: '#795548', bg: '#F2E7DF', image: QUICK_MENU_IMAGES.password, cardBg: '#F7EEE8', borderColor: '#D8BFAF', onPress: openPasswordModal },
+    { key: 'scheduleChanges', label: 'スケジュール変更履歴', icon: 'swap-horizontal-outline', color: '#E86A17', bg: '#FFE8D6', image: TODAY_PLAN_IMAGES.pickup, cardBg: '#FFF7ED', borderColor: '#FFB36A', onPress: () => router.push('/schedule-changes' as any) },
     { key: 'logout', label: 'ログアウト', icon: 'log-out-outline', color: '#E53935', bg: '#FFE4E4', image: QUICK_MENU_IMAGES.logout, cardBg: '#FFF1F1', borderColor: '#FFB7B7', onPress: handleLogout },
   ];
   const visibleStaffQuickOptions = staffQuickVisibleKeys.flatMap(key => {
@@ -2494,7 +2496,7 @@ export default function MenuScreen() {
                     badge={unreadCount}
                   />
                   <MenuCard
-                    image={MENU_ICONS.scheduleChanges} title="変更履歴" subtitle="スケジュール変更を確認" bgColor="#E8C97A"
+                    image={MENU_ICONS.scheduleChanges} title="スケジュール変更履歴" subtitle="利用者の変更を確認" bgColor="#E8C97A"
                     onPress={() => router.push('/schedule-changes' as any)}
                     animValue={cardAnims[7]}
                   />

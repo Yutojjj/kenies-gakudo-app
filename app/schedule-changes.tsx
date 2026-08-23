@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, orderBy, query, setDoc, Timestamp, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -31,11 +31,38 @@ const fmtTime = (ts: Timestamp | null) => {
 };
 
 export default function ScheduleChangesScreen() {
-  const { verified, checking } = useRequireRole(['admin', 'staff', 'user']);
+  const { verified, checking, userInfo } = useRequireRole(['admin', 'staff', 'user']);
 
   const router = useRouter();
   const [logs, setLogs] = useState<ChangeLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [changeNotificationsEnabled, setChangeNotificationsEnabled] = useState(true);
+  const [notificationSettingSaving, setNotificationSettingSaving] = useState(false);
+
+  useEffect(() => {
+    if (userInfo?.role !== 'admin') return;
+    getDoc(doc(db, 'settings', 'schedule_change_notifications')).then(snapshot => {
+      if (snapshot.exists()) setChangeNotificationsEnabled(snapshot.data().enabled !== false);
+    }).catch(() => {});
+  }, [userInfo?.role]);
+
+  const toggleChangeNotifications = async () => {
+    if (userInfo?.role !== 'admin' || notificationSettingSaving) return;
+    const next = !changeNotificationsEnabled;
+    setChangeNotificationsEnabled(next);
+    setNotificationSettingSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'schedule_change_notifications'), {
+        enabled: next,
+        updatedAt: new Date(),
+        updatedBy: userInfo.name,
+      }, { merge: true });
+    } catch {
+      setChangeNotificationsEnabled(!next);
+    } finally {
+      setNotificationSettingSaving(false);
+    }
+  };
 
   useEffect(() => {
     // 今日を含む過去7日分を取得
@@ -82,7 +109,22 @@ export default function ScheduleChangesScreen() {
           <Ionicons name="chevron-back" size={24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>スケジュール変更履歴</Text>
-        <Text style={styles.headerSub}>直近7日間</Text>
+        {userInfo?.role === 'admin' ? (
+          <TouchableOpacity
+            style={[styles.notificationToggle, changeNotificationsEnabled && styles.notificationToggleOn]}
+            onPress={toggleChangeNotifications}
+            disabled={notificationSettingSaving}
+          >
+            <Ionicons
+              name={changeNotificationsEnabled ? 'notifications-outline' : 'notifications-off-outline'}
+              size={16}
+              color={changeNotificationsEnabled ? '#087D84' : '#8D8580'}
+            />
+            <Text style={[styles.notificationToggleText, changeNotificationsEnabled && styles.notificationToggleTextOn]}>
+              変更通知 {changeNotificationsEnabled ? 'オン' : 'オフ'}
+            </Text>
+          </TouchableOpacity>
+        ) : <Text style={styles.headerSub}>直近7日間</Text>}
       </View>
 
       {loading ? (
@@ -145,6 +187,20 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerSub: { fontSize: 12, color: '#5D4037', opacity: 0.7 },
+  notificationToggle: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D8D0CB',
+    backgroundColor: '#F2EFED',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  notificationToggleOn: { borderColor: '#9EDADD', backgroundColor: '#EFF9FA' },
+  notificationToggleText: { color: '#8D8580', fontSize: 11, fontWeight: '800' },
+  notificationToggleTextOn: { color: '#087D84' },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyText: { color: COLORS.textLight, fontSize: 15, marginTop: 16 },

@@ -645,12 +645,22 @@ export default function ScheduleScreen() {
           if (isSameMonth) {
             const d = new Date(dateStr);
             const label = `${d.getMonth() + 1}月${d.getDate()}日`;
-            sendPushNotification({
-              accountIds: ['admin'],
-              title: `${loggedInUser.name}さんがスケジュールを変更`,
-              body: `${label} ${child.name}: ${desc}`,
-              url: '/schedule-changes',
-            }).catch(() => {});
+            let changeNotificationsEnabled = true;
+            try {
+              const setting = await getDoc(doc(db, 'settings', 'schedule_change_notifications'));
+              changeNotificationsEnabled = setting.exists() ? setting.data().enabled !== false : true;
+            } catch {
+              // 設定が読めない場合は、従来どおり通知を止めない
+            }
+            if (changeNotificationsEnabled) {
+              // 変更通知は管理者だけに送る。スタッフには送信しない。
+              sendPushNotification({
+                accountIds: ['admin'],
+                title: `${loggedInUser.name}さんがスケジュールを変更`,
+                body: `${label} ${child.name}: ${desc}`,
+                url: '/schedule-changes',
+              }).catch(() => {});
+            }
           }
         }
       }
