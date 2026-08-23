@@ -117,23 +117,28 @@ export default function ShiftViewScreen() {
     };
 
     // Firestoreの読み込みが遅い場合も、直前の設定を先に表示する。
-    AsyncStorage.getItem(storageKey).then(raw => {
-      if (!raw) return;
-      try { applySettings(JSON.parse(raw)); } catch {}
-    });
+    (async () => {
+      const localRaw = await AsyncStorage.getItem(storageKey).catch(() => null);
+      if (localRaw) {
+        // 再起動時はまず端末保存値を表示し、Firestoreの古い値で上書きしない。
+        try { applySettings(JSON.parse(localRaw)); } catch {}
+        return;
+      }
 
-    getDoc(doc(db, 'staff_shift_notification_settings', accountId)).then(snapshot => {
-      if (!snapshot.exists()) return;
-      const data = snapshot.data();
-      applySettings(data);
-      AsyncStorage.setItem(storageKey, JSON.stringify({
-        enabled: data.enabled === true,
-        timing: data.timing === 'previousDay' ? 'previousDay' : 'sameDay',
-        time: data.time,
-      })).catch(() => {});
-    }).catch(() => {
-      // 通信できないときは端末保存値を維持する。
-    });
+      try {
+        const snapshot = await getDoc(doc(db, 'staff_shift_notification_settings', accountId));
+        if (!snapshot.exists()) return;
+        const data = snapshot.data();
+        applySettings(data);
+        await AsyncStorage.setItem(storageKey, JSON.stringify({
+          enabled: data.enabled === true,
+          timing: data.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+          time: data.time,
+        }));
+      } catch {
+        // 通信できないときは初期表示のままにする。
+      }
+    })();
 
     return () => { cancelled = true; };
   }, [accountId, identityLoaded, isAdmin]);
@@ -143,6 +148,12 @@ export default function ShiftViewScreen() {
     setNotificationSaving(true);
     try {
       if (shiftNotifyEnabled) await setupPushToken(accountId);
+      // 先に端末へ保存して、アプリ終了直後でも設定を失わないようにする。
+      await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
+        enabled: shiftNotifyEnabled,
+        timing: shiftNotifyTiming,
+        time: shiftNotifyTime,
+      }));
       await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
         accountId,
         staffName: myName,
@@ -151,11 +162,6 @@ export default function ShiftViewScreen() {
         time: shiftNotifyTime,
         updatedAt: serverTimestamp(),
       }, { merge: true });
-      await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
-        enabled: shiftNotifyEnabled,
-        timing: shiftNotifyTiming,
-        time: shiftNotifyTime,
-      }));
       setNotificationVisible(false);
     } finally {
       setNotificationSaving(false);
