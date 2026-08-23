@@ -377,3 +377,96 @@ exports.publishScheduledAnnouncements = onSchedule(
     }));
   }
 );
+
+function tokyoDateKey(date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function tokyoTimeKey(date) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date).replace(".", ":");
+}
+
+// スタッフ本人が有効にした勤務通知を、指定時刻に各端末へ送る。
+// lastSentDateKeyで同じ勤務日への重複通知を防ぐ。
+exports.sendStaffShiftReminders = onSchedule(
+  {
+    schedule: "every 1 minutes",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    const db = getFirestore();
+    const now = new Date();
+    const todayKey = tokyoDateKey(now);
+    const currentTime = tokyoTimeKey(now);
+    const settingsSnap = await db.collection("staff_shift_notification_settings")
+      .where("enabled", "==", true)
+      .get();
+
+    await Promise.all(settingsSnap.docs.map(async settingDoc => {
+      const setting = settingDoc.data();
+      if (String(setting.time || "") !== currentTime) return;
+
+      const accountId = String(setting.accountId || settingDoc.id || "");
+      const staffName = String(setting.staffName || "");
+      if (!accountId || !staffName) return;
+
+      const timing = setting.timing === "previousDay" ? "previousDay" : "sameDay";
+      const targetDateKey = timing === "previousDay" ? addDaysToDateKey(todayKey, 1) : todayKey;
+      const shiftDoc = await db.collection("assigned_shifts").doc(targetDateKey).get();
+      if (!shiftDoc.exists) return;
+
+      const shifts = (shiftDoc.data().staff || [])
+        .filter(shift => String(shift.name || "") === staffName)
+        .map(shift => `${String(shift.start || "")}〜${String(shift.end || "")}`)
+        .filter(Boolean);
+      if (!shifts.length) return;
+
+      const claimed = await db.runTransaction(async transaction => {
+        const fresh = await transaction.get(settingDoc.ref);
+        const freshData = fresh.data() || {};
+        if (freshData.enabled !== true || freshData.lastSentDateKey === targetDateKey) return false;
+        transaction.update(settingDoc.ref, {
+          lastSentDateKey: targetDateKey,
+          lastSentAt: new Date(),
+        });
+        return true;
+      });
+      if (!claimed) return;
+
+      const result = await sendAnnouncementPush(
+        [accountId],
+        "勤務通知",
+        shifts.join("、"),
+        "/shift-view"
+      );
+      await db.collection("notification_logs").add({
+        type: "staff_shift_reminder",
+        accountId,
+        staffName,
+        targetDateKey,
+        timing,
+        shifts,
+        sent: result.sent,
+        total: result.total,
+        sentAt: new Date(),
+      }).catch(() => {});
+    }));
+  }
+);

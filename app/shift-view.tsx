@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -9,6 +9,8 @@ import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import { setupPushToken } from '../utils/setupPushToken';
+import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 import ShiftScreen from './shift';
 import ShiftCreateScreen from './shift-create';
 
@@ -34,6 +36,7 @@ export default function ShiftViewScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [myName, setMyName] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [identityLoaded, setIdentityLoaded] = useState(false);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
@@ -44,12 +47,19 @@ export default function ShiftViewScreen() {
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [submissionVisible, setSubmissionVisible] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
+  const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
+  const [shiftNotifyTime, setShiftNotifyTime] = useState('08:00');
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
       if (raw) {
         let user: any = {}; try { user = JSON.parse(raw); } catch {}
         setMyName(user.name || '');
+        setAccountId(user.accountId || user.id || '');
         setIsAdmin(user.role === 'admin');
       }
     }).finally(() => setIdentityLoaded(true));
@@ -90,6 +100,36 @@ export default function ShiftViewScreen() {
 
     return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); };
   }, []);
+
+  useEffect(() => {
+    if (!identityLoaded || isAdmin || !accountId) return;
+    getDoc(doc(db, 'staff_shift_notification_settings', accountId)).then(snapshot => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      setShiftNotifyEnabled(data.enabled === true);
+      setShiftNotifyTiming(data.timing === 'previousDay' ? 'previousDay' : 'sameDay');
+      if (typeof data.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(data.time)) setShiftNotifyTime(data.time);
+    }).catch(() => {});
+  }, [accountId, identityLoaded, isAdmin]);
+
+  const saveShiftNotificationSettings = async () => {
+    if (!accountId || !myName) return;
+    setNotificationSaving(true);
+    try {
+      if (shiftNotifyEnabled) await setupPushToken(accountId);
+      await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+        accountId,
+        staffName: myName,
+        enabled: shiftNotifyEnabled,
+        timing: shiftNotifyTiming,
+        time: shiftNotifyTime,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      setNotificationVisible(false);
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
 
   const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 
@@ -223,11 +263,11 @@ export default function ShiftViewScreen() {
         ) : identityLoaded ? (
           <View style={styles.staffHeaderActions}>
             <TouchableOpacity
-              style={[styles.mineHeaderBtn, showOnlyMine && styles.mineHeaderBtnActive]}
-              onPress={() => setShowOnlyMine(!showOnlyMine)}
+              style={styles.notificationHeaderBtn}
+              onPress={() => setNotificationVisible(true)}
+              accessibilityLabel="勤務通知の設定"
             >
-              <Ionicons name={showOnlyMine ? 'people-outline' : 'person-outline'} size={17} color="#176E72" />
-              <Text style={styles.mineHeaderBtnText}>{showOnlyMine ? '全体表示' : '自分のみ'}</Text>
+              <Ionicons name={shiftNotifyEnabled ? 'notifications' : 'notifications-outline'} size={20} color="#176E72" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.submitHeaderBtn} onPress={() => setSubmissionVisible(true)}>
               <Ionicons name="create-outline" size={18} color="#FFFFFF" />
@@ -256,6 +296,86 @@ export default function ShiftViewScreen() {
       />
 
       <AdminBottomNav active="shift" />
+
+      {!isAdmin && identityLoaded && (
+        <TouchableOpacity
+          style={[styles.floatingMineButton, showOnlyMine && styles.floatingMineButtonActive]}
+          onPress={() => setShowOnlyMine(!showOnlyMine)}
+          accessibilityLabel={showOnlyMine ? '全体表示' : '自分のみ表示'}
+        >
+          <Ionicons name={showOnlyMine ? 'people-outline' : 'person-outline'} size={25} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
+      <Modal visible={notificationVisible} transparent animationType="fade" onRequestClose={() => setNotificationVisible(false)}>
+        <View style={styles.notificationOverlay}>
+          <View style={styles.notificationModal}>
+            <View style={styles.notificationTitleRow}>
+              <Text style={styles.notificationTitle}>勤務通知</Text>
+              <TouchableOpacity style={styles.notificationClose} onPress={() => setNotificationVisible(false)}>
+                <Ionicons name="close" size={25} color="#5D4037" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.notificationHint}>自分の勤務日の開始前に通知します</Text>
+
+            <Text style={styles.notificationLabel}>通知</Text>
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[styles.segmentButton, !shiftNotifyEnabled && styles.segmentButtonSelectedOff]}
+                onPress={() => setShiftNotifyEnabled(false)}
+              >
+                <Text style={[styles.segmentText, !shiftNotifyEnabled && styles.segmentTextSelected]}>通知しない</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentButton, shiftNotifyEnabled && styles.segmentButtonSelectedOn]}
+                onPress={() => setShiftNotifyEnabled(true)}
+              >
+                <Text style={[styles.segmentText, shiftNotifyEnabled && styles.segmentTextSelected]}>通知する</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.notificationLabel}>通知する日</Text>
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[styles.segmentButton, shiftNotifyTiming === 'sameDay' && styles.segmentButtonSelectedOn]}
+                onPress={() => setShiftNotifyTiming('sameDay')}
+              >
+                <Text style={[styles.segmentText, shiftNotifyTiming === 'sameDay' && styles.segmentTextSelected]}>勤務当日</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentButton, shiftNotifyTiming === 'previousDay' && styles.segmentButtonSelectedOn]}
+                onPress={() => setShiftNotifyTiming('previousDay')}
+              >
+                <Text style={[styles.segmentText, shiftNotifyTiming === 'previousDay' && styles.segmentTextSelected]}>前日</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.notificationLabel}>通知する時刻</Text>
+            <TouchableOpacity style={styles.timeSelectButton} onPress={() => setTimePickerVisible(true)}>
+              <Ionicons name="time-outline" size={22} color="#176E72" />
+              <Text style={styles.timeSelectText}>{shiftNotifyTime}</Text>
+              <Ionicons name="chevron-forward" size={20} color="#8A7770" />
+            </TouchableOpacity>
+            <Text style={styles.notificationDescription}>件名「勤務通知」／内容「開始時間〜終了時間」</Text>
+
+            <TouchableOpacity
+              style={[styles.notificationSaveButton, notificationSaving && styles.notificationSaveButtonDisabled]}
+              onPress={saveShiftNotificationSettings}
+              disabled={notificationSaving}
+            >
+              <Text style={styles.notificationSaveText}>{notificationSaving ? '保存中...' : '設定を保存'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <CenteredTimePickerModal
+        visible={timePickerVisible}
+        value={shiftNotifyTime}
+        title="通知時刻を選択"
+        onClose={() => setTimePickerVisible(false)}
+        onConfirm={value => { setShiftNotifyTime(value); setTimePickerVisible(false); }}
+      />
 
       <Modal visible={submissionVisible} transparent animationType="fade" onRequestClose={() => setSubmissionVisible(false)}>
         <View style={styles.submissionOverlay}>
@@ -291,9 +411,7 @@ const styles = StyleSheet.create({
   createBtn: { backgroundColor: '#2D8BE8' },
   adminHeaderBtnText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   staffHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  mineHeaderBtn: { minHeight: 40, paddingHorizontal: 11, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
-  mineHeaderBtnActive: { backgroundColor: '#D8F2F0', borderColor: '#62C5C8' },
-  mineHeaderBtnText: { fontSize: 12, fontWeight: '900', color: '#176E72' },
+  notificationHeaderBtn: { width: 42, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
   submitHeaderBtn: { minHeight: 40, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#08AEB8' },
   submitHeaderBtnText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
@@ -317,6 +435,27 @@ const styles = StyleSheet.create({
   cellStaffStartTime: { color: '#171717' },
   cellStaffEndTime: { color: '#171717' },
   cellStaffTimeMe: { fontWeight: '700' },
+  floatingMineButton: { position: 'absolute', right: 18, bottom: 78, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4B93E6', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 7, elevation: 7 },
+  floatingMineButtonActive: { backgroundColor: '#168B91' },
+  notificationOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(35, 30, 27, 0.55)' },
+  notificationModal: { width: '100%', maxWidth: 460, borderRadius: 20, padding: 20, backgroundColor: '#FFFDFC', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.24, shadowRadius: 18, elevation: 12 },
+  notificationTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  notificationTitle: { color: '#3D2A24', fontSize: 22, fontWeight: '900' },
+  notificationClose: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF1DD' },
+  notificationHint: { marginTop: 4, color: '#89766C', fontSize: 13, fontWeight: '700' },
+  notificationLabel: { marginTop: 18, marginBottom: 8, color: '#3D2A24', fontSize: 15, fontWeight: '900' },
+  segmentRow: { flexDirection: 'row', gap: 8 },
+  segmentButton: { flex: 1, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#F3F4F3', borderWidth: 1, borderColor: '#DFE3E0' },
+  segmentButtonSelectedOn: { backgroundColor: '#DDF4F1', borderColor: '#57B7B5' },
+  segmentButtonSelectedOff: { backgroundColor: '#FFF0F0', borderColor: '#F0A3A3' },
+  segmentText: { color: '#756963', fontSize: 15, fontWeight: '800' },
+  segmentTextSelected: { color: '#176E72', fontWeight: '900' },
+  timeSelectButton: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
+  timeSelectText: { flex: 1, marginLeft: 10, color: '#173D40', fontSize: 23, fontWeight: '900' },
+  notificationDescription: { marginTop: 8, color: '#89766C', fontSize: 12, fontWeight: '700' },
+  notificationSaveButton: { minHeight: 52, marginTop: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#08AEB8' },
+  notificationSaveButtonDisabled: { opacity: 0.55 },
+  notificationSaveText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   submissionOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 12 },
   submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
   createOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 10 },
