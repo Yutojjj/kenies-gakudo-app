@@ -104,13 +104,38 @@ export default function ShiftViewScreen() {
 
   useEffect(() => {
     if (!identityLoaded || isAdmin || !accountId) return;
+
+    const storageKey = `staff_shift_notification_settings:${accountId}`;
+    let cancelled = false;
+    const applySettings = (data: any) => {
+      if (cancelled || !data) return;
+      setShiftNotifyEnabled(data.enabled === true);
+      setShiftNotifyTiming(data.timing === 'previousDay' ? 'previousDay' : 'sameDay');
+      if (typeof data.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(data.time)) {
+        setShiftNotifyTime(data.time);
+      }
+    };
+
+    // Firestoreの読み込みが遅い場合も、直前の設定を先に表示する。
+    AsyncStorage.getItem(storageKey).then(raw => {
+      if (!raw) return;
+      try { applySettings(JSON.parse(raw)); } catch {}
+    });
+
     getDoc(doc(db, 'staff_shift_notification_settings', accountId)).then(snapshot => {
       if (!snapshot.exists()) return;
       const data = snapshot.data();
-      setShiftNotifyEnabled(data.enabled === true);
-      setShiftNotifyTiming(data.timing === 'previousDay' ? 'previousDay' : 'sameDay');
-      if (typeof data.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(data.time)) setShiftNotifyTime(data.time);
-    }).catch(() => {});
+      applySettings(data);
+      AsyncStorage.setItem(storageKey, JSON.stringify({
+        enabled: data.enabled === true,
+        timing: data.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+        time: data.time,
+      })).catch(() => {});
+    }).catch(() => {
+      // 通信できないときは端末保存値を維持する。
+    });
+
+    return () => { cancelled = true; };
   }, [accountId, identityLoaded, isAdmin]);
 
   const saveShiftNotificationSettings = async () => {
@@ -126,6 +151,11 @@ export default function ShiftViewScreen() {
         time: shiftNotifyTime,
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
+        enabled: shiftNotifyEnabled,
+        timing: shiftNotifyTiming,
+        time: shiftNotifyTime,
+      }));
       setNotificationVisible(false);
     } finally {
       setNotificationSaving(false);
