@@ -432,6 +432,8 @@ export default function MenuScreen() {
   const suppressQuickPressRef = useRef(false);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
   const [scheduleDate, setScheduleDate] = useState(new Date());
+  const [scheduleDatePickerVisible, setScheduleDatePickerVisible] = useState(false);
+  const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
   const [todayPlanLoading, setTodayPlanLoading] = useState(false);
   const [menuEvents, setMenuEvents] = useState<MenuEventItem[]>([]);
@@ -2120,19 +2122,28 @@ export default function MenuScreen() {
               <View style={styles.todayPlanHeaderTop}>
                 <View style={styles.todayPlanDateWrap}>
                   <TouchableOpacity
-                    style={styles.todayPlanDateButton}
+                    style={styles.todayPlanDateStepButton}
                     onPress={() => setScheduleDate(prev => addDays(prev, -1))}
                     activeOpacity={0.75}
                   >
-                    <Ionicons name="chevron-back" size={18} color="#6D5A4D" />
+                    <Text style={styles.todayPlanDateStepText}>前の日</Text>
                   </TouchableOpacity>
-                  <Text style={styles.todayPlanDateText}>{formatMenuDateLabel(scheduleDate)}</Text>
                   <TouchableOpacity
-                    style={styles.todayPlanDateButton}
+                    style={styles.todayPlanDateTextButton}
+                    onPress={() => {
+                      setScheduleCalendarMonth(new Date(scheduleDate.getFullYear(), scheduleDate.getMonth(), 1));
+                      setScheduleDatePickerVisible(true);
+                    }}
+                    activeOpacity={0.78}
+                  >
+                    <Text style={styles.todayPlanDateText}>{formatMenuDateLabel(scheduleDate)}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.todayPlanDateStepButton}
                     onPress={() => setScheduleDate(prev => addDays(prev, 1))}
                     activeOpacity={0.75}
                   >
-                    <Ionicons name="chevron-forward" size={18} color="#6D5A4D" />
+                    <Text style={styles.todayPlanDateStepText}>次の日</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2756,6 +2767,118 @@ export default function MenuScreen() {
                         onPress={() => {
                           setStaffPlanDate(date);
                           setPickupDatePickerVisible(false);
+                        }}
+                        activeOpacity={0.72}
+                      >
+                        <Text style={[
+                          styles.pickupDatePickerDayText,
+                          dayOfWeek === 0 && styles.pickupDatePickerSunday,
+                          dayOfWeek === 6 && styles.pickupDatePickerSaturday,
+                          isSelected && styles.pickupDatePickerSelectedText,
+                        ]}>
+                          {day}
+                        </Text>
+                        {isToday && !isSelected && <View style={styles.pickupDatePickerTodayDot} />}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={scheduleDatePickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScheduleDatePickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickupDatePickerBackdrop}
+          activeOpacity={1}
+          onPress={() => setScheduleDatePickerVisible(false)}
+        >
+          <TouchableWithoutFeedback>
+            <View style={styles.pickupDatePickerCard}>
+              <View style={styles.pickupDatePickerHeader}>
+                <View>
+                  <Text style={styles.pickupDatePickerTitle}>日付を選択</Text>
+                  <Text style={styles.pickupDatePickerSub}>予定を確認する日を選んでください</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerClose}
+                  onPress={() => setScheduleDatePickerVisible(false)}
+                  activeOpacity={0.78}
+                >
+                  <Ionicons name="close" size={24} color="#4A403A" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.pickupDatePickerMonthRow}>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerNav}
+                  onPress={() => setScheduleCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="chevron-back" size={21} color="#6D5A4D" />
+                </TouchableOpacity>
+                <Text style={styles.pickupDatePickerMonthText}>
+                  {scheduleCalendarMonth.getFullYear()}年 {scheduleCalendarMonth.getMonth() + 1}月
+                </Text>
+                <TouchableOpacity
+                  style={styles.pickupDatePickerNav}
+                  onPress={() => setScheduleCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="chevron-forward" size={21} color="#6D5A4D" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.pickupDatePickerWeekRow}>
+                {DAY_NAMES.map((day, index) => (
+                  <Text
+                    key={day}
+                    style={[
+                      styles.pickupDatePickerWeekText,
+                      index === 0 && styles.pickupDatePickerSunday,
+                      index === 6 && styles.pickupDatePickerSaturday,
+                    ]}
+                  >
+                    {day}
+                  </Text>
+                ))}
+              </View>
+              <View style={styles.pickupDatePickerGrid}>
+                {(() => {
+                  const year = scheduleCalendarMonth.getFullYear();
+                  const month = scheduleCalendarMonth.getMonth();
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const cells: (number | null)[] = [
+                    ...Array(firstDay).fill(null),
+                    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+                  ];
+                  while (cells.length % 7 !== 0) cells.push(null);
+                  const selectedKey = makeDateStr(scheduleDate);
+                  const todayKey = makeDateStr(new Date());
+                  return cells.map((day, index) => {
+                    if (!day) return <View key={`schedule-empty-${index}`} style={styles.pickupDatePickerCell} />;
+                    const date = new Date(year, month, day);
+                    const dateKey = makeDateStr(date);
+                    const isSelected = dateKey === selectedKey;
+                    const isToday = dateKey === todayKey;
+                    const dayOfWeek = date.getDay();
+                    return (
+                      <TouchableOpacity
+                        key={dateKey}
+                        style={[
+                          styles.pickupDatePickerCell,
+                          isToday && styles.pickupDatePickerTodayCell,
+                          isSelected && styles.pickupDatePickerSelectedCell,
+                        ]}
+                        onPress={() => {
+                          setScheduleDate(date);
+                          setScheduleDatePickerVisible(false);
                         }}
                         activeOpacity={0.72}
                       >
@@ -4886,8 +5009,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 8,
     flexShrink: 0,
+  },
+  todayPlanDateStepButton: {
+    minWidth: 66,
+    minHeight: 44,
+    paddingHorizontal: 10,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF4DF',
+    borderWidth: 1,
+    borderColor: '#F2D5A6',
+  },
+  todayPlanDateStepText: {
+    color: '#6D5A4D',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  todayPlanDateTextButton: {
+    minWidth: width <= 390 ? 132 : 150,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF8EA',
+    borderWidth: 1,
+    borderColor: '#EFD8B7',
   },
   todayPlanDateButton: {
     width: 32,
@@ -4904,10 +5054,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   todayPlanDateText: {
-    minWidth: width <= 390 ? 76 : 86,
     textAlign: 'center',
-    fontSize: width <= 390 ? 12 : 13,
-    fontWeight: '800',
+    fontSize: width <= 390 ? 17 : 19,
+    fontWeight: '900',
     color: '#5F4B42',
   },
   todayPlanCard: {
