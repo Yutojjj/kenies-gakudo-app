@@ -423,6 +423,7 @@ export default function AlbumScreen() {
   const [eventAlbumDeleteTarget, setEventAlbumDeleteTarget] = useState<AlbumEvent | null>(null);
   const [unlockedEvents, setUnlockedEvents] = useState<string[]>([]);
   const [unlockModalVisible, setUnlockModalVisible] = useState(false);
+  const [unlockTargetEventId, setUnlockTargetEventId] = useState<string | null>(null);
   const [unlockCodeInput, setUnlockCodeInput] = useState('');
 
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -500,7 +501,8 @@ export default function AlbumScreen() {
     };
     fetchUser();
 
-    AsyncStorage.getItem('unlockedEvents').then(res => {
+    const unlockedEventsKey = `unlockedEvents:${name || 'unknown'}`;
+    AsyncStorage.getItem(unlockedEventsKey).then(res => {
       if (res && isMounted) { try { setUnlockedEvents(JSON.parse(res)); } catch {} }
     });
     const albumCacheKey = `albumMediaCacheV3:${role || 'unknown'}:${name || 'unknown'}`;
@@ -923,15 +925,18 @@ export default function AlbumScreen() {
 
   const handleUnlockEvent = () => {
     const inputCode = unlockCodeInput.trim().toUpperCase();
-    const ev = albumEvents.find(e => e.code === inputCode);
+    const ev = unlockTargetEventId
+      ? albumEvents.find(e => e.id === unlockTargetEventId && e.code === inputCode)
+      : albumEvents.find(e => e.code === inputCode);
     if (ev) {
       if (!unlockedEvents.includes(ev.id)) {
         const newUnlocked = [...unlockedEvents, ev.id];
         setUnlockedEvents(newUnlocked);
-        AsyncStorage.setItem('unlockedEvents', JSON.stringify(newUnlocked));
+        AsyncStorage.setItem(`unlockedEvents:${name || 'unknown'}`, JSON.stringify(newUnlocked));
       }
       Alert.alert('成功', `「${ev.name}」のアルバムをロック解除しました！`);
       setUnlockModalVisible(false);
+      setUnlockTargetEventId(null);
       setUnlockCodeInput('');
     } else {
       Alert.alert('エラー', '無効なイベントコードです');
@@ -975,9 +980,15 @@ export default function AlbumScreen() {
     return true;
   };
 
-  const getVisibleEventsForDate = (dateStr: string) => albumEvents.filter(event => (
-    getEventDateStr(event) === dateStr && (role !== 'user' || unlockedEvents.includes(event.id))
-  ));
+  const getAllEventsForDate = (dateStr: string) => albumEvents.filter(event => getEventDateStr(event) === dateStr);
+
+  const canViewEventAlbum = (event: AlbumEvent) => (
+    role !== 'user' || !event.code || unlockedEvents.includes(event.id)
+  );
+
+  const getVisibleEventsForDate = (dateStr: string) => (
+    getAllEventsForDate(dateStr).filter(canViewEventAlbum)
+  );
 
   const getCalendarEventTitlesForDate = (dateStr: string) => {
     const albumEventTitles = getVisibleEventsForDate(dateStr).map(getEventDisplayName);
@@ -985,14 +996,21 @@ export default function AlbumScreen() {
   };
 
   const getCalendarEventItemsForDate = (dateStr: string) => {
-    const visibleAlbumEvents = getVisibleEventsForDate(dateStr);
-    return getCalendarEventTitlesForDate(dateStr).map(title => {
+    const allAlbumEvents = getAllEventsForDate(dateStr);
+    const titles = Array.from(new Set(allAlbumEvents.map(getEventDisplayName)));
+    return titles.map(title => {
       const uniqueMedia = new Map<string, AlbumMedia>();
-      visibleAlbumEvents
+      const matchingEvents = allAlbumEvents
         .filter(event => getEventDisplayName(event) === title)
+      matchingEvents
+        .filter(canViewEventAlbum)
         .flatMap(event => albumPhotos[event.category] || [])
         .forEach(item => uniqueMedia.set(item.id, item));
-      return { title, count: uniqueMedia.size };
+      return {
+        title,
+        count: uniqueMedia.size,
+        locked: matchingEvents.some(event => !canViewEventAlbum(event)),
+      };
     });
   };
 
@@ -1042,7 +1060,7 @@ export default function AlbumScreen() {
   const availableMediaDates = Array.from(new Set([
     ...Object.keys(albumPhotos).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key)),
     ...albumEvents.map(getEventDateStr).filter(Boolean),
-  ])).filter(dateStr => getMediaForDate(dateStr).length > 0).sort();
+  ])).filter(dateStr => getMediaForDate(dateStr).length > 0 || getAllEventsForDate(dateStr).length > 0).sort();
 
   const moveViewMonth = (amount: number) => {
     const next = new Date(viewYear, viewMonth - 1 + amount, 1);
@@ -1191,20 +1209,22 @@ export default function AlbumScreen() {
   };
 
   const currentFullScreenPhoto = fullScreenPhotos ? fullScreenPhotos[fullScreenIndex] : null;
-  const selectedDateEvents = selectedAlbumDate ? getVisibleEventsForDate(selectedAlbumDate) : [];
+  const selectedDateEvents = selectedAlbumDate ? getAllEventsForDate(selectedAlbumDate) : [];
   const selectedDateSections = selectedAlbumDate ? [
     {
       key: `daily:${selectedAlbumDate}`,
       label: '日常写真',
       kind: 'daily' as const,
       media: getDailyMediaForDate(selectedAlbumDate),
+      locked: false,
       event: null,
     },
     ...selectedDateEvents.map(event => ({
       key: `event:${event.id}`,
       label: getEventDisplayName(event),
       kind: 'event' as const,
-      media: albumPhotos[event.category] || [],
+      media: canViewEventAlbum(event) ? (albumPhotos[event.category] || []) : [],
+      locked: !canViewEventAlbum(event),
       event,
     })),
   ].filter(section => section.kind === 'event' || section.media.length > 0) : [];
@@ -1270,7 +1290,7 @@ export default function AlbumScreen() {
                     if (!cell) {
                       return <View key={`empty-${rowIndex}-${columnIndex}`} style={styles.albumCalendarCell} />;
                     }
-                    const hasMedia = cell.media.length > 0;
+                    const hasContent = cell.media.length > 0 || cell.eventItems.length > 0;
                     const weekday = new Date(`${cell.dateStr}T00:00:00`).getDay();
                     return (
                       <TouchableOpacity
@@ -1278,10 +1298,10 @@ export default function AlbumScreen() {
                         style={[
                           styles.albumCalendarCell,
                           cell.isToday && styles.albumCalendarToday,
-                          hasMedia && styles.albumCalendarCellActive,
+                          hasContent && styles.albumCalendarCellActive,
                           isChoosingAddDate && styles.albumCalendarCellSelecting,
                         ]}
-                        disabled={role === 'user' && !hasMedia}
+                        disabled={role === 'user' && !hasContent}
                         activeOpacity={0.72}
                         onPress={() => {
                           if (role !== 'user' && isChoosingAddDate) {
@@ -1296,9 +1316,9 @@ export default function AlbumScreen() {
                         <Text style={[
                           styles.albumCalendarDay,
                           role !== 'user' && styles.albumCalendarDayManageable,
-                          hasMedia && styles.albumCalendarDayWithMedia,
-                          hasMedia && weekday === 0 && styles.calendarSundayText,
-                          hasMedia && weekday === 6 && styles.calendarSaturdayText,
+                          hasContent && styles.albumCalendarDayWithMedia,
+                          hasContent && weekday === 0 && styles.calendarSundayText,
+                          hasContent && weekday === 6 && styles.calendarSaturdayText,
                         ]}>{cell.day}</Text>
                         {cell.dailyMediaCount > 0 && (
                           <View style={styles.albumCalendarDailyBadge}>
@@ -1309,7 +1329,9 @@ export default function AlbumScreen() {
                         {cell.eventItems.map(eventItem => (
                           <View key={eventItem.title} style={styles.albumCalendarEventBadge}>
                             <Text style={styles.albumCalendarBadgeText}>{eventItem.title}</Text>
-                            <Text style={styles.albumCalendarEventCount}>{eventItem.count}件</Text>
+                            <Text style={styles.albumCalendarEventCount}>
+                              {eventItem.locked ? 'コードで閲覧' : `${eventItem.count}件`}
+                            </Text>
                           </View>
                         ))}
                       </TouchableOpacity>
@@ -1318,7 +1340,7 @@ export default function AlbumScreen() {
                 </View>
               ))}
             </View>
-            {cells.every(cell => !cell || cell.media.length === 0) && (
+            {cells.every(cell => !cell || cell.media.length === 0 && cell.eventItems.length === 0) && (
               <Text style={styles.calendarEmptyText}>この月に閲覧できる写真・動画はありません</Text>
             )}
           </>
@@ -1362,7 +1384,11 @@ export default function AlbumScreen() {
           {isSelectMode ? `${selectedPhotoIds.length}件選択中` : 'アルバム'}
         </Text>
         {!isSelectMode && role === 'user' && (
-          <TouchableOpacity style={styles.headerCodeButton} onPress={() => setUnlockModalVisible(true)}>
+          <TouchableOpacity style={styles.headerCodeButton} onPress={() => {
+            setUnlockTargetEventId(null);
+            setUnlockCodeInput('');
+            setUnlockModalVisible(true);
+          }}>
             <Text style={styles.headerCodeButtonText}>イベントコード</Text>
           </TouchableOpacity>
         )}
@@ -1505,12 +1531,30 @@ export default function AlbumScreen() {
                             >
                               <View style={styles.dateAlbumSectionTextWrap}>
                                 <Text style={styles.dateAlbumSectionTitle}>{section.label}</Text>
-                                <Text style={styles.dateAlbumSectionCount}>{section.media.length}件</Text>
+                                <Text style={styles.dateAlbumSectionCount}>
+                                  {section.locked ? 'コードが必要' : `${section.media.length}件`}
+                                </Text>
                               </View>
                               <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={21} color={COLORS.text} />
                             </TouchableOpacity>
                           </View>
-                          {expanded && section.media.length > 0 && (
+                          {expanded && section.locked && section.event && (
+                            <View style={styles.lockedEventAlbumBox}>
+                              <Text style={styles.lockedEventAlbumTitle}>このイベントアルバムはロックされています</Text>
+                              <Text style={styles.lockedEventAlbumCaption}>イベントコードを入力すると写真・動画を閲覧できます。</Text>
+                              <TouchableOpacity
+                                style={styles.lockedEventAlbumButton}
+                                onPress={() => {
+                                  setUnlockTargetEventId(section.event?.id || null);
+                                  setUnlockCodeInput('');
+                                  setUnlockModalVisible(true);
+                                }}
+                              >
+                                <Text style={styles.lockedEventAlbumButtonText}>コードを入力</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          {expanded && !section.locked && section.media.length > 0 && (
                             <FlatList
                               data={visibleSelectedDateMedia}
                               style={[styles.dateAlbumMediaScroll, { height: selectedDateMediaGridHeight }]}
@@ -1558,7 +1602,7 @@ export default function AlbumScreen() {
                               )}
                             />
                           )}
-                          {expanded && section.media.length === 0 && (
+                          {expanded && !section.locked && section.media.length === 0 && (
                             <View style={styles.dateAlbumEmptyCompact}>
                               <Text style={styles.dateAlbumEmptyCaption}>このアルバムにはまだ写真・動画がありません</Text>
                             </View>
@@ -1878,8 +1922,12 @@ export default function AlbumScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>イベントをアンロック</Text>
-              <TouchableOpacity onPress={() => setUnlockModalVisible(false)}><Ionicons name="close" size={28} color={COLORS.textLight} /></TouchableOpacity>
+              <Text style={styles.modalTitle}>イベントコードを入力</Text>
+              <TouchableOpacity onPress={() => {
+                setUnlockModalVisible(false);
+                setUnlockTargetEventId(null);
+                setUnlockCodeInput('');
+              }}><Ionicons name="close" size={28} color={COLORS.textLight} /></TouchableOpacity>
             </View>
             <Text style={{ marginBottom: 8, fontWeight: 'bold', color: COLORS.text }}>イベントコード</Text>
             <TextInput 
@@ -2170,6 +2218,11 @@ const styles = StyleSheet.create({
   dateAlbumSectionTextWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   dateAlbumSectionTitle: { flexShrink: 1, color: COLORS.text, fontSize: 14, fontWeight: 'bold' },
   dateAlbumSectionCount: { color: COLORS.textLight, fontSize: 12, fontWeight: 'bold' },
+  lockedEventAlbumBox: { minHeight: 132, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 18, backgroundColor: '#FFF8E8' },
+  lockedEventAlbumTitle: { color: COLORS.text, fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  lockedEventAlbumCaption: { marginTop: 6, color: COLORS.textLight, fontSize: 12, textAlign: 'center' },
+  lockedEventAlbumButton: { marginTop: 14, minHeight: 42, paddingHorizontal: 22, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  lockedEventAlbumButtonText: { color: COLORS.white, fontSize: 14, fontWeight: 'bold' },
   dateAlbumEmptyCompact: { minHeight: 110, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   dateAlbumCollapsedHint: { flex: 1, minHeight: 160, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   dateAlbumCollapsedHintText: { color: COLORS.textLight, fontSize: 13, lineHeight: 20, textAlign: 'center' },
