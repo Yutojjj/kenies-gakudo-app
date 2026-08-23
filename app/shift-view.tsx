@@ -47,6 +47,7 @@ export default function ShiftViewScreen() {
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [submissionVisible, setSubmissionVisible] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
+  const [createForPdf, setCreateForPdf] = useState(false);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
   const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
@@ -240,21 +241,20 @@ export default function ShiftViewScreen() {
           <View style={styles.adminHeaderActions}>
             <TouchableOpacity
               style={[styles.adminHeaderBtn, styles.pdfBtn]}
-              onPress={() => router.push({
-                pathname: '/shift-create',
-                params: {
-                  autoPdf: '1',
-                  year: String(currentDate.getFullYear()),
-                  month: String(currentDate.getMonth() + 1),
-                },
-              } as any)}
+              onPress={() => {
+                setCreateForPdf(true);
+                setCreateVisible(true);
+              }}
             >
               <Ionicons name="document-text" size={18} color="#FFFFFF" />
               <Text style={styles.adminHeaderBtnText}>PDF出力</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.adminHeaderBtn, styles.createBtn]}
-              onPress={() => setCreateVisible(true)}
+              onPress={() => {
+                setCreateForPdf(false);
+                setCreateVisible(true);
+              }}
             >
               <Ionicons name="create-outline" size={18} color="#FFFFFF" />
               <Text style={styles.adminHeaderBtnText}>作成する</Text>
@@ -390,7 +390,11 @@ export default function ShiftViewScreen() {
             <ShiftCreateScreen
               embedded
               initialDate={currentDate}
-              onClose={() => setCreateVisible(false)}
+              autoPdfOnOpen={createForPdf}
+              onClose={() => {
+                setCreateVisible(false);
+                setCreateForPdf(false);
+              }}
             />
           </View>
         </View>

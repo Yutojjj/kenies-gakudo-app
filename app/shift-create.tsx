@@ -138,9 +138,10 @@ type ShiftCreateScreenProps = {
   embedded?: boolean;
   initialDate?: Date;
   onClose?: () => void;
+  autoPdfOnOpen?: boolean;
 };
 
-export default function ShiftCreateScreen({ embedded = false, initialDate, onClose }: ShiftCreateScreenProps = {}) {
+export default function ShiftCreateScreen({ embedded = false, initialDate, onClose, autoPdfOnOpen = false }: ShiftCreateScreenProps = {}) {
   const { verified, checking } = useRequireRole('admin');
 
   const router = useRouter();
@@ -677,7 +678,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   }, [openWorkSummary]);
 
   useEffect(() => {
-    if (autoPdf !== '1' || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
+    if ((autoPdf !== '1' && !autoPdfOnOpen) || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
     autoPdfHandledRef.current = true;
     const timer = setTimeout(() => exportPDF(), 350);
     return () => clearTimeout(timer);
