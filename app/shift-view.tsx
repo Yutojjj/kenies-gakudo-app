@@ -180,7 +180,7 @@ export default function ShiftViewScreen() {
             const visibleStaffNames = new Set(allStaff.map(staff => staff.name));
             const assignedList = (assignedShifts[item.dateStr] || []).filter(shift => visibleStaffNames.has(shift.name));
             const myShift = assignedList.find(s => s.name === myName);
-            const cellBg = myShift ? '#F3FBF6' : hPeriod?.color || COLORS.white;
+            const cellBg = myShift ? '#D8F1DF' : hPeriod?.color || COLORS.white;
 
             return (
               <View key={item.dateStr} style={[styles.calCell, { backgroundColor: cellBg }]}>
