@@ -4981,7 +4981,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   todayPlanTitle: {
-    fontSize: width <= 390 ? 19 : 21,
+    fontSize: 24,
     fontWeight: '900',
     color: '#333333',
     fontStyle: 'italic',

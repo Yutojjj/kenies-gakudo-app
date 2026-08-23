@@ -57,8 +57,8 @@ type AlbumEvent = {
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, '0'));
 const MINUTES = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0'));
-const TIME_ITEM_HEIGHT = 44;
-const TIME_WHEEL_HEIGHT = 220;
+const TIME_ITEM_HEIGHT = 41;
+const TIME_WHEEL_HEIGHT = 132;
 
 const fiscalYearRange = (base = new Date()) => {
   const startYear = base.getMonth() >= 3 ? base.getFullYear() : base.getFullYear() - 1;
@@ -86,14 +86,26 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
   const ref = useRef<ScrollView>(null);
   const selectedIndex = Math.max(0, values.indexOf(value));
 
+  const valueFromOffset = (offset: number) => {
+    const index = Math.max(0, Math.min(values.length - 1, Math.round(offset / TIME_ITEM_HEIGHT)));
+    return values[index];
+  };
+
+  const applyOffset = (offset: number) => {
+    const nextValue = valueFromOffset(offset);
+    if (nextValue !== value) onChange(nextValue);
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => ref.current?.scrollTo({ y: selectedIndex * TIME_ITEM_HEIGHT, animated: false }), 40);
     return () => clearTimeout(timer);
   }, [selectedIndex]);
 
   const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.max(0, Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / TIME_ITEM_HEIGHT)));
-    onChange(values[index]);
+    const offset = event.nativeEvent.contentOffset.y;
+    const nextValue = valueFromOffset(offset);
+    const index = values.indexOf(nextValue);
+    if (nextValue !== value) onChange(nextValue);
     ref.current?.scrollTo({ y: index * TIME_ITEM_HEIGHT, animated: true });
   };
 
@@ -107,8 +119,12 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
         snapToInterval={TIME_ITEM_HEIGHT}
-        snapToAlignment="start"
+        snapToOffsets={values.map((_, index) => index * TIME_ITEM_HEIGHT)}
+        snapToAlignment="center"
+        disableIntervalMomentum
         decelerationRate="fast"
+        scrollEventThrottle={16}
+        onScroll={(event) => applyOffset(event.nativeEvent.contentOffset.y)}
         onMomentumScrollEnd={settle}
         onScrollEndDrag={settle}
       >
@@ -649,7 +665,7 @@ export default function AnnouncementsScreen() {
       <Modal visible={timeVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTimeVisible(false)}>
           <TouchableWithoutFeedback><View style={styles.timeCard}>
-            <Text style={styles.timeTitle}>掲載時刻</Text>
+            <Text style={styles.timeTitle}>時間を選択</Text>
             <View style={styles.timeColumns}>
               <TimeWheel values={HOURS} value={publishHour} onChange={setPublishHour} />
               <Text style={styles.timeColon}>:</Text>
@@ -828,18 +844,18 @@ const styles = StyleSheet.create({
   dayCellEnd: { backgroundColor: '#F0A22E' },
   dayText: { fontSize: 14, fontWeight: '800', color: '#302C29' },
   dayTextSelected: { color: '#fff' },
-  timeCard: { width: '100%', maxWidth: 330, maxHeight: 360, borderRadius: 18, backgroundColor: '#fff', padding: 18, overflow: 'hidden' },
+  timeCard: { width: '100%', maxWidth: 340, borderRadius: 24, backgroundColor: '#fff', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 16, overflow: 'hidden' },
   timeTitle: { fontSize: 18, fontWeight: '900', color: '#302B28', textAlign: 'center', marginBottom: 14 },
-  timeColumns: { height: TIME_WHEEL_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, overflow: 'hidden' },
-  timeWheelViewport: { width: 96, height: TIME_WHEEL_HEIGHT, overflow: 'hidden', borderRadius: 12, backgroundColor: '#F5F7F7' },
-  timeWheelSelection: { position: 'absolute', zIndex: 0, left: 4, right: 4, top: (TIME_WHEEL_HEIGHT - TIME_ITEM_HEIGHT) / 2, height: TIME_ITEM_HEIGHT, borderRadius: 9, backgroundColor: '#DDF6F7' },
+  timeColumns: { height: TIME_WHEEL_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  timeWheelViewport: { width: 88, height: TIME_WHEEL_HEIGHT, overflow: 'hidden' },
+  timeWheelSelection: { position: 'absolute', zIndex: 0, left: 8, right: 8, top: (TIME_WHEEL_HEIGHT - TIME_ITEM_HEIGHT) / 2, height: TIME_ITEM_HEIGHT, borderRadius: 12, backgroundColor: '#FFF5D6', borderWidth: 1, borderColor: '#F4D778' },
   timeList: { width: '100%', height: TIME_WHEEL_HEIGHT, zIndex: 1 },
   timeListContent: { paddingVertical: (TIME_WHEEL_HEIGHT - TIME_ITEM_HEIGHT) / 2 },
   timeOption: { height: TIME_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
-  timeOptionText: { fontSize: 19, fontWeight: '800', color: '#777' },
-  timeOptionTextSelected: { color: '#087D84', fontSize: 22, fontWeight: '900' },
-  timeColon: { fontSize: 26, fontWeight: '900', color: '#423A35' },
-  timeDone: { minHeight: 48, borderRadius: 11, backgroundColor: '#00AEB8', alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  timeOptionText: { fontSize: 19, color: '#8A8580', fontWeight: '700' },
+  timeOptionTextSelected: { color: '#D6A91E', fontSize: 22, fontWeight: '900' },
+  timeColon: { fontSize: 24, fontWeight: 'bold', color: '#7D7772', marginHorizontal: 8 },
+  timeDone: { minHeight: 48, borderRadius: 11, backgroundColor: '#00AEB8', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   timeDoneText: { color: '#fff', fontWeight: '900', fontSize: 15 },
   photoSourceCard: { width: '100%', maxWidth: 480, borderRadius: 16, backgroundColor: '#fff', padding: 18 },
   photoSourceHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
