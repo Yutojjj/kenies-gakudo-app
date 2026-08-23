@@ -8,6 +8,8 @@ const webpush = require("web-push");
 
 initializeApp();
 
+const DEFAULT_NOTIFICATION_API_ORIGIN = "https://kenies-gakudo-app.vercel.app";
+
 // 許可するアプリ内URLのプレフィックス
 const ALLOWED_URL_PREFIXES = [
   "/menu", "/messages", "/schedule", "/album",
@@ -199,17 +201,62 @@ async function sendAnnouncementPush(accountIds, title, body, url) {
     data: { url },
   });
   let sent = 0;
+  const errors = [];
   await Promise.allSettled(subscriptions.map(async item => {
     try {
       await webpush.sendNotification(item.subscription, payload);
       sent++;
     } catch (error) {
+      errors.push({
+        accountId: item.accountId,
+        deviceId: item.deviceId,
+        statusCode: Number(error?.statusCode || 0),
+        message: String(error?.message || "push failed").slice(0, 200),
+      });
       if (error.statusCode === 404 || error.statusCode === 410) {
         await db.collection("push_subscriptions_v2").doc(item.accountId).collection("devices").doc(item.deviceId).delete().catch(() => {});
       }
     }
   }));
-  return { sent, total: subscriptions.length };
+  return { sent, total: subscriptions.length, errors };
+}
+
+function trustedNotificationApiOrigin(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    const host = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol === "https:" &&
+      host.endsWith(".vercel.app") &&
+      host.includes("kenies-gakudo-app")
+    ) {
+      return parsed.origin;
+    }
+  } catch {}
+  return "";
+}
+
+async function sendStaffShiftPush(setting, accountId, title, body, url) {
+  const apiOrigin = trustedNotificationApiOrigin(setting.notificationApiOrigin) || DEFAULT_NOTIFICATION_API_ORIGIN;
+  if (apiOrigin) {
+    const response = await fetch(`${apiOrigin}/api/send-notification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountIds: [accountId], title, body, url }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(`notification API failed: ${response.status} ${data.error || ""}`.trim());
+    }
+    return {
+      sent: Number(data.sent || 0),
+      total: Number(data.total || 0),
+      errors: Array.isArray(data.failed)
+        ? data.failed.map(message => ({ message: String(message) }))
+        : [],
+    };
+  }
+  return sendAnnouncementPush([accountId], title, body, url);
 }
 
 const WEEKDAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
@@ -429,48 +476,116 @@ exports.sendStaffShiftReminders = onSchedule(
       .where("enabled", "==", true)
       .get();
 
+    const diagnostics = {
+      enabledSettings: settingsSnap.size,
+      invalidTime: 0,
+      outsideWindow: 0,
+      missingIdentity: 0,
+      missingShiftDocument: 0,
+      staffNameMismatch: 0,
+      alreadySentOrProcessing: 0,
+      noPushSubscription: 0,
+      pushFailed: 0,
+      sent: 0,
+    };
+
     await Promise.all(settingsSnap.docs.map(async settingDoc => {
       const setting = settingDoc.data();
       const scheduledMinutes = timeToMinutes(setting.time);
-      if (currentMinutes === null || scheduledMinutes === null) return;
+      if (currentMinutes === null || scheduledMinutes === null) {
+        diagnostics.invalidTime++;
+        return;
+      }
       // Schedulerは実行時刻が数分ずれることがあるため、設定時刻から10分以内を対象にする。
       // lastSentDateKeyで同じ勤務日の二重送信を防ぐ。
       const minutesSinceScheduled = currentMinutes - scheduledMinutes;
-      if (minutesSinceScheduled < 0 || minutesSinceScheduled >= 10) return;
+      if (minutesSinceScheduled < 0 || minutesSinceScheduled >= 10) {
+        diagnostics.outsideWindow++;
+        return;
+      }
 
       const accountId = String(setting.accountId || settingDoc.id || "");
       const staffName = String(setting.staffName || "");
-      if (!accountId || !staffName) return;
+      if (!accountId || !staffName) {
+        diagnostics.missingIdentity++;
+        return;
+      }
 
       const timing = setting.timing === "previousDay" ? "previousDay" : "sameDay";
       const targetDateKey = timing === "previousDay" ? addDaysToDateKey(todayKey, 1) : todayKey;
       const shiftDoc = await db.collection("assigned_shifts").doc(targetDateKey).get();
-      if (!shiftDoc.exists) return;
+      if (!shiftDoc.exists) {
+        diagnostics.missingShiftDocument++;
+        return;
+      }
 
       const shifts = (shiftDoc.data().staff || [])
         .filter(shift => String(shift.name || "") === staffName)
         .map(shift => `${String(shift.start || "")}〜${String(shift.end || "")}`)
         .filter(Boolean);
-      if (!shifts.length) return;
+      if (!shifts.length) {
+        diagnostics.staffNameMismatch++;
+        return;
+      }
 
       const claimed = await db.runTransaction(async transaction => {
         const fresh = await transaction.get(settingDoc.ref);
         const freshData = fresh.data() || {};
-        if (freshData.enabled !== true || freshData.lastSentDateKey === targetDateKey) return false;
+        const processingAt = freshData.notificationProcessingAt?.toDate?.();
+        const processingIsFresh =
+          freshData.notificationProcessingDateKey === targetDateKey &&
+          processingAt instanceof Date &&
+          now.getTime() - processingAt.getTime() < 2 * 60 * 1000;
+        if (
+          freshData.enabled !== true ||
+          freshData.lastSentDateKey === targetDateKey ||
+          processingIsFresh
+        ) return false;
         transaction.update(settingDoc.ref, {
-          lastSentDateKey: targetDateKey,
-          lastSentAt: new Date(),
+          notificationProcessingDateKey: targetDateKey,
+          notificationProcessingAt: now,
         });
         return true;
       });
-      if (!claimed) return;
+      if (!claimed) {
+        diagnostics.alreadySentOrProcessing++;
+        return;
+      }
 
-      const result = await sendAnnouncementPush(
-        [accountId],
-        "勤務通知",
-        shifts.join("、"),
-        "/shift-view"
-      );
+      let result;
+      try {
+        result = await sendStaffShiftPush(
+          setting,
+          accountId,
+          "勤務通知",
+          shifts.join("、"),
+          "/shift-view"
+        );
+      } catch (error) {
+        result = { sent: 0, total: 0, errors: [{ message: String(error?.message || error) }] };
+      }
+
+      if (result.sent > 0) {
+        diagnostics.sent += result.sent;
+        await settingDoc.ref.update({
+          lastSentDateKey: targetDateKey,
+          lastSentAt: new Date(),
+          notificationProcessingDateKey: null,
+          notificationProcessingAt: null,
+          lastSendError: null,
+        });
+      } else {
+        if (result.total === 0) diagnostics.noPushSubscription++;
+        else diagnostics.pushFailed++;
+        await settingDoc.ref.update({
+          notificationProcessingDateKey: null,
+          notificationProcessingAt: null,
+          lastSendError: result.total === 0
+            ? "push subscription not found"
+            : String(result.errors?.[0]?.message || "push send failed").slice(0, 300),
+          lastSendErrorAt: new Date(),
+        });
+      }
       await db.collection("notification_logs").add({
         type: "staff_shift_reminder",
         accountId,
@@ -480,8 +595,15 @@ exports.sendStaffShiftReminders = onSchedule(
         shifts,
         sent: result.sent,
         total: result.total,
+        errors: result.errors || [],
         sentAt: new Date(),
       }).catch(() => {});
+    }));
+
+    console.log("[staff-shift-reminder]", JSON.stringify({
+      todayKey,
+      currentTime,
+      ...diagnostics,
     }));
   }
 );

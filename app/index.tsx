@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useRouter } from 'expo-router';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -29,6 +29,26 @@ const customAlert = (title: string, message?: string) => {
 };
 
 const hashPassword = (password: string) => Crypto.SHA256(password).toString();
+
+const syncSavedStaffShiftNotification = async (user: any) => {
+  if (user?.role !== 'staff' || !user?.accountId || !user?.name) return;
+  const raw = await AsyncStorage.getItem(`staff_shift_notification_settings:${user.accountId}`);
+  if (!raw) return;
+  let setting: any;
+  try { setting = JSON.parse(raw); } catch { return; }
+  const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.location.origin
+    : '';
+  await setDoc(doc(db, 'staff_shift_notification_settings', user.accountId), {
+    accountId: user.accountId,
+    staffName: user.name,
+    enabled: setting.enabled === true,
+    timing: setting.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+    time: typeof setting.time === 'string' ? setting.time : '08:00',
+    notificationApiOrigin,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+};
 
 // ── ログイン試行制限 ──────────────────────────────────────
 const MAX_ATTEMPTS = 5;       // 最大試行回数
@@ -70,6 +90,12 @@ export default function LoginScreen() {
         const savedUser = await AsyncStorage.getItem('loggedInUser');
         if (savedUser) {
           const user = JSON.parse(savedUser);
+          if (Platform.OS === 'web' && user.accountId) {
+            refreshPushSubscription(user.accountId).catch(() => {});
+          }
+          await syncSavedStaffShiftNotification(user).catch(error => {
+            console.warn('[shift notification] startup sync failed', error);
+          });
           router.replace('/menu');
           return;
         }
@@ -121,14 +147,18 @@ export default function LoginScreen() {
           // ✅ 認証成功 → 試行カウントリセット
           setFailCount(0);
           setLockedUntil(null);
-          await AsyncStorage.setItem('loggedInUser', JSON.stringify({
+          const loggedInUser = {
             role: userData.role,
             name: userData.name,
             accountId: querySnapshot.docs[0].id,
-          }));
+          };
+          await AsyncStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
           if (Platform.OS === 'web') {
             refreshPushSubscription(querySnapshot.docs[0].id).catch(() => {});
           }
+          await syncSavedStaffShiftNotification(loggedInUser).catch(error => {
+            console.warn('[shift notification] login sync failed', error);
+          });
           router.replace('/menu');
           return;
         }

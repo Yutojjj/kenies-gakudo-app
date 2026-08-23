@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
@@ -54,6 +54,7 @@ export default function ShiftViewScreen() {
   const [shiftNotifyTime, setShiftNotifyTime] = useState('08:00');
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -103,9 +104,12 @@ export default function ShiftViewScreen() {
   }, []);
 
   useEffect(() => {
-    if (!identityLoaded || isAdmin || !accountId) return;
+    if (!identityLoaded || isAdmin || !accountId || !myName) return;
 
     const storageKey = `staff_shift_notification_settings:${accountId}`;
+    const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : '';
     let cancelled = false;
     const applySettings = (data: any) => {
       if (cancelled || !data) return;
@@ -118,41 +122,92 @@ export default function ShiftViewScreen() {
 
     // Firestoreの読み込みが遅い場合も、直前の設定を先に表示する。
     (async () => {
+      let localData: any = null;
       const localRaw = await AsyncStorage.getItem(storageKey).catch(() => null);
       if (localRaw) {
-        // 再起動時はまず端末保存値を表示し、Firestoreの古い値で上書きしない。
-        try { applySettings(JSON.parse(localRaw)); } catch {}
-        return;
+        try {
+          localData = JSON.parse(localRaw);
+          applySettings(localData);
+        } catch {}
       }
 
       try {
         const snapshot = await getDoc(doc(db, 'staff_shift_notification_settings', accountId));
-        if (!snapshot.exists()) return;
-        const data = snapshot.data();
-        applySettings(data);
-        await AsyncStorage.setItem(storageKey, JSON.stringify({
-          enabled: data.enabled === true,
-          timing: data.timing === 'previousDay' ? 'previousDay' : 'sameDay',
-          time: data.time,
-        }));
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const remoteSavedAt = data.updatedAt?.toMillis?.() || 0;
+          // savedAt導入前の端末設定は、利用者が最後に選んだ値として一度だけ同期する。
+          const localSavedAt = Number(localData?.savedAt || (localData ? Date.now() : 0));
+          if (!localData || localSavedAt <= remoteSavedAt) {
+            applySettings(data);
+            if (notificationApiOrigin && data.notificationApiOrigin !== notificationApiOrigin) {
+              await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+                notificationApiOrigin,
+                updatedAt: serverTimestamp(),
+              }, { merge: true });
+            }
+            await AsyncStorage.setItem(storageKey, JSON.stringify({
+              enabled: data.enabled === true,
+              timing: data.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+              time: data.time,
+              savedAt: remoteSavedAt || Date.now(),
+            }));
+            return;
+          }
+        }
+
+        // 端末側にだけ残った設定も勤務通知のサーバー処理から参照できるよう同期する。
+        if (localData) {
+          const syncedAt = Date.now();
+          await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+            accountId,
+            staffName: myName,
+            enabled: localData.enabled === true,
+            timing: localData.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+            time: localData.time,
+            notificationApiOrigin,
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+          await AsyncStorage.setItem(storageKey, JSON.stringify({
+            enabled: localData.enabled === true,
+            timing: localData.timing === 'previousDay' ? 'previousDay' : 'sameDay',
+            time: localData.time,
+            savedAt: syncedAt,
+          }));
+        }
       } catch {
         // 通信できないときは初期表示のままにする。
       }
     })();
 
     return () => { cancelled = true; };
-  }, [accountId, identityLoaded, isAdmin]);
+  }, [accountId, identityLoaded, isAdmin, myName]);
 
   const saveShiftNotificationSettings = async () => {
     if (!accountId || !myName) return;
     setNotificationSaving(true);
+    setNotificationMessage('');
     try {
-      if (shiftNotifyEnabled) await setupPushToken(accountId);
+      const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.location.origin
+        : '';
+      if (shiftNotifyEnabled) {
+        const pushResult = await setupPushToken(accountId);
+        if (pushResult !== 'granted') {
+          setNotificationMessage(
+            pushResult === 'denied'
+              ? '端末の通知が許可されていません。ブラウザまたはホーム画面アプリの設定で通知を許可してください。'
+              : 'この端末を通知先として登録できませんでした。iPhoneはホーム画面に追加したアプリから開いてください。'
+          );
+          return;
+        }
+      }
       // 先に端末へ保存して、アプリ終了直後でも設定を失わないようにする。
       await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
         enabled: shiftNotifyEnabled,
         timing: shiftNotifyTiming,
         time: shiftNotifyTime,
+        savedAt: Date.now(),
       }));
       await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
         accountId,
@@ -160,9 +215,14 @@ export default function ShiftViewScreen() {
         enabled: shiftNotifyEnabled,
         timing: shiftNotifyTiming,
         time: shiftNotifyTime,
+        notificationApiOrigin,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setNotificationVisible(false);
+      setNotificationMessage('');
+    } catch (error) {
+      console.warn('[shift notification] save failed', error);
+      setNotificationMessage('通知設定を保存できませんでした。通信状態を確認して、もう一度お試しください。');
     } finally {
       setNotificationSaving(false);
     }
@@ -392,6 +452,9 @@ export default function ShiftViewScreen() {
               <Ionicons name="chevron-forward" size={20} color="#8A7770" />
             </TouchableOpacity>
             <Text style={styles.notificationDescription}>件名「勤務通知」／内容「開始時間〜終了時間」</Text>
+            {!!notificationMessage && (
+              <Text style={styles.notificationError}>{notificationMessage}</Text>
+            )}
 
             <TouchableOpacity
               style={[styles.notificationSaveButton, notificationSaving && styles.notificationSaveButtonDisabled]}
@@ -492,6 +555,7 @@ const styles = StyleSheet.create({
   timeSelectButton: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
   timeSelectText: { flex: 1, marginLeft: 10, color: '#173D40', fontSize: 23, fontWeight: '900' },
   notificationDescription: { marginTop: 8, color: '#89766C', fontSize: 12, fontWeight: '700' },
+  notificationError: { marginTop: 12, padding: 10, borderRadius: 10, color: '#9B2C2C', backgroundColor: '#FFF0F0', fontSize: 13, lineHeight: 19, fontWeight: '800' },
   notificationSaveButton: { minHeight: 52, marginTop: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#08AEB8' },
   notificationSaveButtonDisabled: { opacity: 0.55 },
   notificationSaveText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
