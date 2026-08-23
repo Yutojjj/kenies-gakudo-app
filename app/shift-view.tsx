@@ -270,8 +270,7 @@ export default function ShiftViewScreen() {
               <Ionicons name={shiftNotifyEnabled ? 'notifications' : 'notifications-outline'} size={20} color="#176E72" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.submitHeaderBtn} onPress={() => setSubmissionVisible(true)}>
-              <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.submitHeaderBtnText}>シフト提出</Text>
+              <Text style={styles.submitHeaderBtnText}>シフト提出画面へ</Text>
             </TouchableOpacity>
           </View>
         ) : null}
