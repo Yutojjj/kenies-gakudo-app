@@ -2362,7 +2362,7 @@ export default function MenuScreen() {
                 accessibilityLabel="クイックメニューを追加"
               >
                 <Ionicons name="add" size={32} color="#7A7897" />
-                <Text style={styles.quickFeatureAddCardText}>追加</Text>
+                
               </TouchableOpacity>
             </View>
               ) : role === 'staff' ? (
@@ -2400,7 +2400,7 @@ export default function MenuScreen() {
                 accessibilityLabel="クイックメニューを追加"
               >
                 <Ionicons name="add" size={32} color="#7A7897" />
-                <Text style={styles.quickFeatureAddCardText}>追加</Text>
+                
               </TouchableOpacity>
             </View>
               ) : (
