@@ -82,6 +82,13 @@ const todayStr = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+// 今日の曜日を取得（'月', '火', ... '日'）
+const getTodayDayOfWeek = () => {
+  const d = new Date();
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return days[d.getDay()];
+};
+
 const formatDate = (s: string) => {
   if (!s) return '';
   const [y, m, d] = s.split('-');
@@ -439,7 +446,10 @@ export default function TypingCertScreen() {
             <SectionHeader title="基本情報" />
             {/* 氏名 */}
             <Text style={styles.fieldLabel}>氏名</Text>
-            <TouchableOpacity style={styles.selector} onPress={() => setPickerTarget('student')}>
+            <TouchableOpacity style={styles.selector} onPress={() => {
+              setCreateFilterDay(getTodayDayOfWeek());
+              setPickerTarget('student');
+            }}>
               <Text style={selectedStudent ? styles.selectorText : styles.selectorPlaceholder}>
                 {selectedStudent ? selectedStudent.name : '-- 選択 --'}
               </Text>
