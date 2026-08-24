@@ -1884,33 +1884,6 @@ export default function MenuScreen() {
             >
               <View style={styles.staffPickupTopRow}>
                 <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
-                <View style={styles.pickupInlineActions}>
-                  <TouchableOpacity
-                    style={[styles.pickupInlineActionBtn, styles.pickupInlineAttendanceBtn]}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any);
-                    }}
-                    activeOpacity={0.82}
-                  >
-                    <Ionicons name="checkmark-done-outline" size={15} color="#247A5A" />
-                    <Text style={styles.pickupInlineAttendanceText}>登所一覧</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pickupInlineActionBtn, styles.pickupInlineOverviewBtn]}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      openPickupOverviewAction('view');
-                    }}
-                    disabled={pickupOverviewLoadingAction !== null}
-                    activeOpacity={0.82}
-                  >
-                    {pickupOverviewLoadingAction === 'view'
-                      ? <ActivityIndicator size="small" color="#245E96" />
-                      : <Ionicons name="open-outline" size={15} color="#245E96" />}
-                    <Text style={styles.pickupInlineOverviewText}>送迎一覧</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
