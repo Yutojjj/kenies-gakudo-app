@@ -112,7 +112,7 @@ type AdminQuickKey =
   | 'accountCreate'
   | 'announcements';
 
-const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['attendance', 'pickup', 'shift', 'messages', 'events', 'album', 'announcements', 'scheduleChanges'];
+const DEFAULT_ADMIN_QUICK_KEYS: AdminQuickKey[] = ['todayStatus', 'pickup', 'userList', 'announcements', 'album', 'scheduleChanges'];
 
 type StaffQuickKey =
   | 'attendance'
@@ -129,7 +129,7 @@ type StaffQuickKey =
   | 'logout'
   | 'scheduleChanges'
   | 'announcements';
-const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['attendance', 'todayStatus', 'pickup', 'events', 'messages', 'shift', 'album', 'announcements', 'scheduleChanges'];
+const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['todayStatus', 'pickup', 'userList', 'announcements', 'album', 'scheduleChanges'];
 
 const STAFF_COLORS = [
   '#00AEB8','#4A90E2','#7E9CF5','#8A63D2','#F06292',
@@ -2321,18 +2321,6 @@ export default function MenuScreen() {
                 <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
                 <Text style={styles.sectionLabel}>クイックメニュー</Text>
               </View>
-              {role === 'admin' && (
-                <TouchableOpacity style={styles.quickFeatureHeaderAddButton} onPress={() => setAdminQuickEditorVisible(true)} activeOpacity={0.86}>
-                  <Ionicons name="add-circle-outline" size={17} color="#5B5A8F" />
-                  <Text style={styles.quickFeatureHeaderAddText}>候補を追加</Text>
-                </TouchableOpacity>
-              )}
-              {role === 'staff' && (
-                <TouchableOpacity style={styles.quickFeatureHeaderAddButton} onPress={() => setStaffQuickEditorVisible(true)} activeOpacity={0.86}>
-                  <Ionicons name="add-circle-outline" size={17} color="#5B5A8F" />
-                  <Text style={styles.quickFeatureHeaderAddText}>候補を追加</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
             {/* ── メニューグリッド ── */}
@@ -2366,12 +2354,16 @@ export default function MenuScreen() {
                   {item.key === 'survey' && surveyCount > 0 && <View style={styles.quickFeatureBadge}><Text style={styles.quickFeatureBadgeText}>{surveyCount > 99 ? '99+' : surveyCount}</Text></View>}
                 </AnimatedTouchableOpacity>
               ))}
-              {visibleAdminQuickOptions.length === 0 && (
-                <View style={styles.quickFeatureEmptyCard}>
-                  <Text style={styles.quickFeatureEmptyTitle}>表示中の候補はありません</Text>
-                  <Text style={styles.quickFeatureEmptyText}>右下のボタンから追加できます</Text>
-                </View>
-              )}
+              <TouchableOpacity
+                style={styles.quickFeatureAddCard}
+                onPress={() => setAdminQuickEditorVisible(true)}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="クイックメニューを追加"
+              >
+                <Ionicons name="add" size={32} color="#7A7897" />
+                <Text style={styles.quickFeatureAddCardText}>追加</Text>
+              </TouchableOpacity>
             </View>
               ) : role === 'staff' ? (
             <View style={styles.quickFeatureGrid}>
@@ -2400,12 +2392,16 @@ export default function MenuScreen() {
                   <Text style={styles.quickFeatureText}>{item.label}</Text>
                 </AnimatedTouchableOpacity>
               ))}
-              {visibleStaffQuickOptions.length === 0 && (
-                <View style={styles.quickFeatureEmptyCard}>
-                  <Text style={styles.quickFeatureEmptyTitle}>表示中の候補はありません</Text>
-                  <Text style={styles.quickFeatureEmptyText}>右下のボタンから追加できます</Text>
-                </View>
-              )}
+              <TouchableOpacity
+                style={styles.quickFeatureAddCard}
+                onPress={() => setStaffQuickEditorVisible(true)}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="クイックメニューを追加"
+              >
+                <Ionicons name="add" size={32} color="#7A7897" />
+                <Text style={styles.quickFeatureAddCardText}>追加</Text>
+              </TouchableOpacity>
             </View>
               ) : (
             <>
@@ -4177,6 +4173,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.13,
     shadowRadius: 8,
     elevation: 4,
+  },
+  quickFeatureAddCard: {
+    width: '31.7%',
+    minHeight: 108,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#B8B4CC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 9,
+    paddingBottom: 11,
+  },
+  quickFeatureAddCardText: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#625F78',
+    textAlign: 'center',
   },
   quickFeatureIcon: {
     width: 50,
