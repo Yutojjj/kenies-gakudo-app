@@ -1865,15 +1865,6 @@ export default function MenuScreen() {
                 <View style={styles.todayPlanTitleBar} />
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
-              {(role === 'staff' || role === 'admin') && (
-                <TouchableOpacity ref={noticeButtonRef} style={styles.staffSectionMemoBtn} onPress={openNoticePopover} activeOpacity={0.82}>
-                  <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
-                  <Text style={styles.staffSectionMemoText}>メモを追加</Text>
-                  {(todayMemos.length + adminNotices.length) > 0 && (
-                    <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
-                  )}
-                </TouchableOpacity>
-              )}
             </View>
             <AnimatedTouchableOpacity
               style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
@@ -1884,6 +1875,21 @@ export default function MenuScreen() {
             >
               <View style={styles.staffPickupTopRow}>
                 <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
+                <TouchableOpacity
+                  ref={noticeButtonRef}
+                  style={styles.staffSectionMemoBtn}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openNoticePopover();
+                  }}
+                  activeOpacity={0.82}
+                >
+                  <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
+                  <Text style={styles.staffSectionMemoText}>メモを追加</Text>
+                  {(todayMemos.length + adminNotices.length) > 0 && (
+                    <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
+                  )}
+                </TouchableOpacity>
               </View>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
