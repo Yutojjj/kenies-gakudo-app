@@ -199,8 +199,8 @@ export default function TypingCertScreen() {
     return { avg, wpm: Math.round(avg * 60) };
   };
   const wpmResult = calcWPM();
-  const hasAllStageInputs = stageVals.every(value => Number.parseFloat(value) > 0)
-    && stageMisses.every(value => value.trim() !== '' && Number.parseInt(value, 10) >= 0);
+  // 入力されたステージ（はやさが入力済み）だけを対象にする。8ステージすべての入力は不要。
+  const hasAllStageInputs = stageVals.some(value => Number.parseFloat(value) > 0);
   const hasStageData = stageVals.some(value => value !== '') || stageMisses.some(value => value !== '');
 
   const pressCustomNumberKey = (key: string) => {
@@ -236,6 +236,15 @@ export default function TypingCertScreen() {
     if (stageInputMode === 'value') {
       setStageInputMode('misses');
       return;
+    }
+    // ミス数が未入力のまま次へ進む場合、UI表示（0）に合わせて実際の値も0として確定する
+    if (activeStageInput !== null && stageMisses[activeStageInput] === '') {
+      const index = activeStageInput;
+      setStageMisses(prev => {
+        const next = [...prev];
+        next[index] = '0';
+        return next;
+      });
     }
     moveToNextStage();
   };
@@ -292,7 +301,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
-    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべてのはやさとミス数を入力してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '少なくとも1ステージ分のはやさを入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -315,7 +324,7 @@ export default function TypingCertScreen() {
     const student = students.find(s => s.id === selStudentId);
     const certifier = certifiers.find(c => c.id === selCertifierId);
     if (!student) { alert$('エラー', '氏名を選択してください'); return; }
-    if (!hasAllStageInputs) { alert$('エラー', '8ステージすべてのはやさとミス数を入力してください'); return; }
+    if (!hasAllStageInputs) { alert$('エラー', '少なくとも1ステージ分のはやさを入力してください'); return; }
     if (!wpmResult) { alert$('エラー', 'WPMを計算するためステージ値を入力してください'); return; }
     setSaving(true);
     try {
@@ -1298,4 +1307,3 @@ const styles = StyleSheet.create({
 
 
 });
-
