@@ -39,7 +39,7 @@ const customConfirm = (title: string, message: string, onConfirm: () => void) =>
   }
 };
 
-type EventData = { id: string; dateStr: string; title: string; description: string; externalParticipants: any[] };
+type EventData = { id: string; dateStr: string; title: string; description: string; deadlineDate?: string; externalParticipants: any[] };
 type Participant = { id: string; childName: string; childSchool?: string; childGrade?: string; status: string };
 type MemberInfo = { id: string; name: string; nicknameKana?: string; school?: string; grade?: string };
 
@@ -64,6 +64,9 @@ export default function EventManagementScreen() {
   const [calModalVisible, setCalModalVisible] = useState(false);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDesc, setEventDesc] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineModalVisible, setDeadlineModalVisible] = useState(false);
+  const [deadlineCalendarDate, setDeadlineCalendarDate] = useState(new Date());
 
   // 参加者管理モーダル
   const [participantModalVisible, setParticipantModalVisible] = useState(false);
@@ -170,11 +173,26 @@ export default function EventManagementScreen() {
     return days;
   };
 
+  const formatDeadlineDate = (dateStr: string) => {
+    if (!dateStr) return '締切日を選択';
+    const d = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${DAY_NAMES[d.getDay()]}）`;
+  };
+
+  const openDeadlineModal = () => {
+    const base = deadlineDate || selectedDateStr;
+    const d = base ? new Date(`${base}T00:00:00`) : new Date();
+    setDeadlineCalendarDate(Number.isNaN(d.getTime()) ? new Date() : new Date(d.getFullYear(), d.getMonth(), 1));
+    setDeadlineModalVisible(true);
+  };
+
   const openCalModal = (dateStr: string) => {
     setSelectedDateStr(dateStr);
     const ev = events[dateStr];
     setEventTitle(ev?.title || '');
     setEventDesc(ev?.description || '');
+    setDeadlineDate(ev?.deadlineDate || '');
     setCalModalVisible(true);
   };
 
@@ -193,7 +211,7 @@ export default function EventManagementScreen() {
     if (!eventTitle) return customAlert('エラー', 'イベント名を入力してください');
     try {
       const ev = events[selectedDateStr] || { id: selectedDateStr, dateStr: selectedDateStr, externalParticipants: [] };
-      await setDoc(doc(db, 'events', selectedDateStr), { ...ev, title: eventTitle, description: eventDesc }, { merge: true });
+      await setDoc(doc(db, 'events', selectedDateStr), { ...ev, title: eventTitle, description: eventDesc, deadlineDate: deadlineDate || '' }, { merge: true });
       customAlert('保存完了', 'イベント情報を保存しました');
       setCalModalVisible(false);
     } catch { customAlert('エラー', '保存に失敗しました'); }
@@ -339,6 +357,22 @@ export default function EventManagementScreen() {
               <TextInput style={styles.input} value={eventTitle} onChangeText={setEventTitle} placeholder="例: 春の遠足" placeholderTextColor="#BBB" />
               <Text style={styles.label}>説明・詳細</Text>
               <TextInput style={[styles.input, { height: 80 }]} value={eventDesc} onChangeText={setEventDesc} placeholder="持ち物や集合時間など" placeholderTextColor="#BBB" multiline />
+
+              <Text style={styles.label}>参加締切日</Text>
+              <TouchableOpacity style={styles.deadlineButton} onPress={openDeadlineModal} activeOpacity={0.75}>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                <Text style={[styles.deadlineButtonText, !deadlineDate && { color: COLORS.textLight }]}>
+                  {formatDeadlineDate(deadlineDate)}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+              </TouchableOpacity>
+              {!!deadlineDate && (
+                <TouchableOpacity style={styles.deadlineClearButton} onPress={() => setDeadlineDate('')}>
+                  <Ionicons name="close-circle-outline" size={15} color={COLORS.textLight} />
+                  <Text style={styles.deadlineClearText}>締切日を解除</Text>
+                </TouchableOpacity>
+              )}
+
               <View style={styles.actionRow}>
                 {events[selectedDateStr] && (
                   <TouchableOpacity style={styles.deleteBtn} onPress={deleteEvent}>
@@ -353,6 +387,109 @@ export default function EventManagementScreen() {
             </ScrollView>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* 参加締切日カレンダー */}
+      <Modal visible={deadlineModalVisible} animationType="fade" transparent onRequestClose={() => setDeadlineModalVisible(false)}>
+        <View style={styles.deadlineModalOverlay}>
+          <View style={styles.deadlineModalCard}>
+            <View style={styles.deadlineModalHeader}>
+              <Text style={styles.deadlineModalTitle}>参加締切日を選択</Text>
+              <TouchableOpacity onPress={() => setDeadlineModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={25} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.deadlineMonthRow}>
+              <TouchableOpacity
+                style={styles.deadlineMonthNav}
+                onPress={() => setDeadlineCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              >
+                <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+              <Text style={styles.deadlineMonthText}>
+                {deadlineCalendarDate.getFullYear()}年 {deadlineCalendarDate.getMonth() + 1}月
+              </Text>
+              <TouchableOpacity
+                style={styles.deadlineMonthNav}
+                onPress={() => setDeadlineCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              >
+                <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.deadlineWeekRow}>
+              {DAY_NAMES.map((w, i) => (
+                <Text
+                  key={w}
+                  style={[
+                    styles.deadlineWeekText,
+                    i === 0 && { color: '#E53935' },
+                    i === 6 && { color: '#1E88E5' },
+                  ]}
+                >
+                  {w}
+                </Text>
+              ))}
+            </View>
+
+            <View style={styles.deadlineGrid}>
+              {(() => {
+                const y = deadlineCalendarDate.getFullYear();
+                const m = deadlineCalendarDate.getMonth();
+                const firstDay = new Date(y, m, 1).getDay();
+                const lastDay = new Date(y, m + 1, 0).getDate();
+                const cells: (null | { day: number; dateStr: string })[] = [];
+                for (let i = 0; i < firstDay; i++) cells.push(null);
+                for (let day = 1; day <= lastDay; day++) {
+                  cells.push({
+                    day,
+                    dateStr: `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                  });
+                }
+                while (cells.length % 7 !== 0) cells.push(null);
+
+                return cells.map((cell, index) => {
+                  if (!cell) return <View key={`empty-${index}`} style={styles.deadlineDayCell} />;
+                  const selected = deadlineDate === cell.dateStr;
+                  const dow = new Date(`${cell.dateStr}T00:00:00`).getDay();
+                  return (
+                    <TouchableOpacity
+                      key={cell.dateStr}
+                      style={[styles.deadlineDayCell, selected && styles.deadlineDayCellSelected]}
+                      onPress={() => {
+                        setDeadlineDate(cell.dateStr);
+                        setDeadlineModalVisible(false);
+                      }}
+                      activeOpacity={0.72}
+                    >
+                      <Text
+                        style={[
+                          styles.deadlineDayText,
+                          dow === 0 && { color: '#E53935' },
+                          dow === 6 && { color: '#1E88E5' },
+                          selected && styles.deadlineDayTextSelected,
+                        ]}
+                      >
+                        {cell.day}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+
+            <TouchableOpacity
+              style={styles.deadlineNoDateButton}
+              onPress={() => {
+                setDeadlineDate('');
+                setDeadlineModalVisible(false);
+              }}
+            >
+              <Text style={styles.deadlineNoDateText}>締切日を設定しない</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* ═══════════════════════════════════════════════════
@@ -652,6 +789,28 @@ const styles = StyleSheet.create({
 
   label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, marginTop: 16, color: COLORS.text },
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12, fontSize: 15, backgroundColor: '#FAFAFA', color: COLORS.text },
+  deadlineButton: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 13, backgroundColor: '#FAFAFA' },
+  deadlineButtonText: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.text },
+  deadlineClearButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 2 },
+  deadlineClearText: { fontSize: 12, color: COLORS.textLight },
+
+  deadlineModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  deadlineModalCard: { width: '100%', maxWidth: 420, backgroundColor: COLORS.white, borderRadius: 18, padding: 16 },
+  deadlineModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  deadlineModalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  deadlineMonthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  deadlineMonthNav: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F5F5F5' },
+  deadlineMonthText: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
+  deadlineWeekRow: { flexDirection: 'row', marginBottom: 4 },
+  deadlineWeekText: { width: '14.2857%', textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, paddingVertical: 6 },
+  deadlineGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  deadlineDayCell: { width: '14.2857%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  deadlineDayCellSelected: { backgroundColor: COLORS.primary },
+  deadlineDayText: { fontSize: 14, color: COLORS.text, fontWeight: '600' },
+  deadlineDayTextSelected: { color: COLORS.white },
+  deadlineNoDateButton: { marginTop: 14, paddingVertical: 11, alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.border },
+  deadlineNoDateText: { fontSize: 13, color: COLORS.textLight, fontWeight: '600' },
+
   actionRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   saveBtn: { flex: 1, flexDirection: 'row', backgroundColor: COLORS.primary, padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 15 },
