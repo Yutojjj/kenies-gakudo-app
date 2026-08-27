@@ -943,7 +943,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             onPress={exportPDF}
             disabled={loading}
           >
-            <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
             <Text style={styles.pdfBtnText}>PDF出力</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -958,7 +957,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             onPress={() => setMonthActionConfirm('autoFill')}
             disabled={loading}
           >
-            {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="pencil-outline" size={19} color={COLORS.white} />}
+            {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
             <Text style={styles.pdfBtnText}>自動入力</Text>
           </TouchableOpacity>
         </View>
@@ -1903,12 +1902,12 @@ const styles = StyleSheet.create({
   header: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4, borderRadius: 12, backgroundColor: '#EAF7F7', flexShrink: 1 },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
-  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
-  headerPdfBtn: { minHeight: 40, paddingHorizontal: 10, backgroundColor: '#00AEB8' },
-  submissionStatusBtn: { minHeight: 40, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
-  headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#00AEB8' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#EAF7F7', flexShrink: 1 },
+  pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 7 },
+  pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 0, fontSize: 10 },
+  headerPdfBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
+  submissionStatusBtn: { minHeight: 34, paddingHorizontal: 6, backgroundColor: '#00AEB8' },
+  headerAutoFillBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
