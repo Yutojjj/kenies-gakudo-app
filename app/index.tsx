@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,6 +32,11 @@ const hashPassword = (password: string) => Crypto.SHA256(password).toString();
 
 const syncSavedStaffShiftNotification = async (user: any) => {
   if (user?.role !== 'staff' || !user?.accountId || !user?.name) return;
+  const remoteRef = doc(db, 'staff_shift_notification_settings', user.accountId);
+  // Firestoreに保存済みの設定がある場合、起動時の古い端末データで上書きしない。
+  const remote = await getDoc(remoteRef);
+  if (remote.exists()) return;
+
   const raw = await AsyncStorage.getItem(`staff_shift_notification_settings:${user.accountId}`);
   if (!raw) return;
   let setting: any;
@@ -39,7 +44,7 @@ const syncSavedStaffShiftNotification = async (user: any) => {
   const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
     ? window.location.origin
     : '';
-  await setDoc(doc(db, 'staff_shift_notification_settings', user.accountId), {
+  await setDoc(remoteRef, {
     accountId: user.accountId,
     staffName: user.name,
     enabled: setting.enabled === true,

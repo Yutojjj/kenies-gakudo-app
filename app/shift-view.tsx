@@ -191,24 +191,9 @@ export default function ShiftViewScreen() {
       const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.location.origin
         : '';
-      if (shiftNotifyEnabled) {
-        const pushResult = await setupPushToken(accountId);
-        if (pushResult !== 'granted') {
-          setNotificationMessage(
-            pushResult === 'denied'
-              ? '端末の通知が許可されていません。ブラウザまたはホーム画面アプリの設定で通知を許可してください。'
-              : 'この端末を通知先として登録できませんでした。iPhoneはホーム画面に追加したアプリから開いてください。'
-          );
-          return;
-        }
-      }
-      // 先に端末へ保存して、アプリ終了直後でも設定を失わないようにする。
-      await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
-        enabled: shiftNotifyEnabled,
-        timing: shiftNotifyTiming,
-        time: shiftNotifyTime,
-        savedAt: Date.now(),
-      }));
+
+      // 通知先の登録に失敗しても、勤務通知の設定自体は保存できるようにする。
+      // Push登録はブラウザの許可状態やiOSの起動方法に左右されるため、保存と分離する。
       await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
         accountId,
         staffName: myName,
@@ -216,13 +201,40 @@ export default function ShiftViewScreen() {
         timing: shiftNotifyTiming,
         time: shiftNotifyTime,
         notificationApiOrigin,
-        updatedAt: serverTimestamp(),
+        // 他の設定画面と同じく、端末側SDKで確実にシリアライズできるDateを使う。
+        updatedAt: new Date(),
       }, { merge: true });
+
+      const savedAt = Date.now();
+      await AsyncStorage.setItem(`staff_shift_notification_settings:${accountId}`, JSON.stringify({
+        enabled: shiftNotifyEnabled,
+        timing: shiftNotifyTiming,
+        time: shiftNotifyTime,
+        savedAt,
+      }));
+
+      if (shiftNotifyEnabled) {
+        const pushResult = await setupPushToken(accountId);
+        if (pushResult !== 'granted') {
+          setNotificationMessage(
+            pushResult === 'denied'
+              ? '設定は保存しました。端末の通知が許可されていないため、通知を受け取るにはブラウザまたはホーム画面アプリの設定で通知を許可してください。'
+              : '設定は保存しました。この端末を通知先として登録できなかったため、通知を受け取るにはホーム画面アプリから再度お試しください。'
+          );
+          return;
+        }
+      }
+
       setNotificationVisible(false);
       setNotificationMessage('');
     } catch (error) {
       console.warn('[shift notification] save failed', error);
-      setNotificationMessage('通知設定を保存できませんでした。通信状態を確認して、もう一度お試しください。');
+      const code = String((error as any)?.code || '');
+      setNotificationMessage(
+        code === 'permission-denied'
+          ? '通知設定の保存権限がありません。Firestoreのルールでスタッフ本人の設定保存を許可してください。'
+          : '通知設定を保存できませんでした。通信状態を確認して、もう一度お試しください。'
+      );
     } finally {
       setNotificationSaving(false);
     }
