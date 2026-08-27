@@ -142,7 +142,7 @@ function ShiftTimeWheel({
         {values.map((item) => (
           <TouchableOpacity
             key={item}
-            style={styles.shiftWheelItem}
+            style={[styles.shiftWheelItem, value === item && styles.shiftWheelItemActive]}
             onPress={() => {
               const index = values.indexOf(item);
               selectIndex(index);
@@ -1257,17 +1257,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         </View>
                         {timePickerVisible && editingStaffName === s.name && (
                           <View style={styles.inlineTimeEditor}>
-                            <View style={styles.timeTargetRow}>
-                              <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'start' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('start')}>
-                                <Text style={styles.timeTargetLabel}>開始時間</Text>
-                                <Text style={[styles.timeTargetValue, timeSelectTarget === 'start' && styles.timeTargetValueActive]}>{tempStart}</Text>
-                              </TouchableOpacity>
-                              <Text style={styles.inlineTimeTilde}>〜</Text>
-                              <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'end' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('end')}>
-                                <Text style={styles.timeTargetLabel}>終了時間</Text>
-                                <Text style={[styles.timeTargetValue, timeSelectTarget === 'end' && styles.timeTargetValueActive]}>{tempEnd}</Text>
-                              </TouchableOpacity>
-                            </View>
                             <View style={styles.drumPickerRow}>
                               <View style={styles.shiftTimeGroup}>
                                 <Text style={styles.shiftTimeGroupTitle}>開始</Text>
@@ -2027,7 +2016,7 @@ const styles = StyleSheet.create({
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
   assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  inlineTimeEditor: { marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC' },
+  inlineTimeEditor: { marginTop: 10, padding: 8, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC', width: '100%', maxWidth: '100%', minWidth: 0, alignSelf: 'stretch' },
   inlineTimeTilde: { fontSize: 18, fontWeight: '900', color: COLORS.textLight, marginHorizontal: 3 },
   inlineTimeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   inlineTimeCancel: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#F1F2F2', alignItems: 'center' },
@@ -2063,7 +2052,8 @@ const styles = StyleSheet.create({
   shiftWheelSelection: { position: 'absolute', left: 2, right: 2, top: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2, height: SHIFT_WHEEL_ITEM_HEIGHT, borderRadius: 8, backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2', zIndex: 0 },
   shiftWheelScroll: { height: SHIFT_WHEEL_VIEW_HEIGHT, zIndex: 1 },
   shiftWheelContent: { paddingVertical: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2 },
-  shiftWheelItem: { height: SHIFT_WHEEL_ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  shiftWheelItem: { height: SHIFT_WHEEL_ITEM_HEIGHT, marginHorizontal: 3, borderRadius: 8, backgroundColor: '#F1FAFA', alignItems: 'center', justifyContent: 'center' },
+  shiftWheelItemActive: { backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2' },
   shiftWheelText: { fontSize: 16, fontWeight: '700', color: '#919A9C' },
   shiftWheelTextActive: { fontSize: 20, fontWeight: '900', color: '#172629' },
   drumColon: { width: 12, textAlign: 'center', fontSize: 21, fontWeight: '900', color: '#333333' },
