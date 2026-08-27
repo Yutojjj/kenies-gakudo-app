@@ -395,7 +395,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return weeks;
   };
 
-  const openDayModal = (dateStr: string) => {
+  const openDayModal = (dateStr: string, assignedOverride?: AssignedStaff[]) => {
     setSelectedDateStr(dateStr);
     const avail: Staff[] = [];
     const unavail: {name: string, type: string}[] = [];
@@ -411,7 +411,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     
     setAvailableStaff(avail);
     setUnavailableStaff(unavail);
-    setCurrentDayAssigned(assignedShifts[dateStr] || []);
+    setCurrentDayAssigned(assignedOverride ?? assignedShifts[dateStr] ?? []);
     setModalVisible(true);
   };
 
@@ -543,10 +543,32 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const saveDayShift = async () => {
     try {
       await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() }, { merge: true });
+      setAssignedShifts(previous => ({ ...previous, [selectedDateStr]: currentDayAssigned }));
       setModalVisible(false);
     } catch (e) {
       Alert.alert('エラー', '保存に失敗しました');
     }
+  };
+
+  const moveModalDate = async (amount: number) => {
+    if (!selectedDateStr) return;
+    try {
+      await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() }, { merge: true });
+      setAssignedShifts(previous => ({ ...previous, [selectedDateStr]: currentDayAssigned }));
+      const nextDate = new Date(`${selectedDateStr}T00:00:00`);
+      nextDate.setDate(nextDate.getDate() + amount);
+      const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+      openDayModal(nextDateStr);
+    } catch (e) {
+      Alert.alert('エラー', '保存に失敗しました');
+    }
+  };
+
+  const formatModalAdjacentDate = (amount: number) => {
+    if (!selectedDateStr) return '';
+    const date = new Date(`${selectedDateStr}T00:00:00`);
+    date.setDate(date.getDate() + amount);
+    return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
   const exportPDF = async () => {
@@ -636,9 +658,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 1mm; width: 100%; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
-        .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: anywhere; font-weight: 900; }
+        .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
-        .calendar-shift-time { font-weight: 900; font-size: 10px; }
+        .calendar-shift-time { display: inline-block; white-space: nowrap; font-weight: 900; font-size: 10px; }
 
         .legend { display: none; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
@@ -1187,15 +1209,27 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       </Modal>
 
       {/* --- モーダル群 --- */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent>
         <SafeAreaView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
+              <TouchableOpacity style={styles.modalDateNavBtn} onPress={() => moveModalDate(-1)}>
+                <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+                <Text style={styles.modalDateNavText}>{formatModalAdjacentDate(-1)}</Text>
+              </TouchableOpacity>
               <Text style={styles.modalTitle}>
                 {selectedDateStr} のシフト
                 {publicHolidays[selectedDateStr] ? ` (${publicHolidays[selectedDateStr]})` : ''}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
+              <View style={styles.modalHeaderRight}>
+                <TouchableOpacity style={styles.modalDateNavBtn} onPress={() => moveModalDate(1)}>
+                  <Text style={styles.modalDateNavText}>{formatModalAdjacentDate(1)}</Text>
+                  <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setModalVisible(false)}>
+                  <Ionicons name="close" size={30} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={{ flex: 1, padding: 20 }}>
@@ -1957,10 +1991,14 @@ const styles = StyleSheet.create({
   dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },
   dayEventTitle: { fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#27211B' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.white, height: '85%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 12 },
+  modalContent: { backgroundColor: COLORS.white, height: '92%', width: '100%', maxWidth: 1200, borderRadius: 20, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderBottomWidth: 1, borderColor: COLORS.border, gap: 8 },
+  modalTitle: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 18, fontWeight: 'bold' },
+  modalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  modalDateNavBtn: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderRadius: 10, backgroundColor: '#FFF8EB' },
+  modalDateNavText: { fontSize: 13, fontWeight: '800', color: COLORS.text },
+  modalCloseBtn: { minWidth: 42, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', borderBottomWidth: 2, borderColor: COLORS.border, paddingBottom: 4, marginBottom: 12 },
   shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, minWidth: 0 },
   shiftAssignedPane: { flex: 2.35, minWidth: 0 },
