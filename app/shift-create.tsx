@@ -528,6 +528,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     )));
   };
 
+  const saveStaffTimeCandidate = async (candidate: string) => {
+    if (masterTimes.includes(candidate)) return;
+    const newTimes = [...masterTimes, candidate].sort();
+    setMasterTimes(newTimes);
+    await setDoc(doc(db, 'settings', 'master_data'), { workTimes: newTimes }, { merge: true });
+  };
+
   const saveDayShift = async () => {
     try {
       await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() }, { merge: true });
@@ -1228,10 +1235,20 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   {currentDayAssigned.length === 0 && <Text style={styles.shiftEmptyText}>追加されていません</Text>}
                   {currentDayAssigned.map((s, i) => (
                     <View key={i} style={styles.assignedCard}>
-                      <View>
+                      <View style={styles.assignedCardContent}>
                         <Text style={styles.assignedName}>{s.name}</Text>
-                        <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
-                        <Text style={styles.assignedHint}>候補から時間変更</Text>
+                        <View style={styles.assignedTimeRow}>
+                          <TouchableOpacity onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.7}>
+                            <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.saveCandidateBtn}
+                            onPress={() => saveStaffTimeCandidate(`${s.start}-${s.end}`)}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={styles.saveCandidateText}>この時刻を保存</Text>
+                          </TouchableOpacity>
+                        </View>
                         <View style={styles.assignedCandidateRow}>
                           {masterTimes.map(candidate => (
                             <TouchableOpacity
@@ -1929,7 +1946,7 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', borderBottomWidth: 2, borderColor: COLORS.border, paddingBottom: 4, marginBottom: 12 },
-  shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, minWidth: 0 },
   shiftAssignedPane: { flex: 1.6, minWidth: 0 },
   shiftStaffPane: { flex: 1, minWidth: 0, paddingLeft: 14, borderLeftWidth: 1, borderColor: '#E5E7EB' },
   assignedSectionTitle: { borderColor: COLORS.accent, marginBottom: 8 },
@@ -1950,17 +1967,21 @@ const styles = StyleSheet.create({
   removeBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
   removeBtnText: { color: COLORS.danger, fontWeight: 'bold', fontSize: 12 },
   
-  assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', minWidth: 0, width: '100%' },
+  assignedCardContent: { flex: 1, minWidth: 0, marginRight: 10 },
   assignedName: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
+  assignedTimeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 },
   assignedTime: { fontSize: 14, color: COLORS.text, fontWeight: 'bold' },
-  assignedCandidateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7, maxWidth: 420 },
-  assignedCandidateBtn: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#B8D9E8' },
+  saveCandidateBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, backgroundColor: '#E6F7F7', borderWidth: 1, borderColor: COLORS.primary, flexShrink: 1 },
+  saveCandidateText: { fontSize: 10, fontWeight: '800', color: COLORS.primary },
+  assignedCandidateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7, width: '100%', maxWidth: '100%', minWidth: 0 },
+  assignedCandidateBtn: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#B8D9E8', flexShrink: 1 },
   assignedCandidateBtnActive: { backgroundColor: '#D9F1FB', borderColor: COLORS.primary },
-  assignedCandidateText: { fontSize: 11, fontWeight: '800', color: '#46707F' },
+  assignedCandidateText: { fontSize: 11, fontWeight: '800', color: '#46707F', flexShrink: 1 },
   assignedCandidateTextActive: { color: COLORS.primary },
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
-  assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   
   modalFooter: { padding: 20, borderTopWidth: 1, borderColor: COLORS.border },
   saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
