@@ -1559,7 +1559,7 @@ export default function MenuScreen() {
     { key: 'attendance', label: '出欠一覧', icon: 'people', color: '#F05172', bg: '#FFE1E8', image: QUICK_MENU_IMAGES.attendance, cardBg: '#FFF1F6', borderColor: '#FFB8CA', onPress: () => router.push('/attendance') },
     { key: 'todayStatus', label: '出席記録', icon: 'checkmark-done-outline', color: '#00A176', bg: '#DFF8EF', image: QUICK_MENU_IMAGES.todayStatus, cardBg: '#ECFFF4', borderColor: '#AEE9C9', onPress: () => router.push({ pathname: '/attendance', params: { view: 'todayStatus' } } as any) },
     { key: 'pickup', label: '送迎管理', icon: 'car', color: '#E86A17', bg: '#FFE8D6', image: QUICK_MENU_IMAGES.pickup, cardBg: '#FFE0D3', borderColor: '#FFAC8B', onPress: () => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(new Date()) } } as any) },
-    { key: 'shift', label: 'シフト管理', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any) },
+    { key: 'shift', label: 'シフト管理', icon: 'calendar', color: '#2D8BE8', bg: '#DFF2FF', image: QUICK_MENU_IMAGES.shift, cardBg: '#EAF7FF', borderColor: '#9BD3FF', onPress: () => router.push('/shift-create' as any) },
     { key: 'messages', label: 'メッセージ', icon: 'chatbubble-ellipses', color: '#8A63D2', bg: '#E7D9FF', image: QUICK_MENU_IMAGES.messages, cardBg: '#F3ECFF', borderColor: '#C9AEFF', onPress: () => router.push({ pathname: '/messages', params: { tab: 'talk' } } as any) },
     { key: 'announcements', label: 'お知らせ', icon: 'bulb-outline', color: '#D98213', bg: '#FFF0CB', image: QUICK_MENU_IMAGES.announcements, cardBg: '#FFF8E8', borderColor: '#F2C982', onPress: () => router.push({ pathname: '/announcements', params: { role: role || 'admin', name: name || '' } } as any) },
     { key: 'events', label: 'イベント管理', icon: 'flag', color: '#26A65B', bg: '#DFF5DF', image: QUICK_MENU_IMAGES.events, cardBg: '#F7F6D8', borderColor: '#DDE478', onPress: () => router.push({ pathname: '/year-events', params: { role: role || '', tab: 'management' } } as any) },
@@ -2438,7 +2438,7 @@ export default function MenuScreen() {
                 />
                 <MenuCard
                   image={MENU_ICONS.shiftView} title="シフトを見る" subtitle="シフトを確認" bgColor="#6CBDE8"
-                  onPress={() => router.push({ pathname: '/shift-view', params: { name: name || '' } } as any)}
+                  onPress={() => router.push((role === 'admin' ? '/shift-create' : { pathname: '/shift-view', params: { name: name || '' } }) as any)}
                   animValue={cardAnims[3]}
                 />
               </View>
@@ -2889,7 +2889,7 @@ export default function MenuScreen() {
                 <Text style={styles.adminActionText}>シフトを作成する</Text>
                 <Ionicons name="chevron-forward" size={18} color="#AAA" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.adminActionRow} onPress={() => { setAdminShiftMenuVisible(false); router.push({ pathname: '/shift-view', params: { name: name || '' } } as any); }}>
+              <TouchableOpacity style={styles.adminActionRow} onPress={() => { setAdminShiftMenuVisible(false); router.push('/shift-create' as any); }}>
                 <Ionicons name="calendar-outline" size={22} color="#26A65B" />
                 <Text style={styles.adminActionText}>シフトを見る</Text>
                 <Ionicons name="chevron-forward" size={18} color="#AAA" />

@@ -124,7 +124,7 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
           </TouchableOpacity>
         )}
         {!isUser && (
-          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any))} activeOpacity={0.78}>
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push((isAdmin ? '/shift-create' : { pathname: '/shift-view', params: { name: adminName || '' } }) as any))} activeOpacity={0.78}>
             {renderIcon('shift')}
             <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>

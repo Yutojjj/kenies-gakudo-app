@@ -104,6 +104,10 @@ export default function ShiftViewScreen() {
   }, []);
 
   useEffect(() => {
+    if (identityLoaded && isAdmin) router.replace('/shift-create' as any);
+  }, [identityLoaded, isAdmin, router]);
+
+  useEffect(() => {
     if (!identityLoaded || isAdmin || !accountId || !myName) return;
 
     const storageKey = `staff_shift_notification_settings:${accountId}`;

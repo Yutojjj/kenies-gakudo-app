@@ -925,6 +925,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <TouchableOpacity
+          style={[styles.pdfBtn, styles.headerPdfBtn]}
+          onPress={exportPDF}
+          disabled={loading}
+        >
+          <Ionicons name="document-text" size={18} color={COLORS.white} />
+          <Text style={styles.pdfBtnText}>PDF出力</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.pdfBtn, styles.submissionStatusBtn]}
           onPress={() => setSubmissionStatusVisible(true)}
           disabled={loading}
@@ -1878,6 +1886,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
+  headerPdfBtn: { minHeight: 40, paddingHorizontal: 10, backgroundColor: '#00AEB8' },
   submissionStatusBtn: { minHeight: 40, paddingHorizontal: 8, backgroundColor: '#6C8795' },
   headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#36A9B5' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
