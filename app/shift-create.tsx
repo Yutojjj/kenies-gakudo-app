@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
@@ -174,6 +174,8 @@ type ShiftCreateScreenProps = {
 
 export default function ShiftCreateScreen({ embedded = false, initialDate, onClose, autoPdfOnOpen = false }: ShiftCreateScreenProps = {}) {
   const { verified, checking } = useRequireRole('admin');
+  const { width: viewportWidth } = useWindowDimensions();
+  const isCompact = viewportWidth < 520;
 
   const router = useRouter();
   const { openSettings, openWorkSummary, autoPdf, year: routeYear, month: routeMonth } = useLocalSearchParams<{
@@ -1227,13 +1229,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       <Modal visible={modalVisible} animationType="fade" transparent>
         <SafeAreaView style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, isCompact && styles.modalHeaderCompact]}>
               <TouchableOpacity style={styles.modalDateNavBtn} onPress={() => moveModalDate(-1)}>
                 <Ionicons name="chevron-back" size={24} color={COLORS.text} />
                 <Text style={styles.modalDateNavText}>{formatModalAdjacentDate(-1)}</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>
-                {formatModalDate()} のシフト
+              <Text style={[styles.modalTitle, isCompact && styles.modalTitleCompact]} numberOfLines={1}>
+                {formatModalDate()}
                 {publicHolidays[selectedDateStr] ? ` (${publicHolidays[selectedDateStr]})` : ''}
               </Text>
               <View style={styles.modalHeaderRight}>
@@ -1247,7 +1249,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               </View>
             </View>
 
-            <ScrollView style={{ flex: 1, padding: 20 }}>
+            <ScrollView style={{ flex: 1, padding: isCompact ? 8 : 20 }}>
 
               {eventsData[selectedDateStr]?.length > 0 && (
                 <View style={styles.dayEventCard}>
@@ -1261,16 +1263,16 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 </View>
               )}
 
-              <View style={styles.shiftEditorColumns}>
+              <View style={[styles.shiftEditorColumns, isCompact && styles.shiftEditorColumnsCompact]}>
                 <View style={styles.shiftAssignedPane}>
                   {/* 決定済みを左側にまとめ、横幅を広く使う */}
                   <Text style={[styles.sectionTitle, styles.assignedSectionTitle]}>決定したシフト</Text>
                   {currentDayAssigned.length === 0 && <Text style={styles.shiftEmptyText}>追加されていません</Text>}
                   {currentDayAssigned.map((s, i) => (
-                    <View key={i} style={styles.assignedCard}>
-                      <View style={styles.assignedCardContent}>
+                    <View key={i} style={[styles.assignedCard, isCompact && styles.assignedCardCompact]}>
+                      <View style={[styles.assignedCardContent, isCompact && styles.assignedCardContentCompact]}>
                         <Text style={styles.assignedName}>{s.name}</Text>
-                        <View style={styles.assignedTimeRow}>
+                        <View style={[styles.assignedTimeRow, isCompact && styles.assignedTimeRowCompact]}>
                           <TouchableOpacity onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.7}>
                             <View style={styles.assignedTimePills}>
                               <Text style={[styles.assignedTime, styles.assignedStartTime]}>{s.start}</Text>
@@ -1289,18 +1291,18 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         {timePickerVisible && editingStaffName === s.name && (
                           <View style={styles.inlineTimeEditor}>
                             <View style={styles.drumPickerRow}>
-                              <View style={styles.shiftTimeGroup}>
+                                <View style={[styles.shiftTimeGroup, isCompact && styles.shiftTimeGroupCompact]}>
                                 <Text style={styles.shiftTimeGroupTitle}>開始</Text>
-                                <View style={styles.shiftTimePair}>
+                                  <View style={[styles.shiftTimePair, isCompact && styles.shiftTimePairCompact]}>
                                   <ShiftTimeWheel values={HOURS} value={newStartHour} visible={timePickerVisible} onChange={(hour) => { setNewStartHour(hour); setTempStart(`${String(hour).padStart(2, '0')}:${String(newStartMinute).padStart(2, '0')}`); }} />
                                   <Text style={styles.drumColon}>:</Text>
                                   <ShiftTimeWheel values={MINUTES} value={newStartMinute} visible={timePickerVisible} onChange={(minute) => { setNewStartMinute(minute); setTempStart(`${String(newStartHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`); }} />
                                 </View>
                               </View>
                               <Text style={styles.drumTilde}>〜</Text>
-                              <View style={styles.shiftTimeGroup}>
+                                <View style={[styles.shiftTimeGroup, isCompact && styles.shiftTimeGroupCompact]}>
                                 <Text style={styles.shiftTimeGroupTitle}>終了</Text>
-                                <View style={styles.shiftTimePair}>
+                                  <View style={[styles.shiftTimePair, isCompact && styles.shiftTimePairCompact]}>
                                   <ShiftTimeWheel values={HOURS} value={newEndHour} visible={timePickerVisible} onChange={(hour) => { setNewEndHour(hour); setTempEnd(`${String(hour).padStart(2, '0')}:${String(newEndMinute).padStart(2, '0')}`); }} />
                                   <Text style={styles.drumColon}>:</Text>
                                   <ShiftTimeWheel values={MINUTES} value={newEndMinute} visible={timePickerVisible} onChange={(minute) => { setNewEndMinute(minute); setTempEnd(`${String(newEndHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`); }} />
@@ -1332,14 +1334,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                           ))}
                         </View>
                       </View>
-                      <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
+                      <TouchableOpacity style={[styles.assignedDeleteBtn, isCompact && styles.assignedDeleteBtnCompact]} onPress={() => removeStaffFromShift(s.name)}>
                         <Ionicons name="trash" size={16} color={COLORS.danger} />
                       </TouchableOpacity>
                     </View>
                   ))}
                 </View>
 
-                <View style={styles.shiftStaffPane}>
+                <View style={[styles.shiftStaffPane, isCompact && styles.shiftStaffPaneCompact]}>
                   <View style={styles.staffPaneHeader}>
                     <Text style={[styles.sectionTitle, styles.staffPaneTitle]}>スタッフ</Text>
                   </View>
@@ -2007,18 +2009,22 @@ const styles = StyleSheet.create({
   dayEventLabel: { fontSize: 14, fontWeight: '900', color: '#6A4500' },
   dayEventTitle: { fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#27211B' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 12 },
-  modalContent: { backgroundColor: COLORS.white, height: '92%', width: '100%', maxWidth: 1200, borderRadius: 20, overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderBottomWidth: 1, borderColor: COLORS.border, gap: 8 },
-  modalTitle: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 18, fontWeight: 'bold' },
-  modalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modalDateNavBtn: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, borderRadius: 10, backgroundColor: '#FFF8EB' },
-  modalDateNavText: { fontSize: 13, fontWeight: '800', color: COLORS.text },
-  modalCloseBtn: { minWidth: 42, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 4 },
+  modalContent: { backgroundColor: COLORS.white, height: '96%', width: '100%', maxWidth: 1200, borderRadius: 16, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderColor: COLORS.border, gap: 5 },
+  modalHeaderCompact: { paddingHorizontal: 5, gap: 2 },
+  modalTitle: { flex: 1, minWidth: 0, textAlign: 'center', fontSize: 18, fontWeight: 'bold' },
+  modalTitleCompact: { fontSize: 15 },
+  modalHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
+  modalDateNavBtn: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, borderRadius: 10, backgroundColor: '#FFF8EB', flexShrink: 1 },
+  modalDateNavText: { fontSize: 12, fontWeight: '800', color: COLORS.text },
+  modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', borderBottomWidth: 2, borderColor: COLORS.border, paddingBottom: 4, marginBottom: 12 },
-  shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, minWidth: 0 },
+  shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, minWidth: 0 },
+  shiftEditorColumnsCompact: { gap: 6 },
   shiftAssignedPane: { flex: 2.35, minWidth: 0 },
   shiftStaffPane: { flex: 0.75, minWidth: 150, paddingLeft: 10, borderLeftWidth: 1, borderColor: '#E5E7EB' },
+  shiftStaffPaneCompact: { flex: 0.65, minWidth: 106, paddingLeft: 5 },
   assignedSectionTitle: { borderColor: COLORS.accent, marginBottom: 8 },
   shiftEmptyText: { color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 },
   assignedHint: { fontSize: 10, color: COLORS.textLight, marginTop: 2 },
@@ -2037,10 +2043,13 @@ const styles = StyleSheet.create({
   removeBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, flexShrink: 0 },
   removeBtnText: { color: COLORS.danger, fontWeight: 'bold', fontSize: 12 },
   
-  assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', minWidth: 0, width: '100%' },
+  assignedCard: { position: 'relative', backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', minWidth: 0, width: '100%' },
+  assignedCardCompact: { padding: 10 },
   assignedCardContent: { flex: 1, minWidth: 0, marginRight: 10 },
+  assignedCardContentCompact: { marginRight: 0, paddingRight: 34 },
   assignedName: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
   assignedTimeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 },
+  assignedTimeRowCompact: { gap: 4 },
   assignedTimePills: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 2 },
   assignedTime: { fontSize: 16, color: '#173E43', fontWeight: '900', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, backgroundColor: '#BFE8E8' },
   assignedStartTime: { color: '#173E43' },
@@ -2055,7 +2064,8 @@ const styles = StyleSheet.create({
   assignedCandidateTextActive: { color: COLORS.primary },
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
-  assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  assignedDeleteBtn: { position: 'absolute', top: 8, right: 8, width: 34, height: 34, backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  assignedDeleteBtnCompact: { top: 6, right: 6, width: 30, height: 30, borderRadius: 7 },
   inlineTimeEditor: { marginTop: 10, padding: 6, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC', width: '100%', maxWidth: '100%', minWidth: 0, alignSelf: 'stretch', overflow: 'hidden' },
   inlineTimeTilde: { fontSize: 18, fontWeight: '900', color: COLORS.textLight, marginHorizontal: 3 },
   inlineTimeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
@@ -2086,8 +2096,10 @@ const styles = StyleSheet.create({
   masterTimeText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary },
   drumPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 0, width: '100%' },
   shiftTimeGroup: { flex: 1, maxWidth: 150, minWidth: 0, alignItems: 'center' },
+  shiftTimeGroupCompact: { maxWidth: 102 },
   shiftTimeGroupTitle: { marginBottom: 5, fontSize: 12, fontWeight: '900', color: '#37474F' },
   shiftTimePair: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 0 },
+  shiftTimePairCompact: { gap: 1 },
   shiftWheelWrap: { position: 'relative', flex: 1, minWidth: 40, maxWidth: 58, height: SHIFT_WHEEL_VIEW_HEIGHT, overflow: 'hidden', borderRadius: 10, backgroundColor: '#FAFCFC', borderWidth: 1, borderColor: '#D6E1E2' },
   shiftWheelSelection: { position: 'absolute', left: 2, right: 2, top: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2, height: SHIFT_WHEEL_ITEM_HEIGHT, borderRadius: 8, backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2', zIndex: 0 },
   shiftWheelScroll: { height: SHIFT_WHEEL_VIEW_HEIGHT, zIndex: 1 },
