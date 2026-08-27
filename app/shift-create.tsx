@@ -593,21 +593,20 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
              ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
           : allStaff;
-        const staffHtml = orderedStaff.map(staff => {
+        const staffHtml = orderedStaff.map((staff, staffIndex) => {
           const cells = wk.map(cell => {
             if (!cell) return `<td class="c-shift c-shift-empty"></td>`;
             const isSun = cell.dow===0, isSat = cell.dow===6;
             const isPH = !!publicHolidays[cell.dateStr];
-            // 土日・祝日は色だけ（×なし）
+            // 休日は空欄にし、平日の確定シフトだけを色付きで印刷する。
             if (isSun || isPH) return `<td class="c-shift c-col-sun"></td>`;
             if (isSat) return `<td class="c-shift c-col-sat"></td>`;
             const assigned = assignedShifts[cell.dateStr]?.find((s:any) => s.name === staff.name);
-            const req = requests[`${(staff.name||'').trim()}_${cell.dateStr}`];
             if (assigned) {
-              return `<td class="c-shift c-assigned">${assigned.start}-${assigned.end}</td>`;
+              const color = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+              return `<td class="c-shift c-assigned" style="background-color:${color} !important;">${assigned.start}〜${assigned.end}</td>`;
             } else {
-              // 平日の未回答・出勤不可は × グレー
-              return `<td class="c-shift c-off">×</td>`;
+              return `<td class="c-shift"></td>`;
             }
           }).join('');
           return `<tr><td class="c-name">${staff.name}</td>${cells}</tr>`;
@@ -617,11 +616,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       });
 
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        @page { size: A4 portrait; margin: 5mm; }
+        @page { size: A4 portrait; margin: 4mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
-          font-size: 7px;
+          font-size: 6.5px;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
           color-adjust: exact;
@@ -629,45 +628,44 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         td { border: 0.5px solid #AAAAAA; vertical-align: middle; text-align: center; }
 
-        .c-month { background-color: #E8F5E9 !important; font-weight: bold; font-size: 8px; padding: 2px; }
+        .c-month { background-color: #E8F5E9 !important; font-weight: bold; font-size: 7px; padding: 1px; }
 
-        .c-dow { font-weight: bold; font-size: 7.5px; padding: 2px; }
+        .c-dow { font-weight: bold; font-size: 7px; padding: 1px; }
         .c-dow-week { background-color: #E8E8E8 !important; color: #333; }
         .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
-        .c-date-label { background-color: #FFFFFF !important; height: 14px; }
-        .c-date-empty { background-color: #F0F0F0 !important; height: 14px; }
-        .c-date       { font-weight: bold; font-size: 8px; height: 14px; padding: 1px; }
+        .c-date-label { background-color: #FFFFFF !important; height: 11px; }
+        .c-date-empty { background-color: #F0F0F0 !important; height: 11px; }
+        .c-date       { font-weight: bold; font-size: 7px; height: 11px; padding: 0; }
         .c-date-week  { background-color: #E8F5E9 !important; color: #333; }
         .c-date-sun   { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-date-sat   { background-color: #CCE4FF !important; color: #0055CC; }
 
-        .c-name { background-color: #FFB6C1 !important; font-weight: 900; font-size: 8.5px;
-          padding: 1px 2px; height: 20px; white-space: nowrap; overflow: hidden; }
+        .c-name { background-color: #F4F0FA !important; font-weight: 900; font-size: 7.5px;
+          padding: 0 2px; height: 16px; white-space: nowrap; overflow: hidden; }
 
-        .c-shift       { height: 20px; font-size: 9.5px; padding: 1px;
+        .c-shift       { height: 16px; font-size: 7px; padding: 0;
                          background-color: #FFFFFF !important;
                          white-space: nowrap; overflow: hidden; }
         .c-shift-empty { background-color: #F0F0F0 !important; }
-        .c-assigned    { background-color: #FFD700 !important; font-weight: 900; color: #111; font-size: 10px; }
-        .c-off         { background-color: #D0D0D0 !important; color: #111; font-size: 13px; font-weight: 900; line-height: 1; }
+        .c-assigned    { font-weight: 900; color: #111; font-size: 7px; }
         .c-col-sun     { background-color: #FFD9D9 !important; }
         .c-col-sat     { background-color: #CCE4FF !important; }
 
-        .legend { margin-top: 5px; font-size: 6.5px; color: #444; display: flex; gap: 10px; align-items: center; }
+        .legend { display: none; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
           <colgroup>
-            <col style="width:18px"/>
-            <col style="width:3%"/>
-            <col style="width:16.4%"/>
-            <col style="width:16.4%"/>
-            <col style="width:16.4%"/>
-            <col style="width:16.4%"/>
-            <col style="width:16.4%"/>
-            <col style="width:3%"/>
+            <col style="width:12%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
+            <col style="width:12.57%"/>
           </colgroup>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
