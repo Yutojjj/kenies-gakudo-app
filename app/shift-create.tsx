@@ -520,6 +520,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     setTimePickerVisible(false);
   };
 
+  const applyStaffTimeCandidate = (staffName: string, candidate: string) => {
+    const [start, end] = candidate.split('-').map(value => value.trim());
+    if (!start || !end) return;
+    setCurrentDayAssigned(currentDayAssigned.map(staff => (
+      staff.name === staffName ? { ...staff, start, end } : staff
+    )));
+  };
+
   const saveDayShift = async () => {
     try {
       await setDoc(doc(db, 'assigned_shifts', selectedDateStr), { staff: currentDayAssigned, updatedAt: new Date() }, { merge: true });
@@ -1219,16 +1227,34 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   <Text style={[styles.sectionTitle, styles.assignedSectionTitle]}>決定したシフト</Text>
                   {currentDayAssigned.length === 0 && <Text style={styles.shiftEmptyText}>追加されていません</Text>}
                   {currentDayAssigned.map((s, i) => (
-                    <TouchableOpacity key={i} style={styles.assignedCard} onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.75}>
+                    <View key={i} style={styles.assignedCard}>
                       <View>
                         <Text style={styles.assignedName}>{s.name}</Text>
                         <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
-                        <Text style={styles.assignedHint}>タップで時間変更</Text>
+                        <Text style={styles.assignedHint}>候補から時間変更</Text>
+                        <View style={styles.assignedCandidateRow}>
+                          {masterTimes.map(candidate => (
+                            <TouchableOpacity
+                              key={`${s.name}-${candidate}`}
+                              style={[
+                                styles.assignedCandidateBtn,
+                                `${s.start}-${s.end}` === candidate && styles.assignedCandidateBtnActive,
+                              ]}
+                              onPress={() => applyStaffTimeCandidate(s.name, candidate)}
+                              activeOpacity={0.75}
+                            >
+                              <Text style={[
+                                styles.assignedCandidateText,
+                                `${s.start}-${s.end}` === candidate && styles.assignedCandidateTextActive,
+                              ]}>{candidate}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                       </View>
                       <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
                         <Ionicons name="trash" size={16} color={COLORS.danger} />
                       </TouchableOpacity>
-                    </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
 
@@ -1924,9 +1950,14 @@ const styles = StyleSheet.create({
   removeBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
   removeBtnText: { color: COLORS.danger, fontWeight: 'bold', fontSize: 12 },
   
-  assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   assignedName: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
   assignedTime: { fontSize: 14, color: COLORS.text, fontWeight: 'bold' },
+  assignedCandidateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7, maxWidth: 420 },
+  assignedCandidateBtn: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#B8D9E8' },
+  assignedCandidateBtnActive: { backgroundColor: '#D9F1FB', borderColor: COLORS.primary },
+  assignedCandidateText: { fontSize: 11, fontWeight: '800', color: '#46707F' },
+  assignedCandidateTextActive: { color: COLORS.primary },
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
   assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
