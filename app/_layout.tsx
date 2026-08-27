@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import { enableNetwork } from 'firebase/firestore';
+import { disableNetwork, enableNetwork } from 'firebase/firestore';
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, AppState, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -153,11 +153,26 @@ export default function RootLayout() {
 
     // Web環境でのオンライン/オフライン監視
     if (Platform.OS === 'web') {
-      const handleOnline = async () => {
+      let reconnecting = false;
+      let lastReconnectAt = 0;
+      const reconnectFirestore = async () => {
+        const now = Date.now();
+        if (reconnecting || now - lastReconnectAt < 500) return;
+        reconnecting = true;
+        lastReconnectAt = now;
         try {
+          // iOSのスリープ復帰では、SDK上は接続中のまま購読だけ止まることがある。
+          await disableNetwork(db);
           await enableNetwork(db);
           setIsOnline(true);
-        } catch {}
+        } catch {
+          setIsOnline(false);
+        } finally {
+          reconnecting = false;
+        }
+      };
+      const handleOnline = async () => {
+        await reconnectFirestore();
       };
       const handleOffline = async () => {
         setIsOnline(false);
@@ -166,10 +181,7 @@ export default function RootLayout() {
       // 購読だけが止まった状態になることがあるため、表示復帰でも再接続する。
       const handleVisibilityChange = async () => {
         if (document.visibilityState !== 'visible') return;
-        try {
-          await enableNetwork(db);
-          setIsOnline(true);
-        } catch {}
+        await reconnectFirestore();
       };
       const handlePageShow = handleVisibilityChange;
       window.addEventListener('online', handleOnline);

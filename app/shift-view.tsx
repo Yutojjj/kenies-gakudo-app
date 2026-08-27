@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, enableNetwork, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -110,11 +110,8 @@ export default function ShiftViewScreen() {
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const refreshSubscriptions = async () => {
+    const refreshSubscriptions = () => {
       if (document.visibilityState !== 'visible') return;
-      try {
-        await enableNetwork(db);
-      } catch {}
       setSubscriptionKey(key => key + 1);
     };
     document.addEventListener('visibilitychange', refreshSubscriptions);

@@ -381,7 +381,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const refreshSubscriptions = async () => {
       if (document.visibilityState !== 'visible' || scheduled) return;
       scheduled = true;
-      try { await enableNetwork(db); } catch {}
       setSubscriptionKey(key => key + 1);
       setTimeout(() => { scheduled = false; }, 250);
     };
