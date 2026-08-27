@@ -35,6 +35,11 @@ const SHIFT_CARD_COLORS = [
   '#EAB2A7',
 ];
 
+const PRINT_SHIFT_COLORS = [
+  '#75C8B6', '#E995AD', '#A394E2', '#E6A477',
+  '#79B8E6', '#9CCB6E', '#E5C65C', '#6EC4C8',
+];
+
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 const SHIFT_WHEEL_ITEM_HEIGHT = 40;
@@ -586,15 +591,18 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
+          const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
+            `<div class="calendar-event"><span class="calendar-event-label">イベント</span><span>${title}</span></div>`
+          )).join('');
           const entries = orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
-            const color = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+            const color = PRINT_SHIFT_COLORS[staffIndex % PRINT_SHIFT_COLORS.length];
             return `<div class="calendar-shift" style="background-color:${color} !important;">
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('');
-          return `<td class="${dayClass}"><div class="calendar-date">${cell.day}</div><div class="calendar-shifts">${entries}</div></td>`;
+          return `<td class="${dayClass}"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -618,17 +626,21 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
-        .calendar-day { height: 38mm; vertical-align: top; text-align: left; padding: 2mm; background: #FFFFFF !important; }
+        .calendar-day { height: 38mm; vertical-align: top; text-align: left; padding: 1.5mm; background: #FFFFFF !important; }
         .calendar-day-empty { background: #F4F4F4 !important; }
         .calendar-day-sun { background: #FFF1F1 !important; }
         .calendar-day-sat { background: #F0F7FF !important; }
-        .calendar-date { font-weight: 900; font-size: 12px; line-height: 1; margin-bottom: 2mm; }
+        .calendar-date { font-weight: 900; font-size: 16px; line-height: 1; margin-bottom: 1.5mm; }
         .calendar-day-sun .calendar-date { color: #D94747; }
         .calendar-day-sat .calendar-date { color: #2874C6; }
         .calendar-shifts { display: flex; flex-direction: column; gap: 1.2mm; }
-        .calendar-shift { border-radius: 1.2mm; padding: 1.2mm 1.5mm; font-size: 8px; line-height: 1.15; color: #111; white-space: nowrap; overflow: hidden; font-weight: 900; }
-        .calendar-shift-name { font-weight: 900; margin-right: 1.5mm; }
-        .calendar-shift-time { font-weight: 900; }
+        .calendar-events { display: flex; flex-direction: column; gap: 1mm; margin-bottom: 1.5mm; width: 100%; }
+        .calendar-event { width: 100%; border-radius: 1.2mm; padding: 1.4mm 1.5mm; background: #F4C84A !important; color: #3B2A00; font-size: 10px; line-height: 1.15; font-weight: 900; white-space: nowrap; overflow: hidden; }
+        .calendar-event-label { display: inline-block; margin-right: 1.5mm; padding: 0.4mm 1mm; border-radius: 1mm; background: #C89000 !important; color: #FFFFFF; font-size: 8px; }
+        .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 1.2mm; }
+        .calendar-shift { width: 100%; border-radius: 1.2mm; padding: 1.4mm 1.5mm; font-size: 10px; line-height: 1.15; color: #111; white-space: nowrap; overflow: hidden; font-weight: 900; }
+        .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1.5mm; }
+        .calendar-shift-time { font-weight: 900; font-size: 10px; }
 
         .legend { display: none; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
