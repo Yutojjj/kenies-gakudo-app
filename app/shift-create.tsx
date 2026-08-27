@@ -567,7 +567,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       }
 
       const dowHeader = `<tr>
-        <td class="c-month">${month}月</td>
         ${DOW.map((d,i) => {
           const cls = i===0 ? 'c-dow c-dow-sun' : i===6 ? 'c-dow c-dow-sat' : 'c-dow c-dow-week';
           return `<td class="${cls}">${d}</td>`;
@@ -575,44 +574,29 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       </tr>`;
 
       let bodyHtml = '';
+      const orderedStaff: typeof allStaff = autoFillSettings.pdfOrder && autoFillSettings.pdfOrder.length > 0
+        ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
+           ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
+        : allStaff;
+
       weeks.forEach(wk => {
-        // 日付行
-        const dateRow = `<tr>
-          <td class="c-date-label"></td>
-          ${wk.map(cell => {
-            if (!cell) return `<td class="c-date-empty"></td>`;
-            const isSun = cell.dow===0, isSat = cell.dow===6;
-            const isPH = !!publicHolidays[cell.dateStr];
-            const cls = (isPH||isSun) ? 'c-date c-date-sun' : isSat ? 'c-date c-date-sat' : 'c-date c-date-week';
-            return `<td class="${cls}">${cell.day}</td>`;
-          }).join('')}
-        </tr>`;
-
-        // スタッフ行
-        const orderedStaff: typeof allStaff = autoFillSettings.pdfOrder && autoFillSettings.pdfOrder.length > 0
-          ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
-             ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
-          : allStaff;
-        const staffHtml = orderedStaff.map((staff, staffIndex) => {
-          const cells = wk.map(cell => {
-            if (!cell) return `<td class="c-shift c-shift-empty"></td>`;
-            const isSun = cell.dow===0, isSat = cell.dow===6;
-            const isPH = !!publicHolidays[cell.dateStr];
-            // 休日は空欄にし、平日の確定シフトだけを色付きで印刷する。
-            if (isSun || isPH) return `<td class="c-shift c-col-sun"></td>`;
-            if (isSat) return `<td class="c-shift c-col-sat"></td>`;
-            const assigned = assignedShifts[cell.dateStr]?.find((s:any) => s.name === staff.name);
-            if (assigned) {
-              const color = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
-              return `<td class="c-shift c-assigned" style="background-color:${color} !important;">${assigned.start}〜${assigned.end}</td>`;
-            } else {
-              return `<td class="c-shift"></td>`;
-            }
-          }).join('');
-          return `<tr><td class="c-name">${staff.name}</td>${cells}</tr>`;
+        const cells = wk.map(cell => {
+          if (!cell) return `<td class="calendar-day calendar-day-empty"></td>`;
+          const isSun = cell.dow === 0;
+          const isSat = cell.dow === 6;
+          const isPH = !!publicHolidays[cell.dateStr];
+          const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
+          const entries = orderedStaff.map((staff, staffIndex) => {
+            const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
+            if (!assigned) return '';
+            const color = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+            return `<div class="calendar-shift" style="background-color:${color} !important;">
+              <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
+            </div>`;
+          }).filter(Boolean).join('');
+          return `<td class="${dayClass}"><div class="calendar-date">${cell.day}</div><div class="calendar-shifts">${entries}</div></td>`;
         }).join('');
-
-        bodyHtml += dateRow + staffHtml;
+        bodyHtml += `<tr>${cells}</tr>`;
       });
 
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -628,45 +612,29 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         td { border: 0.5px solid #AAAAAA; vertical-align: middle; text-align: center; }
 
-        .c-month { background-color: #E8F5E9 !important; font-weight: bold; font-size: 7px; padding: 1px; }
-
         .c-dow { font-weight: bold; font-size: 7px; padding: 1px; }
         .c-dow-week { background-color: #E8E8E8 !important; color: #333; }
         .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
-        .c-date-label { background-color: #FFFFFF !important; height: 11px; }
-        .c-date-empty { background-color: #F0F0F0 !important; height: 11px; }
-        .c-date       { font-weight: bold; font-size: 7px; height: 11px; padding: 0; }
-        .c-date-week  { background-color: #E8F5E9 !important; color: #333; }
-        .c-date-sun   { background-color: #FFD9D9 !important; color: #CC0000; }
-        .c-date-sat   { background-color: #CCE4FF !important; color: #0055CC; }
-
-        .c-name { background-color: #F4F0FA !important; font-weight: 900; font-size: 7.5px;
-          padding: 0 2px; height: 16px; white-space: nowrap; overflow: hidden; }
-
-        .c-shift       { height: 16px; font-size: 7px; padding: 0;
-                         background-color: #FFFFFF !important;
-                         white-space: nowrap; overflow: hidden; }
-        .c-shift-empty { background-color: #F0F0F0 !important; }
-        .c-assigned    { font-weight: 900; color: #111; font-size: 7px; }
-        .c-col-sun     { background-color: #FFD9D9 !important; }
-        .c-col-sat     { background-color: #CCE4FF !important; }
+        caption { caption-side: top; text-align: left; font-size: 11px; font-weight: 900; padding: 0 0 3px; }
+        .calendar-day { height: 42mm; vertical-align: top; text-align: left; padding: 1.5mm; background: #FFFFFF !important; }
+        .calendar-day-empty { background: #F4F4F4 !important; }
+        .calendar-day-sun { background: #FFF1F1 !important; }
+        .calendar-day-sat { background: #F0F7FF !important; }
+        .calendar-date { font-weight: 900; font-size: 9px; line-height: 1; margin-bottom: 1.5mm; }
+        .calendar-day-sun .calendar-date { color: #D94747; }
+        .calendar-day-sat .calendar-date { color: #2874C6; }
+        .calendar-shifts { display: flex; flex-direction: column; gap: 1mm; }
+        .calendar-shift { border-radius: 1.2mm; padding: 1mm; font-size: 6px; line-height: 1.15; color: #111; white-space: nowrap; overflow: hidden; }
+        .calendar-shift-name { font-weight: 900; margin-right: 1.5mm; }
+        .calendar-shift-time { font-weight: 700; }
 
         .legend { display: none; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <colgroup>
-            <col style="width:12%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-            <col style="width:12.57%"/>
-          </colgroup>
+          <caption>${year}年${month}月 シフト表</caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
