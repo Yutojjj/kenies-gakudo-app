@@ -572,6 +572,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  const formatModalDate = () => {
+    if (!selectedDateStr) return '';
+    const date = new Date(`${selectedDateStr}T00:00:00`);
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${selectedDateStr} (${weekdays[date.getDay()]})`;
+  };
+
   const exportPDF = async () => {
     try {
       const year = currentDate.getFullYear();
@@ -1225,7 +1232,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <Text style={styles.modalDateNavText}>{formatModalAdjacentDate(-1)}</Text>
               </TouchableOpacity>
               <Text style={styles.modalTitle}>
-                {selectedDateStr} のシフト
+                {formatModalDate()} のシフト
                 {publicHolidays[selectedDateStr] ? ` (${publicHolidays[selectedDateStr]})` : ''}
               </Text>
               <View style={styles.modalHeaderRight}>
