@@ -4,6 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
+import { handleWebWheelStep } from '../utils/webWheel';
+
+const WebScrollView = ScrollView as any;
 
 const COLORS = {
   primary: '#5B9BD5', white: '#FFFFFF', text: '#333333',
@@ -91,6 +94,8 @@ export default function TransportModal({
   const customMinuteScrollRef = useRef<ScrollView>(null);
   const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customMinuteSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customHourWheelLockRef = useRef(0);
+  const customMinuteWheelLockRef = useRef(0);
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -1768,7 +1773,7 @@ export default function TransportModal({
             <Text style={styles.customBlockLabel}>時刻</Text>
             <View style={styles.customPickerColumns} nativeID="ui-time-wheel-transport">
               <View style={styles.customPickerSelectionFrame} pointerEvents="none" />
-              <ScrollView
+              <WebScrollView
                 ref={customHourScrollRef}
                 style={styles.customPickerScroll}
                 contentContainerStyle={styles.customPickerScrollInner}
@@ -1779,7 +1784,15 @@ export default function TransportModal({
                 disableIntervalMomentum
                 nestedScrollEnabled
                 scrollEventThrottle={16}
-                onScroll={event => {
+                onWheel={(event: any) => handleWebWheelStep(event, {
+                  index: CUSTOM_TIME_HOURS.indexOf(customHour),
+                  length: CUSTOM_TIME_HOURS.length,
+                  itemHeight: CUSTOM_TIME_ITEM_HEIGHT,
+                  lockRef: customHourWheelLockRef,
+                  onIndexChange: index => setCustomHour(CUSTOM_TIME_HOURS[index]),
+                  scrollTo: offset => customHourScrollRef.current?.scrollTo({ y: offset, animated: true }),
+                })}
+                onScroll={(event: any) => {
                   const y = event.nativeEvent.contentOffset.y;
                   updateCustomTimeFromScroll(CUSTOM_TIME_HOURS, y, customHour, setCustomHour);
                   scheduleCustomTimeSnap(
@@ -1790,13 +1803,13 @@ export default function TransportModal({
                     customHourSnapTimerRef,
                   );
                 }}
-                onMomentumScrollEnd={event => settleCustomTimeWheel(
+                onMomentumScrollEnd={(event: any) => settleCustomTimeWheel(
                   CUSTOM_TIME_HOURS,
                   event.nativeEvent.contentOffset.y,
                   setCustomHour,
                   customHourScrollRef,
                 )}
-                onScrollEndDrag={event => settleCustomTimeWheel(
+                onScrollEndDrag={(event: any) => settleCustomTimeWheel(
                   CUSTOM_TIME_HOURS,
                   event.nativeEvent.contentOffset.y,
                   setCustomHour,
@@ -1814,9 +1827,9 @@ export default function TransportModal({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
+              </WebScrollView>
               <Text style={styles.customPickerColon}>:</Text>
-              <ScrollView
+              <WebScrollView
                 ref={customMinuteScrollRef}
                 style={styles.customPickerScroll}
                 contentContainerStyle={styles.customPickerScrollInner}
@@ -1827,7 +1840,15 @@ export default function TransportModal({
                 disableIntervalMomentum
                 nestedScrollEnabled
                 scrollEventThrottle={16}
-                onScroll={event => {
+                onWheel={(event: any) => handleWebWheelStep(event, {
+                  index: CUSTOM_TIME_MINUTES.indexOf(customMinute),
+                  length: CUSTOM_TIME_MINUTES.length,
+                  itemHeight: CUSTOM_TIME_ITEM_HEIGHT,
+                  lockRef: customMinuteWheelLockRef,
+                  onIndexChange: index => setCustomMinute(CUSTOM_TIME_MINUTES[index]),
+                  scrollTo: offset => customMinuteScrollRef.current?.scrollTo({ y: offset, animated: true }),
+                })}
+                onScroll={(event: any) => {
                   const y = event.nativeEvent.contentOffset.y;
                   updateCustomTimeFromScroll(CUSTOM_TIME_MINUTES, y, customMinute, setCustomMinute);
                   scheduleCustomTimeSnap(
@@ -1838,13 +1859,13 @@ export default function TransportModal({
                     customMinuteSnapTimerRef,
                   );
                 }}
-                onMomentumScrollEnd={event => settleCustomTimeWheel(
+                onMomentumScrollEnd={(event: any) => settleCustomTimeWheel(
                   CUSTOM_TIME_MINUTES,
                   event.nativeEvent.contentOffset.y,
                   setCustomMinute,
                   customMinuteScrollRef,
                 )}
-                onScrollEndDrag={event => settleCustomTimeWheel(
+                onScrollEndDrag={(event: any) => settleCustomTimeWheel(
                   CUSTOM_TIME_MINUTES,
                   event.nativeEvent.contentOffset.y,
                   setCustomMinute,
@@ -1862,7 +1883,7 @@ export default function TransportModal({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
+              </WebScrollView>
             </View>
 
             <Text style={styles.customBlockLabel}>メンバー（任意）</Text>

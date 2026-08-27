@@ -17,6 +17,9 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import CropImageModal from '../components/CropImageModal';
 import { db, storage } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
+import { handleWebWheelStep } from '../utils/webWheel';
+
+const WebScrollView = ScrollView as any;
 
 type Announcement = {
   id: string;
@@ -84,6 +87,7 @@ const formatPublishedAt = (value: any) => {
 
 function TimeWheel({ values, value, onChange }: { values: string[]; value: string; onChange: (next: string) => void }) {
   const ref = useRef<ScrollView>(null);
+  const wheelLockRef = useRef(0);
   const selectedIndex = Math.max(0, values.indexOf(value));
 
   const valueFromOffset = (offset: number) => {
@@ -112,7 +116,7 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
   return (
     <View style={styles.timeWheelViewport}>
       <View pointerEvents="none" style={styles.timeWheelSelection} />
-      <ScrollView
+      <WebScrollView
         ref={ref}
         style={styles.timeList}
         contentContainerStyle={styles.timeListContent}
@@ -124,7 +128,15 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
         disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
-        onScroll={(event) => applyOffset(event.nativeEvent.contentOffset.y)}
+        onWheel={(event: any) => handleWebWheelStep(event, {
+          index: values.indexOf(value),
+          length: values.length,
+          itemHeight: TIME_ITEM_HEIGHT,
+          lockRef: wheelLockRef,
+          onIndexChange: index => onChange(values[index]),
+          scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
+        })}
+        onScroll={(event: any) => applyOffset(event.nativeEvent.contentOffset.y)}
         onMomentumScrollEnd={settle}
         onScrollEndDrag={settle}
       >
@@ -140,7 +152,7 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
             <Text style={[styles.timeOptionText, value === item && styles.timeOptionTextSelected]}>{item}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </WebScrollView>
     </View>
   );
 }

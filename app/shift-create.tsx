@@ -12,7 +12,10 @@ import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
+import { handleWebWheelStep } from '../utils/webWheel';
 import { navigateHome } from '../utils/navigationHome';
+
+const WebScrollView = ScrollView as any;
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
@@ -52,6 +55,7 @@ function ShiftTimeWheel({
   const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draggingRef = useRef(false);
   const lastIndexRef = useRef(values.indexOf(value));
+  const wheelLockRef = useRef(0);
 
   const getIndex = (y: number) => Math.max(
     0,
@@ -89,7 +93,7 @@ function ShiftTimeWheel({
   return (
     <View style={styles.shiftWheelWrap} nativeID="ui-time-wheel-shift">
       <View style={styles.shiftWheelSelection} pointerEvents="none" />
-      <ScrollView
+      <WebScrollView
         ref={scrollRef}
         style={styles.shiftWheelScroll}
         contentContainerStyle={styles.shiftWheelContent}
@@ -100,15 +104,23 @@ function ShiftTimeWheel({
         decelerationRate="fast"
         disableIntervalMomentum
         scrollEventThrottle={16}
+        onWheel={(event: any) => handleWebWheelStep(event, {
+          index: lastIndexRef.current,
+          length: values.length,
+          itemHeight: SHIFT_WHEEL_ITEM_HEIGHT,
+          lockRef: wheelLockRef,
+          onIndexChange: index => selectIndex(index, false),
+          scrollTo: offset => scrollRef.current?.scrollTo({ y: offset, animated: true }),
+        })}
         onScrollBeginDrag={() => { draggingRef.current = true; }}
-        onScroll={(event) => {
+        onScroll={(event: any) => {
           const y = event.nativeEvent.contentOffset.y;
           selectIndex(getIndex(y));
           if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
           snapTimerRef.current = setTimeout(() => settle(y), 110);
         }}
-        onMomentumScrollEnd={(event) => settle(event.nativeEvent.contentOffset.y)}
-        onScrollEndDrag={(event) => {
+        onMomentumScrollEnd={(event: any) => settle(event.nativeEvent.contentOffset.y)}
+        onScrollEndDrag={(event: any) => {
           const y = event.nativeEvent.contentOffset.y;
           if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
           snapTimerRef.current = setTimeout(() => settle(y), 90);
@@ -129,7 +141,7 @@ function ShiftTimeWheel({
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </WebScrollView>
     </View>
   );
 }

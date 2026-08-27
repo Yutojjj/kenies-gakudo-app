@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { playUiSound } from '../utils/uiSounds';
+import { handleWebWheelStep } from '../utils/webWheel';
+
+const WebScrollView = ScrollView as any;
 
 const ITEM_HEIGHT = 48;
 const VISIBLE_ITEMS = 5;
@@ -47,6 +50,8 @@ export default function CenteredTimePickerModal({
   const [minute, setMinute] = useState(minutes[0] ?? 0);
   const hourRef = useRef<ScrollView>(null);
   const minuteRef = useRef<ScrollView>(null);
+  const hourWheelLockRef = useRef(0);
+  const minuteWheelLockRef = useRef(0);
   const suppressTickUntilRef = useRef(0);
 
   const settle = (
@@ -81,9 +86,10 @@ export default function CenteredTimePickerModal({
     setter: (next: number) => void,
     ref: React.RefObject<ScrollView | null>,
     pad: boolean,
+    wheelLockRef: React.MutableRefObject<number>,
   ) => (
     <View style={styles.wheelColumn}>
-      <ScrollView
+      <WebScrollView
         ref={ref}
         style={styles.wheelScroll}
         contentContainerStyle={styles.wheelContent}
@@ -94,7 +100,18 @@ export default function CenteredTimePickerModal({
         disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
-        onScroll={event => {
+        onWheel={(event: any) => handleWebWheelStep(event, {
+          index: values.indexOf(selected),
+          length: values.length,
+          itemHeight: ITEM_HEIGHT,
+          lockRef: wheelLockRef,
+          onIndexChange: index => {
+            setter(values[index]);
+            playUiSound('tick');
+          },
+          scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
+        })}
+        onScroll={(event: any) => {
           const index = nearestIndex(event.nativeEvent.contentOffset.y, values.length);
           if (values[index] !== selected) {
             setter(values[index]);
@@ -104,8 +121,8 @@ export default function CenteredTimePickerModal({
             }
           }
         }}
-        onMomentumScrollEnd={event => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
-        onScrollEndDrag={event => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
+        onMomentumScrollEnd={(event: any) => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
+        onScrollEndDrag={(event: any) => settle(event.nativeEvent.contentOffset.y, values, setter, ref)}
       >
         {values.map(item => (
           <TouchableOpacity
@@ -124,7 +141,7 @@ export default function CenteredTimePickerModal({
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </WebScrollView>
     </View>
   );
 
@@ -145,9 +162,9 @@ export default function CenteredTimePickerModal({
               </Text>
               <View style={styles.wheels}>
                 <View pointerEvents="none" style={styles.selectionFrame} />
-                {renderWheel(hours, hour, setHour, hourRef, true)}
+                {renderWheel(hours, hour, setHour, hourRef, true, hourWheelLockRef)}
                 <Text pointerEvents="none" style={styles.colon}>:</Text>
-                {renderWheel(minutes, minute, setMinute, minuteRef, true)}
+                {renderWheel(minutes, minute, setMinute, minuteRef, true, minuteWheelLockRef)}
               </View>
               <View style={styles.actions}>
                 <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
