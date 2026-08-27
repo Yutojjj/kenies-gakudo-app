@@ -1213,7 +1213,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         <Text style={styles.assignedName}>{s.name}</Text>
                         <View style={styles.assignedTimeRow}>
                           <TouchableOpacity onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.7}>
-                            <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
+                            <View style={styles.assignedTimePills}>
+                              <Text style={[styles.assignedTime, styles.assignedStartTime]}>{s.start}</Text>
+                              <Text style={styles.assignedTimeTilde}>〜</Text>
+                              <Text style={[styles.assignedTime, styles.assignedEndTime]}>{s.end}</Text>
+                            </View>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.saveCandidateBtn}
@@ -1973,7 +1977,11 @@ const styles = StyleSheet.create({
   assignedCardContent: { flex: 1, minWidth: 0, marginRight: 10 },
   assignedName: { fontSize: 16, fontWeight: 'bold', color: COLORS.primary, marginBottom: 4 },
   assignedTimeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 },
-  assignedTime: { fontSize: 14, color: COLORS.text, fontWeight: 'bold' },
+  assignedTimePills: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 3 },
+  assignedTime: { fontSize: 14, color: COLORS.text, fontWeight: 'bold', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 },
+  assignedStartTime: { backgroundColor: '#E1F5F5', color: '#008F99' },
+  assignedEndTime: { backgroundColor: '#F2F0FF', color: '#5E4B9A' },
+  assignedTimeTilde: { fontSize: 14, color: COLORS.textLight, fontWeight: 'bold' },
   saveCandidateBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, backgroundColor: '#E6F7F7', borderWidth: 1, borderColor: COLORS.primary, flexShrink: 1 },
   saveCandidateText: { fontSize: 10, fontWeight: '800', color: COLORS.primary },
   assignedCandidateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 7, width: '100%', maxWidth: '100%', minWidth: 0 },
@@ -1984,7 +1992,7 @@ const styles = StyleSheet.create({
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
   assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  inlineTimeEditor: { marginTop: 10, padding: 8, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC', width: '100%', maxWidth: '100%', minWidth: 0, alignSelf: 'stretch' },
+  inlineTimeEditor: { marginTop: 10, padding: 6, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC', width: '100%', maxWidth: '100%', minWidth: 0, alignSelf: 'stretch', overflow: 'hidden' },
   inlineTimeTilde: { fontSize: 18, fontWeight: '900', color: COLORS.textLight, marginHorizontal: 3 },
   inlineTimeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   inlineTimeCancel: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#F1F2F2', alignItems: 'center' },
@@ -2012,11 +2020,11 @@ const styles = StyleSheet.create({
   masterTimeDeleteBtn: { marginLeft: -8, marginTop: -16, zIndex: 1 },
   masterTimeBtn: { backgroundColor: '#F0F8FF', borderWidth: 1.5, borderColor: COLORS.primary + '40', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center' },
   masterTimeText: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary },
-  drumPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  shiftTimeGroup: { flex: 1, maxWidth: 164, minWidth: 0, alignItems: 'center' },
+  drumPickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 0, width: '100%' },
+  shiftTimeGroup: { flex: 1, maxWidth: 150, minWidth: 0, alignItems: 'center' },
   shiftTimeGroupTitle: { marginBottom: 5, fontSize: 12, fontWeight: '900', color: '#37474F' },
-  shiftTimePair: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
-  shiftWheelWrap: { position: 'relative', flex: 1, minWidth: 48, maxWidth: 64, height: SHIFT_WHEEL_VIEW_HEIGHT, overflow: 'hidden', borderRadius: 10, backgroundColor: '#FAFCFC', borderWidth: 1, borderColor: '#D6E1E2' },
+  shiftTimePair: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 0 },
+  shiftWheelWrap: { position: 'relative', flex: 1, minWidth: 40, maxWidth: 58, height: SHIFT_WHEEL_VIEW_HEIGHT, overflow: 'hidden', borderRadius: 10, backgroundColor: '#FAFCFC', borderWidth: 1, borderColor: '#D6E1E2' },
   shiftWheelSelection: { position: 'absolute', left: 2, right: 2, top: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2, height: SHIFT_WHEEL_ITEM_HEIGHT, borderRadius: 8, backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2', zIndex: 0 },
   shiftWheelScroll: { height: SHIFT_WHEEL_VIEW_HEIGHT, zIndex: 1 },
   shiftWheelContent: { paddingVertical: (SHIFT_WHEEL_VIEW_HEIGHT - SHIFT_WHEEL_ITEM_HEIGHT) / 2 },
@@ -2024,7 +2032,7 @@ const styles = StyleSheet.create({
   shiftWheelItemActive: { backgroundColor: '#DFF5F4', borderWidth: 1.5, borderColor: '#65BEC2' },
   shiftWheelText: { fontSize: 16, fontWeight: '700', color: '#919A9C' },
   shiftWheelTextActive: { fontSize: 20, fontWeight: '900', color: '#172629' },
-  drumColon: { width: 12, textAlign: 'center', fontSize: 21, fontWeight: '900', color: '#333333' },
+  drumColon: { width: 9, textAlign: 'center', fontSize: 21, fontWeight: '900', color: '#333333' },
   drumTilde: { width: 20, textAlign: 'center', fontSize: 17, fontWeight: '900', color: '#748083' },
   addTimeContainer: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderColor: COLORS.border, backgroundColor: '#FAFAFA', borderRadius: 8, paddingHorizontal: 8, paddingBottom: 8 },
   addTimeTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.textLight, marginBottom: 8, textAlign: 'center' },
