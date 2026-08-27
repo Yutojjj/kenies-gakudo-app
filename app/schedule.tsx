@@ -24,6 +24,7 @@ import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { sendPushNotification } from '../utils/sendPushNotification';
 import { playUiSound } from '../utils/uiSounds';
+import { handleWebWheelStep } from '../utils/webWheel';
 
 const customAlert = (title: string, message?: string) => {
   if (Platform.OS === 'web') {
@@ -134,9 +135,64 @@ export default function ScheduleScreen() {
   const timePickerMinuteScrollRef = useRef<any>(null);
   const lessonPickerHourScrollRef = useRef<any>(null);
   const lessonPickerMinuteScrollRef = useRef<any>(null);
+  const addPickupHourWheelWrapRef = useRef<any>(null);
+  const addPickupMinuteWheelWrapRef = useRef<any>(null);
+  const timePickerHourWheelWrapRef = useRef<any>(null);
+  const timePickerMinuteWheelWrapRef = useRef<any>(null);
+  const lessonPickerHourWheelWrapRef = useRef<any>(null);
+  const lessonPickerMinuteWheelWrapRef = useRef<any>(null);
+  const addPickupHourWheelLockRef = useRef(0);
+  const addPickupMinuteWheelLockRef = useRef(0);
+  const timePickerHourWheelLockRef = useRef(0);
+  const timePickerMinuteWheelLockRef = useRef(0);
+  const lessonPickerHourWheelLockRef = useRef(0);
+  const lessonPickerMinuteWheelLockRef = useRef(0);
   const pickerSettleTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [eventSectionCollapsed, setEventSectionCollapsed] = useState(false);
   const initialEditOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const listeners: Array<{ element: HTMLElement; onWheel: (event: WheelEvent) => void }> = [];
+    const attach = (
+      element: HTMLElement | null,
+      values: number[],
+      currentValue: number,
+      setter: (value: number) => void,
+      scrollRef: React.MutableRefObject<any>,
+      lockRef: React.MutableRefObject<number>,
+    ) => {
+      if (!element) return;
+      const onWheel = (event: WheelEvent) => handleWebWheelStep(event, {
+        index: Math.max(0, values.indexOf(currentValue)),
+        length: values.length,
+        itemHeight: PICKER_ITEM_HEIGHT,
+        lockRef,
+        onIndexChange: nextIndex => {
+          setter(values[nextIndex]);
+          triggerPickerHaptic();
+        },
+        scrollTo: offset => scrollRef.current?.scrollTo?.({ y: offset, animated: true }),
+      });
+      element.addEventListener('wheel', onWheel, { passive: false });
+      listeners.push({ element, onWheel });
+    };
+
+    if (addPickupPickerVisible) {
+      attach(addPickupHourWheelWrapRef.current, HOURS, addPickupHour, setAddPickupHour, addPickupHourScrollRef, addPickupHourWheelLockRef);
+      attach(addPickupMinuteWheelWrapRef.current, MINUTES, addPickupMinute, setAddPickupMinute, addPickupMinuteScrollRef, addPickupMinuteWheelLockRef);
+    }
+    if (timePickerVisible) {
+      attach(timePickerHourWheelWrapRef.current, HOURS, tempHour, setTempHour, timePickerHourScrollRef, timePickerHourWheelLockRef);
+      attach(timePickerMinuteWheelWrapRef.current, MINUTES, tempMinute, setTempMinute, timePickerMinuteScrollRef, timePickerMinuteWheelLockRef);
+    }
+    if (lessonAddVisible) {
+      attach(lessonPickerHourWheelWrapRef.current, HOURS, tempHour, setTempHour, lessonPickerHourScrollRef, lessonPickerHourWheelLockRef);
+      attach(lessonPickerMinuteWheelWrapRef.current, MINUTES, tempMinute, setTempMinute, lessonPickerMinuteScrollRef, lessonPickerMinuteWheelLockRef);
+    }
+    return () => listeners.forEach(({ element, onWheel }) => element.removeEventListener('wheel', onWheel));
+  }, [addPickupPickerVisible, addPickupHour, addPickupMinute, timePickerVisible, tempHour, tempMinute, lessonAddVisible]);
 
   useEffect(() => {
     return () => {
@@ -1544,6 +1600,7 @@ export default function ScheduleScreen() {
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
             <View style={styles.pickerColumns} nativeID="ui-time-wheel-pickup-option">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
+              <View ref={addPickupHourWheelWrapRef} style={styles.pickerWheelWrap}>
               <ScrollView
                 ref={addPickupHourScrollRef}
                 style={styles.pickerScroll}
@@ -1566,7 +1623,9 @@ export default function ScheduleScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              </View>
               <Text style={styles.pickerColon}>:</Text>
+              <View ref={addPickupMinuteWheelWrapRef} style={styles.pickerWheelWrap}>
               <ScrollView
                 ref={addPickupMinuteScrollRef}
                 style={styles.pickerScroll}
@@ -1589,6 +1648,7 @@ export default function ScheduleScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              </View>
             </View>
             <View style={styles.pickerFooter}>
               <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => setAddPickupPickerVisible(false)}>
@@ -1629,6 +1689,7 @@ export default function ScheduleScreen() {
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns} nativeID="ui-time-wheel-schedule">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
+              <View ref={timePickerHourWheelWrapRef} style={styles.pickerWheelWrap}>
               <ScrollView
                 ref={timePickerHourScrollRef}
                 style={styles.pickerScroll}
@@ -1651,7 +1712,9 @@ export default function ScheduleScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              </View>
               <Text style={styles.pickerColon}>:</Text>
+              <View ref={timePickerMinuteWheelWrapRef} style={styles.pickerWheelWrap}>
               <ScrollView
                 ref={timePickerMinuteScrollRef}
                 style={styles.pickerScroll}
@@ -1674,6 +1737,7 @@ export default function ScheduleScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              </View>
             </View>
             <View style={styles.pickerFooter}>
               <TouchableOpacity style={styles.pickerCancelBtn} onPress={() => {
@@ -1766,6 +1830,7 @@ export default function ScheduleScreen() {
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>送迎時間</Text>
                   <View style={styles.pickerColumns} nativeID="ui-time-wheel-bulk">
                     <View pointerEvents="none" style={styles.pickerSelectionFrame} />
+                    <View ref={lessonPickerHourWheelWrapRef} style={styles.pickerWheelWrap}>
                     <ScrollView
                       ref={lessonPickerHourScrollRef}
                       style={styles.pickerScroll}
@@ -1788,7 +1853,9 @@ export default function ScheduleScreen() {
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
+                    </View>
                     <Text style={styles.pickerColon}>:</Text>
+                    <View ref={lessonPickerMinuteWheelWrapRef} style={styles.pickerWheelWrap}>
                     <ScrollView
                       ref={lessonPickerMinuteScrollRef}
                       style={styles.pickerScroll}
@@ -1811,6 +1878,7 @@ export default function ScheduleScreen() {
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
+                    </View>
                   </View>
 
                   <View style={styles.pickerFooter}>
@@ -2708,6 +2776,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF5D6',
     borderWidth: 1,
     borderColor: '#F4D778',
+  },
+  pickerWheelWrap: {
+    width: 88,
+    height: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   pickerScroll: { 
     width: 88, 
