@@ -607,12 +607,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         : allStaff;
 
       weeks.forEach(wk => {
+        const weekHasContent = wk.some(cell => cell && (
+          (eventsData[cell.dateStr] || []).length > 0 ||
+          (assignedShifts[cell.dateStr] || []).length > 0
+        ));
         const cells = wk.map(cell => {
-          if (!cell) return `<td class="calendar-day calendar-day-empty"></td>`;
+          if (!cell) return `<td class="calendar-day calendar-day-empty${weekHasContent ? '' : ' calendar-day-short'}"></td>`;
           const isSun = cell.dow === 0;
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
-          const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
+          const shortClass = weekHasContent ? '' : ' calendar-day-short';
+          const dayClass = `${isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day'}${shortClass}`;
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
@@ -650,12 +655,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
         .calendar-day { height: 38mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-day-empty { background: #F4F4F4 !important; }
+        .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
         .calendar-day-sat { background: #F0F7FF !important; }
         .calendar-date { font-weight: 900; font-size: 16px; line-height: 1; padding: 1.5mm 1.5mm 0; margin-bottom: 1.5mm; }
         .calendar-day-sun .calendar-date { color: #D94747; }
         .calendar-day-sat .calendar-date { color: #2874C6; }
-        .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 1mm; width: 100%; }
+        .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
