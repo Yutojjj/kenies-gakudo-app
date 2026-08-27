@@ -671,7 +671,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-day-sun .calendar-date { color: #D94747; }
         .calendar-day-sat .calendar-date { color: #2874C6; }
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
-        .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
+        .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
