@@ -1249,6 +1249,44 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                             <Text style={styles.saveCandidateText}>この時刻を保存</Text>
                           </TouchableOpacity>
                         </View>
+                        {timePickerVisible && editingStaffName === s.name && (
+                          <View style={styles.inlineTimeEditor}>
+                            <View style={styles.timeTargetRow}>
+                              <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'start' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('start')}>
+                                <Text style={styles.timeTargetLabel}>開始時間</Text>
+                                <Text style={[styles.timeTargetValue, timeSelectTarget === 'start' && styles.timeTargetValueActive]}>{tempStart}</Text>
+                              </TouchableOpacity>
+                              <Text style={styles.inlineTimeTilde}>〜</Text>
+                              <TouchableOpacity style={[styles.timeTargetBtn, timeSelectTarget === 'end' && styles.timeTargetBtnActive]} onPress={() => setTimeSelectTarget('end')}>
+                                <Text style={styles.timeTargetLabel}>終了時間</Text>
+                                <Text style={[styles.timeTargetValue, timeSelectTarget === 'end' && styles.timeTargetValueActive]}>{tempEnd}</Text>
+                              </TouchableOpacity>
+                            </View>
+                            <View style={styles.drumPickerRow}>
+                              <View style={styles.shiftTimeGroup}>
+                                <Text style={styles.shiftTimeGroupTitle}>開始</Text>
+                                <View style={styles.shiftTimePair}>
+                                  <ShiftTimeWheel values={HOURS} value={newStartHour} visible={timePickerVisible} onChange={(hour) => { setNewStartHour(hour); setTempStart(`${String(hour).padStart(2, '0')}:${String(newStartMinute).padStart(2, '0')}`); }} />
+                                  <Text style={styles.drumColon}>:</Text>
+                                  <ShiftTimeWheel values={MINUTES} value={newStartMinute} visible={timePickerVisible} onChange={(minute) => { setNewStartMinute(minute); setTempStart(`${String(newStartHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`); }} />
+                                </View>
+                              </View>
+                              <Text style={styles.drumTilde}>〜</Text>
+                              <View style={styles.shiftTimeGroup}>
+                                <Text style={styles.shiftTimeGroupTitle}>終了</Text>
+                                <View style={styles.shiftTimePair}>
+                                  <ShiftTimeWheel values={HOURS} value={newEndHour} visible={timePickerVisible} onChange={(hour) => { setNewEndHour(hour); setTempEnd(`${String(hour).padStart(2, '0')}:${String(newEndMinute).padStart(2, '0')}`); }} />
+                                  <Text style={styles.drumColon}>:</Text>
+                                  <ShiftTimeWheel values={MINUTES} value={newEndMinute} visible={timePickerVisible} onChange={(minute) => { setNewEndMinute(minute); setTempEnd(`${String(newEndHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`); }} />
+                                </View>
+                              </View>
+                            </View>
+                            <View style={styles.inlineTimeActions}>
+                              <TouchableOpacity style={styles.inlineTimeCancel} onPress={() => setTimePickerVisible(false)}><Text style={styles.inlineTimeCancelText}>閉じる</Text></TouchableOpacity>
+                              <TouchableOpacity style={styles.inlineTimeConfirm} onPress={saveTimeEdit}><Text style={styles.inlineTimeConfirmText}>変更を確定</Text></TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
                         <View style={styles.assignedCandidateRow}>
                           {masterTimes.map(candidate => (
                             <TouchableOpacity
@@ -1323,7 +1361,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       </Modal>
 
       {/* --- 時間変更＆候補追加モーダル --- */}
-      <Modal visible={timePickerVisible} transparent animationType="slide">
+      <Modal visible={false} transparent animationType="slide">
         <View style={styles.pickerOverlay}>
           <View style={styles.pickerContent}>
             <Text style={styles.pickerTitle}>{editingStaffName} の勤務時間</Text>
@@ -1947,8 +1985,8 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', borderBottomWidth: 2, borderColor: COLORS.border, paddingBottom: 4, marginBottom: 12 },
   shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, minWidth: 0 },
-  shiftAssignedPane: { flex: 1.6, minWidth: 0 },
-  shiftStaffPane: { flex: 1, minWidth: 0, paddingLeft: 14, borderLeftWidth: 1, borderColor: '#E5E7EB' },
+  shiftAssignedPane: { flex: 2.35, minWidth: 0 },
+  shiftStaffPane: { flex: 0.75, minWidth: 150, paddingLeft: 10, borderLeftWidth: 1, borderColor: '#E5E7EB' },
   assignedSectionTitle: { borderColor: COLORS.accent, marginBottom: 8 },
   shiftEmptyText: { color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 },
   assignedHint: { fontSize: 10, color: COLORS.textLight, marginTop: 2 },
@@ -1960,11 +1998,11 @@ const styles = StyleSheet.create({
   unavailableStaffName: { color: COLORS.danger },
   unavailableAddBtn: { backgroundColor: '#999999' },
   
-  staffRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F0F0F0' },
-  staffName: { fontSize: 16, fontWeight: 'bold' },
-  addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
+  staffRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 5, paddingVertical: 7, borderBottomWidth: 1, borderColor: '#F0F0F0' },
+  staffName: { fontSize: 14, fontWeight: 'bold', flex: 1, minWidth: 0 },
+  addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, flexShrink: 0 },
   addBtnText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12 },
-  removeBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 6 },
+  removeBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6, flexShrink: 0 },
   removeBtnText: { color: COLORS.danger, fontWeight: 'bold', fontSize: 12 },
   
   assignedCard: { backgroundColor: '#F0F8FF', padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', minWidth: 0, width: '100%' },
@@ -1982,6 +2020,13 @@ const styles = StyleSheet.create({
   editTimeBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   editTimeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12, marginLeft: 4 },
   assignedDeleteBtn: { backgroundColor: '#FFF0F0', borderWidth: 1, borderColor: '#FFE0E0', padding: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  inlineTimeEditor: { marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#9ED6DC' },
+  inlineTimeTilde: { fontSize: 18, fontWeight: '900', color: COLORS.textLight, marginHorizontal: 3 },
+  inlineTimeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  inlineTimeCancel: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#F1F2F2', alignItems: 'center' },
+  inlineTimeCancelText: { color: COLORS.text, fontWeight: 'bold', fontSize: 12 },
+  inlineTimeConfirm: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.primary, alignItems: 'center' },
+  inlineTimeConfirmText: { color: COLORS.white, fontWeight: 'bold', fontSize: 12 },
   
   modalFooter: { padding: 20, borderTopWidth: 1, borderColor: COLORS.border },
   saveBtn: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
