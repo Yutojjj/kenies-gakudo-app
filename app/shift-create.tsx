@@ -1213,66 +1213,74 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 </View>
               )}
 
-              {/* ⑬ 決定したシフト（最上位に表示） */}
-              <Text style={[styles.sectionTitle, { borderColor: COLORS.accent, marginBottom: 8 }]}>決定したシフト</Text>
-              {currentDayAssigned.length === 0 && <Text style={{ color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 }}>追加されていません</Text>}
-              {currentDayAssigned.map((s, i) => (
-                <TouchableOpacity key={i} style={styles.assignedCard} onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.75}>
-                  <View>
-                    <Text style={styles.assignedName}>{s.name}</Text>
-                    <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
-                    <Text style={{ fontSize: 10, color: COLORS.textLight, marginTop: 2 }}>タップで時間変更</Text>
-                  </View>
-                  <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
-                    <Ionicons name="trash" size={16} color={COLORS.danger} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-              
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 20 }}>
-                <Text style={[styles.sectionTitle, { color: COLORS.primary, marginBottom: 0, borderBottomWidth: 0 }]}>出勤可能なスタッフ</Text>
-                <TouchableOpacity
-                  style={styles.autoFillBtn}
-                  onPress={() => {
-                    const alreadyAssigned = currentDayAssigned.map(a => a.name);
-                    const candidates = availableStaff.filter(s => !alreadyAssigned.includes(s.name));
-                    const toAdd = candidates.slice(0, Math.max(0, 3 - currentDayAssigned.length));
-                    if (toAdd.length === 0) return;
-                    setCurrentDayAssigned([...currentDayAssigned, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))]);
-                  }}
-                >
-                  <Ionicons name="flash" size={14} color={COLORS.white} />
-                  <Text style={styles.autoFillBtnText}>3名まで自動追加</Text>
-                </TouchableOpacity>
-              </View>
-              {availableStaff.map((s, i) => {
-                const isAssigned = currentDayAssigned.some(a => a.name === s.name);
-                return (
-                  <TouchableOpacity key={i} style={styles.staffRow} onPress={() => !isAssigned && addStaffToShift(s.name, false)} activeOpacity={isAssigned ? 1 : 0.6}>
-                    <Text style={styles.staffName}>{s.name}</Text>
-                    {isAssigned ? (
-                      <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
-                    ) : (
-                      <View style={styles.addBtn}><Text style={styles.addBtnText}>追加</Text></View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+              <View style={styles.shiftEditorColumns}>
+                <View style={styles.shiftAssignedPane}>
+                  {/* 決定済みを左側にまとめ、横幅を広く使う */}
+                  <Text style={[styles.sectionTitle, styles.assignedSectionTitle]}>決定したシフト</Text>
+                  {currentDayAssigned.length === 0 && <Text style={styles.shiftEmptyText}>追加されていません</Text>}
+                  {currentDayAssigned.map((s, i) => (
+                    <TouchableOpacity key={i} style={styles.assignedCard} onPress={() => openTimeEditor(s.name, s.start, s.end)} activeOpacity={0.75}>
+                      <View>
+                        <Text style={styles.assignedName}>{s.name}</Text>
+                        <Text style={styles.assignedTime}>{s.start} 〜 {s.end}</Text>
+                        <Text style={styles.assignedHint}>タップで時間変更</Text>
+                      </View>
+                      <TouchableOpacity style={styles.assignedDeleteBtn} onPress={() => removeStaffFromShift(s.name)}>
+                        <Ionicons name="trash" size={16} color={COLORS.danger} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              <Text style={[styles.sectionTitle, { marginTop: 20, color: COLORS.textLight }]}>出勤不可のスタッフ (追加時警告)</Text>
-              {unavailableStaff.map((s, i) => {
-                const isAssigned = currentDayAssigned.some(a => a.name === s.name);
-                return (
-                  <TouchableOpacity key={i} style={[styles.staffRow, { opacity: 0.6 }]} onPress={() => !isAssigned && addStaffToShift(s.name, true)} activeOpacity={isAssigned ? 1 : 0.6}>
-                    <Text style={[styles.staffName, { color: COLORS.danger }]}>{s.name} ({s.type})</Text>
-                    {isAssigned ? (
-                      <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
-                    ) : (
-                      <View style={[styles.addBtn, {backgroundColor: '#999'}]}><Text style={styles.addBtnText}>追加</Text></View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                <View style={styles.shiftStaffPane}>
+                  <View style={styles.staffPaneHeader}>
+                    <Text style={[styles.sectionTitle, styles.staffPaneTitle]}>スタッフ</Text>
+                    <TouchableOpacity
+                      style={styles.autoFillBtn}
+                      onPress={() => {
+                        const alreadyAssigned = currentDayAssigned.map(a => a.name);
+                        const candidates = availableStaff.filter(s => !alreadyAssigned.includes(s.name));
+                        const toAdd = candidates.slice(0, Math.max(0, 3 - currentDayAssigned.length));
+                        if (toAdd.length === 0) return;
+                        setCurrentDayAssigned([...currentDayAssigned, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))]);
+                      }}
+                    >
+                      <Ionicons name="flash" size={14} color={COLORS.white} />
+                      <Text style={styles.autoFillBtnText}>3名まで自動追加</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.staffGroupLabel}>出勤可能</Text>
+                  {availableStaff.map((s, i) => {
+                    const isAssigned = currentDayAssigned.some(a => a.name === s.name);
+                    return (
+                      <TouchableOpacity key={`available-${i}`} style={styles.staffRow} onPress={() => !isAssigned && addStaffToShift(s.name, false)} activeOpacity={isAssigned ? 1 : 0.6}>
+                        <Text style={styles.staffName}>{s.name}</Text>
+                        {isAssigned ? (
+                          <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
+                        ) : (
+                          <View style={styles.addBtn}><Text style={styles.addBtnText}>追加</Text></View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  <Text style={[styles.staffGroupLabel, styles.unavailableGroupLabel]}>出勤不可</Text>
+                  {unavailableStaff.map((s, i) => {
+                    const isAssigned = currentDayAssigned.some(a => a.name === s.name);
+                    return (
+                      <TouchableOpacity key={`unavailable-${i}`} style={[styles.staffRow, styles.unavailableStaffRow]} onPress={() => !isAssigned && addStaffToShift(s.name, true)} activeOpacity={isAssigned ? 1 : 0.6}>
+                        <Text style={[styles.staffName, styles.unavailableStaffName]}>{s.name} ({s.type})</Text>
+                        {isAssigned ? (
+                          <TouchableOpacity style={styles.removeBtn} onPress={() => removeStaffFromShift(s.name)}><Text style={styles.removeBtnText}>外す</Text></TouchableOpacity>
+                        ) : (
+                          <View style={[styles.addBtn, styles.unavailableAddBtn]}><Text style={styles.addBtnText}>追加</Text></View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
               <View style={{height: 40}} />
             </ScrollView>
@@ -1908,6 +1916,19 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border },
   modalTitle: { fontSize: 18, fontWeight: 'bold' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', borderBottomWidth: 2, borderColor: COLORS.border, paddingBottom: 4, marginBottom: 12 },
+  shiftEditorColumns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  shiftAssignedPane: { flex: 1.6, minWidth: 0 },
+  shiftStaffPane: { flex: 1, minWidth: 0, paddingLeft: 14, borderLeftWidth: 1, borderColor: '#E5E7EB' },
+  assignedSectionTitle: { borderColor: COLORS.accent, marginBottom: 8 },
+  shiftEmptyText: { color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 },
+  assignedHint: { fontSize: 10, color: COLORS.textLight, marginTop: 2 },
+  staffPaneHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 },
+  staffPaneTitle: { color: COLORS.primary, marginBottom: 0, borderBottomWidth: 0 },
+  staffGroupLabel: { fontSize: 12, fontWeight: '900', color: '#287C86', marginTop: 4, marginBottom: 2 },
+  unavailableGroupLabel: { color: COLORS.danger, marginTop: 16 },
+  unavailableStaffRow: { opacity: 0.62 },
+  unavailableStaffName: { color: COLORS.danger },
+  unavailableAddBtn: { backgroundColor: '#999999' },
   
   staffRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F0F0F0' },
   staffName: { fontSize: 16, fontWeight: 'bold' },
