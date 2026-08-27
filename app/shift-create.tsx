@@ -604,7 +604,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
-          font-size: 6.5px;
+          font-size: 8px;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
           color-adjust: exact;
@@ -617,18 +617,18 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
-        caption { caption-side: top; text-align: left; font-size: 11px; font-weight: 900; padding: 0 0 3px; }
-        .calendar-day { height: 42mm; vertical-align: top; text-align: left; padding: 1.5mm; background: #FFFFFF !important; }
+        caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
+        .calendar-day { height: 38mm; vertical-align: top; text-align: left; padding: 2mm; background: #FFFFFF !important; }
         .calendar-day-empty { background: #F4F4F4 !important; }
         .calendar-day-sun { background: #FFF1F1 !important; }
         .calendar-day-sat { background: #F0F7FF !important; }
-        .calendar-date { font-weight: 900; font-size: 9px; line-height: 1; margin-bottom: 1.5mm; }
+        .calendar-date { font-weight: 900; font-size: 12px; line-height: 1; margin-bottom: 2mm; }
         .calendar-day-sun .calendar-date { color: #D94747; }
         .calendar-day-sat .calendar-date { color: #2874C6; }
-        .calendar-shifts { display: flex; flex-direction: column; gap: 1mm; }
-        .calendar-shift { border-radius: 1.2mm; padding: 1mm; font-size: 6px; line-height: 1.15; color: #111; white-space: nowrap; overflow: hidden; }
+        .calendar-shifts { display: flex; flex-direction: column; gap: 1.2mm; }
+        .calendar-shift { border-radius: 1.2mm; padding: 1.2mm 1.5mm; font-size: 8px; line-height: 1.15; color: #111; white-space: nowrap; overflow: hidden; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; margin-right: 1.5mm; }
-        .calendar-shift-time { font-weight: 700; }
+        .calendar-shift-time { font-weight: 900; }
 
         .legend { display: none; }
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
