@@ -569,7 +569,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     if (!selectedDateStr) return '';
     const date = new Date(`${selectedDateStr}T00:00:00`);
     date.setDate(date.getDate() + amount);
-    return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} (${weekdays[date.getDay()]})`;
   };
 
   const formatModalDate = () => {
