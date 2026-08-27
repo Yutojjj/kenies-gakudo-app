@@ -9,7 +9,8 @@ type WebWheelStepOptions = {
   scrollTo: (offset: number) => void;
 };
 
-// PCの1回のホイール操作を、候補1つ分の移動に揃える。
+// PCのホイール操作を候補の移動量へ変換する。
+// 小さなトラックパッド操作は1つ、大きなホイール操作は複数候補進める。
 export function handleWebWheelStep(event: any, options: WebWheelStepOptions) {
   if (Platform.OS !== 'web') return;
 
@@ -21,10 +22,14 @@ export function handleWebWheelStep(event: any, options: WebWheelStepOptions) {
 
   const now = Date.now();
   if (now < options.lockRef.current) return;
-  options.lockRef.current = now + 160;
+  // 同じノッチが短時間に重複通知される場合だけ抑制する。
+  // 待ち時間を長くすると連続スクロールまで止まるため短くする。
+  options.lockRef.current = now + 24;
 
   const direction = deltaY > 0 ? 1 : -1;
-  const nextIndex = Math.max(0, Math.min(options.length - 1, options.index + direction));
+  const magnitude = Math.abs(deltaY);
+  const steps = Math.max(1, Math.min(8, Math.round(magnitude / 100)));
+  const nextIndex = Math.max(0, Math.min(options.length - 1, options.index + direction * steps));
   if (nextIndex === options.index) {
     options.scrollTo(nextIndex * options.itemHeight);
     return;

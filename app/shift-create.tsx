@@ -1235,19 +1235,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <View style={styles.shiftStaffPane}>
                   <View style={styles.staffPaneHeader}>
                     <Text style={[styles.sectionTitle, styles.staffPaneTitle]}>スタッフ</Text>
-                    <TouchableOpacity
-                      style={styles.autoFillBtn}
-                      onPress={() => {
-                        const alreadyAssigned = currentDayAssigned.map(a => a.name);
-                        const candidates = availableStaff.filter(s => !alreadyAssigned.includes(s.name));
-                        const toAdd = candidates.slice(0, Math.max(0, 3 - currentDayAssigned.length));
-                        if (toAdd.length === 0) return;
-                        setCurrentDayAssigned([...currentDayAssigned, ...toAdd.map(s => ({ name: s.name, start: '14:00', end: '18:30' }))]);
-                      }}
-                    >
-                      <Ionicons name="flash" size={14} color={COLORS.white} />
-                      <Text style={styles.autoFillBtnText}>3名まで自動追加</Text>
-                    </TouchableOpacity>
                   </View>
 
                   <Text style={styles.staffGroupLabel}>出勤可能</Text>
