@@ -1946,7 +1946,7 @@ const styles = StyleSheet.create({
   toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },
   toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
   monthAutoFillBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#36A9B5', borderWidth: 1, borderColor: '#258C96' },
-  monthDeleteBtn: { width: 40, height: 40, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
+  monthDeleteBtn: { width: 40, height: 40, marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
   monthActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   monthDeleteText: { color: '#B93E48', fontSize: 12, fontWeight: '900' },
   monthConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 20 },
