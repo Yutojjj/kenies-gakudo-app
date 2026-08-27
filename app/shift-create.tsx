@@ -927,7 +927,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           onPress={exportPDF}
           disabled={loading}
         >
-          <Ionicons name="document-text" size={18} color={COLORS.white} />
+          <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
           <Text style={styles.pdfBtnText}>PDF出力</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1102,7 +1102,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
-                <Ionicons name="document-text" size={20} color={COLORS.white} />
+                <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
                 <Text style={styles.pdfBtnText}>PDF出力</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
