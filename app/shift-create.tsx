@@ -36,8 +36,9 @@ const SHIFT_CARD_COLORS = [
 ];
 
 const PRINT_SHIFT_COLORS = [
-  '#75C8B6', '#E995AD', '#A394E2', '#E6A477',
-  '#79B8E6', '#9CCB6E', '#E5C65C', '#6EC4C8',
+  '#A9DFD1', '#F3B1C3', '#C9BEF2', '#F2BE9B',
+  '#A8D2F0', '#BCD99B', '#F2D783', '#9ED9DE',
+  '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
 ];
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
