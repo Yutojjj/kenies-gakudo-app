@@ -937,29 +937,31 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           <Ionicons name={embedded ? 'close' : 'chevron-back'} size={embedded ? 26 : 24} color="#5D4037" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
-        <TouchableOpacity
-          style={[styles.pdfBtn, styles.headerPdfBtn]}
-          onPress={exportPDF}
-          disabled={loading}
-        >
-          <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
-          <Text style={styles.pdfBtnText}>PDF出力</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.pdfBtn, styles.submissionStatusBtn]}
-          onPress={() => setSubmissionStatusVisible(true)}
-          disabled={loading}
-        >
-          <Text style={styles.pdfBtnText}>シフト提出状況</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.pdfBtn, styles.headerAutoFillBtn]}
-          onPress={() => setMonthActionConfirm('autoFill')}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="pencil-outline" size={19} color={COLORS.white} />}
-          <Text style={styles.pdfBtnText}>自動入力</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.pdfBtn, styles.headerPdfBtn]}
+            onPress={exportPDF}
+            disabled={loading}
+          >
+            <Ionicons name="calendar-outline" size={18} color={COLORS.white} />
+            <Text style={styles.pdfBtnText}>PDF出力</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.pdfBtn, styles.submissionStatusBtn]}
+            onPress={() => setSubmissionStatusVisible(true)}
+            disabled={loading}
+          >
+            <Text style={styles.pdfBtnText}>シフト提出状況</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.pdfBtn, styles.headerAutoFillBtn]}
+            onPress={() => setMonthActionConfirm('autoFill')}
+            disabled={loading}
+          >
+            {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="pencil-outline" size={19} color={COLORS.white} />}
+            <Text style={styles.pdfBtnText}>自動入力</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal visible={submissionStatusVisible} transparent animationType="fade">
@@ -1093,7 +1095,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
           <TouchableOpacity style={styles.monthDeleteBtn} onPress={() => setMonthActionConfirm('delete')} disabled={loading}>
             <Ionicons name="trash-outline" size={15} color="#B93E48" />
-            <Text style={styles.monthDeleteText}>削除</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1902,11 +1903,12 @@ const styles = StyleSheet.create({
   header: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
   backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4, borderRadius: 12, backgroundColor: '#EAF7F7', flexShrink: 1 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 3, fontSize: 11 },
   headerPdfBtn: { minHeight: 40, paddingHorizontal: 10, backgroundColor: '#00AEB8' },
-  submissionStatusBtn: { minHeight: 40, paddingHorizontal: 8, backgroundColor: '#6C8795' },
-  headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#36A9B5' },
+  submissionStatusBtn: { minHeight: 40, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
+  headerAutoFillBtn: { minHeight: 40, paddingHorizontal: 13, backgroundColor: '#00AEB8' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
@@ -1944,7 +1946,7 @@ const styles = StyleSheet.create({
   toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },
   toggleTimeText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
   monthAutoFillBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#36A9B5', borderWidth: 1, borderColor: '#258C96' },
-  monthDeleteBtn: { minHeight: 36, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 10, borderRadius: 18, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
+  monthDeleteBtn: { width: 40, height: 40, marginLeft: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#E7A6AC' },
   monthActionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   monthDeleteText: { color: '#B93E48', fontSize: 12, fontWeight: '900' },
   monthConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)', alignItems: 'center', justifyContent: 'center', padding: 20 },
