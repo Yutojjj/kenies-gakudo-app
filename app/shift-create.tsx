@@ -1228,7 +1228,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       {/* --- モーダル群 --- */}
       <Modal visible={modalVisible} animationType="fade" transparent>
         <SafeAreaView style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={styles.modalContent}
+            onTouchStart={() => {
+              if (timePickerVisible) setTimePickerVisible(false);
+            }}
+          >
             <View style={[styles.modalHeader, isCompact && styles.modalHeaderCompact]}>
               <TouchableOpacity style={styles.modalDateNavBtn} onPress={() => moveModalDate(-1)}>
                 <Ionicons name="chevron-back" size={24} color={COLORS.text} />
@@ -1289,7 +1294,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                           </TouchableOpacity>
                         </View>
                         {timePickerVisible && editingStaffName === s.name && (
-                          <View style={styles.inlineTimeEditor}>
+                          <View style={styles.inlineTimeEditor} onTouchStart={(event) => event.stopPropagation()}>
                             <View style={styles.drumPickerRow}>
                                 <View style={[styles.shiftTimeGroup, isCompact && styles.shiftTimeGroupCompact]}>
                                 <Text style={styles.shiftTimeGroupTitle}>開始</Text>
