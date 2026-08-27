@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { collection, doc, enableNetwork, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -55,6 +55,7 @@ export default function ShiftViewScreen() {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [subscriptionKey, setSubscriptionKey] = useState(0);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -71,21 +72,25 @@ export default function ShiftViewScreen() {
       .then(setPublicHolidays)
       .catch(() => {});
 
+    const onSubscriptionError = (name: string) => (error: unknown) => {
+      console.warn(`[shift-view] ${name} の購読に失敗しました`, error);
+    };
+
     const unsubAccounts = onSnapshot(query(collection(db, 'accounts'), where('role', '==', 'staff')), snap => {
       setAllStaff(snap.docs
         .filter(d => d.data().showInShiftTable !== false)
         .map(d => ({ id: d.id, name: d.data().name })));
-    });
+    }, onSubscriptionError('accounts'));
 
     const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), snap => {
       const data: Record<string, AssignedStaff[]> = {};
       snap.forEach(d => { data[d.id] = d.data().staff || []; });
       setAssignedShifts(data);
-    });
+    }, onSubscriptionError('assigned_shifts'));
 
     const unsubHolidays = onSnapshot(doc(db, 'settings', 'holidays_data'), snap => {
       if (snap.exists() && snap.data().periods) setHolidayPeriods(snap.data().periods);
-    });
+    }, onSubscriptionError('holidays'));
 
     const unsubEvents = onSnapshot(collection(db, 'events'), snap => {
       const eData: Record<string, string[]> = {};
@@ -98,9 +103,28 @@ export default function ShiftViewScreen() {
         if (!eData[dateKey].includes(title)) eData[dateKey].push(title);
       });
       setEventsData(eData);
-    });
+    }, onSubscriptionError('events'));
 
     return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); };
+  }, [subscriptionKey]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const refreshSubscriptions = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        await enableNetwork(db);
+      } catch {}
+      setSubscriptionKey(key => key + 1);
+    };
+    document.addEventListener('visibilitychange', refreshSubscriptions);
+    window.addEventListener('pageshow', refreshSubscriptions);
+    window.addEventListener('online', refreshSubscriptions);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshSubscriptions);
+      window.removeEventListener('pageshow', refreshSubscriptions);
+      window.removeEventListener('online', refreshSubscriptions);
+    };
   }, []);
 
   useEffect(() => {

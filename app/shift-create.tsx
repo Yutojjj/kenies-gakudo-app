@@ -4,7 +4,7 @@ import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { collection, deleteDoc, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, enableNetwork, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -224,6 +224,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
+  const [subscriptionKey, setSubscriptionKey] = useState(0);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -370,6 +371,27 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       asUnsub();
       evUnsub();
       holidaysUnsub();
+    };
+  }, [subscriptionKey]);
+
+  // iPhone のPWA復帰時はFirestoreの購読だけが止まることがあるため、表示復帰時に張り直す。
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    let scheduled = false;
+    const refreshSubscriptions = async () => {
+      if (document.visibilityState !== 'visible' || scheduled) return;
+      scheduled = true;
+      try { await enableNetwork(db); } catch {}
+      setSubscriptionKey(key => key + 1);
+      setTimeout(() => { scheduled = false; }, 250);
+    };
+    document.addEventListener('visibilitychange', refreshSubscriptions);
+    window.addEventListener('pageshow', refreshSubscriptions);
+    window.addEventListener('online', refreshSubscriptions);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshSubscriptions);
+      window.removeEventListener('pageshow', refreshSubscriptions);
+      window.removeEventListener('online', refreshSubscriptions);
     };
   }, []);
 
@@ -931,7 +953,16 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     );
   };
 
-  if (checking || !verified) return null;
+  if (checking || !verified) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>シフトを読み込んでいます</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -2182,4 +2213,6 @@ const styles = StyleSheet.create({
   ssDataText: { fontSize: 9, color: '#333', textAlign: 'center', lineHeight: 11 },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.secondary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   autoFillBtnText: { color: COLORS.white, fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  loadingScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: COLORS.background },
+  loadingText: { fontSize: 15, fontWeight: '700', color: COLORS.textLight },
 })

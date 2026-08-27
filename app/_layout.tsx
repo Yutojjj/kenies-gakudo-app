@@ -162,11 +162,25 @@ export default function RootLayout() {
       const handleOffline = async () => {
         setIsOnline(false);
       };
+      // iOSのPWAは画面復帰時にonlineイベントが発火せず、Firestoreの
+      // 購読だけが止まった状態になることがあるため、表示復帰でも再接続する。
+      const handleVisibilityChange = async () => {
+        if (document.visibilityState !== 'visible') return;
+        try {
+          await enableNetwork(db);
+          setIsOnline(true);
+        } catch {}
+      };
+      const handlePageShow = handleVisibilityChange;
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('pageshow', handlePageShow);
       return () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('pageshow', handlePageShow);
       };
     } else {
       const sub = AppState.addEventListener('change', handleAppStateChange);
