@@ -50,6 +50,8 @@ export default function CenteredTimePickerModal({
   const [minute, setMinute] = useState(minutes[0] ?? 0);
   const hourRef = useRef<ScrollView>(null);
   const minuteRef = useRef<ScrollView>(null);
+  const hourWrapRef = useRef<any>(null);
+  const minuteWrapRef = useRef<any>(null);
   const hourWheelLockRef = useRef(0);
   const minuteWheelLockRef = useRef(0);
   const suppressTickUntilRef = useRef(0);
@@ -80,6 +82,30 @@ export default function CenteredTimePickerModal({
     return () => clearTimeout(timer);
   }, [visible, value, hours, minutes]);
 
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') return;
+    const listeners = [
+      { element: hourWrapRef.current as HTMLElement | null, values: hours, selected: hour, setter: setHour, ref: hourRef, lockRef: hourWheelLockRef },
+      { element: minuteWrapRef.current as HTMLElement | null, values: minutes, selected: minute, setter: setMinute, ref: minuteRef, lockRef: minuteWheelLockRef },
+    ].map(({ element, values, selected, setter, ref, lockRef }) => {
+      if (!element?.addEventListener) return null;
+      const onWheel = (event: WheelEvent) => handleWebWheelStep(event, {
+        index: values.indexOf(selected),
+        length: values.length,
+        itemHeight: ITEM_HEIGHT,
+        lockRef,
+        onIndexChange: index => {
+          setter(values[index]);
+          playUiSound('tick');
+        },
+        scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
+      });
+      element.addEventListener('wheel', onWheel, { passive: false });
+      return { element, onWheel };
+    });
+    return () => listeners.forEach(listener => listener?.element.removeEventListener('wheel', listener.onWheel));
+  }, [visible, hours, minutes, hour, minute]);
+
   const renderWheel = (
     values: number[],
     selected: number,
@@ -87,8 +113,9 @@ export default function CenteredTimePickerModal({
     ref: React.RefObject<ScrollView | null>,
     pad: boolean,
     wheelLockRef: React.MutableRefObject<number>,
+    wrapRef: React.MutableRefObject<any>,
   ) => (
-    <View style={styles.wheelColumn}>
+    <View ref={wrapRef} style={styles.wheelColumn}>
       <WebScrollView
         ref={ref}
         style={styles.wheelScroll}
@@ -100,17 +127,6 @@ export default function CenteredTimePickerModal({
         disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
-        onWheel={(event: any) => handleWebWheelStep(event, {
-          index: values.indexOf(selected),
-          length: values.length,
-          itemHeight: ITEM_HEIGHT,
-          lockRef: wheelLockRef,
-          onIndexChange: index => {
-            setter(values[index]);
-            playUiSound('tick');
-          },
-          scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
-        })}
         onScroll={(event: any) => {
           const index = nearestIndex(event.nativeEvent.contentOffset.y, values.length);
           if (values[index] !== selected) {
@@ -162,9 +178,9 @@ export default function CenteredTimePickerModal({
               </Text>
               <View style={styles.wheels}>
                 <View pointerEvents="none" style={styles.selectionFrame} />
-                {renderWheel(hours, hour, setHour, hourRef, true, hourWheelLockRef)}
+                {renderWheel(hours, hour, setHour, hourRef, true, hourWheelLockRef, hourWrapRef)}
                 <Text pointerEvents="none" style={styles.colon}>:</Text>
-                {renderWheel(minutes, minute, setMinute, minuteRef, true, minuteWheelLockRef)}
+                {renderWheel(minutes, minute, setMinute, minuteRef, true, minuteWheelLockRef, minuteWrapRef)}
               </View>
               <View style={styles.actions}>
                 <TouchableOpacity style={styles.cancelButton} onPress={onClose}>

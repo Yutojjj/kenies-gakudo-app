@@ -52,6 +52,7 @@ function ShiftTimeWheel({
   onChange: (value: number) => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
+  const wheelWrapRef = useRef<any>(null);
   const snapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draggingRef = useRef(false);
   const lastIndexRef = useRef(values.indexOf(value));
@@ -90,8 +91,28 @@ function ShiftTimeWheel({
     return () => clearTimeout(timer);
   }, [value, visible, values]);
 
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') return;
+    const element = wheelWrapRef.current as HTMLElement | null;
+    if (!element?.addEventListener) return;
+
+    const onWheel = (event: WheelEvent) => {
+      handleWebWheelStep(event, {
+        index: lastIndexRef.current,
+        length: values.length,
+        itemHeight: SHIFT_WHEEL_ITEM_HEIGHT,
+        lockRef: wheelLockRef,
+        onIndexChange: index => selectIndex(index, false),
+        scrollTo: offset => scrollRef.current?.scrollTo({ y: offset, animated: true }),
+      });
+    };
+
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [visible, values, selectIndex]);
+
   return (
-    <View style={styles.shiftWheelWrap} nativeID="ui-time-wheel-shift">
+    <View ref={wheelWrapRef} style={styles.shiftWheelWrap} nativeID="ui-time-wheel-shift">
       <View style={styles.shiftWheelSelection} pointerEvents="none" />
       <WebScrollView
         ref={scrollRef}
@@ -104,14 +125,6 @@ function ShiftTimeWheel({
         decelerationRate="fast"
         disableIntervalMomentum
         scrollEventThrottle={16}
-        onWheel={(event: any) => handleWebWheelStep(event, {
-          index: lastIndexRef.current,
-          length: values.length,
-          itemHeight: SHIFT_WHEEL_ITEM_HEIGHT,
-          lockRef: wheelLockRef,
-          onIndexChange: index => selectIndex(index, false),
-          scrollTo: offset => scrollRef.current?.scrollTo({ y: offset, animated: true }),
-        })}
         onScrollBeginDrag={() => { draggingRef.current = true; }}
         onScroll={(event: any) => {
           const y = event.nativeEvent.contentOffset.y;

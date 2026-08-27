@@ -9,7 +9,7 @@ import {
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Image, Modal, SafeAreaView, ScrollView, StyleSheet,
+  ActivityIndicator, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet,
   NativeScrollEvent, NativeSyntheticEvent, Text, TextInput, TouchableOpacity,
   TouchableWithoutFeedback, View,
 } from 'react-native';
@@ -87,6 +87,7 @@ const formatPublishedAt = (value: any) => {
 
 function TimeWheel({ values, value, onChange }: { values: string[]; value: string; onChange: (next: string) => void }) {
   const ref = useRef<ScrollView>(null);
+  const wheelWrapRef = useRef<any>(null);
   const wheelLockRef = useRef(0);
   const selectedIndex = Math.max(0, values.indexOf(value));
 
@@ -105,6 +106,22 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
     return () => clearTimeout(timer);
   }, [selectedIndex]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const element = wheelWrapRef.current as HTMLElement | null;
+    if (!element?.addEventListener) return;
+    const onWheel = (event: WheelEvent) => handleWebWheelStep(event, {
+      index: values.indexOf(value),
+      length: values.length,
+      itemHeight: TIME_ITEM_HEIGHT,
+      lockRef: wheelLockRef,
+      onIndexChange: index => onChange(values[index]),
+      scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
+    });
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [values, value]);
+
   const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offset = event.nativeEvent.contentOffset.y;
     const nextValue = valueFromOffset(offset);
@@ -114,7 +131,7 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
   };
 
   return (
-    <View style={styles.timeWheelViewport}>
+    <View ref={wheelWrapRef} style={styles.timeWheelViewport}>
       <View pointerEvents="none" style={styles.timeWheelSelection} />
       <WebScrollView
         ref={ref}
@@ -128,14 +145,6 @@ function TimeWheel({ values, value, onChange }: { values: string[]; value: strin
         disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
-        onWheel={(event: any) => handleWebWheelStep(event, {
-          index: values.indexOf(value),
-          length: values.length,
-          itemHeight: TIME_ITEM_HEIGHT,
-          lockRef: wheelLockRef,
-          onIndexChange: index => onChange(values[index]),
-          scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
-        })}
         onScroll={(event: any) => applyOffset(event.nativeEvent.contentOffset.y)}
         onMomentumScrollEnd={settle}
         onScrollEndDrag={settle}

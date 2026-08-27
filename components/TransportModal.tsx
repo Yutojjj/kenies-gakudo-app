@@ -92,10 +92,33 @@ export default function TransportModal({
   const [defaultShiftTimes, setDefaultShiftTimes] = useState<Record<string, { start: string; end: string }>>({});
   const customHourScrollRef = useRef<ScrollView>(null);
   const customMinuteScrollRef = useRef<ScrollView>(null);
+  const customHourWheelWrapRef = useRef<any>(null);
+  const customMinuteWheelWrapRef = useRef<any>(null);
   const customHourSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customMinuteSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const customHourWheelLockRef = useRef(0);
   const customMinuteWheelLockRef = useRef(0);
+
+  useEffect(() => {
+    if (!customBlockModalVisible || Platform.OS !== 'web') return;
+    const wheels = [
+      { element: customHourWheelWrapRef.current as HTMLElement | null, values: CUSTOM_TIME_HOURS, selected: customHour, setter: setCustomHour, ref: customHourScrollRef, lockRef: customHourWheelLockRef },
+      { element: customMinuteWheelWrapRef.current as HTMLElement | null, values: CUSTOM_TIME_MINUTES, selected: customMinute, setter: setCustomMinute, ref: customMinuteScrollRef, lockRef: customMinuteWheelLockRef },
+    ].map(({ element, values, selected, setter, ref, lockRef }) => {
+      if (!element?.addEventListener) return null;
+      const onWheel = (event: WheelEvent) => handleWebWheelStep(event, {
+        index: values.indexOf(selected),
+        length: values.length,
+        itemHeight: CUSTOM_TIME_ITEM_HEIGHT,
+        lockRef,
+        onIndexChange: index => setter(values[index]),
+        scrollTo: offset => ref.current?.scrollTo({ y: offset, animated: true }),
+      });
+      element.addEventListener('wheel', onWheel, { passive: false });
+      return { element, onWheel };
+    });
+    return () => wheels.forEach(wheel => wheel?.element.removeEventListener('wheel', wheel.onWheel));
+  }, [customBlockModalVisible, customHour, customMinute]);
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
@@ -1773,25 +1796,18 @@ export default function TransportModal({
             <Text style={styles.customBlockLabel}>時刻</Text>
             <View style={styles.customPickerColumns} nativeID="ui-time-wheel-transport">
               <View style={styles.customPickerSelectionFrame} pointerEvents="none" />
-              <WebScrollView
-                ref={customHourScrollRef}
-                style={styles.customPickerScroll}
-                contentContainerStyle={styles.customPickerScrollInner}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
-                snapToOffsets={CUSTOM_TIME_HOURS.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
-                decelerationRate="fast"
-                disableIntervalMomentum
-                nestedScrollEnabled
-                scrollEventThrottle={16}
-                onWheel={(event: any) => handleWebWheelStep(event, {
-                  index: CUSTOM_TIME_HOURS.indexOf(customHour),
-                  length: CUSTOM_TIME_HOURS.length,
-                  itemHeight: CUSTOM_TIME_ITEM_HEIGHT,
-                  lockRef: customHourWheelLockRef,
-                  onIndexChange: index => setCustomHour(CUSTOM_TIME_HOURS[index]),
-                  scrollTo: offset => customHourScrollRef.current?.scrollTo({ y: offset, animated: true }),
-                })}
+              <View ref={customHourWheelWrapRef} style={styles.customPickerScrollWrap}>
+                <WebScrollView
+                  ref={customHourScrollRef}
+                  style={styles.customPickerScroll}
+                  contentContainerStyle={styles.customPickerScrollInner}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
+                  snapToOffsets={CUSTOM_TIME_HOURS.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
+                  decelerationRate="fast"
+                  disableIntervalMomentum
+                  nestedScrollEnabled
+                  scrollEventThrottle={16}
                 onScroll={(event: any) => {
                   const y = event.nativeEvent.contentOffset.y;
                   updateCustomTimeFromScroll(CUSTOM_TIME_HOURS, y, customHour, setCustomHour);
@@ -1827,27 +1843,21 @@ export default function TransportModal({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </WebScrollView>
+                </WebScrollView>
+              </View>
               <Text style={styles.customPickerColon}>:</Text>
-              <WebScrollView
-                ref={customMinuteScrollRef}
-                style={styles.customPickerScroll}
-                contentContainerStyle={styles.customPickerScrollInner}
-                showsVerticalScrollIndicator={false}
-                snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
-                snapToOffsets={CUSTOM_TIME_MINUTES.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
-                decelerationRate="fast"
-                disableIntervalMomentum
-                nestedScrollEnabled
-                scrollEventThrottle={16}
-                onWheel={(event: any) => handleWebWheelStep(event, {
-                  index: CUSTOM_TIME_MINUTES.indexOf(customMinute),
-                  length: CUSTOM_TIME_MINUTES.length,
-                  itemHeight: CUSTOM_TIME_ITEM_HEIGHT,
-                  lockRef: customMinuteWheelLockRef,
-                  onIndexChange: index => setCustomMinute(CUSTOM_TIME_MINUTES[index]),
-                  scrollTo: offset => customMinuteScrollRef.current?.scrollTo({ y: offset, animated: true }),
-                })}
+              <View ref={customMinuteWheelWrapRef} style={styles.customPickerScrollWrap}>
+                <WebScrollView
+                  ref={customMinuteScrollRef}
+                  style={styles.customPickerScroll}
+                  contentContainerStyle={styles.customPickerScrollInner}
+                  showsVerticalScrollIndicator={false}
+                  snapToInterval={CUSTOM_TIME_ITEM_HEIGHT}
+                  snapToOffsets={CUSTOM_TIME_MINUTES.map((_, index) => index * CUSTOM_TIME_ITEM_HEIGHT)}
+                  decelerationRate="fast"
+                  disableIntervalMomentum
+                  nestedScrollEnabled
+                  scrollEventThrottle={16}
                 onScroll={(event: any) => {
                   const y = event.nativeEvent.contentOffset.y;
                   updateCustomTimeFromScroll(CUSTOM_TIME_MINUTES, y, customMinute, setCustomMinute);
@@ -1883,7 +1893,8 @@ export default function TransportModal({
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </WebScrollView>
+                </WebScrollView>
+              </View>
             </View>
 
             <Text style={styles.customBlockLabel}>メンバー（任意）</Text>
@@ -2116,6 +2127,7 @@ const styles = StyleSheet.create({
   customBlockInput: { minHeight: 44, borderWidth: 1.5, borderColor: '#CCD9DA', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: '#FAFCFC', fontSize: 14, fontWeight: '700', color: '#222222' },
   customPickerColumns: { position: 'relative', width: 190, height: CUSTOM_TIME_VIEW_HEIGHT, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   customPickerSelectionFrame: { position: 'absolute', left: 10, right: 10, top: (CUSTOM_TIME_VIEW_HEIGHT - CUSTOM_TIME_ITEM_HEIGHT) / 2, height: CUSTOM_TIME_ITEM_HEIGHT, borderRadius: 10, backgroundColor: '#E9F7F7', borderWidth: 1.5, borderColor: '#79C7CC' },
+  customPickerScrollWrap: { width: 72, height: CUSTOM_TIME_VIEW_HEIGHT, flexGrow: 0, flexShrink: 0, zIndex: 1 },
   customPickerScroll: { width: 72, height: CUSTOM_TIME_VIEW_HEIGHT, flexGrow: 0, flexShrink: 0, zIndex: 1 },
   customPickerScrollInner: { paddingVertical: (CUSTOM_TIME_VIEW_HEIGHT - CUSTOM_TIME_ITEM_HEIGHT) / 2 },
   customPickerColon: { width: 18, marginHorizontal: 2, zIndex: 2, textAlign: 'center', fontSize: 23, fontWeight: '900', color: '#333333' },
