@@ -691,7 +691,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const decoration = illustration
             ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm">${decoration}<div class="calendar-cell-content"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -716,8 +716,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
+        .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: hidden; }
         .calendar-cell-content { position: relative; z-index: 1; }
-        .calendar-illustration { position: absolute; z-index: 0; right: 2mm; bottom: 2mm; width: 18mm; height: 18mm; object-fit: contain; opacity: 0.2; pointer-events: none; }
+        .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 11mm; height: 11mm; object-fit: contain; opacity: 0.3; pointer-events: none; }
         .calendar-day-empty { background: #F4F4F4 !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
