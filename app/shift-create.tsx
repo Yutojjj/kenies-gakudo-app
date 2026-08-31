@@ -43,6 +43,7 @@ const PRINT_SHIFT_COLORS = [
   '#A8D2F0', '#BCD99B', '#F2D783', '#9ED9DE',
   '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
 ];
+const ILLUSTRATION_COUNT = 114;
 
 const getStaffShiftColor = (name: string, index: number, palette: string[]) =>
   name === '北条' ? '#B45AA7' : palette[index % palette.length];
@@ -756,8 +757,15 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             .filter(cell => !cell)
             .map(() => shiftPrintPhotos.length > 0
               ? shiftPrintPhotos[Math.floor(Math.random() * shiftPrintPhotos.length)].url
-              : `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`)
+              : `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`)
         : [];
+      const illustrationByDate = new Map(
+        printType === 'event'
+          ? weeks.flat()
+              .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell)
+              .map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`])
+          : [],
+      );
       const fifthWeekdayAnchor = printType === 'event'
         ? weeks.flat()
             .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28)
@@ -791,7 +799,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         const cells = wk.map(cell => {
           if (!cell) {
             const image = emptyCellImages[emptyCellImageIndex++];
-            const decoration = image ? `<img class="calendar-illustration" src="${image}" alt="" />` : '';
+            const decoration = image ? `<img class="calendar-empty-photo" src="${image}" alt="" />` : '';
             return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}</div></td>`;
           }
           const isSun = cell.dow === 0;
@@ -818,10 +826,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('') : '';
+          const illustration = illustrationByDate.get(cell.dateStr);
+          const decoration = illustration
+            ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
+            : '';
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell"><div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="${eventContainerClass}">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="${eventContainerClass}">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -849,6 +861,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
         .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 14mm; height: 14mm; object-fit: contain; opacity: 0.38; pointer-events: none; }
+        .calendar-empty-photo { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 1; pointer-events: none; }
         .calendar-day-empty { background: #FFFFFF !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
@@ -1149,10 +1162,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             {printMenuVisible && (
               <View nativeID="shift-print-menu" style={styles.pdfMenu}>
                 <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
-                  <Text style={styles.pdfMenuItemText}>シフト表</Text>
+                  <Text style={styles.pdfMenuItemText}>シフト表を印刷</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
-                  <Text style={styles.pdfMenuItemText}>イベント</Text>
+                <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
+                  <Text style={styles.pdfMenuItemText}>イベント表を印刷</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
+                  <Text style={styles.pdfMenuItemText}>画像アップロード</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1175,14 +1191,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
             <Text style={styles.pdfBtnText}>自動入力</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.pdfBtn, styles.headerPhotoBtn]}
-            onPress={() => setPhotoManagerVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="印刷写真を管理"
-          >
-            <Ionicons name="images-outline" size={18} color={COLORS.white} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -1195,6 +1203,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <Ionicons name="close" size={24} color="#475569" />
               </TouchableOpacity>
             </View>
+            <Text style={styles.photoManagerDescription}>
+              ここで登録した写真は、イベントカレンダーを印刷するときに、日付のない空白セルへランダムに表示されます。
+            </Text>
             <ScrollView contentContainerStyle={styles.photoManagerList}>
               {shiftPrintPhotos.length === 0 && <Text style={styles.photoManagerEmpty}>登録された写真はありません</Text>}
               {shiftPrintPhotos.map(photo => (
@@ -1205,12 +1216,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </TouchableOpacity>
                 </View>
               ))}
+              <TouchableOpacity style={styles.photoManagerAddTile} onPress={uploadShiftPrintPhotos} disabled={photoUploading} accessibilityLabel="写真アップロード">
+                {photoUploading ? <ActivityIndicator color="#00AEB8" /> : <Text style={styles.photoManagerAddPlus}>＋</Text>}
+                <Text style={styles.photoManagerAddText}>写真アップロード</Text>
+              </TouchableOpacity>
             </ScrollView>
             {!!photoUploadError && <Text style={styles.photoManagerError}>{photoUploadError}</Text>}
-            <TouchableOpacity style={styles.photoManagerUploadBtn} onPress={uploadShiftPrintPhotos} disabled={photoUploading}>
-              {photoUploading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />}
-              <Text style={styles.photoManagerUploadText}>{photoUploading ? 'アップロード中...' : '写真を追加'}</Text>
-            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1376,10 +1387,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 {printMenuVisible && (
                   <View nativeID="shift-print-menu" style={styles.pdfMenu}>
                     <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
-                      <Text style={styles.pdfMenuItemText}>シフト表</Text>
+                      <Text style={styles.pdfMenuItemText}>シフト表を印刷</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
-                      <Text style={styles.pdfMenuItemText}>イベント</Text>
+                    <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
+                      <Text style={styles.pdfMenuItemText}>イベント表を印刷</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
+                      <Text style={styles.pdfMenuItemText}>画像アップロード</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2174,8 +2188,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerActions: { position: 'relative', zIndex: 1001, flexDirection: 'row', alignItems: 'center', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#EAF7F7', flexShrink: 1 },
   pdfMenuAnchor: { position: 'relative', zIndex: 1002 },
-  pdfMenu: { position: 'absolute', top: '100%', right: 0, marginTop: 5, minWidth: 112, padding: 4, borderRadius: 8, backgroundColor: '#FFFFFF', opacity: 1, borderWidth: 1, borderColor: '#D7E1E2', shadowColor: '#000000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 7, elevation: 100, zIndex: 1003 },
-  pdfMenuItem: { minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: '#FFFFFF', zIndex: 1004 },
+  pdfMenu: { position: 'absolute', top: '100%', right: 0, marginTop: 5, minWidth: 168, padding: 4, borderRadius: 8, backgroundColor: '#FFFFFF', opacity: 1, borderWidth: 1, borderColor: '#D7E1E2', shadowColor: '#000000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 7, elevation: 100, zIndex: 1003 },
+  pdfMenuItem: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: '#FFFFFF', zIndex: 1004 },
+  pdfMenuItemSeparated: { borderTopWidth: 1, borderTopColor: '#E5ECEE', borderRadius: 0 },
   pdfMenuItemText: { fontSize: 12, fontWeight: '900', color: '#2C6F77' },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 7 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 0, fontSize: 10 },
@@ -2187,14 +2202,16 @@ const styles = StyleSheet.create({
   photoManagerPanel: { width: '92%', maxWidth: 420, maxHeight: '78%', borderRadius: 14, padding: 14, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 12 },
   photoManagerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   photoManagerTitle: { fontSize: 17, fontWeight: '900', color: '#243B53' },
+  photoManagerDescription: { marginBottom: 12, color: '#526779', fontSize: 12, lineHeight: 18, fontWeight: '700' },
   photoManagerList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 10 },
   photoManagerEmpty: { width: '100%', paddingVertical: 22, textAlign: 'center', color: '#829AB1', fontSize: 13, fontWeight: '700' },
   photoManagerError: { marginBottom: 9, color: '#C53030', fontSize: 12, fontWeight: '700', lineHeight: 18 },
   photoManagerItem: { position: 'relative', width: 88, height: 70, borderRadius: 8, overflow: 'hidden', backgroundColor: '#F1F5F9' },
   photoManagerImage: { width: '100%', height: '100%' },
   photoManagerDelete: { position: 'absolute', top: 3, right: 3, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.65)' },
-  photoManagerUploadBtn: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 9, backgroundColor: '#00AEB8' },
-  photoManagerUploadText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  photoManagerAddTile: { width: 88, height: 70, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#8BCFD3', backgroundColor: '#F7FCFC' },
+  photoManagerAddPlus: { color: '#00AEB8', fontSize: 27, fontWeight: '400', lineHeight: 29 },
+  photoManagerAddText: { marginTop: 3, color: '#16878E', fontSize: 10, fontWeight: '900' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
