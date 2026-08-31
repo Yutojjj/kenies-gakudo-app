@@ -662,6 +662,15 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28)
             .sort((a, b) => a.day - b.day)[0]
         : null;
+      const fifthWeekdayEnd = fifthWeekdayAnchor
+        ? weeks.find(wk => wk.some(cell => cell?.dateStr === fifthWeekdayAnchor.dateStr))
+            ?.filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28)
+            .sort((a, b) => a.dow - b.dow)
+            .slice(-1)[0]
+        : null;
+      const fifthWeekdayBandWidth = fifthWeekdayAnchor && fifthWeekdayEnd
+        ? Math.max(1, fifthWeekdayEnd.dow - fifthWeekdayAnchor.dow + 1)
+        : 1;
 
       weeks.forEach(wk => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
@@ -684,7 +693,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
           const fifthWeekdayNote = fifthWeekdayAnchor?.dateStr === cell.dateStr
-            ? `<div class="calendar-closure-band" style="width:${Math.max(1, 6 - cell.dow)}00%">スイミングお休み</div>`
+            ? `<div class="calendar-closure-band" style="width:${fifthWeekdayBandWidth}00%">スイミングお休み</div>`
             : '';
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
@@ -704,7 +713,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          const closureCellClass = fifthWeekdayAnchor?.dateStr === cell.dateStr ? ' calendar-closure-cell' : '';
+          return `<td class="${dayClass}${closureCellClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -729,6 +739,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
+        .calendar-closure-cell { position: relative; z-index: 10; overflow: visible; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
         .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 11mm; height: 11mm; object-fit: contain; opacity: 0.3; pointer-events: none; }
