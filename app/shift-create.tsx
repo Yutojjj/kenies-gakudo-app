@@ -197,6 +197,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [loading, setLoading] = useState(false);
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
   const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff'>('staff');
+  const [printMenuVisible, setPrintMenuVisible] = useState(false);
   
   const showTimeInCalendar = true;
 
@@ -604,7 +605,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return `${selectedDateStr} (${weekdays[date.getDay()]})`;
   };
 
-  const exportPDF = async () => {
+  const exportPDF = async (printType: 'shift' | 'event' = 'shift') => {
     try {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth() + 1;
@@ -646,7 +647,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             (total, title) => total + Math.max(1, Math.ceil(Array.from(String(title)).length / 16)),
             0,
           );
-          return eventRows + (assignedShifts[cell.dateStr] || []).length;
+          return eventRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
         const weekHeightMm = Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
@@ -659,14 +660,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
-          const entries = orderedStaff.map((staff, staffIndex) => {
+          const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
             const color = PRINT_SHIFT_COLORS[staffIndex % PRINT_SHIFT_COLORS.length];
             return `<div class="calendar-shift" style="background-color:${color} !important;">
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
-          }).filter(Boolean).join('');
+          }).filter(Boolean).join('') : '';
           return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
@@ -710,7 +711,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <caption>${year}年${month}月 シフト表</caption>
+          <caption>${year}年${month}月 ${printType === 'event' ? 'イベント' : 'シフト表'}</caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
@@ -976,13 +977,25 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </TouchableOpacity>
         <Text style={styles.headerTitle}>シフト作成</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.pdfBtn, styles.headerPdfBtn]}
-            onPress={exportPDF}
-            disabled={loading}
-          >
-            <Text style={styles.pdfBtnText}>PDF出力</Text>
-          </TouchableOpacity>
+          <View style={styles.pdfMenuAnchor}>
+            <TouchableOpacity
+              style={[styles.pdfBtn, styles.headerPdfBtn]}
+              onPress={() => setPrintMenuVisible(current => !current)}
+              disabled={loading}
+            >
+              <Text style={styles.pdfBtnText}>印刷</Text>
+            </TouchableOpacity>
+            {printMenuVisible && (
+              <View style={styles.pdfMenu}>
+                <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
+                  <Text style={styles.pdfMenuItemText}>シフト表</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
+                  <Text style={styles.pdfMenuItemText}>イベント</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
           <TouchableOpacity
             style={[styles.pdfBtn, styles.submissionStatusBtn]}
             onPress={() => setSubmissionStatusVisible(true)}
@@ -1157,10 +1170,22 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <Text style={styles.ssModalTitle}>月別シフト表</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <TouchableOpacity onPress={exportPDF} style={styles.pdfBtn}>
-                <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
-                <Text style={styles.pdfBtnText}>PDF出力</Text>
-              </TouchableOpacity>
+              <View style={styles.pdfMenuAnchor}>
+                <TouchableOpacity onPress={() => setPrintMenuVisible(current => !current)} style={styles.pdfBtn}>
+                  <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
+                  <Text style={styles.pdfBtnText}>印刷</Text>
+                </TouchableOpacity>
+                {printMenuVisible && (
+                  <View style={styles.pdfMenu}>
+                    <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
+                      <Text style={styles.pdfMenuItemText}>シフト表</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
+                      <Text style={styles.pdfMenuItemText}>イベント</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
               <TouchableOpacity onPress={() => setSpreadsheetVisible(false)}>
                 <Ionicons name="close-circle" size={32} color={COLORS.textLight} />
               </TouchableOpacity>
@@ -1950,6 +1975,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#EAF7F7', flexShrink: 1 },
+  pdfMenuAnchor: { position: 'relative', zIndex: 20 },
+  pdfMenu: { position: 'absolute', top: '100%', right: 0, marginTop: 5, minWidth: 112, padding: 4, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7E1E2', shadowColor: '#000000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 7, elevation: 8, zIndex: 30 },
+  pdfMenuItem: { minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+  pdfMenuItemText: { fontSize: 12, fontWeight: '900', color: '#2C6F77' },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 7 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 0, fontSize: 10 },
   headerPdfBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
