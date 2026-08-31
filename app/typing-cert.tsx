@@ -264,12 +264,42 @@ export default function TypingCertScreen() {
     setClearStagesVisible(false);
   };
 
-  // ── 印刷ページを開く（aタグclickでポップアップブロック回避）
+  // ── 認定書を画面に表示せず、印刷用フレームから直接印刷する
   const openPrintPage = (params: Record<string, string>) => {
     if (typeof window === 'undefined') return;
     const p = new URLSearchParams(params);
-    // replaceで履歴に残さず遷移→戻るで正しくアプリに戻れる
-    window.location.href = '/cert/print.html?' + p.toString();
+    if (Platform.OS !== 'web') {
+      window.location.href = '/cert/print.html?' + p.toString();
+      return;
+    }
+
+    const oldFrame = document.getElementById('typing-cert-print-iframe');
+    oldFrame?.remove();
+    const frame = document.createElement('iframe');
+    frame.id = 'typing-cert-print-iframe';
+    frame.style.cssText = 'position:fixed;width:210mm;height:297mm;left:-10000px;top:0;border:0;visibility:hidden;';
+    const cleanup = () => frame.remove();
+    frame.addEventListener('load', () => {
+      frame.contentWindow?.addEventListener('afterprint', cleanup, { once: true });
+      window.setTimeout(cleanup, 60000);
+    }, { once: true });
+    frame.src = '/cert/print.html?' + p.toString();
+    document.body.appendChild(frame);
+  };
+
+  const printHistoryCert = (cert: Cert) => {
+    const student = students.find(item => item.name === cert.studentName);
+    openPrintPage({
+      result: cert.result,
+      name: cert.studentName,
+      kana: student?.kana || '',
+      date: cert.date,
+      star: cert.star,
+      grade: String(cert.grade),
+      score: String(cert.score),
+      wpm: String(cert.wpm),
+      certifier: cert.certifierName,
+    });
   };
 
   // ── 認定書を保存し、受講者の級・星も更新する共通処理
@@ -791,10 +821,23 @@ export default function TypingCertScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.historyName}>{item.studentName}</Text>
                       </View>
-                      <View style={[styles.resultPill, { backgroundColor: item.result === 'pass' ? '#dbeafe' : '#fee2e2' }]}>
-                        <Text style={{ fontWeight: 'bold', color: item.result === 'pass' ? '#1d4ed8' : '#b91c1c', fontSize: 13 }}>
-                          {item.result === 'pass' ? '合格' : '不合格'}
-                        </Text>
+                      <View style={styles.historyTopActions}>
+                        <View style={[styles.resultPill, { backgroundColor: item.result === 'pass' ? '#dbeafe' : '#fee2e2' }]}>
+                          <Text style={{ fontWeight: 'bold', color: item.result === 'pass' ? '#1d4ed8' : '#b91c1c', fontSize: 13 }}>
+                            {item.result === 'pass' ? '合格' : '不合格'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.historyPrintIconBtn}
+                          onPress={event => {
+                            event.stopPropagation();
+                            printHistoryCert(item);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${item.studentName}の認定書を印刷`}
+                        >
+                          <Ionicons name="print-outline" size={19} color="#2e7fc1" />
+                        </TouchableOpacity>
                       </View>
                     </View>
                     <View style={styles.historyRow}>
@@ -1290,6 +1333,7 @@ const styles = StyleSheet.create({
   historyDateHeader: { paddingVertical: 6, paddingHorizontal: 4, marginBottom: 4, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#7eb8d8', paddingLeft: 10 },
   historyDateHeaderText: { fontSize: 13, fontWeight: 'bold', color: '#2e7fc1' },
   historyTop:  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
+  historyTopActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   historyName: { fontSize: 16, fontWeight: 'bold', color: '#1e3a5f' },
   historyDate: { fontSize: 12, color: '#94a3b8' },
   resultPill:  { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
@@ -1303,6 +1347,7 @@ const styles = StyleSheet.create({
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
   },
   historyPrintBtnText: { fontSize: 12, color: '#2e7fc1', fontWeight: 'bold' },
+  historyPrintIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17, backgroundColor: '#e8f4fb', borderWidth: 1, borderColor: '#a8d4ee' },
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   pickerBox: {
     backgroundColor: '#fff', borderRadius: 16, padding: 8,
