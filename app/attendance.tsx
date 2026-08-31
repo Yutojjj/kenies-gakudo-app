@@ -52,6 +52,7 @@ const SCHOOL_GRADIENT_COLORS = [
   '#E8C7D8',
 ];
 const SCHOOL_ACCENT_COLORS = ['#E97884', '#E99B48', '#E1B62A', '#6DBA59', '#65AAB6', '#5D96DC', '#4DA5B9', '#7E69B8', '#C16293'];
+const SCHOOL_TIME_GROUP_TOLERANCE_MINUTES = 10;
 
 // 固定の学校順序
 const FIXED_SCHOOL_ORDER = [
@@ -76,6 +77,36 @@ const getGradeValue = (grade: string | undefined | null) => {
 
 const sortKidsByGrade = (kidsArray: any[]) => {
   return [...kidsArray].sort((a, b) => getGradeValue(a.grade) - getGradeValue(b.grade));
+};
+
+const getTimeMinutes = (time: string) => {
+  const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const mergeNearbySchoolTimes = (timeMap: Record<string, any[]>) => {
+  const merged: Record<string, any[]> = {};
+  let groupStartMinutes: number | null = null;
+
+  Object.keys(timeMap)
+    .sort((a, b) => (getTimeMinutes(a) ?? Number.MAX_SAFE_INTEGER) - (getTimeMinutes(b) ?? Number.MAX_SAFE_INTEGER))
+    .forEach(time => {
+      const minutes = getTimeMinutes(time);
+      const startsNewGroup = minutes === null
+        || groupStartMinutes === null
+        || minutes - groupStartMinutes > SCHOOL_TIME_GROUP_TOLERANCE_MINUTES;
+
+      if (startsNewGroup) {
+        groupStartMinutes = minutes;
+        merged[time] = [...(timeMap[time] || [])];
+      } else {
+        const groupTime = Object.keys(merged).slice(-1)[0];
+        merged[groupTime].push(...(timeMap[time] || []));
+      }
+    });
+
+  return merged;
 };
 
 export default function AttendanceScreen() {
@@ -505,8 +536,9 @@ export default function AttendanceScreen() {
       if (pickupTime) {
         totalCount++;
         if (!schools[kid.school]) schools[kid.school] = {};
-        if (!schools[kid.school][pickupTime]) schools[kid.school][pickupTime] = [];
-        schools[kid.school][pickupTime].push(displayKid);
+        const schoolTimes = schools[kid.school];
+        if (!schoolTimes[pickupTime]) schoolTimes[pickupTime] = [];
+        schoolTimes[pickupTime].push(displayKid);
       }
 
       if (lesson) {
@@ -514,6 +546,10 @@ export default function AttendanceScreen() {
         if (!lessons[key]) lessons[key] = [];
         lessons[key].push(displayKid);
       }
+    });
+
+    Object.keys(schools).forEach(school => {
+      schools[school] = mergeNearbySchoolTimes(schools[school]);
     });
 
     lessonsData
@@ -1273,6 +1309,11 @@ export default function AttendanceScreen() {
             dateStr={selectedTransportDate}
             visible={transportModalVisible}
             onClose={() => setTransportModalVisible(false)}
+            onDateChange={(nextDate) => {
+              setSelectedTransportDate(nextDate);
+              const next = new Date(nextDate + 'T00:00:00');
+              setTransportCalendarMonth(new Date(next.getFullYear(), next.getMonth(), 1));
+            }}
             attendance={getAttendanceForDay(new Date(selectedTransportDate + 'T00:00:00'))}
             shiftStaff={assignedShifts[selectedTransportDate] || []}
             allStaffList={allStaffList}

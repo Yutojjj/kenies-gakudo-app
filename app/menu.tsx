@@ -2638,6 +2638,10 @@ export default function MenuScreen() {
           visible={pickupDetailModalVisible}
           dateStr={makeDateStr(staffPlanDate)}
           onClose={() => setPickupDetailModalVisible(false)}
+          onDateChange={(nextDate) => {
+            const [year, month, day] = nextDate.split('-').map(Number);
+            setStaffPlanDate(new Date(year, month - 1, day));
+          }}
           attendance={pickupOverviewData.attendance}
           shiftStaff={pickupOverviewData.shiftStaff}
           allStaffList={pickupOverviewData.staffNames}

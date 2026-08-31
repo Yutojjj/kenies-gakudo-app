@@ -43,6 +43,7 @@ type Props = {
   allStaffList: string[];
   assignments: Record<string, any>;
   onAssign: (dateStr: string, blockKey: string, staffName: string) => Promise<void>;
+  onDateChange?: (dateStr: string) => void;
   publicHolidays: Record<string, string>;
   initialMode?: 'edit' | 'overview';
   readOnly?: boolean;
@@ -63,7 +64,7 @@ const escapeHtml = (value: any) => String(value ?? '')
   .replace(/'/g, '&#039;');
 
 export default function TransportModal({
-  visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign,
+  visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign, onDateChange,
   initialMode = 'edit', readOnly = false, autoPrintOnOpen = false,
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
@@ -122,6 +123,15 @@ export default function TransportModal({
 
   const date = new Date(dateStr + 'T00:00:00');
   const dateLabel = `${date.getMonth()+1}月${date.getDate()}日(${DOW_JP[date.getDay()]})`;
+  const changeDate = (amount: number) => {
+    if (!onDateChange) return;
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + amount);
+    const year = nextDate.getFullYear();
+    const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nextDate.getDate()).padStart(2, '0');
+    onDateChange(`${year}-${month}-${day}`);
+  };
   const lastWeekDate = new Date(date);
   lastWeekDate.setDate(date.getDate() - 7);
 
@@ -1401,7 +1411,18 @@ export default function TransportModal({
           {/* ヘッダー */}
           <View style={styles.header}>
             <View style={styles.headerTopRow}>
-              <Text style={styles.headerTitle}>{dateLabel} 送迎一覧</Text>
+              <View style={styles.headerTitleGroup}>
+                <Text style={styles.headerTitle}>送迎一覧</Text>
+                <View style={styles.dateNavigation}>
+                  <TouchableOpacity style={styles.dateNavigationButton} onPress={() => changeDate(-1)} accessibilityRole="button" accessibilityLabel="前日へ">
+                    <Ionicons name="chevron-back" size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+                  <Text style={styles.dateNavigationLabel}>{dateLabel}</Text>
+                  <TouchableOpacity style={styles.dateNavigationButton} onPress={() => changeDate(1)} accessibilityRole="button" accessibilityLabel="翌日へ">
+                    <Ionicons name="chevron-forward" size={18} color={COLORS.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
               <View style={styles.headerActions}>
                 {showTimeline ? (
                   <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
@@ -1976,7 +1997,11 @@ const styles = StyleSheet.create({
   header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
   headerTopRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, flex: 1 },
+  headerTitleGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
+  headerTitle: { fontSize: 15, fontWeight: 'bold', color: COLORS.text },
+  dateNavigation: { flexDirection: 'row', alignItems: 'center', gap: 2, borderRadius: 10, backgroundColor: '#FFF8ED', paddingHorizontal: 3, paddingVertical: 2 },
+  dateNavigationButton: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  dateNavigationLabel: { minWidth: 98, textAlign: 'center', fontSize: 15, fontWeight: '800', color: COLORS.text },
   
   closeBtn: { padding: 4 },
   modeTabs: { width: '100%', maxWidth: 340, minHeight: 40, alignSelf: 'center', marginTop: 9, padding: 3, borderRadius: 12, flexDirection: 'row', backgroundColor: '#EEF2F3', borderWidth: 1, borderColor: '#D8E0E2' },
