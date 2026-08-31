@@ -750,20 +750,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
            ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
         : allStaff;
-      const illustrationDates = printType === 'event'
-        ? weeks.flat().filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell)
-            .sort(() => Math.random() - 0.5)
+      // イベント印刷では、月初・月末の「日付がないセル」にだけ写真を配置する。
+      const emptyCellImages = printType === 'event'
+        ? weeks.flat()
+            .filter(cell => !cell)
+            .map(() => shiftPrintPhotos.length > 0
+              ? shiftPrintPhotos[Math.floor(Math.random() * shiftPrintPhotos.length)].url
+              : `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`)
         : [];
-      const illustrationByDate = new Map(
-        illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
-      );
-      const photoByDate = new Map(
-        printType === 'event'
-          ? illustrationDates
-              .filter(cell => (eventsData[cell.dateStr] || []).length === 0 && !publicHolidays[cell.dateStr])
-              .map(cell => [cell.dateStr, shiftPrintPhotos.length > 0 ? shiftPrintPhotos[Math.floor(Math.random() * shiftPrintPhotos.length)].url : ''])
-          : [],
-      );
       const fifthWeekdayAnchor = printType === 'event'
         ? weeks.flat()
             .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28)
@@ -779,6 +773,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         ? Math.max(1, fifthWeekdayEnd.dow - fifthWeekdayAnchor.dow + 1)
         : 1;
 
+      let emptyCellImageIndex = 0;
       weeks.forEach(wk => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
           if (!cell) return 0;
@@ -794,7 +789,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           ? 34
           : Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
         const cells = wk.map(cell => {
-          if (!cell) return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"></td>`;
+          if (!cell) {
+            const image = emptyCellImages[emptyCellImageIndex++];
+            const decoration = image ? `<img class="calendar-illustration" src="${image}" alt="" />` : '';
+            return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}</div></td>`;
+          }
           const isSun = cell.dow === 0;
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
@@ -819,14 +818,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('') : '';
-          const illustration = photoByDate.get(cell.dateStr) || illustrationByDate.get(cell.dateStr);
-          const decoration = illustration
-            ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
-            : '';
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="${eventContainerClass}">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell"><div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="${eventContainerClass}">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -853,8 +848,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
-        .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 11mm; height: 11mm; object-fit: contain; opacity: 0.3; pointer-events: none; }
-        .calendar-day-empty { background: #F4F4F4 !important; }
+        .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 14mm; height: 14mm; object-fit: contain; opacity: 0.38; pointer-events: none; }
+        .calendar-day-empty { background: #FFFFFF !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
         .calendar-day-sat { background: #F0F7FF !important; }
