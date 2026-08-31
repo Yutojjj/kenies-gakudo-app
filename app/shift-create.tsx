@@ -1,16 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { collection, deleteDoc, doc, enableNetwork, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, enableNetwork, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { handleWebWheelStep } from '../utils/webWheel';
 import { navigateHome } from '../utils/navigationHome';
@@ -19,6 +21,7 @@ const WebScrollView = ScrollView as any;
 
 type Staff = { id: string, name: string };
 type AssignedStaff = { name: string, start: string, end: string };
+type ShiftPrintPhoto = { id: string; url: string; storagePath: string };
 
 const SHIFT_CARD_COLORS = [
   '#A9DFD1',
@@ -198,6 +201,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
   const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff'>('staff');
   const [printMenuVisible, setPrintMenuVisible] = useState(false);
+  const [photoManagerVisible, setPhotoManagerVisible] = useState(false);
+  const [shiftPrintPhotos, setShiftPrintPhotos] = useState<ShiftPrintPhoto[]>([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   useEffect(() => {
     if (!printMenuVisible || Platform.OS !== 'web') return;
@@ -238,6 +244,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
   const [subscriptionKey, setSubscriptionKey] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'shift_print_photos'), snapshot => {
+      setShiftPrintPhotos(snapshot.docs.map(photo => ({
+        id: photo.id,
+        url: String(photo.data().url || ''),
+        storagePath: String(photo.data().storagePath || ''),
+      })).filter(photo => photo.url));
+    }, error => console.warn('印刷写真の取得に失敗しました', error));
+    return unsubscribe;
+  }, []);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -616,6 +633,47 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return `${selectedDateStr} (${weekdays[date.getDay()]})`;
   };
 
+  const uploadShiftPrintPhotos = async () => {
+    if (photoUploading) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('権限エラー', '写真へのアクセスを許可してください');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] as any, allowsMultipleSelection: true, quality: 0.85 });
+    if (result.canceled || !result.assets?.length) return;
+    setPhotoUploading(true);
+    try {
+      for (const asset of result.assets) {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const storagePath = `shift_print_photos/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const target = storageRef(storage, storagePath);
+        await uploadBytes(target, blob, { contentType: asset.mimeType || 'image/jpeg' });
+        await addDoc(collection(db, 'shift_print_photos'), {
+          url: await getDownloadURL(target),
+          storagePath,
+          createdAt: new Date(),
+        });
+      }
+    } catch (error) {
+      console.warn('印刷写真のアップロードに失敗しました', error);
+      Alert.alert('エラー', '写真のアップロードに失敗しました');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removeShiftPrintPhoto = async (photo: ShiftPrintPhoto) => {
+    try {
+      if (photo.storagePath) await deleteObject(storageRef(storage, photo.storagePath)).catch(() => {});
+      await deleteDoc(doc(db, 'shift_print_photos', photo.id));
+    } catch (error) {
+      console.warn('印刷写真の削除に失敗しました', error);
+      Alert.alert('エラー', '写真を削除できませんでした');
+    }
+  };
+
   const exportPDF = async (printType: 'shift' | 'event' = 'shift') => {
     try {
       const year = currentDate.getFullYear();
@@ -656,6 +714,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         : [];
       const illustrationByDate = new Map(
         illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
+      );
+      const photoByDate = new Map(
+        printType === 'event'
+          ? illustrationDates
+              .filter(cell => (eventsData[cell.dateStr] || []).length === 0 && !publicHolidays[cell.dateStr])
+              .map(cell => [cell.dateStr, shiftPrintPhotos.length > 0 ? shiftPrintPhotos[Math.floor(Math.random() * shiftPrintPhotos.length)].url : ''])
+          : [],
       );
       const fifthWeekdayAnchor = printType === 'event'
         ? weeks.flat()
@@ -712,7 +777,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('') : '';
-          const illustration = illustrationByDate.get(cell.dateStr);
+          const illustration = photoByDate.get(cell.dateStr) || illustrationByDate.get(cell.dateStr);
           const decoration = illustration
             ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
             : '';
@@ -1073,8 +1138,44 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
             <Text style={styles.pdfBtnText}>自動入力</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.pdfBtn, styles.headerPhotoBtn]}
+            onPress={() => setPhotoManagerVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="印刷写真を管理"
+          >
+            <Ionicons name="images-outline" size={18} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
       </View>
+
+      <Modal visible={photoManagerVisible} transparent animationType="fade" onRequestClose={() => setPhotoManagerVisible(false)}>
+        <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} onPress={() => setPhotoManagerVisible(false)}>
+          <TouchableOpacity style={styles.photoManagerPanel} activeOpacity={1} onPress={event => event.stopPropagation()}>
+            <View style={styles.photoManagerHeader}>
+              <Text style={styles.photoManagerTitle}>印刷写真</Text>
+              <TouchableOpacity onPress={() => setPhotoManagerVisible(false)} accessibilityLabel="閉じる">
+                <Ionicons name="close" size={24} color="#475569" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.photoManagerList}>
+              {shiftPrintPhotos.length === 0 && <Text style={styles.photoManagerEmpty}>登録された写真はありません</Text>}
+              {shiftPrintPhotos.map(photo => (
+                <View key={photo.id} style={styles.photoManagerItem}>
+                  <Image source={{ uri: photo.url }} style={styles.photoManagerImage} resizeMode="cover" />
+                  <TouchableOpacity style={styles.photoManagerDelete} onPress={() => removeShiftPrintPhoto(photo)} accessibilityLabel="写真を削除">
+                    <Ionicons name="close" size={15} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.photoManagerUploadBtn} onPress={uploadShiftPrintPhotos} disabled={photoUploading}>
+              {photoUploading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />}
+              <Text style={styles.photoManagerUploadText}>{photoUploading ? 'アップロード中...' : '写真を追加'}</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal visible={submissionStatusVisible} transparent animationType="fade">
         <TouchableOpacity
@@ -2043,6 +2144,18 @@ const styles = StyleSheet.create({
   headerPdfBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
   submissionStatusBtn: { minHeight: 34, paddingHorizontal: 6, backgroundColor: '#00AEB8' },
   headerAutoFillBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
+  headerPhotoBtn: { minHeight: 34, width: 34, paddingHorizontal: 0, backgroundColor: '#00AEB8' },
+  photoManagerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 72, paddingRight: 16 },
+  photoManagerPanel: { width: '92%', maxWidth: 420, maxHeight: '78%', borderRadius: 14, padding: 14, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 12 },
+  photoManagerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  photoManagerTitle: { fontSize: 17, fontWeight: '900', color: '#243B53' },
+  photoManagerList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 10 },
+  photoManagerEmpty: { width: '100%', paddingVertical: 22, textAlign: 'center', color: '#829AB1', fontSize: 13, fontWeight: '700' },
+  photoManagerItem: { position: 'relative', width: 88, height: 70, borderRadius: 8, overflow: 'hidden', backgroundColor: '#F1F5F9' },
+  photoManagerImage: { width: '100%', height: '100%' },
+  photoManagerDelete: { position: 'absolute', top: 3, right: 3, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.65)' },
+  photoManagerUploadBtn: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 9, backgroundColor: '#00AEB8' },
+  photoManagerUploadText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },

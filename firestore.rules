@@ -39,6 +39,7 @@ service cloud.firestore {
 
     // スタッフ本人の勤務通知設定を保存するコレクション。
     match /staff_shift_notification_settings/{docId} { allow read, write: if true; }
+    match /shift_print_photos/{docId} { allow read, write: if true; }
 
     match /{document=**} {
       allow read, write: if false;
