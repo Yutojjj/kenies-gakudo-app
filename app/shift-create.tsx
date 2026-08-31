@@ -204,6 +204,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [photoManagerVisible, setPhotoManagerVisible] = useState(false);
   const [shiftPrintPhotos, setShiftPrintPhotos] = useState<ShiftPrintPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState('');
 
   useEffect(() => {
     if (!printMenuVisible || Platform.OS !== 'web') return;
@@ -633,32 +634,70 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return `${selectedDateStr} (${weekdays[date.getDay()]})`;
   };
 
-  const uploadShiftPrintPhotos = async () => {
-    if (photoUploading) return;
+  const pickShiftPrintPhotos = async (): Promise<ImagePicker.ImagePickerAsset[] | null> => {
+    if (Platform.OS === 'web') {
+      return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.onchange = () => {
+          const assets = Array.from(input.files || []).map((file) => ({
+            uri: URL.createObjectURL(file),
+            width: 0,
+            height: 0,
+            file,
+            fileName: file.name,
+            mimeType: file.type,
+          })) as unknown as ImagePicker.ImagePickerAsset[];
+          resolve(assets.length ? assets : null);
+        };
+        input.click();
+      });
+    }
+
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permission.status !== 'granted') {
       Alert.alert('権限エラー', '写真へのアクセスを許可してください');
-      return;
+      return null;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] as any, allowsMultipleSelection: true, quality: 0.85 });
-    if (result.canceled || !result.assets?.length) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'] as any,
+      allowsMultipleSelection: true,
+      quality: 0.85,
+    });
+    return result.canceled || !result.assets?.length ? null : result.assets;
+  };
+
+  const uploadShiftPrintPhotos = async () => {
+    if (photoUploading) return;
+    setPhotoUploadError('');
+    const assets = await pickShiftPrintPhotos();
+    if (!assets?.length) return;
     setPhotoUploading(true);
     try {
-      for (const asset of result.assets) {
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const storagePath = `shift_print_photos/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+      for (const asset of assets) {
+        const file = (asset as ImagePicker.ImagePickerAsset & { file?: Blob }).file;
+        const blob: Blob = file instanceof Blob
+          ? file
+          : await fetch(asset.uri).then((response) => response.blob());
+        const extension = (asset.fileName?.split('.').pop() || 'jpg').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
+        const storagePath = `shift_print_photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
         const target = storageRef(storage, storagePath);
-        await uploadBytes(target, blob, { contentType: asset.mimeType || 'image/jpeg' });
+        await uploadBytes(target, blob, { contentType: asset.mimeType || blob.type || 'image/jpeg' });
         await addDoc(collection(db, 'shift_print_photos'), {
           url: await getDownloadURL(target),
           storagePath,
           createdAt: new Date(),
         });
+        if (Platform.OS === 'web' && asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn('印刷写真のアップロードに失敗しました', error);
-      Alert.alert('エラー', '写真のアップロードに失敗しました');
+      const message = error?.code === 'storage/unauthorized'
+        ? '写真の保存が許可されていません。Storageのルールを確認してください。'
+        : error?.message || '写真のアップロードに失敗しました';
+      setPhotoUploadError(message);
     } finally {
       setPhotoUploading(false);
     }
@@ -1169,6 +1208,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 </View>
               ))}
             </ScrollView>
+            {!!photoUploadError && <Text style={styles.photoManagerError}>{photoUploadError}</Text>}
             <TouchableOpacity style={styles.photoManagerUploadBtn} onPress={uploadShiftPrintPhotos} disabled={photoUploading}>
               {photoUploading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />}
               <Text style={styles.photoManagerUploadText}>{photoUploading ? 'アップロード中...' : '写真を追加'}</Text>
@@ -2151,6 +2191,7 @@ const styles = StyleSheet.create({
   photoManagerTitle: { fontSize: 17, fontWeight: '900', color: '#243B53' },
   photoManagerList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 10 },
   photoManagerEmpty: { width: '100%', paddingVertical: 22, textAlign: 'center', color: '#829AB1', fontSize: 13, fontWeight: '700' },
+  photoManagerError: { marginBottom: 9, color: '#C53030', fontSize: 12, fontWeight: '700', lineHeight: 18 },
   photoManagerItem: { position: 'relative', width: 88, height: 70, borderRadius: 8, overflow: 'hidden', backgroundColor: '#F1F5F9' },
   photoManagerImage: { width: '100%', height: '100%' },
   photoManagerDelete: { position: 'absolute', top: 3, right: 3, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.65)' },
