@@ -657,6 +657,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       const illustrationByDate = new Map(
         illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
       );
+      const fifthWeekdayAnchor = printType === 'event'
+        ? weeks.flat()
+            .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28)
+            .sort((a, b) => a.day - b.day)[0]
+        : null;
 
       weeks.forEach(wk => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
@@ -665,7 +670,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             (total, title) => total + Math.max(1, Math.ceil(Array.from(String(title)).length / 16)),
             0,
           );
-          const fifthWeekdayNoteRows = printType === 'event' && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28 ? 1 : 0;
+          const fifthWeekdayNoteRows = fifthWeekdayAnchor?.dateStr === cell.dateStr ? 1 : 0;
           return eventRows + fifthWeekdayNoteRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
@@ -678,8 +683,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
-          const fifthWeekdayNote = printType === 'event' && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28
-            ? '<div class="calendar-closure-band">スイミングお休み</div>'
+          const fifthWeekdayNote = fifthWeekdayAnchor?.dateStr === cell.dateStr
+            ? `<div class="calendar-closure-band" style="width:${Math.max(1, 6 - cell.dow)}00%">スイミングお休み</div>`
             : '';
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
@@ -749,7 +754,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <caption>${year}年${month}月 ${printType === 'event' ? 'イベント' : 'シフト表'}</caption>
+          <caption>${year}年${month}月 ${printType === 'event' ? 'カレンダー' : 'シフト表'}</caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
