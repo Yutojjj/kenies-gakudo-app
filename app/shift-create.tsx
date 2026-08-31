@@ -1566,22 +1566,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           <TouchableOpacity style={styles.monthAutoReviewPanel} activeOpacity={1} onPress={event => event.stopPropagation()}>
             <View style={styles.monthAutoReviewHeader}>
               <View style={styles.monthAutoReviewHeading}>
-                <Text style={styles.monthAutoReviewTitle}>自動入力の設定確認</Text>
-                <Text style={styles.monthAutoReviewMonth}>
-                  {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
-                </Text>
+                <Text style={styles.monthAutoReviewTitle}>自動入力</Text>
               </View>
-              <TouchableOpacity style={styles.monthAutoReviewCloseBtn} onPress={() => setMonthActionConfirm(null)}>
-                <Text style={styles.monthAutoReviewCloseText}>閉じる</Text>
-              </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.monthAutoReviewScroll} contentContainerStyle={styles.monthAutoReviewScrollContent}>
-              <Text style={styles.monthAutoReviewHelp}>
-                内容を確認・編集してから、右下の「自動入力を実行」を押してください。変更した設定は自動で保存されます。
-              </Text>
-
-              <Text style={styles.monthAutoReviewSectionTitle}>詳細設定</Text>
               <View style={styles.monthAutoReviewTabs}>
                 <TouchableOpacity style={[styles.monthAutoReviewTab, autoReviewTab === 'dow' && styles.monthAutoReviewTabActive]} onPress={() => setAutoReviewTab('dow')}>
                   <Text style={[styles.monthAutoReviewTabText, autoReviewTab === 'dow' && styles.monthAutoReviewTabTextActive]}>曜日別人数設定</Text>
@@ -1614,8 +1603,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               </>}
 
               {autoReviewTab === 'staff' && <>
-                <Text style={styles.monthAutoReviewSectionTitle}>スタッフ別の優先順位・時間</Text>
-                <Text style={styles.monthAutoReviewSectionNote}>上下ボタンで優先順位、ON/OFFで自動入力の対象を変更できます。</Text>
                 <View style={styles.monthAutoReviewSection}>
                 {autoFillSettings.staffSettings.map((s, idx) => (
                   <View key={s.name} style={styles.settingStaffRow}>
@@ -1681,7 +1668,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 }}
               >
                 <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                <Text style={styles.monthAutoReviewYesText}>自動入力を実行</Text>
+                <Text style={styles.monthAutoReviewYesText}>{currentDate.getMonth() + 1}月分を自動入力</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
