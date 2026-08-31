@@ -698,6 +698,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
+          const isClosureRangeCell = !!fifthWeekdayAnchor && !!fifthWeekdayEnd
+            && cell.dow >= fifthWeekdayAnchor.dow
+            && cell.dow <= fifthWeekdayEnd.dow
+            && cell.day >= fifthWeekdayAnchor.day
+            && cell.day <= fifthWeekdayEnd.day;
+          const eventContainerClass = isClosureRangeCell ? 'calendar-events calendar-events-with-closure' : 'calendar-events';
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
@@ -713,7 +719,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="${eventContainerClass}">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -749,6 +755,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-day-sun .calendar-date { color: #D94747; }
         .calendar-day-sat .calendar-date { color: #2874C6; }
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
+        .calendar-events-with-closure { margin-top: 5mm; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-date-row { display: flex; align-items: baseline; gap: 1.5mm; padding: 1.5mm 1.5mm 0; min-height: 5mm; }
         .calendar-date-row .calendar-date { padding: 0; margin: 0; }
