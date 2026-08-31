@@ -640,17 +640,24 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         : allStaff;
 
       weeks.forEach(wk => {
-        const weekHasContent = wk.some(cell => cell && (
-          (eventsData[cell.dateStr] || []).length > 0 ||
-          (assignedShifts[cell.dateStr] || []).length > 0
-        ));
+        const maxDayEntries = Math.max(0, ...wk.map(cell => {
+          if (!cell) return 0;
+          const eventRows = (eventsData[cell.dateStr] || []).reduce(
+            (total, title) => total + Math.max(1, Math.ceil(Array.from(String(title)).length / 16)),
+            0,
+          );
+          return eventRows + (assignedShifts[cell.dateStr] || []).length;
+        }));
+        // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
+        const weekHeightMm = maxDayEntries === 0
+          ? 38
+          : Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
         const cells = wk.map(cell => {
-          if (!cell) return `<td class="calendar-day calendar-day-empty${weekHasContent ? '' : ' calendar-day-short'}"></td>`;
+          if (!cell) return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"></td>`;
           const isSun = cell.dow === 0;
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
-          const shortClass = weekHasContent ? '' : ' calendar-day-short';
-          const dayClass = `${isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day'}${shortClass}`;
+          const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
@@ -662,7 +669,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('');
-          return `<td class="${dayClass}"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -686,7 +693,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
-        .calendar-day { height: 38mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
+        .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-day-empty { background: #F4F4F4 !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
