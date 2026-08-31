@@ -32,6 +32,9 @@ const SHIFT_CARD_COLORS = [
   '#EAB2A7',
 ];
 
+const getStaffShiftColor = (name: string, index: number) =>
+  name === '北条' ? '#B45AA7' : SHIFT_CARD_COLORS[index % SHIFT_CARD_COLORS.length];
+
 export default function ShiftViewScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -339,7 +342,7 @@ export default function ShiftViewScreen() {
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
                     const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
-                    const staffBackground = SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length];
+                    const staffBackground = getStaffShiftColor(staff.name, staffIndex);
                     return (
                       <View
                         key={staff.id}

@@ -44,6 +44,9 @@ const PRINT_SHIFT_COLORS = [
   '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
 ];
 
+const getStaffShiftColor = (name: string, index: number, palette: string[]) =>
+  name === '北条' ? '#B45AA7' : palette[index % palette.length];
+
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 const SHIFT_WHEEL_ITEM_HEIGHT = 40;
@@ -811,7 +814,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
-            const color = PRINT_SHIFT_COLORS[staffIndex % PRINT_SHIFT_COLORS.length];
+            const color = getStaffShiftColor(staff.name, staffIndex, PRINT_SHIFT_COLORS);
             return `<div class="calendar-shift" style="background-color:${color} !important;">
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
@@ -1100,7 +1103,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         style={[
                           styles.cellStaffRow,
                           !showTimeInCalendar && styles.cellStaffRowCompact,
-                          { backgroundColor: SHIFT_CARD_COLORS[staffIndex % SHIFT_CARD_COLORS.length] },
+                          { backgroundColor: getStaffShiftColor(st.name, staffIndex, SHIFT_CARD_COLORS) },
                         ]}
                       >
                         <Text style={styles.cellStaffName} numberOfLines={1}>{st.name}</Text>

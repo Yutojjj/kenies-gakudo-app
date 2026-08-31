@@ -1,0 +1,14 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Existing app data is currently public by design; keep uploaded print photos consistent.
+    match /shift_print_photos/{allPaths=**} {
+      allow read, write: if true;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
