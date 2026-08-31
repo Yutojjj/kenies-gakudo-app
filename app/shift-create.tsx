@@ -658,15 +658,15 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
       );
 
-      weeks.forEach((wk, weekIndex) => {
+      weeks.forEach(wk => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
           if (!cell) return 0;
           const eventRows = (eventsData[cell.dateStr] || []).reduce(
             (total, title) => total + Math.max(1, Math.ceil(Array.from(String(title)).length / 16)),
             0,
           );
-          const fifthMondayNoteRows = printType === 'event' && weekIndex === 4 && cell.dow === 1 && cell.day > 28 ? 1 : 0;
-          return eventRows + fifthMondayNoteRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
+          const fifthWeekdayNoteRows = printType === 'event' && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28 ? 1 : 0;
+          return eventRows + fifthWeekdayNoteRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
         const weekHeightMm = printType === 'event'
@@ -678,7 +678,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
-          const fifthMondayNote = printType === 'event' && weekIndex === 4 && cell.dow === 1 && cell.day > 28
+          const fifthWeekdayNote = printType === 'event' && cell.dow >= 1 && cell.dow <= 5 && cell.day > 28
             ? '<div class="calendar-closure-band">スイミングお休み</div>'
             : '';
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
@@ -699,7 +699,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthMondayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -739,7 +739,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-date-row { display: flex; align-items: baseline; gap: 1.5mm; padding: 1.5mm 1.5mm 0; min-height: 5mm; }
         .calendar-date-row .calendar-date { padding: 0; margin: 0; }
         .calendar-holiday-label { color: #D94747; font-size: 9px; line-height: 1.1; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
-        .calendar-closure-band { position: absolute; z-index: 2; top: 6mm; left: 0; width: 500%; border-radius: 0; padding: 1.2mm 1.5mm; background: #DCE9F7 !important; color: #244C73; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; }
+        .calendar-closure-band { position: absolute; z-index: 2; top: 6mm; left: 0; width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #DCE9F7 !important; color: #244C73; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
