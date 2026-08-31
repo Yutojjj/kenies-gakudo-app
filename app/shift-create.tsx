@@ -658,14 +658,15 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
       );
 
-      weeks.forEach(wk => {
+      weeks.forEach((wk, weekIndex) => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
           if (!cell) return 0;
           const eventRows = (eventsData[cell.dateStr] || []).reduce(
             (total, title) => total + Math.max(1, Math.ceil(Array.from(String(title)).length / 16)),
             0,
           );
-          return eventRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
+          const fifthWeekNoteRows = printType === 'event' && weekIndex === 4 && cell.dow >= 1 && cell.dow <= 5 ? 1 : 0;
+          return eventRows + fifthWeekNoteRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
         const weekHeightMm = printType === 'event'
@@ -680,7 +681,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const holidayEntry = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<div class="calendar-holiday">${publicHolidays[cell.dateStr]}</div>`
             : '';
-          const eventEntries = holidayEntry + (eventsData[cell.dateStr] || []).map(title => (
+          const fifthWeekNote = printType === 'event' && weekIndex === 4 && cell.dow >= 1 && cell.dow <= 5
+            ? '<div class="calendar-closure">スイミングお休み</div>'
+            : '';
+          const eventEntries = holidayEntry + fifthWeekNote + (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
@@ -733,6 +737,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-holiday { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
+        .calendar-closure { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #DCE9F7 !important; color: #244C73; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
