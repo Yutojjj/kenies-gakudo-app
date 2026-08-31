@@ -713,8 +713,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
             ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
             : '';
-          const closureCellClass = fifthWeekdayAnchor?.dateStr === cell.dateStr ? ' calendar-closure-cell' : '';
-          return `<td class="${dayClass}${closureCellClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div>${fifthWeekdayNote}<div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -739,7 +738,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
-        .calendar-closure-cell { position: relative; z-index: 10; overflow: visible; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
         .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 11mm; height: 11mm; object-fit: contain; opacity: 0.3; pointer-events: none; }
