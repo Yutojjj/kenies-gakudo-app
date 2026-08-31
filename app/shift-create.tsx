@@ -198,6 +198,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
   const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff'>('staff');
   const [printMenuVisible, setPrintMenuVisible] = useState(false);
+
+  useEffect(() => {
+    if (!printMenuVisible || Platform.OS !== 'web') return;
+    const closeMenuOutside = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest?.('#shift-print-menu')) return;
+      setPrintMenuVisible(false);
+    };
+    document.addEventListener('pointerdown', closeMenuOutside);
+    return () => document.removeEventListener('pointerdown', closeMenuOutside);
+  }, [printMenuVisible]);
   
   const showTimeInCalendar = true;
 
@@ -639,6 +650,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         ? [...autoFillSettings.pdfOrder.map(n => allStaff.find(s => s.name === n)).filter((s): s is typeof allStaff[0] => !!s),
            ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
         : allStaff;
+      const illustrationDates = printType === 'event'
+        ? weeks.flat().filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell)
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 10)
+        : [];
+      const illustrationByDate = new Map(
+        illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
+      );
 
       weeks.forEach(wk => {
         const maxDayEntries = Math.max(0, ...wk.map(cell => {
@@ -668,7 +687,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <span class="calendar-shift-name">${staff.name}</span><span class="calendar-shift-time">${assigned.start}〜${assigned.end}</span>
             </div>`;
           }).filter(Boolean).join('') : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></td>`;
+          const illustration = illustrationByDate.get(cell.dateStr);
+          const decoration = illustration
+            ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
+            : '';
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm">${decoration}<div class="calendar-cell-content"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -693,6 +716,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
         caption { caption-side: top; text-align: left; font-size: 14px; font-weight: 900; padding: 0 0 2mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
+        .calendar-cell-content { position: relative; z-index: 1; }
+        .calendar-illustration { position: absolute; z-index: 0; right: 2mm; bottom: 2mm; width: 18mm; height: 18mm; object-fit: contain; opacity: 0.2; pointer-events: none; }
         .calendar-day-empty { background: #F4F4F4 !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
@@ -986,7 +1011,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <Text style={styles.pdfBtnText}>印刷</Text>
             </TouchableOpacity>
             {printMenuVisible && (
-              <View style={styles.pdfMenu}>
+              <View nativeID="shift-print-menu" style={styles.pdfMenu}>
                 <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
                   <Text style={styles.pdfMenuItemText}>シフト表</Text>
                 </TouchableOpacity>
@@ -1176,7 +1201,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   <Text style={styles.pdfBtnText}>印刷</Text>
                 </TouchableOpacity>
                 {printMenuVisible && (
-                  <View style={styles.pdfMenu}>
+                  <View nativeID="shift-print-menu" style={styles.pdfMenu}>
                     <TouchableOpacity style={styles.pdfMenuItem} onPress={() => { setPrintMenuVisible(false); exportPDF('shift'); }}>
                       <Text style={styles.pdfMenuItemText}>シフト表</Text>
                     </TouchableOpacity>
