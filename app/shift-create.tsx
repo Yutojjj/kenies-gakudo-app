@@ -693,7 +693,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
           const fifthWeekdayNote = fifthWeekdayAnchor?.dateStr === cell.dateStr
-            ? `<div class="calendar-closure-band" style="width:${fifthWeekdayBandWidth}00%">手作りおやつ</div>`
+            ? `<div class="calendar-closure-band" style="width:${fifthWeekdayBandWidth}00%">スイミングお休み</div>`
             : '';
           const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
@@ -760,7 +760,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-date-row { display: flex; align-items: baseline; gap: 1.5mm; padding: 1.5mm 1.5mm 0; min-height: 5mm; }
         .calendar-date-row .calendar-date { padding: 0; margin: 0; }
         .calendar-holiday-label { color: #D94747; font-size: 9px; line-height: 1.1; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
-        .calendar-closure-band { position: absolute; z-index: 2; top: 6mm; left: 0; width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E5A62F !important; color: #4A2A00; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; }
+        .calendar-closure-band { position: absolute; z-index: 2; top: 6mm; left: 0; width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #DCE9F7 !important; color: #244C73; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
