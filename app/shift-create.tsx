@@ -678,13 +678,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
-          const holidayEntry = printType === 'event' && publicHolidays[cell.dateStr]
-            ? `<div class="calendar-holiday">${publicHolidays[cell.dateStr]}</div>`
-            : '';
           const fifthWeekNote = printType === 'event' && weekIndex === 4 && cell.dow >= 1 && cell.dow <= 5
             ? '<div class="calendar-closure">スイミングお休み</div>'
             : '';
-          const eventEntries = holidayEntry + fifthWeekNote + (eventsData[cell.dateStr] || []).map(title => (
+          const eventEntries = fifthWeekNote + (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
@@ -699,7 +696,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const decoration = illustration
             ? `<img class="calendar-illustration" src="${illustration}" alt="" />`
             : '';
-          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date">${cell.day}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
+          const holidayLabel = printType === 'event' && publicHolidays[cell.dateStr]
+            ? `<span class="calendar-holiday-label">${publicHolidays[cell.dateStr]}</span>`
+            : '';
+          return `<td class="${dayClass}" style="height:${weekHeightMm}mm"><div class="calendar-cell-shell">${decoration}<div class="calendar-cell-content"><div class="calendar-date-row"><span class="calendar-date">${cell.day}</span>${holidayLabel}</div><div class="calendar-events">${eventEntries}</div><div class="calendar-shifts">${entries}</div></div></div></td>`;
         }).join('');
         bodyHtml += `<tr>${cells}</tr>`;
       });
@@ -736,7 +736,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-day-sat .calendar-date { color: #2874C6; }
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
-        .calendar-holiday { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
+        .calendar-date-row { display: flex; align-items: baseline; gap: 1.5mm; padding: 1.5mm 1.5mm 0; min-height: 5mm; }
+        .calendar-date-row .calendar-date { padding: 0; margin: 0; }
+        .calendar-holiday-label { color: #D94747; font-size: 9px; line-height: 1.1; font-weight: 900; white-space: normal; overflow-wrap: anywhere; }
         .calendar-closure { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #DCE9F7 !important; color: #244C73; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
