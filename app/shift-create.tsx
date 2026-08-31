@@ -649,9 +649,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           return eventRows + (assignedShifts[cell.dateStr] || []).length;
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
-        const weekHeightMm = maxDayEntries === 0
-          ? 38
-          : Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
+        const weekHeightMm = Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
         const cells = wk.map(cell => {
           if (!cell) return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"></td>`;
           const isSun = cell.dow === 0;
