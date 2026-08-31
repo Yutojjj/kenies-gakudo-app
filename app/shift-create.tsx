@@ -196,6 +196,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const autoPdfHandledRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
+  const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff'>('staff');
   
   const showTimeInCalendar = true;
 
@@ -986,7 +987,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.pdfBtn, styles.headerAutoFillBtn]}
-            onPress={() => setMonthActionConfirm('autoFill')}
+            onPress={() => {
+              setAutoReviewTab('staff');
+              setMonthActionConfirm('autoFill');
+            }}
             disabled={loading}
           >
             {loading ? <ActivityIndicator size="small" color={COLORS.white} /> : null}
@@ -1560,54 +1564,52 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
                 </Text>
               </View>
-              <View style={styles.monthAutoReviewTopActions}>
-                <TouchableOpacity
-                  style={styles.monthAutoReviewYesBtn}
-                  onPress={async () => {
-                    setMonthActionConfirm(null);
-                    await autoFillCurrentMonth();
-                  }}
-                >
-                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                  <Text style={styles.monthAutoReviewYesText}>はい</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.monthAutoReviewCloseBtn} onPress={() => setMonthActionConfirm(null)}>
-                  <Text style={styles.monthAutoReviewCloseText}>閉じる</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.monthAutoReviewCloseBtn} onPress={() => setMonthActionConfirm(null)}>
+                <Text style={styles.monthAutoReviewCloseText}>閉じる</Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.monthAutoReviewScroll} contentContainerStyle={styles.monthAutoReviewScrollContent}>
               <Text style={styles.monthAutoReviewHelp}>
-                内容を確認・編集してから「はい」を押してください。変更した設定は自動で保存されます。
+                内容を確認・編集してから、右下の「自動入力を実行」を押してください。変更した設定は自動で保存されます。
               </Text>
 
-              <Text style={styles.monthAutoReviewSectionTitle}>曜日別の入力人数</Text>
-              <View style={styles.monthAutoReviewSection}>
-                {(['月','火','水','木','金'] as const).map(dow => (
-                  <View key={dow} style={styles.settingRow}>
-                    <Text style={styles.settingLabel}>{dow}曜日</Text>
-                    <View style={{ flexDirection:'row', gap:6 }}>
-                      {[1,2,3,4,5].map(n => (
-                        <TouchableOpacity
-                          key={n}
-                          style={[styles.settingNumBtn, autoFillSettings.dayMaxCount[dow] === n && styles.settingNumBtnActive]}
-                          onPress={() => saveAutoFillSettings({
-                            ...autoFillSettings,
-                            dayMaxCount: { ...autoFillSettings.dayMaxCount, [dow]: n },
-                          })}
-                        >
-                          <Text style={[styles.settingNumText, autoFillSettings.dayMaxCount[dow] === n && { color:'#fff' }]}>{n}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                ))}
+              <Text style={styles.monthAutoReviewSectionTitle}>詳細設定</Text>
+              <View style={styles.monthAutoReviewTabs}>
+                <TouchableOpacity style={[styles.monthAutoReviewTab, autoReviewTab === 'dow' && styles.monthAutoReviewTabActive]} onPress={() => setAutoReviewTab('dow')}>
+                  <Text style={[styles.monthAutoReviewTabText, autoReviewTab === 'dow' && styles.monthAutoReviewTabTextActive]}>曜日別人数設定</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.monthAutoReviewTab, autoReviewTab === 'staff' && styles.monthAutoReviewTabActive]} onPress={() => setAutoReviewTab('staff')}>
+                  <Text style={[styles.monthAutoReviewTabText, autoReviewTab === 'staff' && styles.monthAutoReviewTabTextActive]}>スタッフ別時間設定</Text>
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.monthAutoReviewSectionTitle}>スタッフ別の優先順位・時間</Text>
-              <Text style={styles.monthAutoReviewSectionNote}>上下ボタンで優先順位、ON/OFFで自動入力の対象を変更できます。</Text>
-              <View style={styles.monthAutoReviewSection}>
+              {autoReviewTab === 'dow' && <>
+                <Text style={styles.monthAutoReviewSectionTitle}>曜日別の入力人数</Text>
+                <View style={styles.monthAutoReviewSection}>
+                  {(['月','火','水','木','金'] as const).map(dow => (
+                    <View key={dow} style={styles.settingRow}>
+                      <Text style={styles.settingLabel}>{dow}曜日</Text>
+                      <View style={{ flexDirection:'row', gap:6 }}>
+                        {[1,2,3,4,5].map(n => (
+                          <TouchableOpacity
+                            key={n}
+                            style={[styles.settingNumBtn, autoFillSettings.dayMaxCount[dow] === n && styles.settingNumBtnActive]}
+                            onPress={() => saveAutoFillSettings({ ...autoFillSettings, dayMaxCount: { ...autoFillSettings.dayMaxCount, [dow]: n } })}
+                          >
+                            <Text style={[styles.settingNumText, autoFillSettings.dayMaxCount[dow] === n && { color:'#fff' }]}>{n}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </>}
+
+              {autoReviewTab === 'staff' && <>
+                <Text style={styles.monthAutoReviewSectionTitle}>スタッフ別の優先順位・時間</Text>
+                <Text style={styles.monthAutoReviewSectionNote}>上下ボタンで優先順位、ON/OFFで自動入力の対象を変更できます。</Text>
+                <View style={styles.monthAutoReviewSection}>
                 {autoFillSettings.staffSettings.map((s, idx) => (
                   <View key={s.name} style={styles.settingStaffRow}>
                     <View style={{ flexDirection:'column', gap:2, marginRight:6 }}>
@@ -1657,8 +1659,24 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                     </View>
                   </View>
                 ))}
-              </View>
+                </View>
+              </>}
             </ScrollView>
+            <View style={styles.monthAutoReviewFooter}>
+              <TouchableOpacity style={styles.monthAutoReviewFooterClose} onPress={() => setMonthActionConfirm(null)}>
+                <Text style={styles.monthAutoReviewCloseText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.monthAutoReviewExecuteBtn}
+                onPress={async () => {
+                  setMonthActionConfirm(null);
+                  await autoFillCurrentMonth();
+                }}
+              >
+                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                <Text style={styles.monthAutoReviewYesText}>自動入力を実行</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
           ) : (
           <TouchableOpacity
@@ -2015,6 +2033,14 @@ const styles = StyleSheet.create({
   monthAutoReviewSectionTitle: { marginTop: 2, marginBottom: 8, fontSize: 15, fontWeight: '900', color: '#272727' },
   monthAutoReviewSectionNote: { marginTop: -3, marginBottom: 8, fontSize: 11, lineHeight: 17, fontWeight: '700', color: '#717A7C' },
   monthAutoReviewSection: { marginBottom: 16 },
+  monthAutoReviewTabs: { flexDirection: 'row', gap: 8, marginBottom: 15 },
+  monthAutoReviewTab: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#C9D8DA', backgroundColor: '#F4F7F7' },
+  monthAutoReviewTabActive: { borderColor: '#36A9B5', backgroundColor: '#E1F5F6' },
+  monthAutoReviewTabText: { fontSize: 13, fontWeight: '900', color: '#687477' },
+  monthAutoReviewTabTextActive: { color: '#16818C' },
+  monthAutoReviewFooter: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#E6ECEC', backgroundColor: '#FFFFFF' },
+  monthAutoReviewFooterClose: { minHeight: 46, minWidth: 110, paddingHorizontal: 16, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F4', borderWidth: 1, borderColor: '#D9DEDF' },
+  monthAutoReviewExecuteBtn: { flex: 1, minHeight: 46, paddingHorizontal: 18, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#29A6B2' },
   monthAutoReviewTimes: { flex: 1, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'flex-end' },
 
   calendarScroll: { flex: 1 },
