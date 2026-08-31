@@ -653,7 +653,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       const illustrationDates = printType === 'event'
         ? weeks.flat().filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell)
             .sort(() => Math.random() - 0.5)
-            .slice(0, 10)
         : [];
       const illustrationByDate = new Map(
         illustrationDates.map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * 113) + 1}.png`]),
@@ -669,14 +668,19 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           return eventRows + (printType === 'shift' ? (assignedShifts[cell.dateStr] || []).length : 0);
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
-        const weekHeightMm = Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
+        const weekHeightMm = printType === 'event'
+          ? 34
+          : Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
         const cells = wk.map(cell => {
           if (!cell) return `<td class="calendar-day calendar-day-empty" style="height:${weekHeightMm}mm"></td>`;
           const isSun = cell.dow === 0;
           const isSat = cell.dow === 6;
           const isPH = !!publicHolidays[cell.dateStr];
           const dayClass = isPH || isSun ? 'calendar-day calendar-day-sun' : isSat ? 'calendar-day calendar-day-sat' : 'calendar-day';
-          const eventEntries = (eventsData[cell.dateStr] || []).map(title => (
+          const holidayEntry = printType === 'event' && publicHolidays[cell.dateStr]
+            ? `<div class="calendar-holiday">${publicHolidays[cell.dateStr]}</div>`
+            : '';
+          const eventEntries = holidayEntry + (eventsData[cell.dateStr] || []).map(title => (
             `<div class="calendar-event">${title}</div>`
           )).join('');
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
@@ -697,7 +701,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       });
 
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        @page { size: A4 portrait; margin: 4mm; }
+        @page { size: A4 ${printType === 'event' ? 'landscape' : 'portrait'}; margin: 4mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', Arial, sans-serif;
@@ -728,6 +732,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-day-sat .calendar-date { color: #2874C6; }
         .calendar-events { display: flex; flex-direction: column; gap: 0.5mm; margin-bottom: 0; width: 100%; }
         .calendar-event { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
+        .calendar-holiday { width: 100%; border-radius: 0; padding: 1.2mm 1.5mm; background: #E9B92F !important; color: #2D2100; font-size: 10px; line-height: 1.15; font-weight: 900; text-align: center; white-space: normal; overflow-wrap: anywhere; }
         .calendar-shifts { width: 100%; display: flex; flex-direction: column; gap: 0; }
         .calendar-shift { width: 100%; border-radius: 0; padding: 1.1mm 1.5mm; font-size: 10px; line-height: 1.12; color: #111; white-space: normal; overflow-wrap: normal; font-weight: 900; }
         .calendar-shift-name { font-weight: 900; font-size: 11px; margin-right: 1mm; }
