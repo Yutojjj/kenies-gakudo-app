@@ -16,6 +16,7 @@ import { db, storage } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { handleWebWheelStep } from '../utils/webWheel';
 import { navigateHome } from '../utils/navigationHome';
+import { downloadCalendarImage } from '../utils/downloadCalendarImage';
 
 const WebScrollView = ScrollView as any;
 
@@ -226,6 +227,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [shiftPrintPhotos, setShiftPrintPhotos] = useState<ShiftPrintPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState('');
+  const [imageDownloadType, setImageDownloadType] = useState<'shift' | 'event' | null>(null);
 
   useEffect(() => {
     if (!printMenuVisible || Platform.OS !== 'web') return;
@@ -734,6 +736,33 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     }
   };
 
+  const savePrintImage = async (printType: 'shift' | 'event') => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const daysInMonth = getDaysInMonth(year, currentDate.getMonth());
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const date = new Date(year, currentDate.getMonth(), day);
+      const assigned = (assignedShifts[dateStr] || []).filter(shift => allStaff.some(staff => staff.name === shift.name));
+      return {
+        label: `${month}/${day} (${['日', '月', '火', '水', '木', '金', '土'][date.getDay()]})`,
+        dateColor: date.getDay() === 0 || publicHolidays[dateStr] ? '#D94747' : date.getDay() === 6 ? '#2874C6' : '#28343B',
+        shifts: printType === 'shift' ? assigned.map(shift => ({
+          ...shift,
+          color: getStaffShiftColor(shift.name, Math.max(0, allStaff.findIndex(staff => staff.name === shift.name)), PRINT_SHIFT_COLORS),
+        })) : [],
+        note: printType === 'event' ? [...(eventsData[dateStr] || []), ...(publicHolidays[dateStr] ? [publicHolidays[dateStr]] : [])].join('・') : undefined,
+      };
+    });
+    await downloadCalendarImage(
+      `${year}年${month}月 ${printType === 'event' ? 'カレンダー' : 'シフト表'}`,
+      days,
+      `${printType === 'event' ? 'イベント' : 'シフト'}_${year}年${month}月`,
+    );
+    setImageDownloadType(null);
+  };
+
   const exportPDF = async (printType: 'shift' | 'event' = 'shift') => {
     try {
       const year = currentDate.getFullYear();
@@ -1191,6 +1220,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
                   <Text style={styles.pdfMenuItemText}>イベント表を印刷</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setImageDownloadType('shift'); }}>
+                  <Text style={styles.pdfMenuItemText}>シフト表を画像保存</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setImageDownloadType('event'); }}>
+                  <Text style={styles.pdfMenuItemText}>イベント表を画像保存</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
                   <Text style={styles.pdfMenuItemText}>画像アップロード</Text>
                 </TouchableOpacity>
@@ -1217,6 +1252,19 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal visible={!!imageDownloadType} transparent animationType="fade" onRequestClose={() => setImageDownloadType(null)}>
+        <View style={styles.imageDownloadOverlay}>
+          <View style={styles.imageDownloadPanel}>
+            <Text style={styles.imageDownloadTitle}>画像を保存しますか？</Text>
+            <Text style={styles.imageDownloadText}>{currentDate.getMonth() + 1}月の{imageDownloadType === 'event' ? 'イベント表' : 'シフト表'}をA4サイズのPNG画像で保存します。</Text>
+            <View style={styles.imageDownloadActions}>
+              <TouchableOpacity style={styles.imageDownloadCancel} onPress={() => setImageDownloadType(null)}><Text style={styles.imageDownloadCancelText}>キャンセル</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.imageDownloadConfirm} onPress={() => imageDownloadType && savePrintImage(imageDownloadType)}><Ionicons name="download-outline" size={18} color="#FFFFFF" /><Text style={styles.imageDownloadConfirmText}>保存する</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={photoManagerVisible} transparent animationType="fade" onRequestClose={() => setPhotoManagerVisible(false)}>
         <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} onPress={() => setPhotoManagerVisible(false)}>
@@ -1415,6 +1463,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); exportPDF('event'); }}>
                       <Text style={styles.pdfMenuItemText}>イベント表を印刷</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setImageDownloadType('shift'); }}>
+                      <Text style={styles.pdfMenuItemText}>シフト表を画像保存</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setImageDownloadType('event'); }}>
+                      <Text style={styles.pdfMenuItemText}>イベント表を画像保存</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
                       <Text style={styles.pdfMenuItemText}>画像アップロード</Text>
@@ -2222,6 +2276,15 @@ const styles = StyleSheet.create({
   submissionStatusBtn: { minHeight: 34, paddingHorizontal: 6, backgroundColor: '#00AEB8' },
   headerAutoFillBtn: { minHeight: 34, paddingHorizontal: 8, backgroundColor: '#00AEB8' },
   headerPhotoBtn: { minHeight: 34, width: 34, paddingHorizontal: 0, backgroundColor: '#00AEB8' },
+  imageDownloadOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(35, 30, 27, 0.55)' },
+  imageDownloadPanel: { width: '100%', maxWidth: 400, borderRadius: 18, padding: 22, backgroundColor: '#FFFDFC' },
+  imageDownloadTitle: { color: '#3D2A24', fontSize: 19, fontWeight: '900', textAlign: 'center' },
+  imageDownloadText: { marginTop: 10, color: '#657174', fontSize: 13, lineHeight: 20, fontWeight: '700', textAlign: 'center' },
+  imageDownloadActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  imageDownloadCancel: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#F1F3F4' },
+  imageDownloadCancelText: { color: '#555555', fontSize: 13, fontWeight: '900' },
+  imageDownloadConfirm: { flex: 1, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, backgroundColor: '#08AEB8' },
+  imageDownloadConfirmText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   photoManagerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 72, paddingRight: 16 },
   photoManagerPanel: { width: '92%', maxWidth: 420, maxHeight: '78%', borderRadius: 14, padding: 14, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 12 },
   photoManagerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
