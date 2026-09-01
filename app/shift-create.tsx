@@ -763,7 +763,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       const emptyCellImages = (printType === 'event' || printType === 'shift')
         ? weeks.flat()
             .filter(cell => !cell)
-            .map(() => shiftPrintPhotos.length > 0
+            .map(() => printType === 'event' && shiftPrintPhotos.length > 0
               ? shiftPrintPhotos[Math.floor(Math.random() * shiftPrintPhotos.length)].url
               : `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`)
         : [];
