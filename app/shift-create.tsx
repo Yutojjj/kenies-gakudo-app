@@ -861,6 +861,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
         caption { caption-side: top; text-align: center; font-size: 19px; line-height: 1.2; font-weight: 900; padding: 2.5mm 0 3mm; margin-bottom: 1.5mm; color: #216E77; background: #C8E9EB; border: 1px solid #8FCED2; clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%); }
         caption img { width: 12mm; height: 12mm; object-fit: contain; vertical-align: middle; margin: 0 4mm; }
+        .caption-month { display: inline-block; margin: 0 1mm; color: #155B64; font-size: 27px; line-height: 1; font-weight: 1000; vertical-align: -2px; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
@@ -889,7 +890,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <caption><img src="${titleIllustrationLeft}" alt="" />${year}年${month}月 ${printType === 'event' ? 'カレンダー' : 'シフト表'}<img src="${titleIllustrationRight}" alt="" /></caption>
+          <caption><img src="${titleIllustrationLeft}" alt="" /><span>${year}年</span><span class="caption-month">${month}月</span><span>${printType === 'event' ? 'カレンダー' : 'シフト表'}</span><img src="${titleIllustrationRight}" alt="" /></caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
