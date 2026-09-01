@@ -16,7 +16,7 @@ import { db, storage } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { handleWebWheelStep } from '../utils/webWheel';
 import { navigateHome } from '../utils/navigationHome';
-import { downloadCalendarImage } from '../utils/downloadCalendarImage';
+import { downloadCalendarImage, downloadHtmlAsPng } from '../utils/downloadCalendarImage';
 
 const WebScrollView = ScrollView as any;
 
@@ -195,9 +195,10 @@ type ShiftCreateScreenProps = {
   initialDate?: Date;
   onClose?: () => void;
   autoPdfOnOpen?: boolean;
+  autoImageOnOpen?: boolean;
 };
 
-export default function ShiftCreateScreen({ embedded = false, initialDate, onClose, autoPdfOnOpen = false }: ShiftCreateScreenProps = {}) {
+export default function ShiftCreateScreen({ embedded = false, initialDate, onClose, autoPdfOnOpen = false, autoImageOnOpen = false }: ShiftCreateScreenProps = {}) {
   const { verified, checking } = useRequireRole('admin');
   const { width: viewportWidth } = useWindowDimensions();
   const isCompact = viewportWidth < 520;
@@ -737,6 +738,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   };
 
   const savePrintImage = async (printType: 'shift' | 'event') => {
+    await exportPDF(printType, true);
+    setImageDownloadType(null);
+    return;
+    /* Legacy fallback layout kept below for native builds. */
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
     const daysInMonth = getDaysInMonth(year, currentDate.getMonth());
@@ -763,7 +768,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     setImageDownloadType(null);
   };
 
-  const exportPDF = async (printType: 'shift' | 'event' = 'shift') => {
+  const exportPDF = async (printType: 'shift' | 'event' = 'shift', asImage = false) => {
     try {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth() + 1;
@@ -950,6 +955,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         </div>
       </body></html>`;
 
+      if (asImage && Platform.OS === 'web') {
+        await downloadHtmlAsPng(html, `${printType === 'event' ? 'イベント' : 'シフト'}_${year}年${month}月`);
+        return;
+      }
+
       if (Platform.OS === 'web') {
         // srcdoc方式（Vercel HTTPS環境対応・ポップアップ不要）
         const iframe = document.createElement('iframe');
@@ -988,11 +998,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   }, [openWorkSummary]);
 
   useEffect(() => {
-    if ((autoPdf !== '1' && !autoPdfOnOpen) || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
+    if ((!autoPdfOnOpen && !autoImageOnOpen && autoPdf !== '1') || autoPdfHandledRef.current || !staffListLoaded || !assignedShiftsLoaded) return;
     autoPdfHandledRef.current = true;
-    const timer = setTimeout(() => exportPDF(), 350);
+    const timer = setTimeout(() => exportPDF('shift', autoImageOnOpen), 350);
     return () => clearTimeout(timer);
-  }, [autoPdf, staffListLoaded, assignedShiftsLoaded, allStaff, assignedShifts, requests]);
+  }, [autoPdf, autoPdfOnOpen, autoImageOnOpen, staffListLoaded, assignedShiftsLoaded, allStaff, assignedShifts, requests]);
 
 
 

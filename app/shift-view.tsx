@@ -52,6 +52,7 @@ export default function ShiftViewScreen() {
   const [submissionVisible, setSubmissionVisible] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
   const [createForPdf, setCreateForPdf] = useState(false);
+  const [createForImage, setCreateForImage] = useState(false);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
   const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
@@ -413,6 +414,7 @@ export default function ShiftViewScreen() {
               style={[styles.adminHeaderBtn, styles.createBtn]}
               onPress={() => {
                 setCreateForPdf(false);
+                setCreateForImage(false);
                 setCreateVisible(true);
               }}
             >
@@ -557,9 +559,11 @@ export default function ShiftViewScreen() {
               embedded
               initialDate={currentDate}
               autoPdfOnOpen={createForPdf}
+              autoImageOnOpen={createForImage}
               onClose={() => {
                 setCreateVisible(false);
                 setCreateForPdf(false);
+                setCreateForImage(false);
               }}
             />
           </View>
@@ -573,7 +577,7 @@ export default function ShiftViewScreen() {
             <Text style={styles.imageConfirmText}>{currentDate.getMonth() + 1}月のシフトをA4サイズのPNG画像で保存します。</Text>
             <View style={styles.imageConfirmActions}>
               <TouchableOpacity style={styles.imageConfirmCancel} onPress={() => setImageDownloadConfirmVisible(false)}><Text style={styles.imageConfirmCancelText}>キャンセル</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.imageConfirmDownload} onPress={saveShiftImage}><Ionicons name="download-outline" size={18} color="#FFFFFF" /><Text style={styles.imageConfirmDownloadText}>保存する</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.imageConfirmDownload} onPress={() => { setImageDownloadConfirmVisible(false); setCreateForImage(true); setCreateVisible(true); }}><Ionicons name="download-outline" size={18} color="#FFFFFF" /><Text style={styles.imageConfirmDownloadText}>保存する</Text></TouchableOpacity>
             </View>
           </View>
         </View>

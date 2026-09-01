@@ -57,3 +57,31 @@ export const downloadCalendarImage = async (title: string, days: CalendarImageDa
   link.click();
   URL.revokeObjectURL(downloadUrl);
 };
+
+export const downloadHtmlAsPng = async (html: string, fileName: string) => {
+  if (typeof document === 'undefined') return;
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const styles = Array.from(parsed.querySelectorAll('style')).map(style => style.textContent || '').join('\n');
+  const content = parsed.body.innerHTML;
+  const width = 794;
+  const height = 1123;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;background:#FFFFFF;"><style>${styles}</style>${content}</div></foreignObject></svg>`;
+  const sourceUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  const image = new Image();
+  image.src = sourceUrl;
+  await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('画像を作成できませんでした')); });
+  const scale = 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(sourceUrl);
+  const png = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!png) throw new Error('PNGを作成できませんでした');
+  const downloadUrl = URL.createObjectURL(png);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = `${fileName}.png`;
+  link.click();
+  URL.revokeObjectURL(downloadUrl);
+};
