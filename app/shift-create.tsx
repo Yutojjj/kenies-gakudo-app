@@ -45,6 +45,14 @@ const PRINT_SHIFT_COLORS = [
 ];
 const ILLUSTRATION_COUNT = 114;
 
+const getMonthTitleColor = (month: number) => {
+  const progress = ((month - 3 + 12) % 12) / 11;
+  const start = [232, 104, 154];
+  const end = [113, 197, 226];
+  const rgb = start.map((value, index) => Math.round(value + (end[index] - value) * progress));
+  return `rgb(${rgb.join(',')})`;
+};
+
 const getStaffShiftColor = (name: string, index: number, palette: string[]) =>
   name === '北条' ? '#B45AA7' : palette[index % palette.length];
 
@@ -752,7 +760,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
            ...allStaff.filter(s => !(autoFillSettings.pdfOrder as string[]).includes(s.name))]
         : allStaff;
       // イベント印刷では、月初・月末の「日付がないセル」にだけ写真を配置する。
-      const emptyCellImages = printType === 'event'
+      const emptyCellImages = (printType === 'event' || printType === 'shift')
         ? weeks.flat()
             .filter(cell => !cell)
             .map(() => shiftPrintPhotos.length > 0
@@ -760,9 +768,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               : `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`)
         : [];
       const illustrationByDate = new Map(
-        printType === 'event'
+        (printType === 'event' || printType === 'shift')
           ? weeks.flat()
               .filter((cell): cell is { day: number; dow: number; dateStr: string } => !!cell)
+              .filter(cell => printType === 'event' || (assignedShifts[cell.dateStr] || []).length === 0)
               .map(cell => [cell.dateStr, `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`])
           : [],
       );
@@ -840,6 +849,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
       const titleIllustrationLeft = `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`;
       const titleIllustrationRight = `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`;
+      const monthTitleColor = getMonthTitleColor(month);
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
         @page { size: A4 ${printType === 'event' ? 'landscape' : 'portrait'}; margin: 4mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -890,7 +900,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <caption><img src="${titleIllustrationLeft}" alt="" /><span>${year}年</span><span class="caption-month">${month}月</span><span>${printType === 'event' ? 'カレンダー' : 'シフト表'}</span><img src="${titleIllustrationRight}" alt="" /></caption>
+          <caption><img src="${titleIllustrationLeft}" alt="" /><span>${year}年</span><span class="caption-month" style="color:${monthTitleColor};">${month}月</span><span>${printType === 'event' ? 'カレンダー' : 'シフト表'}</span><img src="${titleIllustrationRight}" alt="" /></caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
