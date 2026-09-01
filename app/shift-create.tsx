@@ -794,7 +794,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         }));
         // 内容が少ない週は詰め、行内の最大件数に応じて必要な分だけ高さを増やす。
         const weekHeightMm = printType === 'event'
-          ? 34
+          ? (weeks.length >= 6 ? 29 : 34)
           : Math.min(38, Math.max(16, 9 + maxDayEntries * 4.6));
         const cells = wk.map(cell => {
           if (!cell) {
@@ -848,7 +848,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           print-color-adjust: exact;
           color-adjust: exact;
         }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: avoid; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
         td { border: 0.5px solid #AAAAAA; vertical-align: middle; text-align: center; }
 
         .c-dow { font-weight: 900; font-size: 11px; line-height: 1.1; padding: 1.5mm 1px; }
