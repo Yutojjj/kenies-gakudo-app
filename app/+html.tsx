@@ -25,6 +25,20 @@ export default function Root({ children }: PropsWithChildren) {
           input, textarea, select {
             font-size: 16px !important;
           }
+          @media (hover: hover) and (pointer: fine) {
+            button:not(:disabled):hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
+            a:hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
+            [role="button"]:not([aria-disabled="true"]):hover:not(:has(button:hover, a:hover, [role="button"]:hover)) {
+              filter: brightness(0.9);
+              cursor: pointer;
+            }
+            button:focus-visible,
+            a:focus-visible,
+            [role="button"]:focus-visible {
+              outline: 2px solid #00AEB8;
+              outline-offset: 2px;
+            }
+          }
           @media print {
             .no-print { display: none !important; }
           }
