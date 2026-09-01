@@ -859,8 +859,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
-        caption { caption-side: top; text-align: center; font-size: 16px; line-height: 1.2; font-weight: 900; padding: 2mm 0 2.5mm; margin-bottom: 1.5mm; color: #287A83; background: #EAF7F7; border: 1px solid #B8E1E3; clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%); }
-        caption img { width: 9mm; height: 9mm; object-fit: contain; vertical-align: middle; margin: 0 3mm; }
+        caption { caption-side: top; text-align: center; font-size: 19px; line-height: 1.2; font-weight: 900; padding: 2.5mm 0 3mm; margin-bottom: 1.5mm; color: #216E77; background: #C8E9EB; border: 1px solid #8FCED2; clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%); }
+        caption img { width: 12mm; height: 12mm; object-fit: contain; vertical-align: middle; margin: 0 4mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
