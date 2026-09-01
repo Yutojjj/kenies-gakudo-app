@@ -18,6 +18,7 @@ export const downloadCalendarImage = async (title: string, days: CalendarImageDa
   if (typeof document === 'undefined') return;
   const width = 794;
   const contentWidth = 900;
+  const outputScale = 3;
   const rowHeights = days.map(day => Math.max(82, 58 + day.shifts.length * 34));
   const contentHeight = 34 + rowHeights.reduce((sum, value) => sum + value, 0) + 24;
   const height = 1123;
@@ -43,9 +44,9 @@ export const downloadCalendarImage = async (title: string, days: CalendarImageDa
   image.src = sourceUrl;
   await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('画像を作成できませんでした')); });
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext('2d')?.drawImage(image, 0, 0);
+  canvas.width = width * outputScale;
+  canvas.height = height * outputScale;
+  canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(sourceUrl);
   const png = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
   if (!png) throw new Error('PNGを作成できませんでした');
