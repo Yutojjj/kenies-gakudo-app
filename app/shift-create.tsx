@@ -838,6 +838,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         bodyHtml += `<tr>${cells}</tr>`;
       });
 
+      const titleIllustrationLeft = `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`;
+      const titleIllustrationRight = `/illustrations/${Math.floor(Math.random() * ILLUSTRATION_COUNT) + 1}.png`;
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
         @page { size: A4 ${printType === 'event' ? 'landscape' : 'portrait'}; margin: 4mm; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -857,10 +859,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .c-dow-sun  { background-color: #FFD9D9 !important; color: #CC0000; }
         .c-dow-sat  { background-color: #CCE4FF !important; color: #0055CC; }
 
-        caption { caption-side: top; text-align: center; font-size: 16px; line-height: 1.2; font-weight: 900; padding: 2mm 0 2.5mm; margin-bottom: 1.5mm; color: #287A83; background: #EAF7F7; border: 1px solid #B8E1E3; border-radius: 6px; }
-        caption::before, caption::after { color: #F0B84B; font-size: 13px; vertical-align: 2px; }
-        caption::before { content: '✦'; margin-right: 3mm; }
-        caption::after { content: '✦'; margin-left: 3mm; }
+        caption { caption-side: top; text-align: center; font-size: 16px; line-height: 1.2; font-weight: 900; padding: 2mm 0 2.5mm; margin-bottom: 1.5mm; color: #287A83; background: #EAF7F7; border: 1px solid #B8E1E3; clip-path: polygon(0 0, 100% 0, 97% 50%, 100% 100%, 0 100%, 3% 50%); }
+        caption img { width: 9mm; height: 9mm; object-fit: contain; vertical-align: middle; margin: 0 3mm; }
         .calendar-day { height: 16mm; vertical-align: top; text-align: left; padding: 0; background: #FFFFFF !important; }
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
@@ -889,7 +889,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .lb { display: inline-block; width: 10px; height: 10px; border: 0.5px solid #aaa; vertical-align: middle; margin-right: 2px; }
       </style></head><body>
         <table>
-          <caption>${year}年${month}月 ${printType === 'event' ? 'カレンダー' : 'シフト表'}</caption>
+          <caption><img src="${titleIllustrationLeft}" alt="" />${year}年${month}月 ${printType === 'event' ? 'カレンダー' : 'シフト表'}<img src="${titleIllustrationRight}" alt="" /></caption>
           <thead>${dowHeader}</thead>
           <tbody>${bodyHtml}</tbody>
         </table>
