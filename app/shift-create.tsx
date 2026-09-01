@@ -47,9 +47,18 @@ const ILLUSTRATION_COUNT = 114;
 
 const getMonthTitleColor = (month: number) => {
   const progress = ((month - 3 + 12) % 12) / 11;
-  const start = [232, 104, 154];
-  const end = [113, 197, 226];
-  const rgb = start.map((value, index) => Math.round(value + (end[index] - value) * progress));
+  const stops = [
+    { at: 0, color: [232, 104, 154] }, // 3月: ピンク
+    { at: 0.28, color: [241, 199, 68] }, // 黄色
+    { at: 0.52, color: [151, 204, 78] }, // 黄緑
+    { at: 0.76, color: [79, 193, 179] }, // 緑がかった水色
+    { at: 1, color: [137, 205, 232] }, // 2月: 淡い水色
+  ];
+  const upperIndex = stops.findIndex(stop => progress <= stop.at);
+  const upper = stops[upperIndex < 0 ? stops.length - 1 : upperIndex];
+  const lower = stops[Math.max(0, (upperIndex < 0 ? stops.length - 1 : upperIndex) - 1)];
+  const localProgress = upper.at === lower.at ? 0 : (progress - lower.at) / (upper.at - lower.at);
+  const rgb = lower.color.map((value, index) => Math.round(value + (upper.color[index] - value) * localProgress));
   return `rgb(${rgb.join(',')})`;
 };
 
