@@ -1967,6 +1967,8 @@ export default function MenuScreen() {
                 }}
                 disabled={pickupOverviewLoadingAction !== null}
                 activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel={showAllPickup ? '送迎担当を折りたたむ' : '送迎担当を全体を見る'}
               >
                 {pickupOverviewLoadingAction === 'view'
                   ? <ActivityIndicator size="small" color="#007A82" />

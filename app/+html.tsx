@@ -28,8 +28,9 @@ export default function Root({ children }: PropsWithChildren) {
           @media (hover: hover) and (pointer: fine) {
             button:not(:disabled):hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
             a:hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
-            [role="button"]:not([aria-disabled="true"]):hover:not(:has(button:hover, a:hover, [role="button"]:hover)) {
-              filter: brightness(0.9);
+            [role="button"]:not([aria-disabled="true"]):hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
+            [tabindex="0"]:hover:not(:has(button:hover, a:hover, [role="button"]:hover, [tabindex="0"]:hover)) {
+              background-image: linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1));
               cursor: pointer;
             }
             button:focus-visible,
@@ -38,6 +39,12 @@ export default function Root({ children }: PropsWithChildren) {
               outline: 2px solid #00AEB8;
               outline-offset: 2px;
             }
+          }
+          button:not(:disabled):active:not(:has(button:active, a:active, [role="button"]:active, [tabindex="0"]:active)),
+          a:active:not(:has(button:active, a:active, [role="button"]:active, [tabindex="0"]:active)),
+          [role="button"]:not([aria-disabled="true"]):active:not(:has(button:active, a:active, [role="button"]:active, [tabindex="0"]:active)),
+          [tabindex="0"]:active:not(:has(button:active, a:active, [role="button"]:active, [tabindex="0"]:active)) {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14));
           }
           @media print {
             .no-print { display: none !important; }
