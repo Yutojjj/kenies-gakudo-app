@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
@@ -59,7 +59,6 @@ export default function ShiftViewScreen() {
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [subscriptionKey, setSubscriptionKey] = useState(0);
-  const [shiftImageConfirmVisible, setShiftImageConfirmVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -367,40 +366,6 @@ export default function ShiftViewScreen() {
     );
   };
 
-  const downloadShiftImage = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1;
-    const days = generateDays(currentDate).filter((item): item is { day: number; dateStr: string } => !!item);
-    const escapeXml = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[char] || char));
-    const rows = days.map((day, index) => {
-      const shifts = (assignedShifts[day.dateStr] || []).filter(shift => allStaff.some(staff => staff.name === shift.name));
-      const date = new Date(`${day.dateStr}T00:00:00`);
-      const dateLabel = `${month}/${day.day} (${weeks[date.getDay()]})`;
-      const shiftLines = shifts.length > 0
-        ? shifts.map((shift, shiftIndex) => {
-            const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === shift.name));
-            const color = getStaffShiftColor(shift.name, staffIndex);
-            return `<rect x="235" y="${index * 82 + 46 + shiftIndex * 30}" width="610" height="27" rx="6" fill="${color}"/><text x="250" y="${index * 82 + 65 + shiftIndex * 30}" font-size="17" font-weight="700" fill="#17202A">${escapeXml(shift.name)}　${escapeXml(shift.start)}〜${escapeXml(shift.end)}</text>`;
-          }).join('')
-        : `<text x="250" y="${index * 82 + 65}" font-size="16" fill="#8A9698">シフトなし</text>`;
-      return `<rect x="30" y="${index * 82 + 20}" width="840" height="72" rx="10" fill="#FFFFFF" stroke="#D8E1E2"/><text x="52" y="${index * 82 + 49}" font-size="20" font-weight="900" fill="${date.getDay() === 0 ? '#D94747' : date.getDay() === 6 ? '#2874C6' : '#28343B'}">${dateLabel}</text>${shiftLines}`;
-    }).join('');
-    const height = Math.max(180, days.length * 82 + 145);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="${height}" viewBox="0 0 900 ${height}"><rect width="900" height="${height}" fill="#F3FAFA"/><rect x="30" y="20" width="840" height="72" rx="12" fill="#C8E9EB"/><text x="450" y="66" text-anchor="middle" font-size="30" font-weight="900" fill="#216E77">${year}年${month}月 シフト</text>${rows}</svg>`;
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `シフト_${year}年${month}月.svg`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } else {
-      Alert.alert('保存について', 'この端末では画像を表示してから保存します。');
-    }
-    setShiftImageConfirmVisible(false);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -455,9 +420,6 @@ export default function ShiftViewScreen() {
         <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
         <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
           <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.monthDownloadBtn} onPress={() => setShiftImageConfirmVisible(true)} accessibilityLabel={`${currentDate.getMonth() + 1}月のシフト画像をダウンロード`}>
-          <Ionicons name="download-outline" size={21} color="#176E72" />
         </TouchableOpacity>
       </View>
 
@@ -577,23 +539,6 @@ export default function ShiftViewScreen() {
         </View>
       </Modal>
 
-      <Modal visible={shiftImageConfirmVisible} transparent animationType="fade" onRequestClose={() => setShiftImageConfirmVisible(false)}>
-        <View style={styles.imageConfirmOverlay}>
-          <View style={styles.imageConfirmModal}>
-            <Text style={styles.imageConfirmTitle}>シフト画像を保存しますか？</Text>
-            <Text style={styles.imageConfirmText}>{currentDate.getMonth() + 1}月のシフトを、スマホで見やすい縦長画像として保存します。</Text>
-            <View style={styles.imageConfirmActions}>
-              <TouchableOpacity style={styles.imageConfirmCancel} onPress={() => setShiftImageConfirmVisible(false)}>
-                <Text style={styles.imageConfirmCancelText}>キャンセル</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.imageConfirmDownload} onPress={downloadShiftImage}>
-                <Ionicons name="download-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.imageConfirmDownloadText}>保存する</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -612,9 +557,8 @@ const styles = StyleSheet.create({
   notificationHeaderBtn: { width: 42, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
   submitHeaderBtn: { minHeight: 40, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#08AEB8' },
   submitHeaderBtnText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
-  monthSelector: { position: 'relative', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
   monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
-  monthDownloadBtn: { position: 'absolute', right: 16, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
   calendarScroll: { flex: 1 },
   calendarContent: { width: '100%', paddingHorizontal: 0, paddingBottom: 100 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 4, paddingHorizontal: 2 },
@@ -660,13 +604,4 @@ const styles = StyleSheet.create({
   submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
   createOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 4 },
   createModal: { width: '100%', maxWidth: 1180, height: '96%', overflow: 'hidden', borderRadius: 16, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
-  imageConfirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(35, 30, 27, 0.55)' },
-  imageConfirmModal: { width: '100%', maxWidth: 400, borderRadius: 18, padding: 22, backgroundColor: '#FFFDFC' },
-  imageConfirmTitle: { color: '#3D2A24', fontSize: 19, fontWeight: '900', textAlign: 'center' },
-  imageConfirmText: { marginTop: 10, color: '#657174', fontSize: 13, lineHeight: 20, fontWeight: '700', textAlign: 'center' },
-  imageConfirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  imageConfirmCancel: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#F1F3F4' },
-  imageConfirmCancelText: { color: '#555555', fontSize: 13, fontWeight: '900' },
-  imageConfirmDownload: { flex: 1, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, backgroundColor: '#08AEB8' },
-  imageConfirmDownloadText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
 });
