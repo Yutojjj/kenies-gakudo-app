@@ -876,7 +876,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         .calendar-cell-shell { position: relative; width: 100%; height: 100%; min-height: 16mm; overflow: visible; }
         .calendar-cell-content { position: relative; z-index: 1; }
         .calendar-illustration { position: absolute; z-index: 0; right: 1.5mm; bottom: 1mm; width: 14mm; height: 14mm; object-fit: contain; opacity: 0.38; pointer-events: none; }
-        .calendar-empty-photo { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.38; pointer-events: none; }
+        .calendar-empty-photo { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.38; pointer-events: none; }
         .calendar-day-empty { background: #FFFFFF !important; }
         .calendar-day-short { height: 16mm; }
         .calendar-day-sun { background: #FFF1F1 !important; }
