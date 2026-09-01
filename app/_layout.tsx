@@ -10,9 +10,22 @@ import { db } from '../firebase';
 import { refreshPushSubscription } from '../utils/setupPushToken';
 import { navigateHome } from '../utils/navigationHome';
 import { installGlobalUiSounds } from '../utils/uiSounds';
+import AdminBottomNav from '../components/AdminBottomNav';
 
 
 const PUBLIC_PATHS = ['/', '/index'];
+const ROUTES_WITH_ROOT_NAV = new Set([
+  '/holidays-setting',
+  '/lesson-management',
+  '/paid-transport',
+  '/regular-users',
+  '/school-times',
+  '/staff-hours',
+  '/survey',
+  '/survey-answer',
+  '/typing-cert',
+  '/user-list',
+]);
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -239,6 +252,7 @@ export default function RootLayout() {
                 <Stack.Screen name="messages" />
                 <Stack.Screen name="schedule-changes" />
               </Stack>
+              {ROUTES_WITH_ROOT_NAV.has(pathname) && <AdminBottomNav active="menu" />}
             </Animated.View>
           </SafeAreaView>
         </AuthGuard>

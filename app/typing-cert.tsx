@@ -1148,6 +1148,7 @@ export default function TypingCertScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
     </SafeAreaView>
   );
 }
