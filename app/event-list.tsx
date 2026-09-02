@@ -143,7 +143,7 @@ export default function EventListScreen() {
   const [participants, setParticipants] = useState<Record<string, Record<string, string>>>({});
   // カレンダー用
   const [calDate, setCalDate] = useState(new Date());
-  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
+  const [monthPickerTarget, setMonthPickerTarget] = useState<'year' | 'month' | null>(null);
   const [calSelectedDate, setCalSelectedDate] = useState('');
   const [calModalVisible, setCalModalVisible] = useState(false);
   const [calPublicHolidays, setCalPublicHolidays] = useState<Record<string, string>>({});
@@ -539,14 +539,14 @@ export default function EventListScreen() {
                 <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m - 1, 1))}>
                   <Ionicons name="chevron-back" size={22} color={COLORS.text} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.calMonthTextLabel}>{y}年</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.calMonthTextLabel}>{m + 1}月</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerTarget('year')}><Text style={styles.calMonthTextLabel}>{y}年</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerTarget('month')}><Text style={styles.calMonthTextLabel}>{m + 1}月</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m + 1, 1))}>
                   <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
 
-              <MonthPickerModal visible={monthPickerVisible} value={calDate} onChange={setCalDate} onClose={() => setMonthPickerVisible(false)} />
+              <MonthPickerModal visible={monthPickerTarget !== null} value={calDate} mode={monthPickerTarget ?? 'month'} onChange={setCalDate} onClose={() => setMonthPickerTarget(null)} />
 
               {/* 曜日ヘッダー */}
               <View style={styles.calWeekRow}>

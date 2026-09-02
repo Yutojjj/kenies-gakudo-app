@@ -5,11 +5,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 type Props = {
   visible: boolean;
   value: Date;
+  mode: 'year' | 'month';
   onChange: (value: Date) => void;
   onClose: () => void;
 };
 
-export default function MonthPickerModal({ visible, value, onChange, onClose }: Props) {
+export default function MonthPickerModal({ visible, value, mode, onChange, onClose }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const years = Array.from({ length: 11 }, (_, index) => value.getFullYear() - 5 + index);
   const selectYear = (year: number) => onChange(new Date(year, value.getMonth(), 1));
@@ -21,7 +22,7 @@ export default function MonthPickerModal({ visible, value, onChange, onClose }: 
         <Pressable style={styles.dismissArea} onPress={onClose} accessible={false} focusable={false} />
         <View style={styles.panel}>
           <View style={styles.header}>
-            <Text style={styles.title}>年月を選択</Text>
+            <Text style={styles.title}>{mode === 'year' ? '年を選択' : '月を選択'}</Text>
             <Pressable
               style={({ pressed }) => [styles.closeButton, (hoveredKey === 'close' || pressed) && styles.closeButtonInteraction]}
               accessibilityRole="button"
@@ -33,44 +34,46 @@ export default function MonthPickerModal({ visible, value, onChange, onClose }: 
               <Ionicons name="close" size={22} color="#5D4037" />
             </Pressable>
           </View>
-          <Text style={styles.sectionLabel}>年</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.yearRow}>
-            {years.map(year => (
-              <Pressable
-                key={year}
-                style={({ pressed }) => [
-                  styles.yearButton,
-                  year === value.getFullYear() && styles.selectedButton,
-                  (hoveredKey === `year-${year}` || pressed) && styles.buttonInteraction,
-                ]}
-                accessibilityRole="button"
-                onPress={() => selectYear(year)}
-                onHoverIn={() => setHoveredKey(`year-${year}`)}
-                onHoverOut={() => setHoveredKey(null)}
-              >
-                <Text style={[styles.buttonText, year === value.getFullYear() && styles.selectedText]}>{year}年</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-          <Text style={styles.sectionLabel}>月</Text>
-          <View style={styles.monthGrid}>
-            {Array.from({ length: 12 }, (_, month) => (
-              <Pressable
-                key={month}
-                style={({ pressed }) => [
-                  styles.monthButton,
-                  month === value.getMonth() && styles.selectedButton,
-                  (hoveredKey === `month-${month}` || pressed) && styles.buttonInteraction,
-                ]}
-                accessibilityRole="button"
-                onPress={() => selectMonth(month)}
-                onHoverIn={() => setHoveredKey(`month-${month}`)}
-                onHoverOut={() => setHoveredKey(null)}
-              >
-                <Text style={[styles.buttonText, month === value.getMonth() && styles.selectedText]}>{month + 1}月</Text>
-              </Pressable>
-            ))}
-          </View>
+          <Text style={styles.sectionLabel}>{mode === 'year' ? '年' : '月'}</Text>
+          {mode === 'year' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.yearRow}>
+              {years.map(year => (
+                <Pressable
+                  key={year}
+                  style={({ pressed }) => [
+                    styles.yearButton,
+                    year === value.getFullYear() && styles.selectedButton,
+                    (hoveredKey === `year-${year}` || pressed) && styles.buttonInteraction,
+                  ]}
+                  accessibilityRole="button"
+                  onPress={() => selectYear(year)}
+                  onHoverIn={() => setHoveredKey(`year-${year}`)}
+                  onHoverOut={() => setHoveredKey(null)}
+                >
+                  <Text style={[styles.buttonText, year === value.getFullYear() && styles.selectedText]}>{year}年</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.monthGrid}>
+              {Array.from({ length: 12 }, (_, month) => (
+                <Pressable
+                  key={month}
+                  style={({ pressed }) => [
+                    styles.monthButton,
+                    month === value.getMonth() && styles.selectedButton,
+                    (hoveredKey === `month-${month}` || pressed) && styles.buttonInteraction,
+                  ]}
+                  accessibilityRole="button"
+                  onPress={() => selectMonth(month)}
+                  onHoverIn={() => setHoveredKey(`month-${month}`)}
+                  onHoverOut={() => setHoveredKey(null)}
+                >
+                  <Text style={[styles.buttonText, month === value.getMonth() && styles.selectedText]}>{month + 1}月</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           <Pressable
             style={({ pressed }) => [styles.doneButton, (hoveredKey === 'done' || pressed) && styles.doneButtonInteraction]}
             accessibilityRole="button"

@@ -43,7 +43,7 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
   }, [nameParam]);
 
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
+  const [monthPickerTarget, setMonthPickerTarget] = useState<'year' | 'month' | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -387,8 +387,8 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
           <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton} accessibilityRole="button">
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerTarget('year')}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerTarget('month')}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
           <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton} accessibilityRole="button">
             <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
           </TouchableOpacity>
@@ -487,7 +487,7 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
 
       </ScrollView>
 
-      <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
+      <MonthPickerModal visible={monthPickerTarget !== null} value={currentDate} mode={monthPickerTarget ?? 'month'} onChange={setCurrentDate} onClose={() => setMonthPickerTarget(null)} />
 
       {/* 大きい保存ボタン */}
       {Object.keys(pendingChanges).length > 0 && (
