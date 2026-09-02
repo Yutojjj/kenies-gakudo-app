@@ -16,6 +16,8 @@ import { db, storage } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { handleWebWheelStep } from '../utils/webWheel';
 import { navigateHome } from '../utils/navigationHome';
+import { promptMonth } from '../utils/promptMonth';
+import MonthPickerModal from '../components/MonthPickerModal';
 import { downloadCalendarImage, downloadHtmlAsPng } from '../utils/downloadCalendarImage';
 
 const WebScrollView = ScrollView as any;
@@ -227,11 +229,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [printMenuVisible, setPrintMenuVisible] = useState(false);
   const [printMenuSection, setPrintMenuSection] = useState<'shift' | 'event' | null>(null);
   const [printMenuAction, setPrintMenuAction] = useState<string | null>(null);
+  const [imageSavingType, setImageSavingType] = useState<'shift' | 'event' | null>(null);
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [photoManagerVisible, setPhotoManagerVisible] = useState(false);
   const [shiftPrintPhotos, setShiftPrintPhotos] = useState<ShiftPrintPhoto[]>([]);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoUploadError, setPhotoUploadError] = useState('');
-  const [imageDownloadType, setImageDownloadType] = useState<'shift' | 'event' | null>(null);
 
   useEffect(() => {
     if (!printMenuVisible || Platform.OS !== 'web') return;
@@ -741,13 +744,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   };
 
   const savePrintImage = async (printType: 'shift' | 'event') => {
+    setImageSavingType(printType);
     try {
       await exportPDF(printType, true);
-      setImageDownloadType(null);
     } catch (error: any) {
       console.warn('画像保存に失敗しました', error);
       if (Platform.OS === 'web') window.alert(error?.message || '画像を保存できませんでした');
       else Alert.alert('エラー', error?.message || '画像を保存できませんでした');
+    } finally {
+      setImageSavingType(null);
+      setPrintMenuVisible(false);
+      setPrintMenuSection(null);
     }
     return;
     /* Legacy fallback layout kept below for native builds. */
@@ -774,7 +781,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       days,
       `${printType === 'event' ? 'イベント' : 'シフト'}_${year}年${month}月`,
     );
-    setImageDownloadType(null);
   };
 
   const exportPDF = async (printType: 'shift' | 'event' = 'shift', asImage = false) => {
@@ -1247,8 +1253,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               style={[styles.pdfBtn, styles.headerPdfBtn]}
               onPress={() => { setPrintMenuSection(null); setPrintMenuVisible(current => !current); }}
               disabled={loading}
+              accessibilityLabel="印刷メニュー"
             >
-              <Text style={styles.pdfBtnText}>印刷</Text>
+              <Ionicons name="print-outline" size={20} color={COLORS.white} />
             </TouchableOpacity>
             {printMenuVisible && (
               <View nativeID="shift-print-menu" style={styles.pdfMenu}>
@@ -1262,13 +1269,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </TouchableOpacity>
                   {printMenuSection === 'shift' && (
                     <View style={styles.pdfSubMenu}>
-                      <Pressable style={[styles.pdfMenuItem, printMenuAction === 'shift-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('shift'); }}>
-                        <Text style={styles.pdfMenuItemText}>PDF印刷</Text>
+                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, printMenuAction === 'shift-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('shift'); }}>
+                        <Ionicons name="print-outline" size={17} color="#2C6F77" />
+                        <Text style={styles.pdfMenuItemText}>印刷</Text>
                       </Pressable>
-                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated, printMenuAction === 'shift-image' && styles.pdfMenuItemHover, imageDownloadType === 'shift' && styles.pdfMenuItemActive]} onHoverIn={() => setPrintMenuAction('shift-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setImageDownloadType(current => current === 'shift' ? null : 'shift'); }}>
-                        <Text style={styles.pdfMenuItemText}>画像として保存</Text>
+                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'shift-image' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => savePrintImage('shift')}>
+                        {imageSavingType === 'shift' ? <ActivityIndicator size="small" color="#2C6F77" /> : <Ionicons name="download-outline" size={17} color="#2C6F77" />}
+                        <Text style={styles.pdfMenuItemText}>{imageSavingType === 'shift' ? '保存中' : '画像として保存'}</Text>
                       </Pressable>
-                      {imageDownloadType === 'shift' && <TouchableOpacity style={styles.pdfInlineSaveButton} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); savePrintImage('shift'); }}><Ionicons name="download-outline" size={15} color="#FFFFFF" /><Text style={styles.pdfInlineSaveText}>保存</Text></TouchableOpacity>}
                     </View>
                   )}
                 </Pressable>
@@ -1282,16 +1290,18 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </TouchableOpacity>
                   {printMenuSection === 'event' && (
                     <View style={styles.pdfSubMenu}>
-                      <Pressable style={[styles.pdfMenuItem, printMenuAction === 'event-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('event'); }}>
-                        <Text style={styles.pdfMenuItemText}>PDF印刷</Text>
+                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, printMenuAction === 'event-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('event'); }}>
+                        <Ionicons name="print-outline" size={17} color="#2C6F77" />
+                        <Text style={styles.pdfMenuItemText}>印刷</Text>
                       </Pressable>
-                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-image' && styles.pdfMenuItemHover, imageDownloadType === 'event' && styles.pdfMenuItemActive]} onHoverIn={() => setPrintMenuAction('event-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setImageDownloadType(current => current === 'event' ? null : 'event'); }}>
-                        <Text style={styles.pdfMenuItemText}>画像として保存</Text>
+                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-image' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => savePrintImage('event')}>
+                        {imageSavingType === 'event' ? <ActivityIndicator size="small" color="#2C6F77" /> : <Ionicons name="download-outline" size={17} color="#2C6F77" />}
+                        <Text style={styles.pdfMenuItemText}>{imageSavingType === 'event' ? '保存中' : '画像として保存'}</Text>
                       </Pressable>
-                      {imageDownloadType === 'event' && <TouchableOpacity style={styles.pdfInlineSaveButton} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); savePrintImage('event'); }}><Ionicons name="download-outline" size={15} color="#FFFFFF" /><Text style={styles.pdfInlineSaveText}>保存</Text></TouchableOpacity>}
-                      <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
+                      <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-upload' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-upload')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); setPhotoUploadError(''); setPhotoManagerVisible(true); }}>
+                        <Ionicons name="cloud-upload-outline" size={17} color="#2C6F77" />
                         <Text style={styles.pdfMenuItemText}>画像アップロード</Text>
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   )}
                 </Pressable>
@@ -1318,6 +1328,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           </TouchableOpacity>
         </View>
       </View>
+
+      <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
 
       <Modal visible={photoManagerVisible} transparent animationType="fade" onRequestClose={() => setPhotoManagerVisible(false)}>
         <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} onPress={() => setPhotoManagerVisible(false)}>
@@ -1477,13 +1489,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
       <View style={styles.monthSelector}>
         <View style={styles.monthNavRow}>
-          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
-          <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-          <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
-          <TouchableOpacity style={styles.monthDeleteBtn} onPress={() => setMonthActionConfirm('delete')} disabled={loading}>
-            <Ionicons name="trash-outline" size={15} color="#B93E48" />
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.monthNavButton} accessibilityRole="button" onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={24} color={COLORS.text} /></TouchableOpacity>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.monthNavButton} accessibilityRole="button" onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={24} color={COLORS.text} /></TouchableOpacity>
         </View>
+        <TouchableOpacity style={styles.monthDeleteBtn} accessibilityRole="button" accessibilityLabel="月を削除" onPress={() => setMonthActionConfirm('delete')} disabled={loading}>
+          <Ionicons name="trash-outline" size={15} color="#B93E48" />
+        </TouchableOpacity>
       </View>
 
       <SwipeMonthPager
@@ -1505,9 +1518,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={styles.pdfMenuAnchor}>
-                <TouchableOpacity onPress={() => { setPrintMenuSection(null); setPrintMenuVisible(current => !current); }} style={styles.pdfBtn}>
-                  <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
-                  <Text style={styles.pdfBtnText}>印刷</Text>
+                <TouchableOpacity onPress={() => { setPrintMenuSection(null); setPrintMenuVisible(current => !current); }} style={styles.pdfBtn} accessibilityLabel="印刷メニュー">
+                  <Ionicons name="print-outline" size={20} color={COLORS.white} />
                 </TouchableOpacity>
                 {printMenuVisible && (
                   <View nativeID="shift-print-menu" style={styles.pdfMenu}>
@@ -1518,9 +1530,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                       </TouchableOpacity>
                       {printMenuSection === 'shift' && (
                         <View style={styles.pdfSubMenu}>
-                          <Pressable style={[styles.pdfMenuItem, printMenuAction === 'shift-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('shift'); }}><Text style={styles.pdfMenuItemText}>PDF印刷</Text></Pressable>
-                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated, printMenuAction === 'shift-image' && styles.pdfMenuItemHover, imageDownloadType === 'shift' && styles.pdfMenuItemActive]} onHoverIn={() => setPrintMenuAction('shift-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => setImageDownloadType(current => current === 'shift' ? null : 'shift')}><Text style={styles.pdfMenuItemText}>画像として保存</Text></Pressable>
-                          {imageDownloadType === 'shift' && <TouchableOpacity style={styles.pdfInlineSaveButton} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); savePrintImage('shift'); }}><Ionicons name="download-outline" size={15} color="#FFFFFF" /><Text style={styles.pdfInlineSaveText}>保存</Text></TouchableOpacity>}
+                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, printMenuAction === 'shift-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('shift'); }}><Ionicons name="print-outline" size={17} color="#2C6F77" /><Text style={styles.pdfMenuItemText}>印刷</Text></Pressable>
+                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'shift-image' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('shift-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => savePrintImage('shift')}>{imageSavingType === 'shift' ? <ActivityIndicator size="small" color="#2C6F77" /> : <Ionicons name="download-outline" size={17} color="#2C6F77" />}<Text style={styles.pdfMenuItemText}>{imageSavingType === 'shift' ? '保存中' : '画像として保存'}</Text></Pressable>
                         </View>
                       )}
                     </Pressable>
@@ -1531,10 +1542,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                       </TouchableOpacity>
                       {printMenuSection === 'event' && (
                         <View style={styles.pdfSubMenu}>
-                          <Pressable style={[styles.pdfMenuItem, printMenuAction === 'event-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('event'); }}><Text style={styles.pdfMenuItemText}>PDF印刷</Text></Pressable>
-                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-image' && styles.pdfMenuItemHover, imageDownloadType === 'event' && styles.pdfMenuItemActive]} onHoverIn={() => setPrintMenuAction('event-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => setImageDownloadType(current => current === 'event' ? null : 'event')}><Text style={styles.pdfMenuItemText}>画像として保存</Text></Pressable>
-                          {imageDownloadType === 'event' && <TouchableOpacity style={styles.pdfInlineSaveButton} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); savePrintImage('event'); }}><Ionicons name="download-outline" size={15} color="#FFFFFF" /><Text style={styles.pdfInlineSaveText}>保存</Text></TouchableOpacity>}
-                          <TouchableOpacity style={[styles.pdfMenuItem, styles.pdfMenuItemSeparated]} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); setPhotoUploadError(''); setPhotoManagerVisible(true); }}><Text style={styles.pdfMenuItemText}>画像アップロード</Text></TouchableOpacity>
+                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, printMenuAction === 'event-pdf' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-pdf')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); exportPDF('event'); }}><Ionicons name="print-outline" size={17} color="#2C6F77" /><Text style={styles.pdfMenuItemText}>印刷</Text></Pressable>
+                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-image' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-image')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => savePrintImage('event')}>{imageSavingType === 'event' ? <ActivityIndicator size="small" color="#2C6F77" /> : <Ionicons name="download-outline" size={17} color="#2C6F77" />}<Text style={styles.pdfMenuItemText}>{imageSavingType === 'event' ? '保存中' : '画像として保存'}</Text></Pressable>
+                          <Pressable style={[styles.pdfMenuItem, styles.pdfMenuActionItem, styles.pdfMenuItemSeparated, printMenuAction === 'event-upload' && styles.pdfMenuItemHover]} onHoverIn={() => setPrintMenuAction('event-upload')} onHoverOut={() => setPrintMenuAction(null)} onPress={() => { setPrintMenuVisible(false); setPrintMenuSection(null); setPhotoUploadError(''); setPhotoManagerVisible(true); }}><Ionicons name="cloud-upload-outline" size={17} color="#2C6F77" /><Text style={styles.pdfMenuItemText}>画像アップロード</Text></Pressable>
                         </View>
                       )}
                     </Pressable>
@@ -2335,12 +2345,11 @@ const styles = StyleSheet.create({
   pdfMenuSectionWrap: { position: 'relative', zIndex: 1005 },
   pdfSubMenu: { position: 'absolute', left: '100%', top: -5, minWidth: 150, padding: 4, borderRadius: 8, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D7E1E2', shadowColor: '#000000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 7, elevation: 100, zIndex: 1006 },
   pdfMenuItem: { minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: '#FFFFFF', zIndex: 1004 },
+  pdfMenuActionItem: { flexDirection: 'row', gap: 5 },
   pdfMenuParentItem: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12 },
   pdfMenuItemActive: { backgroundColor: '#D9EEF0' },
   pdfMenuItemHover: { backgroundColor: '#D9EEF0' },
-  pdfInlineSaveButton: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginHorizontal: 4, marginBottom: 4, borderRadius: 6, backgroundColor: '#00AEB8' },
-  pdfInlineSaveText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
-  pdfMenuItemSeparated: { borderTopWidth: 1, borderTopColor: '#E5ECEE', borderRadius: 0 },
+  pdfMenuItemSeparated: { borderTopWidth: 1, borderTopColor: '#E5ECEE' },
   pdfMenuItemText: { fontSize: 12, fontWeight: '900', color: '#2C6F77' },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 7 },
   pdfBtnText: { color: COLORS.white, fontWeight: 'bold', marginLeft: 0, fontSize: 10 },
@@ -2400,9 +2409,12 @@ const styles = StyleSheet.create({
   workSummaryPeriodBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#E1CDBD' },
   workSummaryPeriodText: { minWidth: 130, textAlign: 'center', fontSize: 16, fontWeight: '900', color: '#3F302B' },
   
-  monthSelector: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
-  monthNavRow: { position: 'relative', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
-  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
+  monthSelector: { position: 'relative', width: '100%', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16 },
+  monthNavButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#F2C98F' },
+  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  monthText: { minWidth: 170, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthPartButton: { minHeight: 44, minWidth: 78, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0', alignItems: 'center', justifyContent: 'center' },
+  monthTextLabel: { fontSize: 18, fontWeight: 'bold', marginHorizontal: 0, textAlign: 'center', color: '#5D4037' },
 
   monthActionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   toggleTimeBtn: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#E0FFFF', paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: '#AFEEEE' },

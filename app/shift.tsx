@@ -9,6 +9,8 @@ import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
+import MonthPickerModal from '../components/MonthPickerModal';
+import { promptMonth } from '../utils/promptMonth';
 
 type ShiftType = '✕' | '午前✕' | '午後✕' | '○';
 type Staff = { id: string, name: string };
@@ -41,6 +43,7 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
   }, [nameParam]);
 
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -381,11 +384,12 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
 
       <ScrollView style={styles.scrollArea}>
         <View style={styles.monthSelector}>
-          <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthBtn}>
+          <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton} accessibilityRole="button">
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
-          <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-          <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthBtn}>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton} accessibilityRole="button">
             <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
@@ -482,6 +486,8 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
         </View>}
 
       </ScrollView>
+
+      <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
 
       {/* 大きい保存ボタン */}
       {Object.keys(pendingChanges).length > 0 && (
@@ -665,9 +671,12 @@ const styles = StyleSheet.create({
   activeStampBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   activeStampText: { color: COLORS.text, fontWeight: 'bold', fontSize: 14 },
   scrollArea: { flex: 1 },
-  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 20 },
   monthBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
-  monthText: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  monthNavButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#F2C98F' },
+  monthPartButton: { minHeight: 44, minWidth: 78, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0', alignItems: 'center', justifyContent: 'center' },
+  monthText: { minWidth: 170, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthTextLabel: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', textAlign: 'center' },
   calendarContainer: { paddingHorizontal: 12, paddingBottom: 20 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 12 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },

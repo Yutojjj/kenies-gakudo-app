@@ -23,6 +23,7 @@ import { EventMediaThumbnail, EventMediaViewer } from '../components/EventMedia'
 import SwipeTabPager from '../components/SwipeTabPager';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import MonthPickerModal from '../components/MonthPickerModal';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { navigateHome } from '../utils/navigationHome';
 
@@ -142,6 +143,7 @@ export default function EventListScreen() {
   const [participants, setParticipants] = useState<Record<string, Record<string, string>>>({});
   // カレンダー用
   const [calDate, setCalDate] = useState(new Date());
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [calSelectedDate, setCalSelectedDate] = useState('');
   const [calModalVisible, setCalModalVisible] = useState(false);
   const [calPublicHolidays, setCalPublicHolidays] = useState<Record<string, string>>({});
@@ -537,11 +539,14 @@ export default function EventListScreen() {
                 <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m - 1, 1))}>
                   <Ionicons name="chevron-back" size={22} color={COLORS.text} />
                 </TouchableOpacity>
-                <Text style={styles.calMonthText}>{y}年 {m + 1}月</Text>
+                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.calMonthTextLabel}>{y}年</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.calMonthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.calMonthTextLabel}>{m + 1}月</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.calNavBtn} onPress={() => setCalDate(new Date(y, m + 1, 1))}>
                   <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
+
+              <MonthPickerModal visible={monthPickerVisible} value={calDate} onChange={setCalDate} onClose={() => setMonthPickerVisible(false)} />
 
               {/* 曜日ヘッダー */}
               <View style={styles.calWeekRow}>
@@ -952,9 +957,11 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.primary },
 
   // カレンダー
-  calMonthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
-  calNavBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
-  calMonthText: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  calMonthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+  calNavBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderRadius: 22, borderWidth: 1, borderColor: '#F2C98F' },
+  calMonthText: { minWidth: 170, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0' },
+  calMonthPartButton: { minHeight: 44, minWidth: 78, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0', alignItems: 'center', justifyContent: 'center' },
+  calMonthTextLabel: { fontSize: 16, fontWeight: 'bold', color: '#5D4037' },
   calWeekRow: { flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 6, backgroundColor: '#fff' },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 'bold', color: COLORS.textLight },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4 },

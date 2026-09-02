@@ -7,10 +7,11 @@ import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableO
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
+import { promptMonth } from '../utils/promptMonth';
+import MonthPickerModal from '../components/MonthPickerModal';
 import { db } from '../firebase';
 import { navigateHome } from '../utils/navigationHome';
 import { setupPushToken } from '../utils/setupPushToken';
-import { downloadCalendarImage } from '../utils/downloadCalendarImage';
 import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 import ShiftScreen from './shift';
 import ShiftCreateScreen from './shift-create';
@@ -39,6 +40,7 @@ const getStaffShiftColor = (name: string, index: number) =>
 export default function ShiftViewScreen() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [myName, setMyName] = useState('');
   const [accountId, setAccountId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -52,7 +54,6 @@ export default function ShiftViewScreen() {
   const [submissionVisible, setSubmissionVisible] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
   const [createForPdf, setCreateForPdf] = useState(false);
-  const [createForImage, setCreateForImage] = useState(false);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
   const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
@@ -61,7 +62,6 @@ export default function ShiftViewScreen() {
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [subscriptionKey, setSubscriptionKey] = useState(0);
-  const [imageDownloadConfirmVisible, setImageDownloadConfirmVisible] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem('loggedInUser').then(raw => {
@@ -369,28 +369,6 @@ export default function ShiftViewScreen() {
     );
   };
 
-  const saveShiftImage = async () => {
-    const days = generateDays(currentDate).filter((item): item is { day: number; dateStr: string } => !!item);
-    await downloadCalendarImage(
-      `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月 シフト`,
-      days.map(day => {
-        const date = new Date(`${day.dateStr}T00:00:00`);
-        const shifts = (assignedShifts[day.dateStr] || []).map(shift => {
-          const index = Math.max(0, allStaff.findIndex(staff => staff.name === shift.name));
-          return { ...shift, color: getStaffShiftColor(shift.name, index) };
-        });
-        return {
-          label: `${currentDate.getMonth() + 1}/${day.day} (${weeks[date.getDay()]})`,
-          dateColor: date.getDay() === 0 ? '#D94747' : date.getDay() === 6 ? '#2874C6' : '#28343B',
-          shifts,
-          note: publicHolidays[day.dateStr],
-        };
-      }),
-      `シフト_${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`,
-    );
-    setImageDownloadConfirmVisible(false);
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -414,7 +392,6 @@ export default function ShiftViewScreen() {
               style={[styles.adminHeaderBtn, styles.createBtn]}
               onPress={() => {
                 setCreateForPdf(false);
-                setCreateForImage(false);
                 setCreateVisible(true);
               }}
             >
@@ -440,15 +417,13 @@ export default function ShiftViewScreen() {
 
       {/* 月ナビゲーション */}
       <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
+        <TouchableOpacity style={styles.monthNavButton} accessibilityRole="button" onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-        <TouchableOpacity onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
+        <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.monthNavButton} accessibilityRole="button" onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}>
           <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.monthDownloadBtn} onPress={() => setImageDownloadConfirmVisible(true)} accessibilityLabel="シフト画像をダウンロード">
-          <Ionicons name="download-outline" size={21} color="#176E72" />
         </TouchableOpacity>
       </View>
 
@@ -458,6 +433,8 @@ export default function ShiftViewScreen() {
         renderMonth={renderMonthCalendar}
         enabled={!createVisible && !submissionVisible}
       />
+
+      <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
 
       <AdminBottomNav active="shift" />
 
@@ -559,26 +536,11 @@ export default function ShiftViewScreen() {
               embedded
               initialDate={currentDate}
               autoPdfOnOpen={createForPdf}
-              autoImageOnOpen={createForImage}
               onClose={() => {
                 setCreateVisible(false);
                 setCreateForPdf(false);
-                setCreateForImage(false);
               }}
             />
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={imageDownloadConfirmVisible} transparent animationType="fade" onRequestClose={() => setImageDownloadConfirmVisible(false)}>
-        <View style={styles.imageConfirmOverlay}>
-          <View style={styles.imageConfirmModal}>
-            <Text style={styles.imageConfirmTitle}>シフト画像を保存しますか？</Text>
-            <Text style={styles.imageConfirmText}>{currentDate.getMonth() + 1}月のシフトをA4サイズのPNG画像で保存します。</Text>
-            <View style={styles.imageConfirmActions}>
-              <TouchableOpacity style={styles.imageConfirmCancel} onPress={() => setImageDownloadConfirmVisible(false)}><Text style={styles.imageConfirmCancelText}>キャンセル</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.imageConfirmDownload} onPress={() => { setImageDownloadConfirmVisible(false); setCreateForImage(true); setCreateVisible(true); }}><Ionicons name="download-outline" size={18} color="#FFFFFF" /><Text style={styles.imageConfirmDownloadText}>保存する</Text></TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -601,9 +563,11 @@ const styles = StyleSheet.create({
   notificationHeaderBtn: { width: 42, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
   submitHeaderBtn: { minHeight: 40, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#08AEB8' },
   submitHeaderBtnText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
-  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  monthText: { fontSize: 20, fontWeight: 'bold', marginHorizontal: 16 },
-  monthDownloadBtn: { position: 'absolute', right: 16, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#A7DCDD' },
+  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16 },
+  monthNavButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#F2C98F' },
+  monthPartButton: { minHeight: 44, minWidth: 78, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0', alignItems: 'center', justifyContent: 'center' },
+  monthText: { minWidth: 170, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthTextLabel: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#5D4037' },
   calendarScroll: { flex: 1 },
   calendarContent: { width: '100%', paddingHorizontal: 0, paddingBottom: 100 },
   calHeaderRow: { flexDirection: 'row', marginBottom: 4, paddingHorizontal: 2 },

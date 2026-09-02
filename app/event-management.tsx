@@ -18,6 +18,8 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { useRequireRole } from '../hooks/useRequireRole';
+import { promptMonth } from '../utils/promptMonth';
+import MonthPickerModal from '../components/MonthPickerModal';
 import { navigateHome } from '../utils/navigationHome';
 
 const customAlert = (title: string, message?: string) => {
@@ -55,6 +57,7 @@ export default function EventManagementScreen() {
   useLocalSearchParams<{ role: string }>();
 
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [events, setEvents] = useState<Record<string, EventData>>({});
   const [participantsMap, setParticipantsMap] = useState<Record<string, Participant[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
@@ -292,14 +295,17 @@ export default function EventManagementScreen() {
 
       {/* 月選択 */}
       <View style={styles.monthSelector}>
-        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthBtn}>
+        <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNavButton} accessibilityRole="button">
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.monthText}>{currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月</Text>
-        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthBtn}>
+        <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getFullYear()}年</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.monthPartButton} accessibilityRole="button" onPress={() => setMonthPickerVisible(true)}><Text style={styles.monthTextLabel}>{currentDate.getMonth() + 1}月</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNavButton} accessibilityRole="button">
           <Ionicons name="chevron-forward" size={24} color={COLORS.text} />
         </TouchableOpacity>
       </View>
+
+      <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
 
       {/* カレンダー */}
       <ScrollView style={styles.scrollArea}>
@@ -765,9 +771,12 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: 12 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
 
-  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
+  monthSelector: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 16 },
   monthBtn: { padding: 8, backgroundColor: COLORS.surface, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
-  monthText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  monthNavButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#F2C98F' },
+  monthPartButton: { minHeight: 44, minWidth: 78, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#F2C98F', backgroundColor: '#FFF8F0', alignItems: 'center', justifyContent: 'center' },
+  monthText: { minWidth: 170, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  monthTextLabel: { fontSize: 16, fontWeight: 'bold', color: '#5D4037', textAlign: 'center' },
 
   scrollArea: { flex: 1 },
   calendarContainer: { paddingHorizontal: 8, paddingBottom: 20 },
