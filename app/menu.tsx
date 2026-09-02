@@ -1466,6 +1466,14 @@ export default function MenuScreen() {
   const renderPickupEntryCards = (parsedEntries: any[], showAll = false) => {
     const myDisplayName = role === 'admin' ? '稲熊' : name;
     const filteredEntries = showAll ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === myDisplayName);
+    const orderedEntries = showAll && myDisplayName
+      ? [...filteredEntries].sort((a: any, b: any) => {
+          const aIsMe = a.staffName === myDisplayName;
+          const bIsMe = b.staffName === myDisplayName;
+          if (aIsMe === bIsMe) return 0;
+          return aIsMe ? -1 : 1;
+        })
+      : filteredEntries;
     const customBlockMap = new Map<string, any>();
     try {
       const customBlocks = todayPickup.customBlocks
@@ -1509,7 +1517,7 @@ export default function MenuScreen() {
     if (filteredEntries.length === 0) {
       return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>担当の送迎はありません</Text></View>;
     }
-    return filteredEntries.map((entry: any, sIdx: number) => {
+    return orderedEntries.map((entry: any, sIdx: number) => {
       const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
       const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
       if (activeTrips.length === 0) return null;
