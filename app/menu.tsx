@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
   ImageSourcePropType, Linking, Modal,
-  Platform, SafeAreaView, ScrollView, StyleSheet, Text,
+  Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -2885,9 +2885,9 @@ export default function MenuScreen() {
       </Modal>
 
       <Modal visible={adminShiftMenuVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminShiftMenuVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.adminActionSheet}>
+        <View style={styles.simpleModalBackdrop}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setAdminShiftMenuVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.adminActionSheet}>
               <Text style={styles.simpleModalTitle}>シフト管理</Text>
               <Text style={styles.simpleModalSub}>作成と確認を選べます</Text>
               <TouchableOpacity style={styles.adminActionRow} onPress={() => { setAdminShiftMenuVisible(false); router.push('/shift-create'); }}>
@@ -2900,15 +2900,14 @@ export default function MenuScreen() {
                 <Text style={styles.adminActionText}>シフトを見る</Text>
                 <Ionicons name="chevron-forward" size={18} color="#AAA" />
               </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={adminMoreMenuVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminMoreMenuVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.adminActionSheet}>
+        <View style={styles.simpleModalBackdrop}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setAdminMoreMenuVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.adminActionSheet}>
               <Text style={styles.simpleModalTitle}>メニュー</Text>
               <Text style={styles.simpleModalSub}>その他の管理機能</Text>
               <TouchableOpacity style={styles.adminActionRow} onPress={() => { setAdminMoreMenuVisible(false); router.push({ pathname: '/album', params: { role: role || '', name: name || '' } } as any); }}>
@@ -2921,15 +2920,14 @@ export default function MenuScreen() {
                 <Text style={styles.adminActionText}>アカウント管理</Text>
                 <Ionicons name="chevron-forward" size={18} color="#AAA" />
               </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={adminQuickEditorVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setAdminQuickEditorVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.quickEditorSheet}>
+        <View style={styles.simpleModalBackdrop}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setAdminQuickEditorVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.quickEditorSheet}>
             <View style={styles.simpleModalHeader}>
               <View>
                 <Text style={styles.simpleModalTitle}>クイックメニュー候補</Text>
@@ -2959,15 +2957,14 @@ export default function MenuScreen() {
               })}
               <View style={{ height: 8 }} />
             </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={staffQuickEditorVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={() => setStaffQuickEditorVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.quickEditorSheet}>
+        <View style={styles.simpleModalBackdrop}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setStaffQuickEditorVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.quickEditorSheet}>
             <View style={styles.simpleModalHeader}>
               <View>
                 <Text style={styles.simpleModalTitle}>クイックメニュー候補</Text>
@@ -2997,9 +2994,8 @@ export default function MenuScreen() {
               })}
               <View style={{ height: 8 }} />
             </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal
@@ -3008,9 +3004,9 @@ export default function MenuScreen() {
         animationType="fade"
         onRequestClose={closeQuickReorder}
       >
-        <TouchableOpacity style={styles.simpleModalBackdrop} activeOpacity={1} onPress={closeQuickReorder}>
-          <TouchableWithoutFeedback>
-            <View style={styles.quickReorderSheet}>
+        <View style={styles.simpleModalBackdrop}>
+          <Pressable style={styles.simpleModalDismiss} onPress={closeQuickReorder} accessible={false} focusable={false} />
+          <View style={styles.quickReorderSheet}>
               <View style={styles.simpleModalHeader}>
                 <View>
                   <Text style={styles.simpleModalTitle}>クイックメニューの並び替え</Text>
@@ -3082,9 +3078,8 @@ export default function MenuScreen() {
               <TouchableOpacity style={styles.quickReorderDoneButton} onPress={closeQuickReorder} activeOpacity={0.82}>
                 <Text style={styles.quickReorderDoneText}>完了</Text>
               </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* ── 学年一括更新モーダル ── */}
@@ -3796,9 +3791,9 @@ export default function MenuScreen() {
       </Modal>
 
       <Modal visible={announcementListVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.announcementOverlay} activeOpacity={1} onPress={() => setAnnouncementListVisible(false)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.announcementListCard}>
+        <View style={styles.announcementOverlay}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setAnnouncementListVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.announcementListCard}>
               <View style={styles.announcementModalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Ionicons name="bulb-outline" size={23} color="#A66A10" />
@@ -3833,15 +3828,14 @@ export default function MenuScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!selectedAnnouncement} transparent animationType="fade">
-        <TouchableOpacity style={styles.announcementOverlay} activeOpacity={1} onPress={() => setSelectedAnnouncement(null)}>
-          <TouchableWithoutFeedback>
-            <View style={styles.announcementDetailCard}>
+        <View style={styles.announcementOverlay}>
+          <Pressable style={styles.simpleModalDismiss} onPress={() => setSelectedAnnouncement(null)} accessible={false} focusable={false} />
+          <View style={styles.announcementDetailCard}>
               <View style={styles.announcementModalHeader}>
                 <Text style={styles.announcementDetailHeader}>お知らせ</Text>
                 <TouchableOpacity style={styles.announcementCloseButton} onPress={() => setSelectedAnnouncement(null)}>
@@ -3863,9 +3857,8 @@ export default function MenuScreen() {
                   </>}
                 </View>
               </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!promotionalAnnouncement} transparent animationType="fade">
@@ -4365,6 +4358,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 18,
   },
+  simpleModalDismiss: { ...StyleSheet.absoluteFillObject },
   pickupAllModal: {
     width: '100%',
     maxHeight: '78%',

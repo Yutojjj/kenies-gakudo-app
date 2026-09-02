@@ -1457,8 +1457,8 @@ export default function AlbumScreen() {
 
       {/* 各種モーダル */}
       <Modal visible={!!selectedAlbumDate} transparent animationType="fade" onRequestClose={() => setSelectedAlbumDate(null)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedAlbumDate(null)}>
-          <TouchableOpacity style={styles.dateAlbumModal} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} focusable={false} onPress={() => setSelectedAlbumDate(null)}>
+          <TouchableOpacity style={styles.dateAlbumModal} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.dateAlbumTopRow}>
               <Text style={styles.dateAlbumTitle}>写真・動画</Text>
               <TouchableOpacity style={styles.dateAlbumCloseButton} onPress={() => {
@@ -1652,8 +1652,8 @@ export default function AlbumScreen() {
       </Modal>
 
       <Modal visible={bulkDeleteConfirmVisible} transparent animationType="fade" onRequestClose={() => setBulkDeleteConfirmVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setBulkDeleteConfirmVisible(false)}>
-          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} focusable={false} onPress={() => setBulkDeleteConfirmVisible(false)}>
+          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.eventAlbumDeleteTitle}>選択した写真・動画を削除</Text>
             <Text style={styles.eventAlbumDeleteMessage}>{selectedPhotoIds.length}件を完全に削除しますか？</Text>
             <View style={styles.eventAlbumDeleteActions}>
@@ -1672,8 +1672,8 @@ export default function AlbumScreen() {
       </Modal>
 
       <Modal visible={!!eventAlbumDeleteTarget} transparent animationType="fade" onRequestClose={() => setEventAlbumDeleteTarget(null)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setEventAlbumDeleteTarget(null)}>
-          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} focusable={false} onPress={() => setEventAlbumDeleteTarget(null)}>
+          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.eventAlbumDeleteTitle}>イベントアルバムを削除</Text>
             <Text style={styles.eventAlbumDeleteMessage}>
               「{eventAlbumDeleteTarget ? getEventDisplayName(eventAlbumDeleteTarget) : ''}」と、中の写真・動画をすべて削除しますか？
@@ -1691,8 +1691,8 @@ export default function AlbumScreen() {
       </Modal>
 
       <Modal visible={!!dateJumpPicker} transparent animationType="fade" onRequestClose={() => setDateJumpPicker(null)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDateJumpPicker(null)}>
-          <TouchableOpacity style={styles.dateJumpModal} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} focusable={false} onPress={() => setDateJumpPicker(null)}>
+          <TouchableOpacity style={styles.dateJumpModal} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{dateJumpPicker === 'year' ? '年を選択' : '月を選択'}</Text>
               <TouchableOpacity onPress={() => setDateJumpPicker(null)}>
@@ -1764,8 +1764,8 @@ export default function AlbumScreen() {
       </Modal>
 
       <Modal visible={addMenuVisible} transparent animationType="fade" onRequestClose={() => setAddMenuVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}>
-          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} focusable={false} onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}>
+          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{addTargetDate ? `${formatAlbumDate(addTargetDate)}に追加` : 'アルバムに追加'}</Text>
               <TouchableOpacity onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
@@ -2123,7 +2123,7 @@ const styles = StyleSheet.create({
   },
   uploadingText: { color: COLORS.white, marginTop: 16, fontSize: 16, fontWeight: 'bold' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerCodeButton: { minHeight: 36, paddingHorizontal: 12, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1EAFB', borderWidth: 1, borderColor: '#D4C3EE' },
   headerCodeButtonText: { color: '#6D55A6', fontSize: 12, fontWeight: 'bold' },

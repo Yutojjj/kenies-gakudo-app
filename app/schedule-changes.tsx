@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
-  backBtn: { marginRight: 12 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerSub: { fontSize: 12, color: '#5D4037', opacity: 0.7 },
   notificationToggle: {

@@ -140,9 +140,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  backBtn: {
-    marginRight: 16,
-  },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',

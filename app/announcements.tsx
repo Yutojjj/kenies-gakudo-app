@@ -9,7 +9,7 @@ import {
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet,
+  ActivityIndicator, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet,
   NativeScrollEvent, NativeSyntheticEvent, Text, TextInput, TouchableOpacity,
   TouchableWithoutFeedback, View,
 } from 'react-native';
@@ -520,9 +520,9 @@ export default function AnnouncementsScreen() {
       </TouchableOpacity>
 
       <Modal visible={formVisible} transparent animationType="fade" onRequestClose={closeForm}>
-        <TouchableOpacity style={styles.formModalOverlay} activeOpacity={1} onPress={closeForm}>
-          <TouchableWithoutFeedback>
-            <View style={styles.formModalCard}>
+        <View style={styles.formModalOverlay}>
+          <Pressable style={styles.modalDismissArea} onPress={closeForm} accessible={false} focusable={false} />
+          <View style={styles.formModalCard}>
               <View style={styles.formModalHeader}>
                 <Text style={styles.formModalTitle}>{editingId ? 'お知らせを編集' : 'お知らせを作成'}</Text>
                 <TouchableOpacity style={styles.formModalClose} onPress={closeForm} accessibilityRole="button" accessibilityLabel="閉じる">
@@ -623,16 +623,16 @@ export default function AnnouncementsScreen() {
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>{editingId ? '変更を保存する' : '投稿する'}</Text>}
           </TouchableOpacity>
               </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <AdminBottomNav active="home" />
 
       <Modal visible={calendarVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCalendarVisible(false)}>
-          <TouchableWithoutFeedback><View style={styles.calendarCard}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setCalendarVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.calendarCard}>
             <View style={styles.rangeModalTitleRow}>
               <Text style={styles.rangeModalTitle}>掲載期間を選択</Text>
               <TouchableOpacity style={styles.rangeModalClose} onPress={() => setCalendarVisible(false)}><Ionicons name="close" size={28} color="#4D4641" /></TouchableOpacity>
@@ -679,13 +679,14 @@ export default function AnnouncementsScreen() {
                 setTimeout(() => setTimeVisible(true), 160);
               }}><Text style={[styles.dayText, (isStart || isEnd) && styles.dayTextSelected]}>{day}</Text></TouchableOpacity>;
             })())}</View>
-          </View></TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={timeVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTimeVisible(false)}>
-          <TouchableWithoutFeedback><View style={styles.timeCard}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setTimeVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.timeCard}>
             <Text style={styles.timeTitle}>時間を選択</Text>
             <View style={styles.timeColumns}>
               <TimeWheel values={HOURS} value={publishHour} onChange={setPublishHour} />
@@ -693,13 +694,14 @@ export default function AnnouncementsScreen() {
               <TimeWheel values={MINUTES} value={publishMinute} onChange={setPublishMinute} />
             </View>
             <TouchableOpacity style={styles.timeDone} onPress={() => setTimeVisible(false)}><Text style={styles.timeDoneText}>決定</Text></TouchableOpacity>
-          </View></TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={photoSourceVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPhotoSourceVisible(false)}>
-          <TouchableWithoutFeedback><View style={styles.photoSourceCard}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalDismissArea} onPress={() => setPhotoSourceVisible(false)} accessible={false} focusable={false} />
+          <View style={styles.photoSourceCard}>
             <View style={styles.photoSourceHeader}>
               <Text style={styles.photoSourceTitle}>参考写真を追加</Text>
               <TouchableOpacity style={styles.photoSourceClose} onPress={() => setPhotoSourceVisible(false)}><Ionicons name="close" size={28} color="#332F2C" /></TouchableOpacity>
@@ -712,8 +714,8 @@ export default function AnnouncementsScreen() {
               <Ionicons name="phone-portrait-outline" size={28} color="#C34F76" />
               <View style={{ flex: 1 }}><Text style={styles.photoSourceChoiceTitle}>端末から追加</Text><Text style={styles.photoSourceChoiceCaption}>端末の写真を複数選択</Text></View>
             </TouchableOpacity>
-          </View></TouchableWithoutFeedback>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={albumPickerVisible} transparent animationType="fade" onRequestClose={() => setAlbumPickerVisible(false)}>
@@ -774,12 +776,13 @@ export default function AnnouncementsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF9F2' },
   header: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderColor: '#EEE3D8' },
-  backButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '900', color: '#3E302A' },
   listContent: { padding: 12, paddingBottom: 170 },
   formContent: { padding: 14, paddingBottom: 30 },
   fab: { position: 'absolute', right: 18, bottom: 88, zIndex: 8, width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: '#00AEB8', shadowColor: '#294B4D', shadowOpacity: 0.24, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 7 },
   formModalOverlay: { flex: 1, padding: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(30,25,22,0.52)' },
+  modalDismissArea: { ...StyleSheet.absoluteFillObject },
   formModalCard: { width: '100%', maxWidth: 720, height: '92%', maxHeight: 900, overflow: 'hidden', borderRadius: 18, backgroundColor: '#FFF9F2' },
   formModalHeader: { minHeight: 64, paddingLeft: 18, paddingRight: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#E8DED4', backgroundColor: '#FFF' },
   formModalTitle: { flex: 1, fontSize: 20, fontWeight: '900', color: '#332F2C' },

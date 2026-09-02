@@ -457,8 +457,9 @@ export default function QrScanScreen() {
 
   const pinModal = (
     <Modal visible={pinModalVisible} transparent animationType="fade" onRequestClose={closePinModal}>
-      <Pressable style={styles.pinOverlay} onPress={closePinModal}>
-        <Pressable style={styles.pinModalCard} onPress={event => event.stopPropagation()}>
+      <View style={styles.pinOverlay}>
+        <Pressable style={styles.pinDismissArea} onPress={closePinModal} accessible={false} focusable={false} />
+        <View style={styles.pinModalCard}>
           <View style={styles.pinModalHeader}>
             <View>
               <Text style={styles.pinModalTitle}>{pinAuthorized ? '本日の登所予定' : 'PINコード'}</Text>
@@ -546,8 +547,8 @@ export default function QrScanScreen() {
               )}
             </View>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 
@@ -930,6 +931,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(25, 20, 18, 0.62)',
   },
+  pinDismissArea: { ...StyleSheet.absoluteFillObject },
   pinModalCard: {
     width: '100%',
     maxWidth: 430,

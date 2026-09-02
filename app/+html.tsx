@@ -26,8 +26,8 @@ export default function Root({ children }: PropsWithChildren) {
             font-size: 16px !important;
           }
           @media (hover: hover) and (pointer: fine) {
-            button:not(:disabled):hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
-            a:hover:not(:has(button:hover, a:hover, [role="button"]:hover)),
+            button:not(:disabled):hover:not(:has(button:hover, a:hover, [role="button"]:hover, [tabindex="0"]:hover)),
+            a:hover:not(:has(button:hover, a:hover, [role="button"]:hover, [tabindex="0"]:hover)),
             [role="button"]:not([aria-disabled="true"]):hover:not(:has(button:hover, a:hover, [role="button"]:hover, [tabindex="0"]:hover)),
             [tabindex="0"]:hover:not(:has(button:hover, a:hover, [role="button"]:hover, [tabindex="0"]:hover)) {
               background-image: linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1));

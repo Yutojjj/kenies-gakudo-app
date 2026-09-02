@@ -530,12 +530,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 10,
   },
-  backBtn: { 
-    marginRight: 16,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    padding: 6,
-    borderRadius: 16,
-  },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: 'rgba(255,255,255,0.6)' },
   qrBtn: {
     flexDirection: 'row',
     alignItems: 'center',

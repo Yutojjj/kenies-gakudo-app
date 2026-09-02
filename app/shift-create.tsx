@@ -1182,7 +1182,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
             const hPeriod = holidayPeriods.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
             return (
-              <TouchableOpacity key={item.dateStr} style={[styles.calCell, hPeriod?.color && { backgroundColor: hPeriod.color }]} onPress={() => openDayModal(item.dateStr)}>
+              <TouchableOpacity key={item.dateStr} accessibilityRole="button" accessibilityLabel={`${item.dateStr}のシフト`} style={[styles.calCell, hPeriod?.color && { backgroundColor: hPeriod.color }]} onPress={() => openDayModal(item.dateStr)}>
                 <View style={styles.cellTopRow}>
                   <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
                   <View style={{ alignItems: 'flex-end' }}>
@@ -1332,8 +1332,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       <MonthPickerModal visible={monthPickerVisible} value={currentDate} onChange={setCurrentDate} onClose={() => setMonthPickerVisible(false)} />
 
       <Modal visible={photoManagerVisible} transparent animationType="fade" onRequestClose={() => setPhotoManagerVisible(false)}>
-        <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} onPress={() => setPhotoManagerVisible(false)}>
-          <TouchableOpacity style={styles.photoManagerPanel} activeOpacity={1} onPress={event => event.stopPropagation()}>
+        <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} focusable={false} onPress={() => setPhotoManagerVisible(false)}>
+          <TouchableOpacity style={styles.photoManagerPanel} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.photoManagerHeader}>
               <Text style={styles.photoManagerTitle}>印刷写真</Text>
               <TouchableOpacity onPress={() => setPhotoManagerVisible(false)} accessibilityLabel="閉じる">
@@ -1951,7 +1951,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           onPress={() => setMonthActionConfirm(null)}
         >
           {monthActionConfirm === 'autoFill' ? (
-          <TouchableOpacity style={styles.monthAutoReviewPanel} activeOpacity={1} onPress={event => event.stopPropagation()}>
+          <TouchableOpacity style={styles.monthAutoReviewPanel} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.monthAutoReviewHeader}>
               <View style={styles.monthAutoReviewHeading}>
                 <Text style={styles.monthAutoReviewTitle}>自動入力</Text>
@@ -2337,7 +2337,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { position: 'relative', zIndex: 1000, elevation: 20, overflow: 'visible', minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   headerActions: { position: 'relative', zIndex: 1001, flexDirection: 'row', alignItems: 'center', gap: 3, padding: 3, borderRadius: 10, backgroundColor: '#EAF7F7', flexShrink: 1 },
   pdfMenuAnchor: { position: 'relative', zIndex: 1002 },

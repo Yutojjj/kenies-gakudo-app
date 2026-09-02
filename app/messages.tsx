@@ -1158,8 +1158,8 @@ export default function MessagesScreen() {
         />
 
         <Modal visible={!!deleteConversationTarget} transparent animationType="fade" onRequestClose={() => setDeleteConversationTarget(null)}>
-          <TouchableOpacity style={styles.deleteConfirmOverlay} activeOpacity={1} onPress={() => setDeleteConversationTarget(null)}>
-            <TouchableOpacity style={styles.deleteConfirmCard} activeOpacity={1} onPress={() => {}}>
+          <TouchableOpacity style={styles.deleteConfirmOverlay} activeOpacity={1} focusable={false} onPress={() => setDeleteConversationTarget(null)}>
+            <TouchableOpacity style={styles.deleteConfirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
               <Text style={styles.deleteConfirmTitle}>トークを削除しますか？</Text>
               <Text style={styles.deleteConfirmMessage}>
                 「{deleteConversationTarget?.name || 'トーク'}」を削除します。削除後は元に戻せません。
@@ -1602,7 +1602,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F0',
     borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
-  backBtn: { marginRight: 12 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   callHeaderBtn: { padding: 8, marginLeft: 8, backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 20 },
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },

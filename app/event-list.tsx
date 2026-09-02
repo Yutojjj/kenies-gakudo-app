@@ -568,6 +568,8 @@ export default function EventListScreen() {
                   return (
                     <TouchableOpacity
                       key={item.dateStr}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${item.dateStr}のイベント`}
                       style={[
                         styles.calCell,
                         evs.length > 0 && styles.calCellHasEvent,
@@ -946,7 +948,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  backBtn: { marginRight: 12 },
+  backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
 
   // メインタブ

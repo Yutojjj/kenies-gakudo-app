@@ -991,8 +991,8 @@ export default function TypingCertScreen() {
       )}
 
       <Modal visible={clearStagesVisible} transparent animationType="fade" onRequestClose={() => setClearStagesVisible(false)}>
-        <TouchableOpacity style={styles.stageClearOverlay} activeOpacity={1} onPress={() => setClearStagesVisible(false)}>
-          <TouchableOpacity style={styles.stageClearDialog} activeOpacity={1} onPress={event => event.stopPropagation()}>
+        <TouchableOpacity style={styles.stageClearOverlay} activeOpacity={1} focusable={false} onPress={() => setClearStagesVisible(false)}>
+          <TouchableOpacity style={styles.stageClearDialog} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
             <Text style={styles.stageClearDescription}>8ステージ分のはやさとミス数がすべて消去されます。</Text>
             <View style={styles.stageClearActions}>
@@ -1013,8 +1013,8 @@ export default function TypingCertScreen() {
         animationType="slide"
         onRequestClose={() => { setActiveStageInput(null); setStageInputMode('value'); }}
       >
-        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
-          <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} onPress={event => event.stopPropagation()}>
+        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} focusable={false} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
+          <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.numberPadHeader}>
               <View style={styles.numberPadHeading}>
                 <Text style={styles.numberPadStageLabel}>
@@ -1083,7 +1083,7 @@ export default function TypingCertScreen() {
 
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setPickerTarget(null)}>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} focusable={false} onPress={() => setPickerTarget(null)}>
           <View style={styles.pickerBox}>
             <Text style={styles.pickerTitle}>
               {pickerTarget === 'student' ? '氏名を選択'
@@ -1161,7 +1161,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F0', flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 14, borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
   },
-  backBtn:     { marginRight: 8, padding: 2 },
+  backBtn:     { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#5D4037', flex: 1 },
   tabBar:      { flexDirection: 'row', backgroundColor: '#b8d8f0' },
   tabBtn:      { flex: 1, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
