@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -12,7 +12,11 @@ type Props = {
 
 export default function MonthPickerModal({ visible, value, mode, onChange, onClose }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  const years = Array.from({ length: 11 }, (_, index) => value.getFullYear() - 5 + index);
+  const [yearAnchor, setYearAnchor] = useState(value.getFullYear());
+  useEffect(() => {
+    if (visible) setYearAnchor(value.getFullYear());
+  }, [visible]);
+  const years = Array.from({ length: 10 }, (_, index) => yearAnchor - 5 + index);
   const selectYear = (year: number) => onChange(new Date(year, value.getMonth(), 1));
   const selectMonth = (month: number) => onChange(new Date(value.getFullYear(), month, 1));
 
