@@ -877,9 +877,10 @@ export default function EventListScreen() {
         <TouchableOpacity
           style={styles.confirmOverlay}
           activeOpacity={1}
+          focusable={false}
           onPress={() => setParticipationConfirm(null)}
         >
-          <TouchableOpacity style={styles.confirmCard} activeOpacity={1} onPress={() => {}}>
+          <TouchableOpacity style={styles.confirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.confirmTitle}>
               {participationConfirm?.isJoined ? '申し込みを取り消す' : 'イベントに申し込む'}
             </Text>
