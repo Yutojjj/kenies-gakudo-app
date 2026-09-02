@@ -322,6 +322,7 @@ export default function MenuScreen() {
   const [showAllPickup, setShowAllPickup] = useState(false);
   const [pickupDetailModalVisible, setPickupDetailModalVisible] = useState(false);
   const [pickupOverviewData, setPickupOverviewData] = useState<TransportOverviewData | null>(null);
+  const [pickupShiftStaff, setPickupShiftStaff] = useState<any[]>([]);
   const [pickupOverviewAction, setPickupOverviewAction] = useState<'view' | 'print'>('view');
   const [pickupOverviewLoadingAction, setPickupOverviewLoadingAction] = useState<'view' | 'print' | null>(null);
   const [noticeVisible, setNoticeVisible] = useState(false);
@@ -1100,9 +1101,13 @@ export default function MenuScreen() {
     loadTransportOverview(dateStr).then(overview => {
       if (cancelled) return;
       const isNonWorkingDay = dayOfWeek === 0 || dayOfWeek === 6 || !!overview.publicHolidays?.[dateStr];
+      setPickupShiftStaff(Array.isArray(overview.shiftStaff) ? overview.shiftStaff : []);
       setPickupEntryStatus(isNonWorkingDay ? null : getTransportEntryStatus(overview.attendance, todayPickup));
     }).catch(() => {
-      if (!cancelled) setPickupEntryStatus(null);
+      if (!cancelled) {
+        setPickupShiftStaff([]);
+        setPickupEntryStatus(null);
+      }
     });
 
     return () => { cancelled = true; };
@@ -1465,6 +1470,14 @@ export default function MenuScreen() {
 
   const renderPickupEntryCards = (parsedEntries: any[], showAll = false) => {
     const myDisplayName = role === 'admin' ? '稲熊' : name;
+    const shiftStaffList = pickupOverviewData?.shiftStaff || pickupShiftStaff;
+    const getPickupStaffShift = (staffName: string) => {
+      const normalizedName = String(staffName || '').replace(/\s/g, '');
+      const staff = shiftStaffList.find((shift: any) => String(shift?.name || '').replace(/\s/g, '') === normalizedName);
+      const start = String(staff?.start || staff?.startTime || '');
+      const end = String(staff?.end || staff?.endTime || '');
+      return start && end ? `${start} - ${end}` : '';
+    };
     const filteredEntries = showAll ? parsedEntries : parsedEntries.filter((e: any) => e.staffName === myDisplayName);
     const orderedEntries = showAll && myDisplayName
       ? [...filteredEntries].sort((a: any, b: any) => {
@@ -1489,9 +1502,11 @@ export default function MenuScreen() {
     const getBlockLabel = (blockKey: string) => {
       const customBlock = customBlockMap.get(blockKey);
       if (customBlock) {
-        return `${customBlock.time || ''} ${customBlock.destination || '追加した送迎先'}`.trim();
+        return `${customBlock.destination || '追加した送迎先'} ${customBlock.time || ''}`.trim();
       }
       if (blockKey.startsWith('custom_')) return '追加した送迎先';
+      const timeMatch = blockKey.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+      if (timeMatch) return `${timeMatch[2]} ${timeMatch[1]}`;
       const parts = blockKey.split('_');
       return parts.length > 1
         ? `${parts.slice(0, -1).join('_')} ${parts[parts.length - 1]}`
@@ -1519,6 +1534,7 @@ export default function MenuScreen() {
     }
     return orderedEntries.map((entry: any, sIdx: number) => {
       const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
+      const shiftTime = getPickupStaffShift(entry.staffName);
       const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
       if (activeTrips.length === 0) return null;
       return (
@@ -1526,6 +1542,7 @@ export default function MenuScreen() {
           <View style={styles.staffNameRow}>
             <View style={[styles.staffDot, { backgroundColor: color }]} />
             <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
+            {!!shiftTime && <Text style={styles.staffShiftTime}>{shiftTime}</Text>}
           </View>
           <View style={[styles.tripsRow, { flexWrap: 'wrap' }]}>
             {activeTrips.map((trip: any, tIdx: number) => (
@@ -4912,9 +4929,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  staffNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  staffNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, minWidth: 0 },
   staffDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   staffName: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
+  staffShiftTime: { marginLeft: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F1F6F6', fontSize: 11, fontWeight: '800', color: '#46585B' },
   tripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tripSlot: {
     flexDirection: 'column',

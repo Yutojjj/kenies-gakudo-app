@@ -190,7 +190,7 @@ export default function TransportModal({
     const nameOnly = lessonKey.replace(time, '').trim() || lessonKey;
     blocks.push({ 
       key: lessonKey, 
-      label: lessonKey, 
+      label: `${nameOnly} ${time}`.trim(), 
       nameOnly, 
       time, 
       count: (kids as any[]).length, 
@@ -201,7 +201,7 @@ export default function TransportModal({
   customBlocks.forEach((customBlock) => {
     blocks.push({
       key: customBlock.id,
-      label: `${customBlock.time} ${customBlock.destination}`,
+      label: `${customBlock.destination} ${customBlock.time}`.trim(),
       nameOnly: customBlock.destination,
       time: customBlock.time,
       count: customBlock.members.length,
@@ -464,10 +464,12 @@ export default function TransportModal({
 
   const formatLastWeekBlock = (blockKey: string) => {
     const customBlock = lastWeekCustomBlocks.find(block => block.id === blockKey);
-    if (customBlock) return `${customBlock.time} ${customBlock.destination}`;
+    if (customBlock) return `${customBlock.destination} ${customBlock.time}`.trim();
     if (blockKey.startsWith('custom_')) return '追加した送迎先';
+    const lessonMatch = blockKey.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+    if (lessonMatch) return `${lessonMatch[2]} ${lessonMatch[1]}`;
     const match = blockKey.match(/^(.*)_(\d{1,2}:\d{2})$/);
-    if (match) return `${match[2]} ${match[1].replace(/_/g, ' ')}`;
+    if (match) return `${match[1].replace(/_/g, ' ')} ${match[2]}`;
     return blockKey.replace(/_/g, ' ');
   };
 
@@ -1973,7 +1975,7 @@ export default function TransportModal({
           </View>
           <Text style={styles.customDeleteTitle}>送迎先を削除しますか？</Text>
           <Text style={styles.customDeleteDescription}>
-            {customBlockToDelete?.time} {customBlockToDelete?.destination}
+            {customBlockToDelete?.destination} {customBlockToDelete?.time}
           </Text>
           <Text style={styles.customDeleteNote}>担当に割り当て済みの場合は、担当からも削除されます。</Text>
           <View style={styles.customDeleteActions}>
