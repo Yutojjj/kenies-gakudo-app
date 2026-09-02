@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   visible: boolean;
@@ -36,7 +36,7 @@ export default function MonthPickerModal({ visible, value, mode, onChange, onClo
           </View>
           <Text style={styles.sectionLabel}>{mode === 'year' ? '年' : '月'}</Text>
           {mode === 'year' ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.yearRow}>
+            <View style={styles.yearGrid}>
               {years.map(year => (
                 <Pressable
                   key={year}
@@ -53,7 +53,7 @@ export default function MonthPickerModal({ visible, value, mode, onChange, onClo
                   <Text style={[styles.buttonText, year === value.getFullYear() && styles.selectedText]}>{year}年</Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           ) : (
             <View style={styles.monthGrid}>
               {Array.from({ length: 12 }, (_, month) => (
@@ -98,8 +98,8 @@ const styles = StyleSheet.create({
   closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF1E4' },
   closeButtonInteraction: { backgroundColor: '#EAD9CB' },
   sectionLabel: { marginTop: 16, marginBottom: 8, fontSize: 13, fontWeight: '900', color: '#76665E' },
-  yearRow: { gap: 8 },
-  yearButton: { minWidth: 76, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#E5D7CB', backgroundColor: '#FFFFFF' },
+  yearGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  yearButton: { width: '31%', minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#E5D7CB', backgroundColor: '#FFFFFF' },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   monthButton: { width: '23%', minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#E5D7CB', backgroundColor: '#FFFFFF' },
   selectedButton: { borderColor: '#00AEB8', backgroundColor: '#D9F1F1' },
