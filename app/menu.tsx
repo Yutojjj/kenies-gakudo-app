@@ -1564,6 +1564,45 @@ export default function MenuScreen() {
             .sort((a: any, b: any) => Number(a.tripIndex ?? 0) - Number(b.tripIndex ?? 0))
         : [];
       if (activeTrips.length === 0) return null;
+      if (entry.staffName === '送迎しない') {
+        const noTransportBlockKeys = Array.from(new Set(activeTrips.flatMap((trip: any) => trip.blockKeys))) as string[];
+        return (
+          <AnimatedTouchableOpacity
+            key={`${entry.staffName}-${sIdx}`}
+            style={[styles.staffSection, styles.noTransportSection, { borderLeftColor: color, backgroundColor: '#FFFFFF', borderRadius: 10, marginBottom: 6 }]}
+            onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="送迎しない一覧を確認"
+          >
+            <View style={styles.staffNameRow}>
+              <View style={[styles.staffDot, { backgroundColor: color }]} />
+              <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
+            </View>
+            <View style={styles.noTransportGrid}>
+              {noTransportBlockKeys.map((bk: string) => {
+                const blockDisplay = getBlockDisplay(bk);
+                const members = showAll ? getBlockMembers(bk) : [];
+                return (
+                  <View key={bk} style={styles.noTransportItem}>
+                    <View style={styles.pickupDestinationRow}>
+                      {!!blockDisplay.time && <Text style={styles.pickupTimeText}>{blockDisplay.time}</Text>}
+                      <Text style={[styles.noTransportDestination, blockDisplay.isLesson && styles.lessonDestinationText]} numberOfLines={1}>{blockDisplay.destination}</Text>
+                    </View>
+                    {members.length > 0 && (
+                      <View style={styles.pickupMemberGrid}>
+                        {members.map((member: string, memberIndex: number) => (
+                          <Text key={`${member}-${memberIndex}`} style={styles.pickupMemberNameCell} numberOfLines={1}>{member}</Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </AnimatedTouchableOpacity>
+        );
+      }
       // 回数順に上から積み、縦に長くなった時点で次の列へ送る。
       const tripColumns: any[][] = [[], []];
       const columnHeights = [0, 0];
@@ -5018,6 +5057,11 @@ const styles = StyleSheet.create({
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
   pickupMemberGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 3, columnGap: 10, rowGap: 2 },
   pickupMemberNameCell: { maxWidth: '48%', flexShrink: 1, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
+  noTransportSection: { borderLeftWidth: 4 },
+  noTransportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  noTransportItem: { width: '48%', padding: 8, borderWidth: 1, borderColor: '#D6DADA', borderRadius: 8, backgroundColor: '#FAFCFC' },
+  noTransportDestination: { flexShrink: 1, minWidth: 0, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
+  lessonDestinationText: { color: '#2476C7' },
   pickupDestinationRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', width: '100%' },
   pickupDestinationText: { flexShrink: 1, minWidth: 0 },
   pickupTimeText: { flexShrink: 0, marginRight: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
