@@ -1698,7 +1698,9 @@ export default function MenuScreen() {
                 {column.map((trip: any, columnItemIndex: number) => {
                   const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
                   const tripStatus = getTripStatus(trip);
-                  const isNextTrip = isTodayStaffPlan && activeTrips.indexOf(trip) === nextTripOrder;
+                  // 送迎中は現在の送迎だけを強調し、終了後に次の送迎へ強調を移す。
+                  const highlightedTripOrder = currentTripOrder >= 0 ? currentTripOrder : nextTripOrder;
+                  const isNextTrip = isTodayStaffPlan && activeTrips.indexOf(trip) === highlightedTripOrder;
                   return (
                     <View key={`${entry.staffName || sIdx}-${tripIndex}-${columnItemIndex}`} style={styles.tripTimelineItem}>
                       {showCurrentTimeMarker && activeTrips.indexOf(trip) === markerTripOrder && (
@@ -4940,7 +4942,7 @@ const styles = StyleSheet.create({
   pickupLegendDot: { width: 12, height: 12, borderRadius: 6 },
   pickupLegendText: { fontSize: 12, fontWeight: '800', color: '#4B5558' },
   tripSlotCompleted: { backgroundColor: '#DCDCDC' },
-  tripSlotCurrent: { backgroundColor: '#C4EFF0' },
+  tripSlotCurrent: { backgroundColor: '#FFF4D8' },
   tripSlotFuture: { backgroundColor: '#FFFFFF' },
   tripSlotNext: { borderWidth: 1.5, borderColor: '#F29A24', backgroundColor: '#FFF4D8' },
   staffSectionEditBtn: {
