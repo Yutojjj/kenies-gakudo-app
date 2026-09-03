@@ -1695,6 +1695,7 @@ export default function MenuScreen() {
                 {column.map((trip: any, columnItemIndex: number) => {
                   const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
                   const tripStatus = getTripStatus(trip);
+                  const isNextTrip = isTodayStaffPlan && activeTrips.indexOf(trip) === nextTripOrder;
                   return (
                     <View key={`${entry.staffName || sIdx}-${tripIndex}-${columnItemIndex}`} style={styles.tripTimelineItem}>
                       {showCurrentTimeMarker && activeTrips.indexOf(trip) === markerTripOrder && (
@@ -1716,7 +1717,7 @@ export default function MenuScreen() {
                             : <Text style={styles.tripMarkerNumber}>{tripIndex + 1}</Text>}
                         </View>
                       </View>
-                      <View style={[styles.tripSlot, tripStatus === 'completed' ? styles.tripSlotCompleted : tripStatus === 'current' ? styles.tripSlotCurrent : styles.tripSlotFuture, { borderColor: tripStatus === 'completed' ? '#B8B8B8' : tripStatus === 'current' ? '#00AEB8' : '#3479C8', borderRadius: 8 }]}>
+                      <View style={[styles.tripSlot, tripStatus === 'completed' ? styles.tripSlotCompleted : tripStatus === 'current' ? styles.tripSlotCurrent : styles.tripSlotFuture, { borderColor: tripStatus === 'completed' ? '#B8B8B8' : tripStatus === 'current' ? '#00AEB8' : '#3479C8', borderRadius: 8 }, isNextTrip && styles.tripSlotNext]}>
                         <View style={{ flex: 1, width: '100%' }}>
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
                           const blockDisplay = getBlockDisplay(bk);
@@ -4938,6 +4939,7 @@ const styles = StyleSheet.create({
   tripSlotCompleted: { backgroundColor: '#DCDCDC' },
   tripSlotCurrent: { backgroundColor: '#C4EFF0' },
   tripSlotFuture: { backgroundColor: '#FFFFFF' },
+  tripSlotNext: { borderWidth: 1.5, borderColor: '#F29A24', backgroundColor: '#FFF4D8' },
   staffSectionEditBtn: {
     flexDirection: 'row',
     alignItems: 'center',
