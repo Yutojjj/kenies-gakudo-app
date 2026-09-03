@@ -1603,8 +1603,8 @@ export default function MenuScreen() {
                           return (
                             <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
                               <View style={styles.pickupDestinationRow}>
-                                <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
                                 {!!blockDisplay.time && <Text style={styles.pickupTimeText}>{blockDisplay.time}</Text>}
+                                <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
                               </View>
                               {members.length > 0 && (
                                 <View style={styles.pickupMemberGrid}>
@@ -4995,7 +4995,7 @@ const styles = StyleSheet.create({
   tripsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   tripColumn: { flex: 1, minWidth: 0, alignSelf: 'stretch', gap: 6, paddingLeft: 28, position: 'relative' },
   tripColumnFull: { flex: 1, width: 'auto' },
-  tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 18, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
+  tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
   tripTimelineItem: { position: 'relative', width: '100%' },
   tripSlot: {
@@ -5017,7 +5017,7 @@ const styles = StyleSheet.create({
   pickupMemberNameCell: { maxWidth: '48%', flexShrink: 1, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
   pickupDestinationRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', width: '100%' },
   pickupDestinationText: { flexShrink: 1, minWidth: 0 },
-  pickupTimeText: { flexShrink: 0, marginLeft: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
+  pickupTimeText: { flexShrink: 0, marginRight: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',
