@@ -1575,7 +1575,7 @@ export default function MenuScreen() {
           <View style={styles.tripsRow}>
             {tripColumns.filter((column: any[]) => column.length > 0).map((column: any[], columnIndex: number, visibleColumns: any[][]) => (
               <View key={`trip-column-${columnIndex}`} style={[styles.tripColumn, visibleColumns.length === 1 && styles.tripColumnFull]}>
-                <View style={[styles.tripRailLine, { backgroundColor: color }]} />
+                <View style={[styles.tripRailLine, columnIndex > 0 && styles.tripRailLineContinue, { backgroundColor: color }]} />
                 {column.map((trip: any, columnItemIndex: number) => {
                   const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
                   return (
@@ -4981,6 +4981,7 @@ const styles = StyleSheet.create({
   tripColumn: { flex: 1, minWidth: 0, alignSelf: 'stretch', gap: 6, paddingLeft: 28, position: 'relative' },
   tripColumnFull: { flex: 1, width: 'auto' },
   tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 18, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
+  tripRailLineContinue: { top: 0 },
   tripTimelineItem: { position: 'relative', width: '100%' },
   tripSlot: {
     flexDirection: 'column',
