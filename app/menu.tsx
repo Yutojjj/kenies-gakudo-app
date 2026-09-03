@@ -437,6 +437,7 @@ export default function MenuScreen() {
   const [scheduleDatePickerVisible, setScheduleDatePickerVisible] = useState(false);
   const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
+  const [currentClock, setCurrentClock] = useState(() => new Date());
   const [todayPlanLoading, setTodayPlanLoading] = useState(false);
   const [menuEvents, setMenuEvents] = useState<MenuEventItem[]>([]);
   const [menuEventDetails, setMenuEventDetails] = useState<Record<string, boolean>>({});
@@ -554,6 +555,7 @@ export default function MenuScreen() {
   const waveAnim = useRef(new Animated.Value(0)).current;
   const eventRevealAnim = useRef(new Animated.Value(0)).current;
   const eventFloatAnim = useRef(new Animated.Value(0)).current;
+  const currentTimePulseAnim = useRef(new Animated.Value(0)).current;
   const todayPlanItemAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const quickItemAnims = useRef(Array.from({ length: 24 }, () => new Animated.Value(0))).current;
 
@@ -1115,6 +1117,11 @@ export default function MenuScreen() {
   }, [role, staffPlanDate, todayPickup]);
 
   useEffect(() => {
+    const clockTimer = setInterval(() => setCurrentClock(new Date()), 1000);
+    return () => clearInterval(clockTimer);
+  }, []);
+
+  useEffect(() => {
     // フワフワアニメーション
     Animated.loop(
       Animated.sequence([
@@ -1138,6 +1145,14 @@ export default function MenuScreen() {
       Animated.sequence([
         Animated.timing(eventFloatAnim, { toValue: 1, duration: 2200, useNativeDriver: true }),
         Animated.timing(eventFloatAnim, { toValue: 0, duration: 2200, useNativeDriver: true }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(currentTimePulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(currentTimePulseAnim, { toValue: 0, duration: 900, useNativeDriver: true }),
+        Animated.delay(700),
       ])
     ).start();
 
@@ -1567,6 +1582,9 @@ export default function MenuScreen() {
     }
     return orderedEntries.map((entry: any, sIdx: number) => {
       const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
+      const now = new Date();
+      const isTodayStaffPlan = makeDateStr(staffPlanDate) === makeDateStr(now);
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const shiftTime = getPickupStaffShift(entry.staffName);
       const activeTrips = entry.trips
         ? entry.trips
@@ -1574,6 +1592,25 @@ export default function MenuScreen() {
             .sort((a: any, b: any) => Number(a.tripIndex ?? 0) - Number(b.tripIndex ?? 0))
         : [];
       if (activeTrips.length === 0) return null;
+      const scheduledMinutes = activeTrips.flatMap((trip: any) => trip.blockKeys.map((key: string) => {
+        const time = getBlockDisplay(key).time;
+        if (!/^\d{1,2}:\d{2}$/.test(time)) return [];
+        const [hour, minute] = time.split(':').map(Number);
+        return [hour * 60 + minute];
+      })).flat();
+      const firstScheduledMinute = scheduledMinutes.length > 0 ? Math.min(...scheduledMinutes) : null;
+      const lastScheduledMinute = scheduledMinutes.length > 0 ? Math.max(...scheduledMinutes) : null;
+      const firstTripMinutes = activeTrips[0].blockKeys.map((key: string) => {
+        const time = getBlockDisplay(key).time;
+        if (!/^\d{1,2}:\d{2}$/.test(time)) return null;
+        const [hour, minute] = time.split(':').map(Number);
+        return hour * 60 + minute;
+      }).filter((value: number | null): value is number => value !== null);
+      const firstTripStartMinute = firstTripMinutes.length > 0 ? Math.min(...firstTripMinutes) : null;
+      const currentTimeProgress = firstScheduledMinute !== null && lastScheduledMinute !== null
+        ? Math.max(0, Math.min(1, (currentMinutes - (firstScheduledMinute - 60)) / ((lastScheduledMinute + 60) - (firstScheduledMinute - 60) || 1)))
+        : 0;
+      const showCurrentTimeMarker = isTodayStaffPlan && firstTripStartMinute !== null && currentMinutes >= firstTripStartMinute;
       if (entry.staffName === '送迎しない') {
         const noTransportBlockKeys = Array.from(new Set(activeTrips.flatMap((trip: any) => trip.blockKeys))) as string[];
         return (
@@ -1643,8 +1680,17 @@ export default function MenuScreen() {
           </View>
           <View style={styles.tripsRow}>
             {tripColumns.filter((column: any[]) => column.length > 0).map((column: any[], columnIndex: number, visibleColumns: any[][]) => (
-              <View key={`trip-column-${columnIndex}`} style={[styles.tripColumn, visibleColumns.length === 1 && styles.tripColumnFull]}>
+                <View key={`trip-column-${columnIndex}`} style={[styles.tripColumn, visibleColumns.length === 1 && styles.tripColumnFull]}>
                 <View style={[styles.tripRailLine, columnIndex > 0 && styles.tripRailLineContinue, { backgroundColor: color }]} />
+                {showCurrentTimeMarker && (
+                  <Animated.View
+                    style={[
+                      styles.currentTimeMarker,
+                      { top: `${currentTimeProgress * 100}%`, backgroundColor: color },
+                      { transform: [{ scale: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }] },
+                    ]}
+                  />
+                )}
                 {column.map((trip: any, columnItemIndex: number) => {
                   const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
                   return (
@@ -2007,6 +2053,9 @@ export default function MenuScreen() {
                 <View style={styles.todayPlanTitleBar} />
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
+              <Text style={styles.currentClockText}>
+                {currentClock.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              </Text>
             </View>
             <Animated.View
               style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
@@ -4837,6 +4886,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    position: 'relative',
     marginBottom: 2,
   },
   staffMenuTitle: {
@@ -4845,6 +4895,17 @@ const styles = StyleSheet.create({
     color: '#333333',
     fontStyle: 'italic',
     letterSpacing: 2,
+  },
+  currentClockText: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '900',
+    color: '#007F88',
+    fontVariant: ['tabular-nums'],
   },
   staffSectionEditBtn: {
     flexDirection: 'row',
@@ -5051,6 +5112,7 @@ const styles = StyleSheet.create({
   tripColumnFull: { flex: 1, width: 'auto' },
   tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
+  currentTimeMarker: { position: 'absolute', zIndex: 3, left: 5, width: 15, height: 15, marginTop: -7, borderRadius: 8 },
   tripTimelineItem: { position: 'relative', width: '100%' },
   tripSlot: {
     flexDirection: 'column',
