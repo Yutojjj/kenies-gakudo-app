@@ -132,7 +132,7 @@ type StaffQuickKey =
 const DEFAULT_STAFF_QUICK_KEYS: StaffQuickKey[] = ['todayStatus', 'pickup', 'userList', 'announcements', 'album', 'scheduleChanges'];
 
 const STAFF_COLORS = [
-  '#00AEB8','#4A90E2','#7E9CF5','#8A63D2','#F06292',
+  '#00AEB8','#4A90E2','#F2A65A','#8A63D2','#F06292',
   '#2EAD6B','#4DB6AC','#5B9BD5','#9B8BB5','#90A4AE',
 ];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
