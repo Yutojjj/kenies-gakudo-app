@@ -1513,6 +1513,17 @@ export default function MenuScreen() {
         : blockKey;
     };
     const getBlockMembers = (blockKey: string) => {
+      const getGradeOrder = (grade: any) => {
+        const value = String(grade || '').replace(/\s/g, '');
+        const kindergartenOrder: Record<string, number> = { '年少': 0, '年中': 1, '年長': 2 };
+        if (kindergartenOrder[value] !== undefined) return kindergartenOrder[value];
+        const elementary = value.match(/小(\d+)/);
+        if (elementary) return 2 + Number(elementary[1]);
+        const juniorHigh = value.match(/中(\d+)/);
+        if (juniorHigh) return 8 + Number(juniorHigh[1]);
+        return 99;
+      };
+      const sortMembersByGrade = (members: any[]) => [...members].sort((a, b) => getGradeOrder(a.grade) - getGradeOrder(b.grade));
       const customBlock = customBlockMap.get(blockKey);
       if (customBlock) return Array.isArray(customBlock.members) ? customBlock.members : [];
       if (!pickupOverviewData) return [];
@@ -1520,11 +1531,11 @@ export default function MenuScreen() {
       for (const [school, times] of Object.entries(pickupOverviewData.attendance.schools || {})) {
         for (const [time, kids] of Object.entries(times || {})) {
           if (`${school}_${time}` !== blockKey) continue;
-          return (kids || []).map((kid: any) => `${kid.name || '名前未登録'}${kid.grade ? `（${kid.grade}）` : ''}`);
+          return sortMembersByGrade(kids || []).map((kid: any) => kid.name || '名前未登録');
         }
       }
       const lessonKids = pickupOverviewData.attendance.lessons?.[blockKey] || [];
-      return lessonKids.map((kid: any) => `${kid.name || '名前未登録'}${kid.grade ? `（${kid.grade}）` : ''}`);
+      return sortMembersByGrade(lessonKids).map((kid: any) => kid.name || '名前未登録');
     };
     if (parsedEntries.length === 0) {
       return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>送迎の予定はありません</Text></View>;
@@ -1535,8 +1546,25 @@ export default function MenuScreen() {
     return orderedEntries.map((entry: any, sIdx: number) => {
       const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
       const shiftTime = getPickupStaffShift(entry.staffName);
-      const activeTrips = entry.trips ? entry.trips.filter((t: any) => t.blockKeys && t.blockKeys.length > 0) : [];
+      const activeTrips = entry.trips
+        ? entry.trips
+            .filter((t: any) => t.blockKeys && t.blockKeys.length > 0)
+            .sort((a: any, b: any) => Number(a.tripIndex ?? 0) - Number(b.tripIndex ?? 0))
+        : [];
       if (activeTrips.length === 0) return null;
+      // 回数順に上から積み、縦に長くなった時点で次の列へ送る。
+      const tripColumns: any[][] = [[], []];
+      const columnHeights = [0, 0];
+      activeTrips.forEach((trip: any) => {
+        const blockCount = Array.isArray(trip.blockKeys) ? trip.blockKeys.length : 0;
+        const memberLineCount = showAll
+          ? trip.blockKeys.reduce((total: number, key: string) => total + Math.min(getBlockMembers(key).length, 3), 0)
+          : 0;
+        const estimatedHeight = 52 + blockCount * 31 + memberLineCount * 18;
+        const columnIndex = tripColumns[0].length > 0 && columnHeights[0] + estimatedHeight > 360 ? 1 : 0;
+        tripColumns[columnIndex].push(trip);
+        columnHeights[columnIndex] += estimatedHeight;
+      });
       return (
         <View key={`${entry.staffName || 'staff'}-${sIdx}`} style={[styles.staffSection, { borderLeftColor: color, backgroundColor: '#FFFFFF', borderRadius: 10, marginBottom: 6 }]}>
           <View style={styles.staffNameRow}>
@@ -1544,24 +1572,40 @@ export default function MenuScreen() {
             <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
             {!!shiftTime && <Text style={styles.staffShiftTime}>{shiftTime}</Text>}
           </View>
-          <View style={[styles.tripsRow, { flexWrap: 'wrap' }]}>
-            {activeTrips.map((trip: any, tIdx: number) => (
-              <View key={`${entry.staffName || sIdx}-${tIdx}`} style={[styles.tripSlot, { borderColor: color, backgroundColor: '#FFFDF9', borderRadius: 8 }]}>
-                <Text style={[styles.tripLabelText, { color: '#5D4037', fontWeight: 'bold', backgroundColor: '#FFF4DE' }]}>{TRIP_LABELS[trip.tripIndex || tIdx] || `${(trip.tripIndex || tIdx)+1}回目`}</Text>
-                <View style={{ flex: 1 }}>
-                  {trip.blockKeys.map((bk: string, bkIdx: number) => {
-                    const label = getBlockLabel(bk);
-                    const members = showAll ? getBlockMembers(bk) : [];
-                    return (
-                      <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
-                        <Text style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>
-                        {members.length > 0 && (
-                          <Text style={styles.pickupMemberNames}>{members.join('、')}</Text>
-                        )}
+          <View style={styles.tripsRow}>
+            {tripColumns.filter((column: any[]) => column.length > 0).map((column: any[], columnIndex: number, visibleColumns: any[][]) => (
+              <View key={`trip-column-${columnIndex}`} style={[styles.tripColumn, visibleColumns.length === 1 && styles.tripColumnFull]}>
+                <View style={[styles.tripRailLine, { backgroundColor: color }]} />
+                {column.map((trip: any, columnItemIndex: number) => {
+                  const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
+                  return (
+                    <View key={`${entry.staffName || sIdx}-${tripIndex}-${columnItemIndex}`} style={styles.tripTimelineItem}>
+                      <View style={styles.tripMarkerWrap}>
+                        <Text style={[styles.tripLabelText, { color, borderColor: color }]}>{tripIndex + 1}</Text>
                       </View>
-                    );
-                  })}
-                </View>
+                      <View style={[styles.tripSlot, { borderColor: color, backgroundColor: '#FFFDF9', borderRadius: 8 }]}>
+                        <View style={{ flex: 1, width: '100%' }}>
+                        {trip.blockKeys.map((bk: string, bkIdx: number) => {
+                          const label = getBlockLabel(bk);
+                          const members = showAll ? getBlockMembers(bk) : [];
+                          return (
+                            <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
+                              <Text style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>
+                              {members.length > 0 && (
+                                <View style={styles.pickupMemberGrid}>
+                                  {members.map((member: string, memberIndex: number) => (
+                                    <Text key={`${member}-${memberIndex}`} style={styles.pickupMemberNameCell} numberOfLines={1}>{member}</Text>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             ))}
           </View>
@@ -4933,7 +4977,11 @@ const styles = StyleSheet.create({
   staffDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   staffName: { fontSize: 14, fontWeight: 'bold', color: '#333333' },
   staffShiftTime: { marginLeft: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F1F6F6', fontSize: 11, fontWeight: '800', color: '#46585B' },
-  tripsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tripsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  tripColumn: { flex: 1, minWidth: 0, alignSelf: 'stretch', gap: 6, paddingLeft: 28, position: 'relative' },
+  tripColumnFull: { flex: 1, width: 'auto' },
+  tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 18, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
+  tripTimelineItem: { position: 'relative', width: '100%' },
   tripSlot: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -4941,13 +4989,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    width: '47%',
+    width: '100%',
+    alignSelf: 'stretch',
     borderStyle: 'solid'
   },
-  tripLabelText: { fontSize: 10, fontWeight: 'bold', color: '#888888', marginTop: 1, marginBottom: 4, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  tripMarkerWrap: { position: 'absolute', zIndex: 2, left: -30, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tripLabelText: { width: 27, height: 27, textAlign: 'center', fontSize: 15, lineHeight: 20, fontWeight: '900', paddingTop: 2, borderRadius: 8, borderWidth: 2, backgroundColor: '#FFFDF9', overflow: 'hidden' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
-  pickupMemberNames: { marginTop: 2, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
+  pickupMemberGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 3, columnGap: 10, rowGap: 2 },
+  pickupMemberNameCell: { maxWidth: '48%', flexShrink: 1, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',
