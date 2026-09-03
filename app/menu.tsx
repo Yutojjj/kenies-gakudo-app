@@ -1150,9 +1150,9 @@ export default function MenuScreen() {
 
     Animated.loop(
       Animated.sequence([
-        Animated.timing(currentTimePulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(currentTimePulseAnim, { toValue: 0, duration: 900, useNativeDriver: true }),
-        Animated.delay(700),
+        Animated.timing(currentTimePulseAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        Animated.timing(currentTimePulseAnim, { toValue: 0, duration: 1400, useNativeDriver: true }),
+        Animated.delay(1000),
       ])
     ).start();
 
@@ -1583,7 +1583,10 @@ export default function MenuScreen() {
     return orderedEntries.map((entry: any, sIdx: number) => {
       const color = STAFF_COLORS[sIdx % STAFF_COLORS.length];
       const now = new Date();
-      const isTodayStaffPlan = makeDateStr(staffPlanDate) === makeDateStr(now);
+      const staffPlanDateStr = makeDateStr(staffPlanDate);
+      const todayDateStr = makeDateStr(now);
+      const isTodayStaffPlan = staffPlanDateStr === todayDateStr;
+      const isPastStaffPlan = staffPlanDateStr < todayDateStr;
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const shiftTime = getPickupStaffShift(entry.staffName);
       const activeTrips = entry.trips
@@ -1592,14 +1595,6 @@ export default function MenuScreen() {
             .sort((a: any, b: any) => Number(a.tripIndex ?? 0) - Number(b.tripIndex ?? 0))
         : [];
       if (activeTrips.length === 0) return null;
-      const scheduledMinutes = activeTrips.flatMap((trip: any) => trip.blockKeys.map((key: string) => {
-        const time = getBlockDisplay(key).time;
-        if (!/^\d{1,2}:\d{2}$/.test(time)) return [];
-        const [hour, minute] = time.split(':').map(Number);
-        return [hour * 60 + minute];
-      })).flat();
-      const firstScheduledMinute = scheduledMinutes.length > 0 ? Math.min(...scheduledMinutes) : null;
-      const lastScheduledMinute = scheduledMinutes.length > 0 ? Math.max(...scheduledMinutes) : null;
       const firstTripMinutes = activeTrips[0].blockKeys.map((key: string) => {
         const time = getBlockDisplay(key).time;
         if (!/^\d{1,2}:\d{2}$/.test(time)) return null;
@@ -1607,10 +1602,25 @@ export default function MenuScreen() {
         return hour * 60 + minute;
       }).filter((value: number | null): value is number => value !== null);
       const firstTripStartMinute = firstTripMinutes.length > 0 ? Math.min(...firstTripMinutes) : null;
-      const currentTimeProgress = firstScheduledMinute !== null && lastScheduledMinute !== null
-        ? Math.max(0, Math.min(1, (currentMinutes - (firstScheduledMinute - 60)) / ((lastScheduledMinute + 60) - (firstScheduledMinute - 60) || 1)))
-        : 0;
       const showCurrentTimeMarker = isTodayStaffPlan && firstTripStartMinute !== null && currentMinutes >= firstTripStartMinute;
+      const getTripStatus = (trip: any) => {
+        const minutes = trip.blockKeys.map((key: string) => {
+          const value = getBlockDisplay(key).time;
+          if (!/^\d{1,2}:\d{2}$/.test(value)) return null;
+          const [hour, minute] = value.split(':').map(Number);
+          return hour * 60 + minute;
+        }).filter((value: number | null): value is number => value !== null);
+        if (isPastStaffPlan) return 'completed';
+        if (minutes.length === 0 || !isTodayStaffPlan) return 'future';
+        const first = Math.min(...minutes);
+        const last = Math.max(...minutes);
+        if (currentMinutes > last) return 'completed';
+        if (currentMinutes >= first) return 'current';
+        return 'future';
+      };
+      const currentTripOrder = activeTrips.findIndex((trip: any) => getTripStatus(trip) === 'current');
+      const nextTripOrder = activeTrips.findIndex((trip: any) => getTripStatus(trip) === 'future');
+      const markerTripOrder = currentTripOrder >= 0 ? currentTripOrder : nextTripOrder >= 0 ? nextTripOrder : activeTrips.length - 1;
       if (entry.staffName === '送迎しない') {
         const noTransportBlockKeys = Array.from(new Set(activeTrips.flatMap((trip: any) => trip.blockKeys))) as string[];
         return (
@@ -1682,23 +1692,31 @@ export default function MenuScreen() {
             {tripColumns.filter((column: any[]) => column.length > 0).map((column: any[], columnIndex: number, visibleColumns: any[][]) => (
                 <View key={`trip-column-${columnIndex}`} style={[styles.tripColumn, visibleColumns.length === 1 && styles.tripColumnFull]}>
                 <View style={[styles.tripRailLine, columnIndex > 0 && styles.tripRailLineContinue, { backgroundColor: color }]} />
-                {showCurrentTimeMarker && (
-                  <Animated.View
-                    style={[
-                      styles.currentTimeMarker,
-                      { top: `${currentTimeProgress * 100}%`, backgroundColor: color },
-                      { transform: [{ scale: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }] },
-                    ]}
-                  />
-                )}
                 {column.map((trip: any, columnItemIndex: number) => {
                   const tripIndex = Number(trip.tripIndex ?? activeTrips.indexOf(trip));
+                  const tripStatus = getTripStatus(trip);
                   return (
                     <View key={`${entry.staffName || sIdx}-${tripIndex}-${columnItemIndex}`} style={styles.tripTimelineItem}>
+                      {showCurrentTimeMarker && activeTrips.indexOf(trip) === markerTripOrder && (
+                        <Animated.View
+                          style={[
+                            styles.currentTimeMarker,
+                            { backgroundColor: '#E34B4B', top: tripStatus === 'future' ? -14 : currentTripOrder < 0 ? '100%' : '50%' },
+                            {
+                              opacity: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
+                              transform: [{ scale: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }],
+                            },
+                          ]}
+                        />
+                      )}
                       <View style={styles.tripMarkerWrap}>
-                        <Text style={[styles.tripLabelText, { color, borderColor: color }]}>{tripIndex + 1}</Text>
+                        <View style={[styles.tripLabelText, { backgroundColor: color }]}>
+                          {tripStatus === 'completed'
+                            ? <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                            : <Text style={styles.tripMarkerNumber}>{tripIndex + 1}</Text>}
+                        </View>
                       </View>
-                      <View style={[styles.tripSlot, { borderColor: color, backgroundColor: '#FFFDF9', borderRadius: 8 }]}>
+                      <View style={[styles.tripSlot, tripStatus === 'completed' ? styles.tripSlotCompleted : tripStatus === 'current' ? styles.tripSlotCurrent : styles.tripSlotFuture, { borderColor: tripStatus === 'completed' ? '#B8B8B8' : tripStatus === 'current' ? '#00AEB8' : '#3479C8', borderRadius: 8 }]}>
                         <View style={{ flex: 1, width: '100%' }}>
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
                           const blockDisplay = getBlockDisplay(bk);
@@ -2049,10 +2067,10 @@ export default function MenuScreen() {
         {(role === 'staff' || role === 'admin') && (
           <View style={styles.staffTodaySection}>
             <View style={styles.staffMenuTitleWrap}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <View style={styles.todayPlanTitleBar} />
-                <Text style={styles.staffMenuTitle}>今日の予定</Text>
-              </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={styles.todayPlanTitleBar} />
+                  <Text style={styles.staffMenuTitle}>今日の予定</Text>
+                </View>
               <Text style={styles.currentClockText}>
                 {`${currentClock.getHours()}時${String(currentClock.getMinutes()).padStart(2, '0')}分${String(currentClock.getSeconds()).padStart(2, '0')}秒`}
               </Text>
@@ -2116,6 +2134,10 @@ export default function MenuScreen() {
                     <Ionicons name="chevron-forward" size={22} color="#6D5A4D" />
                   </TouchableOpacity>
                 </View>
+              </View>
+              <View style={styles.pickupStatusLegend}>
+                <View style={styles.pickupLegendTime}><View style={styles.currentLegendDot} /><Text style={styles.pickupLegendTimeText}>{`${currentClock.getHours()}時${String(currentClock.getMinutes()).padStart(2, '0')}分${String(currentClock.getSeconds()).padStart(2, '0')}秒`}</Text></View>
+                <View style={styles.pickupLegendItem}><View style={[styles.pickupLegendDot, { backgroundColor: '#B8B8B8' }]} /><Text style={styles.pickupLegendText}>完了</Text></View>
               </View>
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
                 <TouchableOpacity
@@ -4906,6 +4928,16 @@ const styles = StyleSheet.create({
     color: '#007F88',
     fontVariant: ['tabular-nums'],
   },
+  pickupStatusLegend: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginTop: 8, marginBottom: 2, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E1E5E5', borderRadius: 12, backgroundColor: '#FFFFFF' },
+  pickupLegendTime: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  currentLegendDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#E34B4B' },
+  pickupLegendTimeText: { fontSize: 13, fontWeight: '900', color: '#303638', fontVariant: ['tabular-nums'] },
+  pickupLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pickupLegendDot: { width: 12, height: 12, borderRadius: 6 },
+  pickupLegendText: { fontSize: 12, fontWeight: '800', color: '#4B5558' },
+  tripSlotCompleted: { backgroundColor: '#DCDCDC' },
+  tripSlotCurrent: { backgroundColor: '#C4EFF0' },
+  tripSlotFuture: { backgroundColor: '#FFFFFF' },
   staffSectionEditBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5111,8 +5143,8 @@ const styles = StyleSheet.create({
   tripColumnFull: { flex: 1, width: 'auto' },
   tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
-  currentTimeMarker: { position: 'absolute', zIndex: 3, left: 5, width: 15, height: 15, marginTop: -7, borderRadius: 8 },
-  tripTimelineItem: { position: 'relative', width: '100%' },
+  currentTimeMarker: { position: 'absolute', zIndex: 6, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
+  tripTimelineItem: { position: 'relative', zIndex: 5, width: '100%' },
   tripSlot: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -5124,8 +5156,9 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderStyle: 'solid'
   },
-  tripMarkerWrap: { position: 'absolute', zIndex: 2, left: -30, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  tripLabelText: { width: 27, height: 27, textAlign: 'center', fontSize: 15, lineHeight: 20, fontWeight: '900', paddingTop: 2, borderRadius: 8, borderWidth: 2, backgroundColor: '#FFFDF9', overflow: 'hidden' },
+  tripMarkerWrap: { position: 'absolute', zIndex: 10, left: -29.5, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tripLabelText: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, overflow: 'hidden' },
+  tripMarkerNumber: { color: '#FFFFFF', fontSize: 15, lineHeight: 19, fontWeight: '900' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
   pickupMemberGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 3, columnGap: 10, rowGap: 2 },
