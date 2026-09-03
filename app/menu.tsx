@@ -2054,7 +2054,7 @@ export default function MenuScreen() {
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
               <Text style={styles.currentClockText}>
-                {currentClock.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                {`${currentClock.getHours()}時${String(currentClock.getMinutes()).padStart(2, '0')}分${String(currentClock.getSeconds()).padStart(2, '0')}秒`}
               </Text>
             </View>
             <Animated.View
