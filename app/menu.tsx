@@ -1661,16 +1661,19 @@ export default function MenuScreen() {
           </AnimatedTouchableOpacity>
         );
       }
-      // 回数順に上から積み、縦に長くなった時点で次の列へ送る。
+      // 番号順に上から積み、一定の高さを超えたら次の列へ送る。
       const tripColumns: any[][] = [[], []];
       const columnHeights = [0, 0];
+      let columnIndex = 0;
       activeTrips.forEach((trip: any) => {
         const blockCount = Array.isArray(trip.blockKeys) ? trip.blockKeys.length : 0;
         const memberLineCount = showAll
-          ? trip.blockKeys.reduce((total: number, key: string) => total + Math.min(getBlockMembers(key).length, 3), 0)
+          ? trip.blockKeys.reduce((total: number, key: string) => total + Math.ceil(Math.min(getBlockMembers(key).length, 4) / 2), 0)
           : 0;
-        const estimatedHeight = 52 + blockCount * 31 + memberLineCount * 18;
-        const columnIndex = tripColumns[0].length > 0 && columnHeights[0] + estimatedHeight > 360 ? 1 : 0;
+        const estimatedHeight = 48 + blockCount * 31 + memberLineCount * 18;
+        if (columnIndex === 0 && tripColumns[0].length > 0 && columnHeights[0] + estimatedHeight > 330) {
+          columnIndex = 1;
+        }
         tripColumns[columnIndex].push(trip);
         columnHeights[columnIndex] += estimatedHeight;
       });
@@ -1686,7 +1689,7 @@ export default function MenuScreen() {
           <View style={styles.staffNameRow}>
             <View style={[styles.staffDot, { backgroundColor: color }]} />
             <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
-            {!!shiftTime && <Text style={styles.staffShiftTime}>{shiftTime}</Text>}
+            {!!shiftTime && <Text style={[styles.staffShiftTime, { backgroundColor: `${color}22`, color }]}>{shiftTime}</Text>}
           </View>
           <View style={styles.tripsRow}>
             {tripColumns.filter((column: any[]) => column.length > 0).map((column: any[], columnIndex: number, visibleColumns: any[][]) => (
@@ -1726,7 +1729,7 @@ export default function MenuScreen() {
                           return (
                             <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
                               <View style={styles.pickupDestinationRow}>
-                                {!!blockDisplay.time && <Text style={[styles.pickupTimeText, isManualPickup && styles.manualPickupText]}>{blockDisplay.time}</Text>}
+                                {!!blockDisplay.time && <Text style={[styles.pickupTimeText, isManualPickup && styles.manualPickupText, isNextTrip && styles.nextTripText]}>{blockDisplay.time}</Text>}
                                 <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: isManualPickup ? '#D94B4B' : blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
                               </View>
                               {members.length > 0 && (
@@ -5174,6 +5177,7 @@ const styles = StyleSheet.create({
   pickupDestinationText: { flexShrink: 1, minWidth: 0 },
   pickupTimeText: { flexShrink: 0, marginRight: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
   manualPickupText: { color: '#D94B4B' },
+  nextTripText: { color: '#E88919' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',
