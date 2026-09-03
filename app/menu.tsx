@@ -2142,7 +2142,7 @@ export default function MenuScreen() {
                 </View>
               </View>
               <View style={styles.pickupStatusLegend}>
-                <View style={styles.pickupLegendTime}><View style={styles.currentLegendDot} /><Text style={styles.pickupLegendTimeText}>{`${currentClock.getHours()}時${String(currentClock.getMinutes()).padStart(2, '0')}分${String(currentClock.getSeconds()).padStart(2, '0')}秒`}</Text></View>
+                <View style={styles.pickupLegendTime}><View style={styles.currentLegendDot} /><Text style={styles.pickupLegendTimeText}>現在時刻</Text></View>
                 <View style={styles.pickupLegendItem}><View style={[styles.pickupLegendDot, { backgroundColor: '#B8B8B8' }]} /><Text style={styles.pickupLegendText}>完了</Text></View>
               </View>
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
