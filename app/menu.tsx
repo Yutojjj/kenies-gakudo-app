@@ -1707,7 +1707,7 @@ export default function MenuScreen() {
                         <Animated.View
                           style={[
                             styles.currentTimeMarker,
-                            { backgroundColor: '#E34B4B', top: tripStatus === 'future' ? -14 : currentTripOrder < 0 ? '100%' : '50%' },
+                            { backgroundColor: color, top: tripStatus === 'future' ? -14 : currentTripOrder < 0 ? '100%' : '50%' },
                             {
                               opacity: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
                               transform: [{ scale: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }],
@@ -2140,10 +2140,6 @@ export default function MenuScreen() {
                     <Ionicons name="chevron-forward" size={22} color="#6D5A4D" />
                   </TouchableOpacity>
                 </View>
-              </View>
-              <View style={styles.pickupStatusLegend}>
-                <View style={styles.pickupLegendTime}><View style={styles.currentLegendDot} /><Text style={styles.pickupLegendTimeText}>現在時刻</Text></View>
-                <View style={styles.pickupLegendItem}><View style={[styles.pickupLegendDot, { backgroundColor: '#B8B8B8' }]} /><Text style={styles.pickupLegendText}>完了</Text></View>
               </View>
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
                 <TouchableOpacity
