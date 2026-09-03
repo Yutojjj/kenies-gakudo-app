@@ -1578,7 +1578,14 @@ export default function MenuScreen() {
         columnHeights[columnIndex] += estimatedHeight;
       });
       return (
-        <View key={`${entry.staffName || 'staff'}-${sIdx}`} style={[styles.staffSection, { borderLeftColor: color, backgroundColor: '#FFFFFF', borderRadius: 10, marginBottom: 6 }]}>
+        <AnimatedTouchableOpacity
+          key={`${entry.staffName || 'staff'}-${sIdx}`}
+          style={[styles.staffSection, { borderLeftColor: color, backgroundColor: '#FFFFFF', borderRadius: 10, marginBottom: 6 }]}
+          onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel={`${entry.staffName || 'スタッフ'}の送迎担当を確認`}
+        >
           <View style={styles.staffNameRow}>
             <View style={[styles.staffDot, { backgroundColor: color }]} />
             <Text style={[styles.staffName, { fontSize: 14, color: '#3F302B' }]}>{entry.staffName}</Text>
@@ -1624,7 +1631,7 @@ export default function MenuScreen() {
               </View>
             ))}
           </View>
-        </View>
+        </AnimatedTouchableOpacity>
       );
     });
   };
@@ -1950,12 +1957,8 @@ export default function MenuScreen() {
                 <Text style={styles.staffMenuTitle}>今日の予定</Text>
               </View>
             </View>
-            <AnimatedTouchableOpacity
+            <Animated.View
               style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
-              onPress={() => router.push({ pathname: '/attendance', params: { dateStr: makeDateStr(staffPlanDate) } } as any)}
-              activeOpacity={0.94}
-              accessibilityRole="button"
-              accessibilityLabel={`${formatMenuDateLabel(staffPlanDate)}の送迎担当を編集`}
             >
               <View style={styles.staffPickupTopRow}>
                 <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
@@ -2059,7 +2062,7 @@ export default function MenuScreen() {
                   : <Ionicons name={showAllPickup ? 'chevron-up' : 'chevron-down'} size={17} color="#007A82" />}
                 <Text style={styles.pickupExpandToggleText}>{showAllPickup ? '折りたたむ' : '全体を見る'}</Text>
               </TouchableOpacity>
-            </AnimatedTouchableOpacity>
+            </Animated.View>
           </View>
         )}
 
