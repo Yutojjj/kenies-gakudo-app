@@ -1512,6 +1512,18 @@ export default function MenuScreen() {
         ? `${parts.slice(0, -1).join('_')} ${parts[parts.length - 1]}`
         : blockKey;
     };
+    const getBlockDisplay = (blockKey: string) => {
+      const customBlock = customBlockMap.get(blockKey);
+      if (customBlock) return { destination: customBlock.destination || '追加した送迎先', time: customBlock.time || '', isLesson: false };
+      const timeMatch = blockKey.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+      if (timeMatch) return { destination: timeMatch[2], time: timeMatch[1], isLesson: true };
+      const parts = blockKey.split('_');
+      const lastPart = parts[parts.length - 1];
+      if (parts.length > 1 && /^\d{1,2}:\d{2}$/.test(lastPart)) {
+        return { destination: parts.slice(0, -1).join('_'), time: lastPart, isLesson: false };
+      }
+      return { destination: getBlockLabel(blockKey), time: '', isLesson: false };
+    };
     const getBlockMembers = (blockKey: string) => {
       const getGradeOrder = (grade: any) => {
         const value = String(grade || '').replace(/\s/g, '');
@@ -1586,11 +1598,14 @@ export default function MenuScreen() {
                       <View style={[styles.tripSlot, { borderColor: color, backgroundColor: '#FFFDF9', borderRadius: 8 }]}>
                         <View style={{ flex: 1, width: '100%' }}>
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
-                          const label = getBlockLabel(bk);
+                          const blockDisplay = getBlockDisplay(bk);
                           const members = showAll ? getBlockMembers(bk) : [];
                           return (
                             <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
-                              <Text style={[styles.slotFilledText, { color: '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{label}</Text>
+                              <View style={styles.pickupDestinationRow}>
+                                <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
+                                {!!blockDisplay.time && <Text style={styles.pickupTimeText}>{blockDisplay.time}</Text>}
+                              </View>
                               {members.length > 0 && (
                                 <View style={styles.pickupMemberGrid}>
                                   {members.map((member: string, memberIndex: number) => (
@@ -5000,6 +5015,9 @@ const styles = StyleSheet.create({
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
   pickupMemberGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 3, columnGap: 10, rowGap: 2 },
   pickupMemberNameCell: { maxWidth: '48%', flexShrink: 1, fontSize: 11, lineHeight: 16, fontWeight: '700', color: '#4C4540' },
+  pickupDestinationRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', width: '100%' },
+  pickupDestinationText: { flexShrink: 1, minWidth: 0 },
+  pickupTimeText: { flexShrink: 0, marginLeft: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',
