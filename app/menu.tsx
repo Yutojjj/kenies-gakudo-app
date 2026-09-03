@@ -1100,6 +1100,7 @@ export default function MenuScreen() {
     setPickupEntryStatus(null);
     loadTransportOverview(dateStr).then(overview => {
       if (cancelled) return;
+      setPickupOverviewData(overview);
       const isNonWorkingDay = dayOfWeek === 0 || dayOfWeek === 6 || !!overview.publicHolidays?.[dateStr];
       setPickupShiftStaff(Array.isArray(overview.shiftStaff) ? overview.shiftStaff : []);
       setPickupEntryStatus(isNonWorkingDay ? null : getTransportEntryStatus(overview.attendance, todayPickup));
@@ -1524,6 +1525,15 @@ export default function MenuScreen() {
       }
       return { destination: getBlockLabel(blockKey), time: '', isLesson: false };
     };
+    const isManualPickupBlock = (blockKey: string) => {
+      if (!pickupOverviewData || blockKey.startsWith('custom_')) return false;
+      for (const [school, times] of Object.entries(pickupOverviewData.attendance.schools || {})) {
+        for (const [time, kids] of Object.entries(times || {})) {
+          if (`${school}_${time}` === blockKey) return (kids || []).some((kid: any) => kid.isManualPickup);
+        }
+      }
+      return false;
+    };
     const getBlockMembers = (blockKey: string) => {
       const getGradeOrder = (grade: any) => {
         const value = String(grade || '').replace(/\s/g, '');
@@ -1582,12 +1592,13 @@ export default function MenuScreen() {
             <View style={styles.noTransportGrid}>
               {noTransportBlockKeys.map((bk: string) => {
                 const blockDisplay = getBlockDisplay(bk);
+                const isManualPickup = !blockDisplay.isLesson && isManualPickupBlock(bk);
                 const members = showAll ? getBlockMembers(bk) : [];
                 return (
                   <View key={bk} style={styles.noTransportItem}>
                     <View style={styles.pickupDestinationRow}>
-                      {!!blockDisplay.time && <Text style={styles.pickupTimeText}>{blockDisplay.time}</Text>}
-                      <Text style={[styles.noTransportDestination, blockDisplay.isLesson && styles.lessonDestinationText]} numberOfLines={1}>{blockDisplay.destination}</Text>
+                      {!!blockDisplay.time && <Text style={[styles.pickupTimeText, isManualPickup && styles.manualPickupText]}>{blockDisplay.time}</Text>}
+                      <Text style={[styles.noTransportDestination, blockDisplay.isLesson && styles.lessonDestinationText, isManualPickup && styles.manualPickupText]} numberOfLines={1}>{blockDisplay.destination}</Text>
                     </View>
                     {members.length > 0 && (
                       <View style={styles.pickupMemberGrid}>
@@ -1645,12 +1656,13 @@ export default function MenuScreen() {
                         <View style={{ flex: 1, width: '100%' }}>
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
                           const blockDisplay = getBlockDisplay(bk);
+                          const isManualPickup = !blockDisplay.isLesson && isManualPickupBlock(bk);
                           const members = showAll ? getBlockMembers(bk) : [];
                           return (
                             <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
                               <View style={styles.pickupDestinationRow}>
-                                {!!blockDisplay.time && <Text style={styles.pickupTimeText}>{blockDisplay.time}</Text>}
-                                <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
+                                {!!blockDisplay.time && <Text style={[styles.pickupTimeText, isManualPickup && styles.manualPickupText]}>{blockDisplay.time}</Text>}
+                                <Text style={[styles.slotFilledText, styles.pickupDestinationText, { color: isManualPickup ? '#D94B4B' : blockDisplay.isLesson ? '#2476C7' : '#2F2A26', fontWeight: '800' }]} numberOfLines={1}>{blockDisplay.destination}</Text>
                               </View>
                               {members.length > 0 && (
                                 <View style={styles.pickupMemberGrid}>
@@ -5065,6 +5077,7 @@ const styles = StyleSheet.create({
   pickupDestinationRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', width: '100%' },
   pickupDestinationText: { flexShrink: 1, minWidth: 0 },
   pickupTimeText: { flexShrink: 0, marginRight: 5, fontSize: 12, lineHeight: 16, fontWeight: '900', color: '#2F2A26' },
+  manualPickupText: { color: '#D94B4B' },
   staffPickupCardTitle: {
     fontSize: 14,
     fontWeight: '900',

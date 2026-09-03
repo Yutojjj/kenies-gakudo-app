@@ -124,7 +124,10 @@ export async function loadTransportOverview(dateStr: string): Promise<TransportO
       totalCount += 1;
       if (!schools[child.school]) schools[child.school] = {};
       if (!schools[child.school][pickupTime]) schools[child.school][pickupTime] = [];
-      schools[child.school][pickupTime].push(child);
+      schools[child.school][pickupTime].push({
+        ...child,
+        isManualPickup: Boolean(override && override.pickupTime !== undefined),
+      });
     }
 
     const overrideLessons = Array.isArray(override?.lessons)
