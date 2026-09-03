@@ -4898,9 +4898,8 @@ const styles = StyleSheet.create({
   },
   currentClockText: {
     position: 'absolute',
-    left: 0,
     right: 0,
-    textAlign: 'center',
+    textAlign: 'right',
     fontSize: 24,
     lineHeight: 29,
     fontWeight: '900',
