@@ -5406,8 +5406,8 @@ const styles = StyleSheet.create({
   tripColumnFull: { flex: 1, width: 'auto' },
   tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
-  currentTimeMarker: { position: 'absolute', zIndex: 1, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
-  tripTimelineItem: { position: 'relative', zIndex: 5, width: '100%' },
+  currentTimeMarker: { position: 'absolute', zIndex: -1, elevation: 0, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
+  tripTimelineItem: { position: 'relative', zIndex: 5, overflow: 'visible', width: '100%' },
   tripSlot: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -5419,8 +5419,8 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderStyle: 'solid'
   },
-  tripMarkerWrap: { position: 'absolute', zIndex: 10, left: -29.5, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  tripLabelText: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, overflow: 'hidden' },
+  tripMarkerWrap: { position: 'absolute', zIndex: 30, elevation: 30, left: -29.5, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tripLabelText: { zIndex: 31, elevation: 31, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, overflow: 'hidden' },
   tripMarkerNumber: { color: '#FFFFFF', fontSize: 15, lineHeight: 19, fontWeight: '900' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
