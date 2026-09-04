@@ -2086,21 +2086,39 @@ export default function MenuScreen() {
             >
               <View style={styles.staffPickupTopRow}>
                 <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
-                <TouchableOpacity
-                  ref={noticeButtonRef}
-                  style={styles.staffSectionMemoBtn}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    openNoticePopover();
-                  }}
-                  activeOpacity={0.82}
-                >
-                  <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
-                  <Text style={styles.staffSectionMemoText}>メモを追加</Text>
-                  {(todayMemos.length + adminNotices.length) > 0 && (
-                    <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
+                <View style={styles.staffPickupTopActions}>
+                  {role === 'admin' && (
+                    <TouchableOpacity
+                      style={styles.staffSectionPrintBtn}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        openPickupOverviewAction('print');
+                      }}
+                      disabled={pickupOverviewLoadingAction !== null}
+                      activeOpacity={0.82}
+                    >
+                      {pickupOverviewLoadingAction === 'print'
+                        ? <ActivityIndicator size="small" color="#137E87" />
+                        : <Ionicons name="print-outline" size={17} color="#137E87" />}
+                      <Text style={styles.staffSectionPrintText}>印刷</Text>
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    ref={noticeButtonRef}
+                    style={styles.staffSectionMemoBtn}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      openNoticePopover();
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
+                    <Text style={styles.staffSectionMemoText}>メモを追加</Text>
+                    {(todayMemos.length + adminNotices.length) > 0 && (
+                      <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
@@ -2864,6 +2882,7 @@ export default function MenuScreen() {
           initialMode="overview"
           readOnly
           autoPrintOnOpen={pickupOverviewAction === 'print'}
+          printOnly={pickupOverviewAction === 'print'}
         />
       )}
 
@@ -4981,6 +5000,23 @@ const styles = StyleSheet.create({
   pickupEntryWarningPartial: { backgroundColor: '#FFF2B8' },
   pickupEntryWarningEmpty: { backgroundColor: '#FFDCE4' },
   pickupEntryWarningText: { flex: 1, fontSize: 13, fontWeight: '800' },
+  staffPickupTopActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  staffSectionPrintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EAFBFC',
+    borderWidth: 1.3,
+    borderColor: '#94DDE2',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    shadowColor: '#8B7340',
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  staffSectionPrintText: { color: '#137E87', fontSize: 12, fontWeight: '900' },
   staffSectionMemoBtn: {
     flexDirection: 'row',
     alignItems: 'center',

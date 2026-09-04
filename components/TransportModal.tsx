@@ -54,6 +54,7 @@ type Props = {
   initialMode?: 'edit' | 'overview';
   readOnly?: boolean;
   autoPrintOnOpen?: boolean;
+  printOnly?: boolean;
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
@@ -71,7 +72,7 @@ const escapeHtml = (value: any) => String(value ?? '')
 
 export default function TransportModal({
   visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign, onDateChange,
-  initialMode = 'edit', readOnly = false, autoPrintOnOpen = false,
+  initialMode = 'edit', readOnly = false, autoPrintOnOpen = false, printOnly = false,
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -1094,7 +1095,10 @@ export default function TransportModal({
     }
     if (!autoPrintOnOpen || !showTimeline || autoPrintTriggeredRef.current) return;
     autoPrintTriggeredRef.current = true;
-    const timer = setTimeout(() => printTimeline(), 350);
+    const timer = setTimeout(() => {
+      printTimeline();
+      if (printOnly) setTimeout(onClose, 450);
+    }, 350);
     return () => clearTimeout(timer);
   }, [visible, autoPrintOnOpen, showTimeline, dateStr]);
 
@@ -1446,6 +1450,10 @@ export default function TransportModal({
     );
   };
 
+  if (printOnly) {
+    return <Modal visible={visible} transparent animationType="none"><View style={styles.printOnlyOverlay} /></Modal>;
+  }
+
   return (
     <>
     <Modal visible={visible} animationType="slide" transparent>
@@ -1473,9 +1481,15 @@ export default function TransportModal({
                     <Text style={styles.printBtnText}>印刷</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
-                    <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
+                      <Ionicons name="print-outline" size={14} color="#fff" />
+                      <Text style={styles.printBtnText}>印刷</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
+                      <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
                 <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                   <Ionicons name="close" size={26} color={COLORS.text} />
@@ -2036,6 +2050,7 @@ export default function TransportModal({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  printOnlyOverlay: { flex: 1, backgroundColor: 'transparent' },
   container: { backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
   header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
   headerTopRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
