@@ -757,7 +757,7 @@ export default function TransportModal({
       const pageDate = new Date(`${page.dateStr}T00:00:00`);
       const pageLabel = `${pageDate.getMonth() + 1}月${pageDate.getDate()}日(${DOW_JP[pageDate.getDay()]})`;
       const getPageShift = (staffName: string) => page.shiftStaff.find(staff => staff.name === staffName);
-      const staffHtml = pageEntries.map((entry, staffIndex) => {
+      const staffCards = pageEntries.map((entry, staffIndex) => {
         const isNoTransport = entry.staffName === '送迎しない';
         const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[staffIndex % STAFF_COLORS.length];
         const shift = isNoTransport ? null : getPageShift(entry.staffName);
@@ -783,9 +783,15 @@ export default function TransportModal({
             : stopsHtml.join('');
           return `<div class="home-print-trip">${isNoTransport ? '' : `<span class="home-print-number" style="--trip-color:${color}">${tripIndex + 1}</span>`}<div class="home-print-trip-body" style="border-color:${color}">${tripBodyHtml}</div></div>`;
         }).join('') : '<div class="home-print-empty">担当なし</div>';
-        return `<section class="home-print-staff ${isNoTransport ? 'no-transport' : ''}" style="--staff-color:${color}"><header class="home-print-staff-head"><span class="home-print-dot" style="background:${color}"></span><strong>${escapeHtml(entry.staffName)}</strong>${shift?.start && shift?.end ? `<span class="home-print-shift">${escapeHtml(shift.start)} - ${escapeHtml(shift.end)}</span>` : ''}</header><div class="home-print-trips">${tripsHtml}</div></section>`;
-      }).join('');
-      return `<section class="home-print-page"><h1 class="home-print-title">${escapeHtml(pageLabel)}　送迎担当</h1><main class="home-print-list">${staffHtml}</main></section>`;
+        return {
+          isNoTransport,
+          html: `<section class="home-print-staff ${isNoTransport ? 'no-transport' : ''}" style="--staff-color:${color}"><header class="home-print-staff-head"><span class="home-print-dot" style="background:${color}"></span><strong>${escapeHtml(entry.staffName)}</strong>${shift?.start && shift?.end ? `<span class="home-print-shift">${escapeHtml(shift.start)} - ${escapeHtml(shift.end)}</span>` : ''}</header><div class="home-print-trips">${tripsHtml}</div></section>`,
+        };
+      });
+      const transportCards = staffCards.filter(card => !card.isNoTransport).map(card => card.html);
+      const noTransportCards = staffCards.filter(card => card.isNoTransport).map(card => card.html);
+      const staffHtml = `<div class="home-print-staff-column">${transportCards.filter((_, index) => index % 2 === 0).join('')}</div><div class="home-print-staff-column">${transportCards.filter((_, index) => index % 2 === 1).join('')}</div>${noTransportCards.join('')}`;
+      return `<section class="home-print-page"><h1 class="home-print-title">${escapeHtml(pageLabel)}</h1><main class="home-print-list">${staffHtml}</main></section>`;
     };
     const homePrintPages = printPages?.length
       ? printPages
@@ -804,8 +810,9 @@ export default function TransportModal({
             body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202426; }
             .home-print-page { break-after: page; page-break-after: always; }
             .home-print-page:last-child { break-after: auto; page-break-after: auto; }
-            .home-print-title { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
-            .home-print-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; align-items: start; }
+            .home-print-title { margin: 0 0 4mm; text-align: center; font-size: 20px; font-weight: 900; }
+            .home-print-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2mm; align-items: start; }
+            .home-print-staff-column { display: flex; flex-direction: column; gap: 2mm; min-width: 0; }
             .home-print-staff { break-inside: avoid; border: 4px solid var(--staff-color); border-radius: 4mm; padding: 2.4mm 3mm; }
             .home-print-staff.no-transport { background: #FAFAFA; }
             .home-print-staff-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; font-size: 11px; }
