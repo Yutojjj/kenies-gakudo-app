@@ -55,6 +55,12 @@ type Props = {
   readOnly?: boolean;
   autoPrintOnOpen?: boolean;
   printOnly?: boolean;
+  printPages?: Array<{
+    dateStr: string;
+    attendance: Props['attendance'];
+    shiftStaff: Props['shiftStaff'];
+    assignments: Record<string, any>;
+  }>;
 };
 const DOW_JP = ['日','月','火','水','木','金','土'];
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
@@ -72,7 +78,7 @@ const escapeHtml = (value: any) => String(value ?? '')
 
 export default function TransportModal({
   visible, dateStr, onClose, attendance, shiftStaff, assignments, onAssign, onDateChange,
-  initialMode = 'edit', readOnly = false, autoPrintOnOpen = false, printOnly = false,
+  initialMode = 'edit', readOnly = false, autoPrintOnOpen = false, printOnly = false, printPages,
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -723,39 +729,68 @@ export default function TransportModal({
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => entry.staffName);
 
-    const homeOverviewStaffHtml = staffEntries.map((entry, staffIndex) => {
-      const isNoTransport = entry.staffName === '送迎しない';
-      const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[staffIndex % STAFF_COLORS.length];
-      const shift = isNoTransport ? null : getStaffShift(entry.staffName);
-      const trips = entry.trips.filter((trip) => trip.blockKeys.length > 0);
-      const tripsHtml = trips.length > 0
-        ? trips.map((trip, tripIndex) => {
-            const stopsHtml = trip.blockKeys.map((blockKey) => {
-              const block = blocks.find((item) => item.key === blockKey);
-              if (!block) return '';
-              const isLesson = block.type === 'lesson';
-              const kids = (block.kids || []).map((kid: any) => String(kid?.name || '')).filter(Boolean);
-              const kidsHtml = kids.map((name) => `<span>${escapeHtml(name)}</span>`).join('');
-              return `<div class="home-print-stop">
-                <div class="home-print-main"><span class="home-print-time">${escapeHtml(block.time || '-')}</span><strong class="${isLesson ? 'lesson' : ''}">${escapeHtml(block.nameOnly || block.label)}</strong></div>
-                ${kids.length > 0 ? `<div class="home-print-kids">${kidsHtml}</div>` : ''}
-              </div>`;
-            }).join('');
-            return `<div class="home-print-trip">
-              ${isNoTransport ? '' : `<span class="home-print-number" style="--trip-color:${color}">${tripIndex + 1}</span>`}
-              <div class="home-print-trip-body" style="border-color:${color}">${stopsHtml}</div>
-            </div>`;
-          }).join('')
-        : '<div class="home-print-empty">担当なし</div>';
-      return `<section class="home-print-staff ${isNoTransport ? 'no-transport' : ''}" style="--staff-color:${color}; border-left-color:${color}">
-        <header class="home-print-staff-head">
-          <span class="home-print-dot" style="background:${color}"></span>
-          <strong>${escapeHtml(entry.staffName)}</strong>
-          ${shift?.start && shift?.end ? `<span class="home-print-shift">${escapeHtml(shift.start)} - ${escapeHtml(shift.end)}</span>` : ''}
-        </header>
-        <div class="home-print-trips">${tripsHtml}</div>
-      </section>`;
-    }).join('');
+    const renderHomePrintPage = (page: NonNullable<Props['printPages']>[number]) => {
+      let pageCustomBlocks: CustomTransportBlock[] = [];
+      try {
+        const parsed = page.assignments?.customBlocks ? JSON.parse(String(page.assignments.customBlocks)) : [];
+        pageCustomBlocks = Array.isArray(parsed) ? parsed : [];
+      } catch {}
+
+      const pageBlocks: Block[] = [];
+      Object.entries(page.attendance.schools || {}).forEach(([school, times]) => {
+        Object.entries(times).forEach(([time, kids]) => pageBlocks.push({ key: `${school}_${time}`, label: `${school} ${time}`, nameOnly: school, time, count: (kids as any[]).length, kids: kids as any[], type: 'school' }));
+      });
+      Object.entries(page.attendance.lessons || {}).forEach(([lessonKey, kids]) => {
+        const timeMatch = lessonKey.match(/^\d{1,2}:\d{2}/);
+        const time = timeMatch ? timeMatch[0] : '';
+        const nameOnly = lessonKey.replace(time, '').trim() || lessonKey;
+        pageBlocks.push({ key: lessonKey, label: `${nameOnly} ${time}`.trim(), nameOnly, time, count: (kids as any[]).length, kids: kids as any[], type: 'lesson' });
+      });
+      pageCustomBlocks.forEach((block) => pageBlocks.push({ key: block.id, label: `${block.destination} ${block.time}`.trim(), nameOnly: block.destination, time: block.time, count: block.members.length, kids: block.members.map((member, index) => ({ id: `${block.id}_${index}`, name: member })), type: block.type }));
+
+      let loadedEntries: StaffEntry[] = [];
+      try {
+        const parsed = page.assignments?.entries ? JSON.parse(String(page.assignments.entries)) : null;
+        if (parsed?.entries) loadedEntries = parsed.entries.map((entry: any) => ({ ...entry, trips: (entry.trips || []).map((trip: any) => ({ ...trip, blockKeys: trip.blockKeys || (trip.blockKey ? [trip.blockKey] : []) })) }));
+      } catch {}
+      const pageEntries = [...page.shiftStaff.map(staff => staff.name), '送迎しない'].map((staffName) => loadedEntries.find(entry => entry.staffName === staffName) || ({ staffName, trips: [{ tripIndex: 0, blockKeys: [] }] }));
+      const pageDate = new Date(`${page.dateStr}T00:00:00`);
+      const pageLabel = `${pageDate.getMonth() + 1}月${pageDate.getDate()}日(${DOW_JP[pageDate.getDay()]})`;
+      const getPageShift = (staffName: string) => page.shiftStaff.find(staff => staff.name === staffName);
+      const staffHtml = pageEntries.map((entry, staffIndex) => {
+        const isNoTransport = entry.staffName === '送迎しない';
+        const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[staffIndex % STAFF_COLORS.length];
+        const shift = isNoTransport ? null : getPageShift(entry.staffName);
+        const trips = entry.trips.filter((trip) => trip.blockKeys.length > 0);
+        const tripsHtml = trips.length > 0 ? trips.map((trip, tripIndex) => {
+          const sortedBlockKeys = [...trip.blockKeys].sort((leftKey, rightKey) => {
+            const leftBlock = pageBlocks.find(block => block.key === leftKey);
+            const rightBlock = pageBlocks.find(block => block.key === rightKey);
+            return String(leftBlock?.time || '').localeCompare(String(rightBlock?.time || ''));
+          });
+          const stopsHtml = sortedBlockKeys.map((blockKey) => {
+            const block = pageBlocks.find(item => item.key === blockKey);
+            if (!block) return '';
+            const kids = (block.kids || []).map((kid: any) => String(kid?.name || '')).filter(Boolean);
+            return `<div class="home-print-stop"><div class="home-print-main"><span class="home-print-time">${escapeHtml(block.time || '-')}</span><strong class="${block.type === 'lesson' ? 'lesson' : ''}">${escapeHtml(block.nameOnly || block.label)}</strong></div>${kids.length > 0 ? `<div class="home-print-kids">${kids.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</div>` : ''}</div>`;
+          });
+          const splitIndex = Math.ceil(stopsHtml.length / 2);
+          const leftStops = stopsHtml.slice(0, splitIndex);
+          const rightStops = stopsHtml.slice(splitIndex);
+          const paddedRightStops = [...rightStops, ...Array(Math.max(0, leftStops.length - rightStops.length)).fill('<div class="home-print-stop home-print-no-transport-blank"></div>')];
+          const tripBodyHtml = isNoTransport && stopsHtml.length > 1
+            ? `<div class="home-print-no-transport-columns"><div class="home-print-no-transport-column">${leftStops.join('')}</div><div class="home-print-no-transport-column">${paddedRightStops.join('')}</div></div>`
+            : stopsHtml.join('');
+          return `<div class="home-print-trip">${isNoTransport ? '' : `<span class="home-print-number" style="--trip-color:${color}">${tripIndex + 1}</span>`}<div class="home-print-trip-body" style="border-color:${color}">${tripBodyHtml}</div></div>`;
+        }).join('') : '<div class="home-print-empty">担当なし</div>';
+        return `<section class="home-print-staff ${isNoTransport ? 'no-transport' : ''}" style="--staff-color:${color}"><header class="home-print-staff-head"><span class="home-print-dot" style="background:${color}"></span><strong>${escapeHtml(entry.staffName)}</strong>${shift?.start && shift?.end ? `<span class="home-print-shift">${escapeHtml(shift.start)} - ${escapeHtml(shift.end)}</span>` : ''}</header><div class="home-print-trips">${tripsHtml}</div></section>`;
+      }).join('');
+      return `<section class="home-print-page"><h1 class="home-print-title">${escapeHtml(pageLabel)}　送迎担当</h1><main class="home-print-list">${staffHtml}</main></section>`;
+    };
+    const homePrintPages = printPages?.length
+      ? printPages
+      : [{ dateStr, attendance, shiftStaff, assignments }];
+    const homePrintPagesHtml = homePrintPages.map(renderHomePrintPage).join('');
 
     const homeOverviewHtml = `
       <!doctype html>
@@ -767,6 +802,8 @@ export default function TransportModal({
             @page { size: A4 portrait; margin: 7mm; }
             * { box-sizing: border-box; }
             body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202426; }
+            .home-print-page { break-after: page; page-break-after: always; }
+            .home-print-page:last-child { break-after: auto; page-break-after: auto; }
             .home-print-title { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
             .home-print-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; align-items: start; }
             .home-print-staff { break-inside: avoid; border: 4px solid var(--staff-color); border-radius: 4mm; padding: 2.4mm 3mm; }
@@ -789,13 +826,15 @@ export default function TransportModal({
             .home-print-kids span { min-width: 0; white-space: nowrap; }
             .home-print-empty { color: #7A8587; font-size: 8px; padding: 1mm 2mm; }
             .home-print-staff.no-transport .home-print-trips { border-left-color: #A3A3A3; }
-            .home-print-staff.no-transport .home-print-kids { grid-template-columns: repeat(3, max-content); column-gap: 6mm; justify-content: start; }
+            .home-print-no-transport-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .home-print-no-transport-column + .home-print-no-transport-column { border-left: 1px solid #D8D8D8; }
+            .home-print-no-transport-column .home-print-stop + .home-print-stop { border-top: 1px solid #E5E5E5; }
+            .home-print-no-transport-blank { min-height: 10.5mm; }
             .home-print-staff.no-transport { grid-column: 1 / -1; }
           </style>
         </head>
         <body>
-          <h1 class="home-print-title">${escapeHtml(dateLabel)}　送迎担当</h1>
-          <main class="home-print-list">${homeOverviewStaffHtml}</main>
+          ${homePrintPagesHtml}
         </body>
       </html>
     `;

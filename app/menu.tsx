@@ -324,7 +324,21 @@ export default function MenuScreen() {
   const [pickupOverviewData, setPickupOverviewData] = useState<TransportOverviewData | null>(null);
   const [pickupShiftStaff, setPickupShiftStaff] = useState<any[]>([]);
   const [pickupOverviewAction, setPickupOverviewAction] = useState<'view' | 'print'>('view');
-  const [pickupOverviewLoadingAction, setPickupOverviewLoadingAction] = useState<'view' | 'print' | null>(null);
+  const [pickupOverviewLoadingAction, setPickupOverviewLoadingAction] = useState<'view' | 'print' | 'range' | null>(null);
+  const [pickupPrintMenuVisible, setPickupPrintMenuVisible] = useState(false);
+  const pickupPrintButtonRef = useRef<any>(null);
+  const [pickupPrintMenuPosition, setPickupPrintMenuPosition] = useState({ top: 96, left: 12, width: 260 });
+  const [pickupPrintDateModalVisible, setPickupPrintDateModalVisible] = useState(false);
+  const [pickupPrintStartDate, setPickupPrintStartDate] = useState('');
+  const [pickupPrintEndDate, setPickupPrintEndDate] = useState('');
+  const [pickupPrintDateTarget, setPickupPrintDateTarget] = useState<'start' | 'end'>('start');
+  const [pickupPrintCalendarMonth, setPickupPrintCalendarMonth] = useState(new Date());
+  const [pickupPrintPages, setPickupPrintPages] = useState<Array<{
+    dateStr: string;
+    attendance: TransportOverviewData['attendance'];
+    shiftStaff: any[];
+    assignments: Record<string, any>;
+  }>>([]);
   const [noticeVisible, setNoticeVisible] = useState(false);
   const noticeButtonRef = useRef<any>(null);
   const [noticePopoverPosition, setNoticePopoverPosition] = useState({ top: 100, left: 12, width: 340, maxHeight: 520 });
@@ -1465,6 +1479,77 @@ export default function MenuScreen() {
     }
   };
 
+  const openPickupPrintMenu = () => {
+    const screen = Dimensions.get('window');
+    const menuWidth = Math.min(280, screen.width - 24);
+    setPickupPrintMenuPosition({ top: 96, left: screen.width - menuWidth - 12, width: menuWidth });
+    setPickupPrintMenuVisible(true);
+    pickupPrintButtonRef.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
+      setPickupPrintMenuPosition({
+        top: y + height + 6,
+        left: Math.max(12, Math.min(screen.width - menuWidth - 12, x + width - menuWidth)),
+        width: menuWidth,
+      });
+    });
+  };
+
+  const openPickupPrintDatePicker = () => {
+    const selectedDate = makeDateStr(staffPlanDate);
+    setPickupPrintMenuVisible(false);
+    setPickupPrintStartDate(selectedDate);
+    setPickupPrintEndDate(selectedDate);
+    setPickupPrintDateTarget('start');
+    setPickupPrintCalendarMonth(new Date(staffPlanDate.getFullYear(), staffPlanDate.getMonth(), 1));
+    setPickupPrintDateModalVisible(true);
+  };
+
+  const getPickupPrintDates = (start: string, end: string) => {
+    const dates: string[] = [];
+    const cursor = new Date(`${start}T00:00:00`);
+    const last = new Date(`${end}T00:00:00`);
+    while (cursor <= last) {
+      dates.push(makeDateStr(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
+  };
+
+  const printPickupDateRange = async () => {
+    if (!pickupPrintStartDate || !pickupPrintEndDate || pickupOverviewLoadingAction) return;
+    const dates = getPickupPrintDates(pickupPrintStartDate, pickupPrintEndDate);
+    setPickupOverviewLoadingAction('range');
+    try {
+      const pages = await Promise.all(dates.map(async (targetDate) => {
+        const [overview, assignmentSnap] = await Promise.all([
+          loadTransportOverview(targetDate),
+          getDoc(doc(db, 'pickup_assignments', targetDate)),
+        ]);
+        return {
+          dateStr: targetDate,
+          attendance: overview.attendance,
+          shiftStaff: overview.shiftStaff,
+          assignments: assignmentSnap.exists() ? assignmentSnap.data() as Record<string, any> : {},
+        };
+      }));
+      if (pages.length === 0) return;
+      setPickupOverviewData({
+        attendance: pages[0].attendance,
+        shiftStaff: pages[0].shiftStaff,
+        staffNames: [],
+        publicHolidays: {},
+      });
+      setPickupPrintPages(pages);
+      setPickupOverviewAction('print');
+      setPickupPrintDateModalVisible(false);
+      setPickupDetailModalVisible(true);
+    } catch (error) {
+      console.error('指定日の送迎印刷データの読み込みに失敗しました', error);
+      showAppAlert('読み込みエラー', '指定日の送迎情報を読み込めませんでした。');
+    } finally {
+      setPickupOverviewLoadingAction(null);
+    }
+  };
+
   const togglePickupInlineOverview = async () => {
     if (pickupOverviewLoadingAction) return;
     if (showAllPickup) {
@@ -2089,10 +2174,11 @@ export default function MenuScreen() {
                 <View style={styles.staffPickupTopActions}>
                   {role === 'admin' && (
                     <TouchableOpacity
+                      ref={pickupPrintButtonRef}
                       style={styles.staffSectionPrintBtn}
                       onPress={(event) => {
                         event.stopPropagation();
-                        openPickupOverviewAction('print');
+                        openPickupPrintMenu();
                       }}
                       disabled={pickupOverviewLoadingAction !== null}
                       activeOpacity={0.82}
@@ -2868,7 +2954,10 @@ export default function MenuScreen() {
         <TransportModal
           visible={pickupDetailModalVisible}
           dateStr={makeDateStr(staffPlanDate)}
-          onClose={() => setPickupDetailModalVisible(false)}
+          onClose={() => {
+            setPickupDetailModalVisible(false);
+            setPickupPrintPages([]);
+          }}
           onDateChange={(nextDate) => {
             const [year, month, day] = nextDate.split('-').map(Number);
             setStaffPlanDate(new Date(year, month - 1, day));
@@ -2883,8 +2972,115 @@ export default function MenuScreen() {
           readOnly
           autoPrintOnOpen={pickupOverviewAction === 'print'}
           printOnly={pickupOverviewAction === 'print'}
+          printPages={pickupPrintPages.length > 0 ? pickupPrintPages : undefined}
         />
       )}
+
+      <Modal visible={pickupPrintMenuVisible} transparent animationType="fade" onRequestClose={() => setPickupPrintMenuVisible(false)}>
+        <View style={styles.noticePopoverLayer}>
+          <TouchableWithoutFeedback onPress={() => setPickupPrintMenuVisible(false)}>
+            <View style={styles.noticePopoverBackdrop} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.pickupPrintPopover, pickupPrintMenuPosition]}>
+            <Text style={styles.pickupPrintPopoverTitle}>送迎担当を印刷</Text>
+            <TouchableOpacity
+              style={styles.pickupPrintPopoverOption}
+              onPress={() => {
+                setPickupPrintMenuVisible(false);
+                setPickupPrintPages([]);
+                openPickupOverviewAction('print');
+              }}
+              activeOpacity={0.78}
+            >
+              <Ionicons name="print-outline" size={19} color="#137E87" />
+              <Text style={styles.pickupPrintPopoverOptionText}>{formatMenuDateLabel(staffPlanDate)}を印刷</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pickupPrintPopoverOption} onPress={openPickupPrintDatePicker} activeOpacity={0.78}>
+              <Ionicons name="calendar-outline" size={19} color="#137E87" />
+              <Text style={styles.pickupPrintPopoverOptionText}>指定日を印刷</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={pickupPrintDateModalVisible} transparent animationType="fade" onRequestClose={() => setPickupPrintDateModalVisible(false)}>
+        <View style={styles.pickupPrintDateBackdrop}>
+          <View style={styles.pickupPrintDateCard}>
+            <View style={styles.pickupPrintDateHeader}>
+              <Text style={styles.pickupPrintDateTitle}>送迎担当の印刷日を選択</Text>
+              <TouchableOpacity onPress={() => setPickupPrintDateModalVisible(false)} accessibilityLabel="閉じる">
+                <Ionicons name="close-circle" size={29} color="#795548" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.pickupPrintDateTargets}>
+              {(['start', 'end'] as const).map(target => {
+                const selected = pickupPrintDateTarget === target;
+                const value = target === 'start' ? pickupPrintStartDate : pickupPrintEndDate;
+                return (
+                  <TouchableOpacity key={target} style={[styles.pickupPrintDateTarget, selected && styles.pickupPrintDateTargetActive]} onPress={() => setPickupPrintDateTarget(target)}>
+                    <Text style={styles.pickupPrintDateTargetLabel}>{target === 'start' ? '開始日' : '終了日'}</Text>
+                    <Text style={styles.pickupPrintDateTargetValue}>{value || '未選択'}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.pickupPrintMonthRow}>
+              <TouchableOpacity onPress={() => setPickupPrintCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}><Ionicons name="chevron-back" size={25} color="#5D4037" /></TouchableOpacity>
+              <Text style={styles.pickupPrintMonthText}>{pickupPrintCalendarMonth.getFullYear()}年 {pickupPrintCalendarMonth.getMonth() + 1}月</Text>
+              <TouchableOpacity onPress={() => setPickupPrintCalendarMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}><Ionicons name="chevron-forward" size={25} color="#5D4037" /></TouchableOpacity>
+            </View>
+            <View style={styles.pickupPrintWeekRow}>
+              {DAY_NAMES.map((day, index) => <Text key={day} style={[styles.pickupPrintWeekText, index === 0 && styles.pickupPrintSunday, index === 6 && styles.pickupPrintSaturday]}>{day}</Text>)}
+            </View>
+            <View style={styles.pickupPrintCalendar}>
+              {(() => {
+                const year = pickupPrintCalendarMonth.getFullYear();
+                const month = pickupPrintCalendarMonth.getMonth();
+                const cells: (number | null)[] = [
+                  ...Array(new Date(year, month, 1).getDay()).fill(null),
+                  ...Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => index + 1),
+                ];
+                while (cells.length % 7 !== 0) cells.push(null);
+                return cells.map((day, index) => {
+                  if (!day) return <View key={`empty-${index}`} style={styles.pickupPrintCalendarCell} />;
+                  const dayDate = new Date(year, month, day);
+                  const dayKey = makeDateStr(dayDate);
+                  const isStart = dayKey === pickupPrintStartDate;
+                  const isEnd = dayKey === pickupPrintEndDate;
+                  const isInRange = !!pickupPrintStartDate && !!pickupPrintEndDate && dayKey > pickupPrintStartDate && dayKey < pickupPrintEndDate;
+                  return (
+                    <TouchableOpacity
+                      key={dayKey}
+                      style={[styles.pickupPrintCalendarCell, (isStart || isEnd) && styles.pickupPrintCalendarSelected, isInRange && styles.pickupPrintCalendarInRange]}
+                      onPress={() => {
+                        if (pickupPrintDateTarget === 'start') {
+                          setPickupPrintStartDate(dayKey);
+                          if (!pickupPrintEndDate || dayKey > pickupPrintEndDate) setPickupPrintEndDate(dayKey);
+                          setPickupPrintDateTarget('end');
+                        } else if (dayKey < pickupPrintStartDate) {
+                          setPickupPrintEndDate(pickupPrintStartDate);
+                          setPickupPrintStartDate(dayKey);
+                        } else {
+                          setPickupPrintEndDate(dayKey);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.pickupPrintCalendarDay, dayDate.getDay() === 0 && styles.pickupPrintSunday, dayDate.getDay() === 6 && styles.pickupPrintSaturday, (isStart || isEnd) && styles.pickupPrintCalendarSelectedText]}>{day}</Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+            <TouchableOpacity
+              style={[styles.pickupPrintSubmit, (!pickupPrintStartDate || !pickupPrintEndDate || pickupOverviewLoadingAction) && styles.pickupPrintSubmitDisabled]}
+              disabled={!pickupPrintStartDate || !pickupPrintEndDate || pickupOverviewLoadingAction !== null}
+              onPress={printPickupDateRange}
+            >
+              {pickupOverviewLoadingAction === 'range' ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.pickupPrintSubmitText}>{pickupPrintStartDate && pickupPrintEndDate ? `${getPickupPrintDates(pickupPrintStartDate, pickupPrintEndDate).length}日分を印刷` : '印刷する日を選択'}</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={pickupDatePickerVisible}
@@ -5017,6 +5213,34 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   staffSectionPrintText: { color: '#137E87', fontSize: 12, fontWeight: '900' },
+  pickupPrintPopover: { position: 'absolute', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 8, borderWidth: 1, borderColor: '#B8E2E5', shadowColor: '#000000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 18 },
+  pickupPrintPopoverTitle: { color: '#426064', fontSize: 12, fontWeight: '900', paddingHorizontal: 10, paddingTop: 5, paddingBottom: 7 },
+  pickupPrintPopoverOption: { minHeight: 44, paddingHorizontal: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: '#F0FBFC', marginTop: 4 },
+  pickupPrintPopoverOptionText: { color: '#17646C', fontSize: 14, fontWeight: '900' },
+  pickupPrintDateBackdrop: { flex: 1, padding: 16, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  pickupPrintDateCard: { width: '100%', maxWidth: 760, alignSelf: 'center', backgroundColor: '#FFFFFF', borderRadius: 20, overflow: 'hidden', padding: 16 },
+  pickupPrintDateHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  pickupPrintDateTitle: { color: '#5D4037', fontSize: 17, fontWeight: '900' },
+  pickupPrintDateTargets: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  pickupPrintDateTarget: { flex: 1, minHeight: 60, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1.5, borderColor: '#E5DED8', backgroundColor: '#FAFAFA' },
+  pickupPrintDateTargetActive: { borderColor: '#00AEB8', backgroundColor: '#EAFBFC' },
+  pickupPrintDateTargetLabel: { color: '#7A6254', fontSize: 11, fontWeight: '800' },
+  pickupPrintDateTargetValue: { color: '#333333', fontSize: 15, fontWeight: '900', marginTop: 3 },
+  pickupPrintMonthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  pickupPrintMonthText: { color: '#5D4037', fontSize: 17, fontWeight: '900' },
+  pickupPrintWeekRow: { flexDirection: 'row', marginBottom: 5 },
+  pickupPrintWeekText: { width: '14.285%', textAlign: 'center', color: '#555555', fontSize: 12, fontWeight: '800' },
+  pickupPrintSunday: { color: '#E53935' },
+  pickupPrintSaturday: { color: '#1565C0' },
+  pickupPrintCalendar: { flexDirection: 'row', flexWrap: 'wrap' },
+  pickupPrintCalendarCell: { width: '14.285%', height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20 },
+  pickupPrintCalendarSelected: { backgroundColor: '#00AEB8' },
+  pickupPrintCalendarInRange: { backgroundColor: '#E3F7F8' },
+  pickupPrintCalendarDay: { color: '#333333', fontSize: 14, fontWeight: '700' },
+  pickupPrintCalendarSelectedText: { color: '#FFFFFF' },
+  pickupPrintSubmit: { minHeight: 52, marginTop: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#00AEB8' },
+  pickupPrintSubmitDisabled: { backgroundColor: '#B8C9CB' },
+  pickupPrintSubmitText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   staffSectionMemoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
