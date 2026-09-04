@@ -1563,7 +1563,9 @@ export default function TransportModal({
                               }}
                               activeOpacity={0.7}
                             >
-                              <Text style={styles.tripLabelText}>{TRIP_LABELS[tIdx] || `${tIdx+1}回`}</Text>
+                              {!selectedBlock && (
+                                <Text style={styles.tripLabelText}>{TRIP_LABELS[tIdx] || `${tIdx+1}回`}</Text>
+                              )}
                               {trip.blockKeys.length > 0 ? (
                                 <View style={{ flex: 1 }}>
                                   {trip.blockKeys.map((bk) => {
@@ -1575,25 +1577,39 @@ export default function TransportModal({
                                       </Text>
                                     ) : null;
                                   })}
-                                  <Text style={{ fontSize: 9, color: '#aaa', marginTop: 2 }}>＋追加可</Text>
+                                  {selectedBlock && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                                      <View style={{ width: 13, height: 13, borderRadius: 7, borderWidth: 1.2, borderColor: '#D94B4B', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 10, lineHeight: 11, color: '#D94B4B', fontWeight: '900' }}>＋</Text>
+                                      </View>
+                                      <Text style={{ fontSize: 9, color: '#D94B4B', fontWeight: '900' }}>{TRIP_LABELS[tIdx] || `${tIdx + 1}回目`}に追加</Text>
+                                    </View>
+                                  )}
                                 </View>
                               ) : (
-                                <Text style={[styles.slotEmptyText, selectedBlock && styles.slotSelectableText]}>
-                                  {selectedBlock ? '👆 タップ' : '空き'}
-                                </Text>
+                                selectedBlock ? (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                    <View style={{ width: 13, height: 13, borderRadius: 7, borderWidth: 1.2, borderColor: '#D94B4B', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Text style={{ fontSize: 10, lineHeight: 11, color: '#D94B4B', fontWeight: '900' }}>＋</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 9, color: '#D94B4B', fontWeight: '900' }}>{TRIP_LABELS[tIdx] || `${tIdx + 1}回目`}に追加</Text>
+                                  </View>
+                                ) : (
+                                  <Text style={styles.slotEmptyText}>空き</Text>
+                                )
                               )}
                             </TouchableOpacity>
                           );
                         })}
                         {/* 新しい回を追加するボタン（selectedBlock選択中のみ） */}
-                        {selectedBlock && !isNoTransport && (
+                        {selectedBlock && !isNoTransport && entry.trips[entry.trips.length - 1]?.blockKeys.length > 0 && (
                           <TouchableOpacity
                             style={[styles.tripSlot, styles.tripSlotAdd]}
                             onPress={() => assignBlockToStaff(sIdx, null, selectedBlock.key)}
                             activeOpacity={0.7}
                           >
                             <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
-                            <Text style={styles.addSlotText}>{TRIP_LABELS[entry.trips.length] || `${entry.trips.length+1}回目`}</Text>
+                            <Text style={styles.addSlotText}>{TRIP_LABELS[entry.trips.length] || `${entry.trips.length+1}回目`}に追加</Text>
                           </TouchableOpacity>
                         )}
                       </View>
