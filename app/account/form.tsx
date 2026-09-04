@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../../components/AdminBottomNav';
@@ -55,6 +55,7 @@ export default function AccountFormScreen() {
 
   const [role, setRole] = useState<'user' | 'staff'>('user');
   const [name, setName] = useState('');
+  const [savedAccountName, setSavedAccountName] = useState('');
   const [nicknameKana, setNicknameKana] = useState('');
   const [empType, setEmpType] = useState('アルバイト');
   const [skills, setSkills] = useState({ drive: false, program: false, child: false });
@@ -111,6 +112,7 @@ export default function AccountFormScreen() {
           const data = docSnap.data();
           setRole(data.role || 'user');
           setName(data.name || '');
+          setSavedAccountName(data.name || '');
           setNicknameKana(data.nicknameKana || '');
           
           if (data.role === 'staff') {
@@ -159,8 +161,77 @@ export default function AccountFormScreen() {
     catch (e) { console.error("Master data update error:", e); }
   };
 
+  const renameStaffReferences = async (accountId: string, previousName: string, nextName: string) => {
+    const normalizeName = (value: unknown) => String(value || '').replace(/\s/g, '');
+    if (!previousName || normalizeName(previousName) === normalizeName(nextName)) return;
+
+    const [shiftSnapshot, assignedSnapshot, pickupSnapshot, autoFillSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'shifts2'), where('staffName', '==', previousName))),
+      getDocs(collection(db, 'assigned_shifts')),
+      getDocs(collection(db, 'pickup_assignments')),
+      getDoc(doc(db, 'settings', 'autoFillSettings')),
+    ]);
+
+    const writes: { ref: ReturnType<typeof doc>; data: Record<string, unknown> }[] = [];
+    shiftSnapshot.forEach((shiftDoc) => {
+      writes.push({ ref: shiftDoc.ref, data: { staffName: nextName, staffId: accountId } });
+    });
+
+    assignedSnapshot.forEach((assignedDoc) => {
+      const staff = assignedDoc.data().staff;
+      if (!Array.isArray(staff)) return;
+      let changed = false;
+      const nextStaff = staff.map((entry: any) => {
+        if (normalizeName(entry?.name) !== normalizeName(previousName)) return entry;
+        changed = true;
+        return { ...entry, name: nextName, staffId: entry?.staffId || accountId };
+      });
+      if (changed) writes.push({ ref: assignedDoc.ref, data: { staff: nextStaff } });
+    });
+
+    pickupSnapshot.forEach((pickupDoc) => {
+      const updates: Record<string, unknown> = {};
+      Object.entries(pickupDoc.data()).forEach(([blockKey, assignedName]) => {
+        if (normalizeName(assignedName) === normalizeName(previousName)) updates[blockKey] = nextName;
+      });
+      if (Object.keys(updates).length > 0) writes.push({ ref: pickupDoc.ref, data: updates });
+    });
+
+    if (autoFillSnapshot.exists()) {
+      const settings = autoFillSnapshot.data();
+      const staffSettings = Array.isArray(settings.staffSettings) ? settings.staffSettings : [];
+      const nextStaffSettings = staffSettings.map((entry: any) =>
+        normalizeName(entry?.name) === normalizeName(previousName)
+          ? { ...entry, name: nextName, staffId: entry?.staffId || accountId }
+          : entry
+      );
+      const pdfOrder = Array.isArray(settings.pdfOrder) ? settings.pdfOrder : [];
+      const nextPdfOrder = pdfOrder.map((entry: unknown) =>
+        normalizeName(entry) === normalizeName(previousName) ? nextName : entry
+      );
+      const settingsChanged = nextStaffSettings.some((entry: any, index: number) => entry !== staffSettings[index])
+        || nextPdfOrder.some((entry: unknown, index: number) => entry !== pdfOrder[index]);
+      if (settingsChanged) {
+        writes.push({ ref: autoFillSnapshot.ref, data: { staffSettings: nextStaffSettings, pdfOrder: nextPdfOrder } });
+      }
+    }
+
+    for (let start = 0; start < writes.length; start += 400) {
+      const batch = writeBatch(db);
+      writes.slice(start, start + 400).forEach(({ ref, data }) => batch.update(ref, data));
+      await batch.commit();
+    }
+
+    await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+      accountId,
+      staffName: nextName,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  };
+
   const handleSave = async () => {
-    if (!name || !nicknameKana) return Alert.alert('入力エラー', '氏名とニックネーム(かな)は必須項目です。');
+    const nextName = name.trim();
+    if (!nextName || !nicknameKana) return Alert.alert('入力エラー', '氏名とニックネーム(かな)は必須項目です。');
     setLoading(true);
 
     try {
@@ -170,7 +241,7 @@ export default function AccountFormScreen() {
       // 表示側で「親ID_sib_0」のように生成する運用が最も安全です。
 
       let accountData: any = {
-        name, nicknameKana, updatedAt: serverTimestamp(),
+        name: nextName, nicknameKana, updatedAt: serverTimestamp(),
         ...(role === 'staff' ? { 
           empType, skills, showInShiftTable, canEditEvents,
           hasChild: skills.child,
@@ -184,6 +255,7 @@ export default function AccountFormScreen() {
       };
 
       if (isEditMode) {
+        if (role === 'staff') await renameStaffReferences(id, savedAccountName, nextName);
         await updateDoc(doc(db, 'accounts', id), accountData);
         Alert.alert('更新完了', 'アカウント情報を更新しました。');
       } else {
