@@ -1481,12 +1481,11 @@ export default function TransportModal({
                   </TouchableOpacity>
                 ) : (
                   <>
-                    <TouchableOpacity style={styles.printBtn} onPress={printTimeline}>
-                      <Ionicons name="print-outline" size={14} color="#fff" />
-                      <Text style={styles.printBtnText}>印刷</Text>
+                    <TouchableOpacity style={styles.printIconBtn} onPress={printTimeline} accessibilityLabel="印刷">
+                      <Ionicons name="print-outline" size={20} color="#fff" />
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
-                      <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週参照</Text>
+                      <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -2083,10 +2082,11 @@ const styles = StyleSheet.create({
   modeTabText: { fontSize: 13, fontWeight: '900', color: '#52606A' },
   modeTabTextActive: { color: '#FFFFFF' },
   printBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 88, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#56B6C2' },
+  printIconBtn: { width: 48, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#56B6C2' },
   printBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
   overviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 104, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#5B9BD5' },
   overviewBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
-  lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 96, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
+  lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 68, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
   lastWeekBtnActive: { backgroundColor: COLORS.primary },
   lastWeekBtnText: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
   lastWeekBanner: { backgroundColor: '#FFF9C4', padding: 7, alignItems: 'center' },
