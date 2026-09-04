@@ -700,7 +700,7 @@ export default function TransportModal({
         }).join('');
         return `
           <div class="timeline-row" style="height:${rowHeight}px">
-            <div class="timeline-staff">
+            <div class="timeline-staff" style="background:${staffShiftTimeColor}">
               <strong>${escapeHtml(entry.staffName)}</strong>
               <span>${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</span>
             </div>
@@ -1011,15 +1011,15 @@ export default function TransportModal({
             .kids { font-size: 8px; }
             .kids-grid {
               display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+              grid-template-columns: repeat(3, minmax(0, 1fr));
               column-gap: 5px;
               row-gap: 2px;
             }
             .kid-entry {
               min-width: 0;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
+              font-size: 7px;
+              line-height: 1.15;
+              overflow-wrap: anywhere;
               font-weight: 700;
             }
             .empty { text-align: center; padding: 20px; color: #666; }
