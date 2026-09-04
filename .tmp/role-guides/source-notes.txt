@@ -1,0 +1,8 @@
+Visual sources
+- pickup-home.png: User-provided screenshot of the Kanyes home pickup schedule screen, captured 2026-09-03.
+- quick-menu-popup.png: User-provided screenshot of the quick-menu selection screen, captured 2026-09-02.
+- date-selector.png: User-provided screenshot of the year/month selector, captured 2026-09-02.
+- logo.png and quick-menu icon assets: Local application assets from this repository.
+
+Content sources
+- Role-specific actions are derived from the local application routes and menu configuration in app/menu.tsx.

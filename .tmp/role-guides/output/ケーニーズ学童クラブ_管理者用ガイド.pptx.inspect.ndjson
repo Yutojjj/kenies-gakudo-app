@@ -1,0 +1,219 @@
+{"kind":"deck","id":"pr/8p2cz7","name":"Deck"}
+{"kind":"layout","layoutId":"0f30c72e-54f9-4577-9bde-96d2c820a40c","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"f74901a9-286a-49c6-91cd-25631ea91126","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/m632lr","slide":1,"title":"ケーニーズ学童クラブ","textShapes":4}
+{"kind":"shape","id":"sh/ilsnqhoj","slide":1,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/k7a5sr6p","slide":1,"text":"ケーニーズ学童クラブ","textPreview":"ケーニーズ学童クラブ","textChars":10,"textLines":1,"bbox":[84,238,680,52]}
+{"kind":"textbox","id":"sh/vi14v258","slide":1,"text":"管理者用\nかんたんガイド","textPreview":"管理者用 | かんたんガイド","textChars":12,"textLines":2,"bbox":[84,304,650,178]}
+{"kind":"textbox","id":"sh/ah8nmhon","slide":1,"text":"学童全体の状況を、ひとつの画面から整える","textPreview":"学童全体の状況を、ひとつの画面から整える","textChars":20,"textLines":1,"bbox":[90,518,600,48]}
+{"kind":"shape","id":"sh/xkjmxcne","slide":1,"bbox":[790,82,382,554]}
+{"kind":"textbox","id":"sh/neh4r25w","slide":1,"text":"毎日の画面を見ながら、必要な操作だけ確認できます。","textPreview":"毎日の画面を見ながら、必要な操作だけ確認できます。","textChars":25,"textLines":1,"bbox":[795,604,370,24]}
+{"kind":"image","id":"im/8by1wvul","slide":1,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[84,84,106,106]}
+{"kind":"image","id":"im/hgri9kvi","slide":1,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[824,110,314,480]}
+{"kind":"notes","id":"nt/m632lr","slide":1,"text":""}
+{"kind":"slide","id":"sl/62ksqh","slide":2,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":22}
+{"kind":"shape","id":"sh/3itkvqpw","slide":2,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/4j214v6h","slide":2,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/pkb2xg72","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/q5kj6lon","slide":2,"text":"この手順書でできること","textPreview":"この手順書でできること","textChars":11,"textLines":1,"bbox":[64,82,1000,56]}
+{"kind":"textbox","id":"sh/r6tkzqp8","slide":2,"text":"必要な操作を探しやすい順に並べています。","textPreview":"必要な操作を探しやすい順に並べています。","textChars":20,"textLines":1,"bbox":[64,148,960,32]}
+{"kind":"textbox","id":"sh/c7218v6t","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,230,56,42]}
+{"kind":"textbox","id":"sh/d8b2107y","slide":2,"text":"ホームの確認","textPreview":"ホームの確認","textChars":6,"textLines":1,"bbox":[146,230,410,36]}
+{"kind":"textbox","id":"sh/e943a5oj","slide":2,"text":"送迎・予定・連絡を毎朝確認する手順","textPreview":"送迎・予定・連絡を毎朝確認する手順","textChars":17,"textLines":1,"bbox":[146,276,418,44]}
+{"kind":"textbox","id":"sh/zadk3ap4","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[624,230,56,42]}
+{"kind":"textbox","id":"sh/zq1gbmtw","slide":2,"text":"出欠と送迎","textPreview":"出欠と送迎","textChars":5,"textLines":1,"bbox":[706,230,410,36]}
+{"kind":"textbox","id":"sh/ypsfi1sb","slide":2,"text":"当日の状況を確認・調整する手順","textPreview":"当日の状況を確認・調整する手順","textChars":15,"textLines":1,"bbox":[706,276,418,44]}
+{"kind":"textbox","id":"sh/lsjydwb2","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[64,358,56,42]}
+{"kind":"textbox","id":"sh/0raxkrah","slide":2,"text":"シフト作成","textPreview":"シフト作成","textChars":5,"textLines":1,"bbox":[146,358,410,36]}
+{"kind":"textbox","id":"sh/bm1w7mt0","slide":2,"text":"勤務予定を作成して共有する手順","textPreview":"勤務予定を作成して共有する手順","textChars":15,"textLines":1,"bbox":[146,404,418,44]}
+{"kind":"textbox","id":"sh/ql8fehsf","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[624,358,56,42]}
+{"kind":"textbox","id":"sh/doje9wb6","slide":2,"text":"日付の切替","textPreview":"日付の切替","textChars":5,"textLines":1,"bbox":[706,358,410,36]}
+{"kind":"textbox","id":"sh/cnaxgral","slide":2,"text":"確認したい日を選ぶ手順","textPreview":"確認したい日を選ぶ手順","textChars":11,"textLines":1,"bbox":[706,404,418,44]}
+{"kind":"textbox","id":"sh/vilgj6t4","slide":2,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[64,486,56,42]}
+{"kind":"textbox","id":"sh/ahcfalsj","slide":2,"text":"お知らせ","textPreview":"お知らせ","textChars":4,"textLines":1,"bbox":[146,486,410,36]}
+{"kind":"textbox","id":"sh/qpgry9g3","slide":2,"text":"スタッフ・利用者へ連絡を届ける手順","textPreview":"スタッフ・利用者へ連絡を届ける手順","textChars":17,"textLines":1,"bbox":[146,532,418,44]}
+{"kind":"textbox","id":"sh/rq9sreho","slide":2,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[624,486,56,42]}
+{"kind":"textbox","id":"sh/sri90jy9","slide":2,"text":"最後の確認","textPreview":"最後の確認","textChars":5,"textLines":1,"bbox":[706,486,410,36]}
+{"kind":"textbox","id":"sh/dsratozu","slide":2,"text":"対応漏れを防ぐチェック項目","textPreview":"対応漏れを防ぐチェック項目","textChars":13,"textLines":1,"bbox":[706,532,418,44]}
+{"kind":"notes","id":"nt/62ksqh","slide":2,"text":""}
+{"kind":"slide","id":"sl/k7gw6d","slide":3,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":13}
+{"kind":"shape","id":"sh/sjut87q5","slide":3,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/rilsf2pk","slide":3,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/qhcb6x8f","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/5g3adc7u","slide":3,"text":"ホームで、今日の全体状況を確認する","textPreview":"ホームで、今日の全体状況を確認する","textChars":17,"textLines":1,"bbox":[64,82,1080,56]}
+{"kind":"textbox","id":"sh/4fut47q9","slide":3,"text":"送迎、連絡、予定変更を確認してから当日の対応を始めます。","textPreview":"送迎、連絡、予定変更を確認してから当日の対応を始めます。","textChars":28,"textLines":1,"bbox":[64,148,1010,32]}
+{"kind":"shape","id":"sh/3elsb2po","slide":3,"bbox":[64,212,530,420]}
+{"kind":"textbox","id":"sh/hs3a9s7i","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[666,238,50,32]}
+{"kind":"textbox","id":"sh/gra90nqx","slide":3,"text":"送迎担当を見る","textPreview":"送迎担当を見る","textChars":7,"textLines":1,"bbox":[740,236,400,30]}
+{"kind":"textbox","id":"sh/6143uhw3","slide":3,"text":"担当者ごとの送迎順を確認します。色のついたカードは対応中または次の送迎です。","textPreview":"担当者ごとの送迎順を確認します。色のついたカードは対応中または次の送迎です。","textChars":38,"textLines":1,"bbox":[740,273,400,48]}
+{"kind":"shape","id":"sh/7md4nmxo","slide":3,"bbox":[666,331,440,1]}
+{"kind":"textbox","id":"sh/8nmlwre9","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[666,354,50,32]}
+{"kind":"textbox","id":"sh/tovmpwfu","slide":3,"text":"メモ・変更を見る","textPreview":"メモ・変更を見る","textChars":8,"textLines":1,"bbox":[740,352,400,30]}
+{"kind":"textbox","id":"sh/yxk3qhw7","slide":3,"text":"利用予定や送迎の変更がある日は、当日のメモと変更履歴を確認します。","textPreview":"利用予定や送迎の変更がある日は、当日のメモと変更履歴を確認します。","textChars":33,"textLines":1,"bbox":[740,389,400,48]}
+{"kind":"shape","id":"sh/jyt4jmxc","slide":3,"bbox":[666,447,440,1]}
+{"kind":"textbox","id":"sh/kz2ls7ex","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[666,470,50,32]}
+{"kind":"textbox","id":"sh/l0vmlcfi","slide":3,"text":"必要な人だけ詳細へ","textPreview":"必要な人だけ詳細へ","textChars":9,"textLines":1,"bbox":[740,468,400,30]}
+{"kind":"textbox","id":"sh/atk3mxgv","slide":3,"text":"全体表示や各メニューから、必要な情報を開きます。","textPreview":"全体表示や各メニューから、必要な情報を開きます。","textChars":24,"textLines":1,"bbox":[740,505,400,48]}
+{"kind":"image","id":"im/vex032to","slide":3,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[88,232,482,375]}
+{"kind":"notes","id":"nt/k7gw6d","slide":3,"text":""}
+{"kind":"slide","id":"sl/y6xnwt","slide":4,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":16}
+{"kind":"shape","id":"sh/kbytwva1","slide":4,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/japs3q9g","slide":4,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/y9gbulsb","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/x87a1grq","slide":4,"text":"出欠・送迎を確認して調整する","textPreview":"出欠・送迎を確認して調整する","textChars":14,"textLines":1,"bbox":[64,82,1040,56]}
+{"kind":"textbox","id":"sh/w7ytsba5","slide":4,"text":"当日の変更を見つけたら、出欠と送迎を同じ流れで見直します。","textPreview":"当日の変更を見つけたら、出欠と送迎を同じ流れで見直します。","textChars":29,"textLines":1,"bbox":[64,148,1040,32]}
+{"kind":"shape","id":"sh/b6pszq9k","slide":4,"bbox":[64,224,280,300]}
+{"kind":"textbox","id":"sh/h4rudkru","slide":4,"text":"操作の入口","textPreview":"操作の入口","textChars":5,"textLines":1,"bbox":[92,442,224,28]}
+{"kind":"textbox","id":"sh/g3it4fq9","slide":4,"text":"出欠一覧 または 送迎管理","textPreview":"出欠一覧 または 送迎管理","textChars":13,"textLines":1,"bbox":[88,477,232,30]}
+{"kind":"textbox","id":"sh/e50rm9wz","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[420,235,56,42]}
+{"kind":"textbox","id":"sh/z698vedk","slide":4,"text":"対象の日付を開く","textPreview":"対象の日付を開く","textChars":8,"textLines":1,"bbox":[500,235,570,32]}
+{"kind":"textbox","id":"sh/07i9ojep","slide":4,"text":"画面上部の日付を確認し、変更したい日を表示します。","textPreview":"画面上部の日付を確認し、変更したい日を表示します。","textChars":25,"textLines":1,"bbox":[500,276,590,43]}
+{"kind":"shape","id":"sh/18raxova","slide":4,"bbox":[420,326,680,1]}
+{"kind":"textbox","id":"sh/q1gri9wn","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[420,341,56,42]}
+{"kind":"textbox","id":"sh/r2p8red8","slide":4,"text":"利用者と送迎先を確認する","textPreview":"利用者と送迎先を確認する","textChars":12,"textLines":1,"bbox":[500,341,570,32]}
+{"kind":"textbox","id":"sh/c3y9kjet","slide":4,"text":"出欠、迎えの有無、送迎先、時刻を上から見比べます。","textPreview":"出欠、迎えの有無、送迎先、時刻を上から見比べます。","textChars":25,"textLines":1,"bbox":[500,382,590,43]}
+{"kind":"shape","id":"sh/d4rqtove","slide":4,"bbox":[420,432,680,1]}
+{"kind":"textbox","id":"sh/axkrudw7","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[420,447,56,42]}
+{"kind":"textbox","id":"sh/vyts3ydc","slide":4,"text":"変更を反映して見直す","textPreview":"変更を反映して見直す","textChars":10,"textLines":1,"bbox":[500,447,570,32]}
+{"kind":"textbox","id":"sh/7ilovqt4","slide":4,"text":"保存後、ホームに戻って送迎担当の表示が合っているか確認します。","textPreview":"保存後、ホームに戻って送迎担当の表示が合っているか確認します。","textChars":31,"textLines":1,"bbox":[500,488,590,43]}
+{"kind":"shape","id":"sh/6hcnm5cj","slide":4,"bbox":[64,570,1042,56]}
+{"kind":"textbox","id":"sh/tk36x0bu","slide":4,"text":"送迎を変更した日は、出欠と送迎先の両方を確認してから完了にします。","textPreview":"送迎を変更した日は、出欠と送迎先の両方を確認してから完了にします。","textChars":33,"textLines":1,"bbox":[86,583,1000,28]}
+{"kind":"image","id":"im/7y90zets","slide":4,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[132,272,145,145]}
+{"kind":"notes","id":"nt/y6xnwt","slide":4,"text":""}
+{"kind":"slide","id":"sl/nww2ez","slide":5,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":16}
+{"kind":"shape","id":"sh/d0zqlc3e","slide":5,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/qdo7qh4n","slide":5,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/bex8jml8","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/ob6po7mh","slide":5,"text":"シフトを作成して共有する","textPreview":"シフトを作成して共有する","textChars":12,"textLines":1,"bbox":[64,82,1040,56]}
+{"kind":"textbox","id":"sh/pcfqhc32","slide":5,"text":"スタッフの勤務予定を作るときの基本手順です。","textPreview":"スタッフの勤務予定を作るときの基本手順です。","textChars":22,"textLines":1,"bbox":[64,148,1040,32]}
+{"kind":"shape","id":"sh/29o7mx4r","slide":5,"bbox":[64,224,280,300]}
+{"kind":"textbox","id":"sh/g7mpknml","slide":5,"text":"操作の入口","textPreview":"操作の入口","textChars":5,"textLines":1,"bbox":[92,442,224,28]}
+{"kind":"textbox","id":"sh/18vqdsn6","slide":5,"text":"シフト作成","textPreview":"シフト作成","textChars":5,"textLines":1,"bbox":[88,477,232,30]}
+{"kind":"textbox","id":"sh/pov6dkjq","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[420,235,56,42]}
+{"kind":"textbox","id":"sh/4n2p4fi5","slide":5,"text":"作成する期間を選ぶ","textPreview":"作成する期間を選ぶ","textChars":9,"textLines":1,"bbox":[500,235,570,32]}
+{"kind":"textbox","id":"sh/3mtoba1k","slide":5,"text":"対象の月と日付を確認して、入力したい期間を開きます。","textPreview":"対象の月と日付を確認して、入力したい期間を開きます。","textChars":26,"textLines":1,"bbox":[500,276,590,43]}
+{"kind":"shape","id":"sh/2lk725kz","slide":5,"bbox":[420,326,680,1]}
+{"kind":"textbox","id":"sh/h0b690ju","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[420,341,56,42]}
+{"kind":"textbox","id":"sh/gz2p0f29","slide":5,"text":"スタッフごとの勤務を入力する","textPreview":"スタッフごとの勤務を入力する","textChars":14,"textLines":1,"bbox":[500,341,570,32]}
+{"kind":"textbox","id":"sh/fyto7a1o","slide":5,"text":"開始・終了時刻を確認し、送迎担当と無理がないか見ます。","textPreview":"開始・終了時刻を確認し、送迎担当と無理がないか見ます。","textChars":27,"textLines":1,"bbox":[500,382,590,43]}
+{"kind":"shape","id":"sh/uxk7y5k3","slide":5,"bbox":[420,432,680,1]}
+{"kind":"textbox","id":"sh/twb650ji","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[420,447,56,42]}
+{"kind":"textbox","id":"sh/svipwv2x","slide":5,"text":"保存後に一覧で確認する","textPreview":"保存後に一覧で確認する","textChars":11,"textLines":1,"bbox":[500,447,570,32]}
+{"kind":"textbox","id":"sh/kfmpsvat","slide":5,"text":"空欄や重複がないかを見て、必要ならスタッフへ共有します。","textPreview":"空欄や重複がないかを見て、必要ならスタッフへ共有します。","textChars":28,"textLines":1,"bbox":[500,488,590,43]}
+{"kind":"shape","id":"sh/l0v6l0re","slide":5,"bbox":[64,570,1042,56]}
+{"kind":"textbox","id":"sh/yd47q5sn","slide":5,"text":"確定前に、送迎担当の勤務時間と送迎時刻が重なっていないか確認します。","textPreview":"確定前に、送迎担当の勤務時間と送迎時刻が重なっていないか確認します。","textChars":34,"textLines":1,"bbox":[86,583,1000,28]}
+{"kind":"image","id":"im/2l8jup43","slide":5,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[132,272,145,145]}
+{"kind":"notes","id":"nt/nww2ez","slide":5,"text":""}
+{"kind":"slide","id":"sl/r0m8fd","slide":6,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":13}
+{"kind":"shape","id":"sh/50bah0ji","slide":6,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/ixkb65k7","slide":6,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/jytsfqls","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/s3mtcf29","slide":6,"text":"確認したい日を選ぶ","textPreview":"確認したい日を選ぶ","textChars":9,"textLines":1,"bbox":[64,82,1080,56]}
+{"kind":"textbox","id":"sh/t4valkju","slide":6,"text":"日付を切り替えて、確認・入力したい日を表示します。","textPreview":"日付を切り替えて、確認・入力したい日を表示します。","textChars":25,"textLines":1,"bbox":[64,148,1010,32]}
+{"kind":"shape","id":"sh/61kba5k3","slide":6,"bbox":[64,212,530,420]}
+{"kind":"textbox","id":"sh/g7mtgf25","slide":6,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[666,238,50,32]}
+{"kind":"textbox","id":"sh/18vapkjq","slide":6,"text":"年または月を押す","textPreview":"年または月を押す","textChars":8,"textLines":1,"bbox":[740,236,400,30]}
+{"kind":"textbox","id":"sh/xonexsba","slide":6,"text":"年・月をそれぞれ押すと、必要な一覧だけを開けます。","textPreview":"年・月をそれぞれ押すと、必要な一覧だけを開けます。","textChars":25,"textLines":1,"bbox":[740,273,400,48]}
+{"kind":"shape","id":"sh/wnud4nap","slide":6,"bbox":[666,331,440,1]}
+{"kind":"textbox","id":"sh/vmlwvit4","slide":6,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[666,354,50,32]}
+{"kind":"textbox","id":"sh/alcv2dsj","slide":6,"text":"対象を選択する","textPreview":"対象を選択する","textChars":7,"textLines":1,"bbox":[740,352,400,30]}
+{"kind":"textbox","id":"sh/5cne1cb6","slide":6,"text":"確認・編集したい年と月を選びます。","textPreview":"確認・編集したい年と月を選びます。","textChars":17,"textLines":1,"bbox":[740,389,400,48]}
+{"kind":"shape","id":"sh/kbed87al","slide":6,"bbox":[666,447,440,1]}
+{"kind":"textbox","id":"sh/ja5wz2tg","slide":6,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[666,470,50,32]}
+{"kind":"textbox","id":"sh/i9wv6xsv","slide":6,"text":"決定で反映する","textPreview":"決定で反映する","textChars":7,"textLines":1,"bbox":[740,468,400,30]}
+{"kind":"textbox","id":"sh/lg3ep8b2","slide":6,"text":"決定後、画面上の日付が変わったことを確認します。","textPreview":"決定後、画面上の日付が変わったことを確認します。","textChars":24,"textLines":1,"bbox":[740,505,400,48]}
+{"kind":"image","id":"im/21kbyd0n","slide":6,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[88,232,482,375]}
+{"kind":"notes","id":"nt/r0m8fd","slide":6,"text":""}
+{"kind":"slide","id":"sl/2t80k9","slide":7,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":16}
+{"kind":"shape","id":"sh/43uxobet","slide":7,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/32lwf6d8","slide":7,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/21sfm1wn","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/h0jedwv2","slide":7,"text":"予定変更の履歴を確認する","textPreview":"予定変更の履歴を確認する","textChars":12,"textLines":1,"bbox":[64,82,1040,56]}
+{"kind":"textbox","id":"sh/gzaxkrex","slide":7,"text":"利用者からの変更がある日は、履歴を確認して当日の予定へ反映します。","textPreview":"利用者からの変更がある日は、履歴を確認して当日の予定へ反映します。","textChars":33,"textLines":1,"bbox":[64,148,1040,32]}
+{"kind":"shape","id":"sh/fy1wbmdc","slide":7,"bbox":[64,224,280,300]}
+{"kind":"textbox","id":"sh/1wnyp0vm","slide":7,"text":"操作の入口","textPreview":"操作の入口","textChars":5,"textLines":1,"bbox":[92,442,224,28]}
+{"kind":"textbox","id":"sh/0vexwvu1","slide":7,"text":"変更履歴","textPreview":"変更履歴","textChars":4,"textLines":1,"bbox":[88,477,232,30]}
+{"kind":"textbox","id":"sh/2t4fux0v","slide":7,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[420,235,56,42]}
+{"kind":"textbox","id":"sh/3uxg32hg","slide":7,"text":"対象の日付を選ぶ","textPreview":"対象の日付を選ぶ","textChars":8,"textLines":1,"bbox":[500,235,570,32]}
+{"kind":"textbox","id":"sh/4v6xw7i1","slide":7,"text":"確認したい日付へ切り替えます。","textPreview":"確認したい日付へ切り替えます。","textChars":15,"textLines":1,"bbox":[500,276,590,43]}
+{"kind":"shape","id":"sh/pwfy5cz6","slide":7,"bbox":[420,326,680,1]}
+{"kind":"textbox","id":"sh/up4f6d0j","slide":7,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[420,341,56,42]}
+{"kind":"textbox","id":"sh/fqdgzih4","slide":7,"text":"変更内容を確認する","textPreview":"変更内容を確認する","textChars":9,"textLines":1,"bbox":[500,341,570,32]}
+{"kind":"textbox","id":"sh/grmxsnip","slide":7,"text":"利用の有無、送迎先、時刻などの変更点を読みます。","textPreview":"利用の有無、送迎先、時刻などの変更点を読みます。","textChars":24,"textLines":1,"bbox":[500,382,590,43]}
+{"kind":"shape","id":"sh/hsvy1sza","slide":7,"bbox":[420,432,680,1]}
+{"kind":"textbox","id":"sh/eloz2hg3","slide":7,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[420,447,56,42]}
+{"kind":"textbox","id":"sh/zmhgbmho","slide":7,"text":"関係する画面を見直す","textPreview":"関係する画面を見直す","textChars":10,"textLines":1,"bbox":[500,447,570,32]}
+{"kind":"textbox","id":"sh/bup4nato","slide":7,"text":"出欠・送迎・お知らせに反映漏れがないか確認します。","textPreview":"出欠・送迎・お知らせに反映漏れがないか確認します。","textChars":25,"textLines":1,"bbox":[500,488,590,43]}
+{"kind":"shape","id":"sh/atg3e5c3","slide":7,"bbox":[64,570,1042,56]}
+{"kind":"textbox","id":"sh/xw7mpkbu","slide":7,"text":"履歴を見ただけで終わらず、当日の出欠と送迎担当に反映されたか確認します。","textPreview":"履歴を見ただけで終わらず、当日の出欠と送迎担当に反映されたか確認します。","textChars":36,"textLines":1,"bbox":[86,583,1000,28]}
+{"kind":"image","id":"im/ratcred0","slide":7,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[132,272,145,145]}
+{"kind":"notes","id":"nt/2t80k9","slide":7,"text":""}
+{"kind":"slide","id":"sl/6wlvfv","slide":8,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":13}
+{"kind":"shape","id":"sh/10zm18nu","slide":8,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/ex836t4j","slide":8,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/fyh4zy54","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/o3alcnml","slide":8,"text":"クイックメニューから目的の機能を開く","textPreview":"クイックメニューから目的の機能を開く","textChars":18,"textLines":1,"bbox":[64,82,1080,56]}
+{"kind":"textbox","id":"sh/p4jm58n6","slide":8,"text":"ホームからすぐに開きたい機能は、クイックメニューで選択します。","textPreview":"ホームからすぐに開きたい機能は、クイックメニューで選択します。","textChars":31,"textLines":1,"bbox":[64,148,1010,32]}
+{"kind":"shape","id":"sh/2183ad4f","slide":8,"bbox":[64,212,530,420]}
+{"kind":"textbox","id":"sh/c7a5gnmh","slide":8,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[666,238,50,32]}
+{"kind":"textbox","id":"sh/x8jm9sn2","slide":8,"text":"表示したい機能を選ぶ","textPreview":"表示したい機能を選ぶ","textChars":10,"textLines":1,"bbox":[740,236,400,30]}
+{"kind":"textbox","id":"sh/t4fihwzm","slide":8,"text":"項目を押して選択状態にします。必要に応じて表示内容を見直します。","textPreview":"項目を押して選択状態にします。必要に応じて表示内容を見直します。","textChars":32,"textLines":1,"bbox":[740,273,400,48]}
+{"kind":"shape","id":"sh/836horih","slide":8,"bbox":[666,331,440,1]}
+{"kind":"textbox","id":"sh/72x0fmhw","slide":8,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[666,354,50,32]}
+{"kind":"textbox","id":"sh/614zmh0b","slide":8,"text":"決定する","textPreview":"決定する","textChars":4,"textLines":1,"bbox":[740,352,400,30]}
+{"kind":"textbox","id":"sh/hsfilwzy","slide":8,"text":"画面下部の決定を押すと、ホームのクイックメニューに反映されます。","textPreview":"画面下部の決定を押すと、ホームのクイックメニューに反映されます。","textChars":32,"textLines":1,"bbox":[740,389,400,48]}
+{"kind":"shape","id":"sh/gr6hsrid","slide":8,"bbox":[666,447,440,1]}
+{"kind":"textbox","id":"sh/vqx0j6hs","slide":8,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[666,470,50,32]}
+{"kind":"textbox","id":"sh/u5ozq107","slide":8,"text":"迷ったとき","textPreview":"迷ったとき","textChars":5,"textLines":1,"bbox":[740,468,400,30]}
+{"kind":"textbox","id":"sh/xwvi9cze","slide":8,"text":"まずは「出欠」「送迎」「メッセージ」を優先して表示しておくと便利です。","textPreview":"まずは「出欠」「送迎」「メッセージ」を優先して表示しておくと便利です。","textChars":35,"textLines":1,"bbox":[740,505,400,48]}
+{"kind":"image","id":"im/etcnm1cn","slide":8,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[88,232,482,375]}
+{"kind":"notes","id":"nt/6wlvfv","slide":8,"text":""}
+{"kind":"slide","id":"sl/2bjxae","slide":9,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":16}
+{"kind":"shape","id":"sh/e1gb6l0j","slide":9,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/147uhgju","slide":9,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/g3yt8vi9","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/36pcjq10","slide":9,"text":"お知らせを届ける","textPreview":"お知らせを届ける","textChars":8,"textLines":1,"bbox":[64,82,1040,56]}
+{"kind":"textbox","id":"sh/25gbal0f","slide":9,"text":"当日に共有が必要な内容は、対象者を確認してお知らせします。","textPreview":"当日に共有が必要な内容は、対象者を確認してお知らせします。","textChars":29,"textLines":1,"bbox":[64,148,1040,32]}
+{"kind":"shape","id":"sh/p8rul0j6","slide":9,"bbox":[64,224,280,300]}
+{"kind":"textbox","id":"sh/ja5s761w","slide":9,"text":"操作の入口","textPreview":"操作の入口","textChars":5,"textLines":1,"bbox":[92,442,224,28]}
+{"kind":"textbox","id":"sh/i9wbe10b","slide":9,"text":"お知らせ / メッセージ","textPreview":"お知らせ / メッセージ","textChars":12,"textLines":1,"bbox":[88,477,232,30]}
+{"kind":"textbox","id":"sh/gnytsja9","slide":9,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[420,235,56,42]}
+{"kind":"textbox","id":"sh/187u1oru","slide":9,"text":"届ける相手を選ぶ","textPreview":"届ける相手を選ぶ","textChars":8,"textLines":1,"bbox":[500,235,570,32]}
+{"kind":"textbox","id":"sh/elgbq9s3","slide":9,"text":"スタッフ向けか利用者向けかを確認します。","textPreview":"スタッフ向けか利用者向けかを確認します。","textChars":20,"textLines":1,"bbox":[500,276,590,43]}
+{"kind":"shape","id":"sh/fmpcze9o","slide":9,"bbox":[420,326,680,1]}
+{"kind":"textbox","id":"sh/obidw3a5","slide":9,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[420,341,56,42]}
+{"kind":"textbox","id":"sh/pcru58rq","slide":9,"text":"要点を短く入力する","textPreview":"要点を短く入力する","textChars":9,"textLines":1,"bbox":[500,341,570,32]}
+{"kind":"textbox","id":"sh/29gvutsf","slide":9,"text":"日時、対象、対応してほしいことを先に書きます。","textPreview":"日時、対象、対応してほしいことを先に書きます。","textChars":23,"textLines":1,"bbox":[500,382,590,43]}
+{"kind":"shape","id":"sh/3apc3y90","slide":9,"bbox":[420,432,680,1]}
+{"kind":"textbox","id":"sh/4fetkza1","slide":9,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[420,447,56,42]}
+{"kind":"textbox","id":"sh/5gnut4rm","slide":9,"text":"送信後に内容を確認する","textPreview":"送信後に内容を確認する","textChars":11,"textLines":1,"bbox":[500,447,570,32]}
+{"kind":"textbox","id":"sh/lcfax0ja","slide":9,"text":"誤字や対象者を確認し、必要ならホームから再確認します。","textPreview":"誤字や対象者を確認し、必要ならホームから再確認します。","textChars":27,"textLines":1,"bbox":[500,488,590,43]}
+{"kind":"shape","id":"sh/kb69ov2p","slide":9,"bbox":[64,570,1042,56]}
+{"kind":"textbox","id":"sh/jaxsvq1k","slide":9,"text":"急な送迎変更は、お知らせだけでなく送迎画面の内容も必ず更新します。","textPreview":"急な送迎変更は、お知らせだけでなく送迎画面の内容も必ず更新します。","textChars":33,"textLines":1,"bbox":[86,583,1000,28]}
+{"kind":"image","id":"im/9szehczy","slide":9,"name":"","geometry":"roundRect","alt":"Kanyes app screen or icon","bbox":[132,272,145,145]}
+{"kind":"notes","id":"nt/2bjxae","slide":9,"text":""}
+{"kind":"slide","id":"sl/047qji","slide":10,"title":"ケーニーズ学童クラブ  |  管理者ガイド","textShapes":17}
+{"kind":"shape","id":"sh/9cnupcju","slide":10,"bbox":[0,0,18,720]}
+{"kind":"textbox","id":"sh/mpwbux0j","slide":10,"text":"ケーニーズ学童クラブ  |  管理者ガイド","textPreview":"ケーニーズ学童クラブ  |  管理者ガイド","textChars":21,"textLines":1,"bbox":[64,30,780,28]}
+{"kind":"textbox","id":"sh/nq5cn214","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1150,30,66,28]}
+{"kind":"textbox","id":"sh/wfyt07il","slide":10,"text":"管理者の業務完了チェック","textPreview":"管理者の業務完了チェック","textChars":12,"textLines":1,"bbox":[64,82,1080,56]}
+{"kind":"textbox","id":"sh/xg7utcj6","slide":10,"text":"完了後にこの4点を確認すると、見落としを減らせます。","textPreview":"完了後にこの4点を確認すると、見落としを減らせます。","textChars":26,"textLines":1,"bbox":[64,148,1040,32]}
+{"kind":"shape","id":"sh/adwbyx0f","slide":10,"bbox":[64,252,230,270]}
+{"kind":"textbox","id":"sh/bepcr210","slide":10,"text":"✓","textPreview":"✓","textChars":1,"textLines":1,"bbox":[92,282,44,44]}
+{"kind":"textbox","id":"sh/kjyt4rih","slide":10,"text":"変更確認","textPreview":"変更確認","textChars":4,"textLines":1,"bbox":[92,352,174,32]}
+{"kind":"textbox","id":"sh/lk7uxwj2","slide":10,"text":"当日の予定変更を確認した","textPreview":"当日の予定変更を確認した","textChars":12,"textLines":1,"bbox":[90,402,178,68]}
+{"kind":"shape","id":"sh/1kj2tkfe","slide":10,"bbox":[340,252,230,270]}
+{"kind":"textbox","id":"sh/gja1kfet","slide":10,"text":"✓","textPreview":"✓","textChars":1,"textLines":1,"bbox":[368,282,44,44]}
+{"kind":"textbox","id":"sh/fi1krax8","slide":10,"text":"送迎確認","textPreview":"送迎確認","textChars":4,"textLines":1,"bbox":[368,352,174,32]}
+{"kind":"textbox","id":"sh/ehsji5w3","slide":10,"text":"担当と時刻に矛盾がない","textPreview":"担当と時刻に矛盾がない","textChars":11,"textLines":1,"bbox":[366,402,178,68]}
+{"kind":"shape","id":"sh/po32xkfq","slide":10,"bbox":[616,252,230,270]}
+{"kind":"textbox","id":"sh/onu1oze5","slide":10,"text":"✓","textPreview":"✓","textChars":1,"textLines":1,"bbox":[644,282,44,44]}
+{"kind":"textbox","id":"sh/3mlkvuxk","slide":10,"text":"連絡確認","textPreview":"連絡確認","textChars":4,"textLines":1,"bbox":[644,352,174,32]}
+{"kind":"textbox","id":"sh/2lsjmpwz","slide":10,"text":"必要な人に共有できている","textPreview":"必要な人に共有できている","textChars":12,"textLines":1,"bbox":[642,402,178,68]}
+{"kind":"shape","id":"sh/5sz2l0f6","slide":10,"bbox":[892,252,230,270]}
+{"kind":"textbox","id":"sh/4rq1cvel","slide":10,"text":"✓","textPreview":"✓","textChars":1,"textLines":1,"bbox":[920,282,44,44]}
+{"kind":"textbox","id":"sh/wvu1svmh","slide":10,"text":"翌日確認","textPreview":"翌日確認","textChars":4,"textLines":1,"bbox":[920,352,174,32]}
+{"kind":"textbox","id":"sh/xw3210n2","slide":10,"text":"次回のシフト・予定を確認した","textPreview":"次回のシフト・予定を確認した","textChars":14,"textLines":1,"bbox":[918,402,178,68]}
+{"kind":"shape","id":"sh/atcjql4r","slide":10,"bbox":[64,568,1080,68]}
+{"kind":"textbox","id":"sh/vulkzq5w","slide":10,"text":"迷ったら、ホームに戻って「今日の予定」と「お知らせ」をもう一度確認します。","textPreview":"迷ったら、ホームに戻って「今日の予定」と「お知らせ」をもう一度確認します。","textChars":37,"textLines":1,"bbox":[88,585,1030,32]}
+{"kind":"notes","id":"nt/047qji","slide":10,"text":""}

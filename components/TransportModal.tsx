@@ -17,6 +17,12 @@ const STAFF_COLORS = [
   '#FF8A65','#FFB74D','#FFD54F','#AED581','#4DB6AC',
   '#4FC3F7','#9575CD','#F06292','#A1887F','#90A4AE',
 ];
+const STAFF_SHIFT_TIME_COLORS = [
+  '#FFF0D8', '#E7F2FF', '#EAF7EC', '#F3ECFF', '#FFF0F4',
+  '#E8F8F7', '#FFF8DE', '#EEF1FF', '#F7F0E9', '#EEF4F5',
+];
+const getStaffShiftTimeColor = (staffName: string, index: number) =>
+  STAFF_SHIFT_TIME_COLORS[index % STAFF_SHIFT_TIME_COLORS.length];
 const LAST_WEEK_CARD_COLORS = [
   { background: '#FFF8F1', border: '#EF8A6B' },
   { background: '#F2F8FF', border: '#4B9FE1' },
@@ -645,6 +651,8 @@ export default function TransportModal({
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => {
         const shift = getStaffShift(entry.staffName);
+        const staffIndex = staffEntries.findIndex((staffEntry) => staffEntry.staffName === entry.staffName);
+        const staffShiftTimeColor = getStaffShiftTimeColor(entry.staffName, Math.max(0, staffIndex));
         const shiftStart = getPrintSlotBoundary(shift?.start, 'start');
         const shiftEnd = getPrintSlotBoundary(shift?.end, 'end');
         const timelineBlocks = entry.trips.flatMap((trip, tIdx) => {
@@ -665,7 +673,7 @@ export default function TransportModal({
         const laneCount = Math.max(1, laneEnds.length);
         const rowHeight = Math.max(42, laneCount * 27);
         const shiftHtml = shiftStart !== null && shiftEnd !== null && shiftEnd > shiftStart
-          ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1}; grid-row: 1 / span ${laneCount};"></div>`
+          ? `<div class="timeline-shift" style="grid-column: ${shiftStart + 1} / ${shiftEnd + 1}; grid-row: 1 / span ${laneCount}; background:${staffShiftTimeColor};"></div>`
           : '';
         const blockHtml = timelineBlocks.map(({ block, slotIndex, lane }) => {
             const isSwimming = (block.nameOnly || block.label).includes('スイミング');
@@ -866,7 +874,7 @@ export default function TransportModal({
             .timeline-shift {
               grid-row: 1;
               min-height: 42px;
-              background: rgba(255, 244, 172, 0.72);
+              background: #FFF0D8;
               border-left: 1px solid rgba(226, 194, 67, 0.7);
               border-right: 1px solid rgba(226, 194, 67, 0.7);
               z-index: 0;
@@ -1182,7 +1190,7 @@ export default function TransportModal({
                     borderColor: slotIndex % 4 === 0 ? '#A7C9C6' : '#D7E1E0',
                   }]} />
                 ))}
-                {shiftWidth > 0 && <View style={[styles.zoomTimelineShift, { left: shiftLeft, width: shiftWidth, height: rowHeight }]} />}
+                {shiftWidth > 0 && <View style={[styles.zoomTimelineShift, { left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: getStaffShiftTimeColor(entry.staffName, staffIndex) }]} />}
                 {layout.items.map(({ block, slotIndex, lane }, blockIndex) => {
                   const isSwimming = (block.nameOnly || block.label).includes('スイミング');
                   const isLesson = block.type === 'lesson';
@@ -1313,7 +1321,7 @@ export default function TransportModal({
 
                       {/* シフト時間のハイライト（薄い黄色） */}
                       {shiftWidth > 0 && (
-                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: '#FFF4AC', opacity: 0.72 }} />
+                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: getStaffShiftTimeColor(entry.staffName, sIdx) }} />
                       )}
 
                       {/* 印刷と同じく、重なる送迎は上下の段へ分けて表示 */}
