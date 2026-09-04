@@ -2997,7 +2997,7 @@ export default function MenuScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.pickupPrintPopoverOption} onPress={openPickupPrintDatePicker} activeOpacity={0.78}>
               <Ionicons name="calendar-outline" size={19} color="#137E87" />
-              <Text style={styles.pickupPrintPopoverOptionText}>指定日を印刷</Text>
+              <Text style={styles.pickupPrintPopoverOptionText}>指定期間を一括印刷</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3007,7 +3007,7 @@ export default function MenuScreen() {
         <View style={styles.pickupPrintDateBackdrop}>
           <View style={styles.pickupPrintDateCard}>
             <View style={styles.pickupPrintDateHeader}>
-              <Text style={styles.pickupPrintDateTitle}>送迎担当の印刷日を選択</Text>
+              <Text style={styles.pickupPrintDateTitle}>期間を選択</Text>
               <TouchableOpacity onPress={() => setPickupPrintDateModalVisible(false)} accessibilityLabel="閉じる">
                 <Ionicons name="close-circle" size={29} color="#795548" />
               </TouchableOpacity>
