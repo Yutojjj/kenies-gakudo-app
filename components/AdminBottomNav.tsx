@@ -32,6 +32,7 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
   const [isUser, setIsUser] = useState(false);
   const [adminName, setAdminName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+  const [homeHovered, setHomeHovered] = useState(false);
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
@@ -73,10 +74,17 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
     </View>
   );
   const renderCenterHome = () => (
-    <TouchableOpacity style={styles.centerHomeItem} onPress={goHome} activeOpacity={0.82} accessibilityLabel="ホーム">
+    <TouchableOpacity
+      style={styles.centerHomeItem}
+      onPress={goHome}
+      {...({ onMouseEnter: () => setHomeHovered(true), onMouseLeave: () => setHomeHovered(false) } as any)}
+      activeOpacity={0.82}
+      accessibilityLabel="ホーム"
+    >
       <View style={styles.centerHomeIconSlot}>
         <View style={[styles.centerHomeIconFrame, active === 'home' && styles.centerHomeIconFrameActive]}>
           <Image source={NAV_IMAGES.home} style={styles.centerHomeIcon} resizeMode="contain" />
+          {homeHovered && <View style={styles.centerHomeIconHoverOverlay} />}
         </View>
       </View>
       <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
@@ -87,12 +95,6 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
     <>
       <View style={styles.navSpacer} />
       <View style={styles.nav}>
-        {isAdmin && (
-          <TouchableOpacity style={styles.item} onPress={goHome} activeOpacity={0.78}>
-            {renderIcon('home')}
-            <Text style={[styles.text, { color: itemColor('home') }]}>ホーム</Text>
-          </TouchableOpacity>
-        )}
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/schedule', params: { name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('schedule')}
@@ -109,11 +111,17 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
           {renderIcon('event')}
           <Text style={[styles.text, { color: itemColor('event') }]}>イベント</Text>
         </TouchableOpacity>
-        {!isAdmin && renderCenterHome()}
+        {renderCenterHome()}
         {isUser && (
           <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/album', params: { role: 'user', name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
+          </TouchableOpacity>
+        )}
+        {isAdmin && (
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push('/shift-create' as any))} activeOpacity={0.78}>
+            {renderIcon('shift')}
+            <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>
         )}
         {(isAdmin || isUser) && (
@@ -123,18 +131,13 @@ export default function AdminBottomNav({ active = 'home' }: Props) {
             {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text></View>}
           </TouchableOpacity>
         )}
-        {!isUser && (
-          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push((isAdmin ? '/shift-create' : { pathname: '/shift-view', params: { name: adminName || '' } }) as any))} activeOpacity={0.78}>
+        {!isAdmin && !isUser && (
+          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/shift-view', params: { name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('shift')}
             <Text style={[styles.text, { color: itemColor('shift') }]}>シフト</Text>
           </TouchableOpacity>
         )}
-        {isAdmin ? (
-          <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push('/admin-more' as any))} activeOpacity={0.78}>
-            {renderIcon('menu')}
-            <Text style={[styles.text, { color: itemColor('menu') }]}>その他</Text>
-          </TouchableOpacity>
-        ) : !isUser ? (
+        {!isAdmin && !isUser ? (
           <TouchableOpacity style={styles.item} onPress={() => navigateFromBottom(() => router.push({ pathname: '/album', params: { role: 'staff', name: adminName || '' } } as any))} activeOpacity={0.78}>
             {renderIcon('album')}
             <Text style={[styles.text, { color: itemColor('album') }]}>アルバム</Text>
@@ -158,7 +161,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: Platform.OS === 'ios' ? 18 : 10,
     paddingHorizontal: 4,
-    backgroundColor: 'rgba(255,251,232,0.98)',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E9DDB7',
     flexDirection: 'row',
@@ -182,6 +185,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     position: 'relative',
+    backgroundColor: 'transparent',
     zIndex: 4,
   },
   centerHomeIconSlot: {
@@ -202,6 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7D8',
     borderWidth: 1,
     borderColor: '#E6DDBA',
+    overflow: 'hidden',
     shadowColor: '#7A6034',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -215,6 +220,11 @@ const styles = StyleSheet.create({
   centerHomeIcon: {
     width: 52,
     height: 52,
+  },
+  centerHomeIconHoverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 34,
+    backgroundColor: 'rgba(0,0,0,0.16)',
   },
   text: {
     fontSize: 9,

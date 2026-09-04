@@ -29,6 +29,7 @@ const ANIMALS = {
   rabbit:  require('../assets/animals/rabbit.png'),
 };
 const KANYES_LOGO = require('../assets/kanyes-logo.png');
+const ADMIN_MORE_IMAGE = require('../assets/bottom-nav-v2/menu.png');
 
 // ── メニューアイコン画像（assets/menu/に配置済みのファイルを使用）──
 const MENU_ICONS = {
@@ -569,7 +570,6 @@ export default function MenuScreen() {
   const waveAnim = useRef(new Animated.Value(0)).current;
   const eventRevealAnim = useRef(new Animated.Value(0)).current;
   const eventFloatAnim = useRef(new Animated.Value(0)).current;
-  const currentTimePulseAnim = useRef(new Animated.Value(0)).current;
   const todayPlanItemAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current;
   const quickItemAnims = useRef(Array.from({ length: 24 }, () => new Animated.Value(0))).current;
 
@@ -1159,14 +1159,6 @@ export default function MenuScreen() {
       Animated.sequence([
         Animated.timing(eventFloatAnim, { toValue: 1, duration: 2200, useNativeDriver: true }),
         Animated.timing(eventFloatAnim, { toValue: 0, duration: 2200, useNativeDriver: true }),
-      ])
-    ).start();
-
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(currentTimePulseAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(currentTimePulseAnim, { toValue: 0, duration: 1400, useNativeDriver: true }),
-        Animated.delay(1000),
       ])
     ).start();
 
@@ -1786,27 +1778,26 @@ export default function MenuScreen() {
                   // 送迎中は現在の送迎だけを強調し、終了後に次の送迎へ強調を移す。
                   const highlightedTripOrder = currentTripOrder >= 0 ? currentTripOrder : nextTripOrder;
                   const isNextTrip = isTodayStaffPlan && activeTrips.indexOf(trip) === highlightedTripOrder;
+                  const markerOverlapsTripMarker = showCurrentTimeMarker
+                    && activeTrips.indexOf(trip) === markerTripOrder
+                    && (tripStatus === 'current' || (currentTripOrder < 0 && tripStatus === 'future'));
+                  const markerDisplayOrder = markerTripOrder;
                   return (
                     <View key={`${entry.staffName || sIdx}-${tripIndex}-${columnItemIndex}`} style={styles.tripTimelineItem}>
-                      {showCurrentTimeMarker && activeTrips.indexOf(trip) === markerTripOrder && (
-                        <Animated.View
+                      {showCurrentTimeMarker && activeTrips.indexOf(trip) === markerDisplayOrder && (
+                        <View
+                          pointerEvents="none"
                           style={[
                             styles.currentTimeMarker,
-                            { backgroundColor: color, top: tripStatus === 'future' ? -14 : currentTripOrder < 0 ? '100%' : '50%' },
+                            markerOverlapsTripMarker && styles.currentTimeMarkerRing,
                             {
-                              opacity: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }),
-                              transform: [{ scale: currentTimePulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }],
+                              backgroundColor: markerOverlapsTripMarker ? 'transparent' : color,
+                              borderColor: markerOverlapsTripMarker ? color : 'transparent',
+                              top: markerOverlapsTripMarker ? 2 : tripStatus === 'future' ? -14 : currentTripOrder < 0 ? '100%' : '50%',
                             },
                           ]}
                         />
                       )}
-                      <View style={styles.tripMarkerWrap}>
-                        <View style={[styles.tripLabelText, { backgroundColor: color }]}>
-                          {tripStatus === 'completed'
-                            ? <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                            : <Text style={styles.tripMarkerNumber}>{tripIndex + 1}</Text>}
-                        </View>
-                      </View>
                       <View style={[styles.tripSlot, tripStatus === 'completed' ? styles.tripSlotCompleted : tripStatus === 'current' ? styles.tripSlotCurrent : styles.tripSlotFuture, { borderColor: tripStatus === 'completed' ? '#B8B8B8' : tripStatus === 'current' ? '#00AEB8' : '#3479C8', borderRadius: 8 }, isNextTrip && styles.tripSlotNext]}>
                         <View style={{ flex: 1, width: '100%' }}>
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
@@ -1830,6 +1821,17 @@ export default function MenuScreen() {
                           );
                         })}
                         </View>
+                      </View>
+                      <View style={[styles.tripMarkerWrap, { backgroundColor: color, borderRadius: 14 }]}>
+                        {tripStatus === 'completed' ? (
+                          <View style={[styles.tripCompletedMarker, { backgroundColor: color, borderColor: color }]}>
+                            <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          </View>
+                        ) : (
+                          <View style={[styles.tripLabelText, { backgroundColor: color }]}>
+                            <Text style={styles.tripMarkerNumber}>{tripIndex + 1}</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   );
@@ -2678,6 +2680,16 @@ export default function MenuScreen() {
                 </AnimatedTouchableOpacity>
               ))}
               <TouchableOpacity
+                style={styles.quickFeatureMoreCard}
+                onPress={() => router.push('/admin-more' as any)}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="その他画面一覧"
+              >
+                <Image source={ADMIN_MORE_IMAGE} style={styles.quickFeatureMoreImage} resizeMode="contain" />
+                <Text style={styles.quickFeatureMoreText}>その他画面一覧</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={styles.quickFeatureAddCard}
                 onPress={() => setAdminQuickEditorVisible(true)}
                 activeOpacity={0.78}
@@ -2685,7 +2697,6 @@ export default function MenuScreen() {
                 accessibilityLabel="クイックメニューを追加"
               >
                 <Ionicons name="add" size={32} color="#7A7897" />
-                
               </TouchableOpacity>
             </View>
               ) : role === 'staff' ? (
@@ -4626,6 +4637,26 @@ const styles = StyleSheet.create({
     color: '#625F78',
     textAlign: 'center',
   },
+  quickFeatureMoreCard: {
+    width: '31.7%',
+    minHeight: 108,
+    borderRadius: 14,
+    backgroundColor: '#F7FCFC',
+    borderWidth: 1,
+    borderColor: '#EAD9C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingTop: 9,
+    paddingBottom: 11,
+    shadowColor: '#846A55',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.13,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  quickFeatureMoreImage: { width: 58, height: 58, marginBottom: 4 },
+  quickFeatureMoreText: { fontSize: 12, fontWeight: '900', color: '#3F302B', textAlign: 'center' },
   quickFeatureIcon: {
     width: 50,
     height: 50,
@@ -5404,10 +5435,11 @@ const styles = StyleSheet.create({
   tripsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   tripColumn: { flex: 1, minWidth: 0, alignSelf: 'stretch', gap: 6, paddingLeft: 28, position: 'relative' },
   tripColumnFull: { flex: 1, width: 'auto' },
-  tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
+  tripRailLine: { position: 'absolute', zIndex: 0, elevation: 0, left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
-  currentTimeMarker: { position: 'absolute', zIndex: -1, elevation: 0, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
-  tripTimelineItem: { position: 'relative', zIndex: 5, overflow: 'visible', width: '100%' },
+  currentTimeMarker: { position: 'absolute', zIndex: 1, elevation: 1, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8, opacity: 1 },
+  currentTimeMarkerRing: { zIndex: -1, elevation: 0, left: -34.5, top: 2, width: 38, height: 38, marginTop: 0, borderRadius: 19, backgroundColor: 'transparent', borderWidth: 3, borderColor: '#00AEB8' },
+  tripTimelineItem: { position: 'relative', zIndex: 10, overflow: 'visible', width: '100%' },
   tripSlot: {
     flexDirection: 'column',
     alignItems: 'flex-start',
@@ -5419,8 +5451,9 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     borderStyle: 'solid'
   },
-  tripMarkerWrap: { position: 'absolute', zIndex: 30, elevation: 30, left: -29.5, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  tripLabelText: { zIndex: 31, elevation: 31, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, overflow: 'hidden' },
+  tripMarkerWrap: { position: 'absolute', zIndex: 100, elevation: 100, left: -29.5, top: 7, width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  tripLabelText: { position: 'relative', zIndex: 101, elevation: 101, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, overflow: 'hidden' },
+  tripCompletedMarker: { position: 'relative', zIndex: 102, elevation: 102, width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, opacity: 1 },
   tripMarkerNumber: { color: '#FFFFFF', fontSize: 15, lineHeight: 19, fontWeight: '900' },
   slotFilledText: { fontSize: 12, fontWeight: 'bold', color: '#333333', marginBottom: 2 },
   pickupBlockDivider: { marginTop: 5, paddingTop: 5, borderTopWidth: 1, borderTopColor: '#E9E2DB' },
