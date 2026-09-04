@@ -510,6 +510,14 @@ export default function TransportModal({
 
     return blocks.map((block) => {
       const assignment = assignmentMap.get(block.key);
+      const kidEntries = [...(block.kids || [])]
+        .sort((a: any, b: any) => {
+          const gradeDiff = parseGradeOrder(a.grade) - parseGradeOrder(b.grade);
+          if (gradeDiff !== 0) return gradeDiff;
+          return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+        })
+        .map((kid: any) => ({ name: String(kid.name || ''), grade: String(kid.grade || '') }))
+        .filter((kid) => kid.name);
       return {
         time: block.time || '-',
         typeLabel: block.type === 'lesson' ? '習い事' : 'お迎え',
@@ -517,16 +525,8 @@ export default function TransportModal({
         count: block.count,
         staffName: assignment?.staffName || '未割当',
         tripLabel: assignment?.tripLabel || '-',
-        kids: [...(block.kids || [])]
-          .sort((a: any, b: any) => {
-            const gradeDiff = parseGradeOrder(a.grade) - parseGradeOrder(b.grade);
-            if (gradeDiff !== 0) return gradeDiff;
-            return String(a.name || '').localeCompare(String(b.name || ''), 'ja');
-          })
-          .map((kid: any) => {
-            const grade = kid.grade ? `（${kid.grade}）` : '';
-            return `${kid.name || ''}${grade}`;
-          }).filter(Boolean),
+        kids: kidEntries.map((kid) => `${kid.name}${kid.grade ? `（${kid.grade}）` : ''}`),
+        kidEntries,
       };
     }).sort((a, b) => `${a.time}${a.name}`.localeCompare(`${b.time}${b.name}`));
   };
@@ -598,7 +598,11 @@ export default function TransportModal({
           <td class="name">${escapeHtml(row.name)}</td>
           <td class="count">${escapeHtml(row.count)}名</td>
           <td>${escapeHtml(row.staffName)}</td>
-          <td class="kids">${escapeHtml(row.kids.join('、') || '-')}</td>
+          <td class="kids">${row.kidEntries.length > 0
+            ? `<div class="kids-grid">${row.kidEntries.map((kid) => `
+                <span class="kid-entry">${escapeHtml(`${kid.name}${kid.grade ? `（${kid.grade}）` : ''}`)}</span>
+              `).join('')}</div>`
+            : '-'}</td>
         </tr>
       `;
       }).join('');
@@ -1004,6 +1008,19 @@ export default function TransportModal({
             .name { font-weight: 700; }
             .count { text-align: center; font-weight: 700; }
             .kids { font-size: 8px; }
+            .kids-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+              column-gap: 5px;
+              row-gap: 2px;
+            }
+            .kid-entry {
+              min-width: 0;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              font-weight: 700;
+            }
             .empty { text-align: center; padding: 20px; color: #666; }
             .destination-empty { border: 1px solid #d7e5e3; }
             @media print {
