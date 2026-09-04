@@ -5406,7 +5406,7 @@ const styles = StyleSheet.create({
   tripColumnFull: { flex: 1, width: 'auto' },
   tripRailLine: { position: 'absolute', left: 11, top: 18, bottom: 0, width: 3, borderRadius: 2, backgroundColor: '#D8E6E6' },
   tripRailLineContinue: { top: 0 },
-  currentTimeMarker: { position: 'absolute', zIndex: 6, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
+  currentTimeMarker: { position: 'absolute', zIndex: 1, left: -23, top: '50%', width: 15, height: 15, marginTop: -7, borderRadius: 8 },
   tripTimelineItem: { position: 'relative', zIndex: 5, width: '100%' },
   tripSlot: {
     flexDirection: 'column',
