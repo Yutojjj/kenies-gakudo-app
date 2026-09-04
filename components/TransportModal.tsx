@@ -723,7 +723,80 @@ export default function TransportModal({
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => entry.staffName);
 
-    const html = `
+    const homeOverviewStaffHtml = staffEntries.map((entry, staffIndex) => {
+      const isNoTransport = entry.staffName === '送迎しない';
+      const color = isNoTransport ? '#9E9E9E' : STAFF_COLORS[staffIndex % STAFF_COLORS.length];
+      const shift = isNoTransport ? null : getStaffShift(entry.staffName);
+      const trips = entry.trips.filter((trip) => trip.blockKeys.length > 0);
+      const tripsHtml = trips.length > 0
+        ? trips.map((trip, tripIndex) => {
+            const stopsHtml = trip.blockKeys.map((blockKey) => {
+              const block = blocks.find((item) => item.key === blockKey);
+              if (!block) return '';
+              const isLesson = block.type === 'lesson';
+              const kids = (block.kids || []).map((kid: any) => String(kid?.name || '')).filter(Boolean).join('　');
+              return `<div class="home-print-stop">
+                <div><span class="home-print-time">${escapeHtml(block.time || '-')}</span><strong class="${isLesson ? 'lesson' : ''}">${escapeHtml(block.nameOnly || block.label)}</strong></div>
+                ${kids ? `<div class="home-print-kids">${escapeHtml(kids)}</div>` : ''}
+              </div>`;
+            }).join('');
+            return `<div class="home-print-trip">
+              ${isNoTransport ? '' : `<span class="home-print-number" style="--trip-color:${color}">${tripIndex + 1}</span>`}
+              <div class="home-print-trip-body" style="border-color:${color}">${stopsHtml}</div>
+            </div>`;
+          }).join('')
+        : '<div class="home-print-empty">担当なし</div>';
+      return `<section class="home-print-staff ${isNoTransport ? 'no-transport' : ''}" style="--staff-color:${color}; border-left-color:${color}">
+        <header class="home-print-staff-head">
+          <span class="home-print-dot" style="background:${color}"></span>
+          <strong>${escapeHtml(entry.staffName)}</strong>
+          ${shift?.start && shift?.end ? `<span class="home-print-shift">${escapeHtml(shift.start)} - ${escapeHtml(shift.end)}</span>` : ''}
+        </header>
+        <div class="home-print-trips">${tripsHtml}</div>
+      </section>`;
+    }).join('');
+
+    const homeOverviewHtml = `
+      <!doctype html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(dateLabel)} 送迎担当</title>
+          <style>
+            @page { size: A4 portrait; margin: 7mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #202426; }
+            .home-print-title { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
+            .home-print-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; align-items: start; }
+            .home-print-staff { break-inside: avoid; border: 4px solid var(--staff-color); border-radius: 4mm; padding: 2.4mm 3mm; }
+            .home-print-staff.no-transport { background: #FAFAFA; }
+            .home-print-staff-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; font-size: 11px; }
+            .home-print-dot { width: 3mm; height: 3mm; border-radius: 50%; flex: 0 0 auto; }
+            .home-print-shift { margin-left: 1mm; padding: 1mm 2mm; border-radius: 3mm; background: #EDF4F4; color: #46585B; font-size: 8px; font-weight: 800; }
+            .home-print-trips { display: block; margin-left: 3mm; padding-left: 4mm; border-left: 2px solid var(--staff-color); }
+            .home-print-trip { position: relative; min-width: 0; padding-left: 6mm; margin-bottom: 2mm; }
+            .home-print-trip:last-child { margin-bottom: 0; }
+            .home-print-number { position: absolute; left: -6.5mm; top: 0; width: 5mm; height: 5mm; border-radius: 50%; border: 1px solid var(--trip-color); background: var(--trip-color); color: #fff; font-size: 8px; font-weight: 900; text-align: center; line-height: 4.7mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .home-print-trip-body { min-height: 9mm; border: 1px solid; border-radius: 2.5mm; overflow: hidden; }
+            .home-print-stop { padding: 1.2mm 2mm; font-size: 8px; line-height: 1.25; }
+            .home-print-stop + .home-print-stop { border-top: 1px solid #E5E5E5; }
+            .home-print-time { display: inline-block; min-width: 10mm; color: #E57D00; font-weight: 900; }
+            .home-print-stop strong { font-size: 8.5px; }
+            .home-print-stop strong.lesson { color: #2577C9; }
+            .home-print-kids { margin-top: 0.8mm; color: #333; font-size: 7px; font-weight: 700; }
+            .home-print-empty { color: #7A8587; font-size: 8px; padding: 1mm 2mm; }
+            .home-print-staff.no-transport .home-print-trips { border-left-color: #A3A3A3; }
+            .home-print-staff.no-transport { grid-column: 1 / -1; }
+          </style>
+        </head>
+        <body>
+          <h1 class="home-print-title">${escapeHtml(dateLabel)}　送迎担当</h1>
+          <main class="home-print-list">${homeOverviewStaffHtml}</main>
+        </body>
+      </html>
+    `;
+
+    const html = printOnly ? homeOverviewHtml : `
       <!doctype html>
       <html lang="ja">
         <head>
