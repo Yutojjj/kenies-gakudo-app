@@ -647,6 +647,10 @@ export default function TransportModal({
       const minute = (index % 4) * 15;
       return `<div class="quarter ${minute === 0 ? 'hour' : ''}">${minute === 0 ? `${hour}:00` : ''}</div>`;
     }).join('');
+    const timelineGridLinesHtml = Array.from({ length: PRINT_SLOT_COUNT + 1 }, (_, index) => {
+      const isHour = index % 4 === 0;
+      return `<i class="timeline-grid-line ${isHour ? 'hour' : ''}" style="left:${(index / PRINT_SLOT_COUNT) * 100}%"></i>`;
+    }).join('');
     const timelineStaffHtml = staffEntries
       .filter((entry) => entry.staffName !== '送迎しない')
       .map((entry) => {
@@ -684,19 +688,20 @@ export default function TransportModal({
             const label = block.nameOnly || block.label;
             return `
               <div class="timeline-block" style="grid-column: ${slotIndex + 1} / span 3; grid-row: ${lane + 1}; background:${bg}; border-color:${border};">
-                <span>${escapeHtml(meta)}</span>
-                ${escapeHtml(label)}
+                <span class="timeline-block-meta">${escapeHtml(meta)}</span>
+                <span class="timeline-block-label">${escapeHtml(label)}</span>
               </div>
             `;
         }).join('');
         return `
-          <div class="timeline-row" style="min-height:${rowHeight}px">
+          <div class="timeline-row" style="height:${rowHeight}px">
             <div class="timeline-staff">
               <strong>${escapeHtml(entry.staffName)}</strong>
               <span>${escapeHtml(shift?.start || '-')} - ${escapeHtml(shift?.end || '-')}</span>
             </div>
-            <div class="timeline-track" style="grid-template-rows:repeat(${laneCount}, minmax(27px, auto)); min-height:${rowHeight}px">
+            <div class="timeline-track" style="grid-template-rows:repeat(${laneCount}, minmax(27px, 1fr)); height:${rowHeight}px">
               ${shiftHtml}
+              ${timelineGridLinesHtml}
               ${blockHtml || '<div class="timeline-empty">担当なし</div>'}
             </div>
           </div>
@@ -832,6 +837,7 @@ export default function TransportModal({
               display: grid;
               grid-template-columns: 88px 1fr;
               min-height: 42px;
+              overflow: hidden;
               border-bottom: 1px solid #edf2f1;
             }
             .timeline-row:last-child { border-bottom: 0; }
@@ -853,35 +859,34 @@ export default function TransportModal({
             .timeline-track {
               display: grid;
               grid-template-columns: repeat(${PRINT_SLOT_COUNT}, minmax(0, 1fr));
+              position: relative;
+              isolation: isolate;
               align-items: stretch;
               min-height: 42px;
-              background-image:
-                repeating-linear-gradient(
-                  to right,
-                  transparent 0,
-                  transparent calc(2.5% - 1px),
-                  #dbe8e7 calc(2.5% - 1px),
-                  #dbe8e7 2.5%
-                ),
-                repeating-linear-gradient(
-                  to right,
-                  transparent 0,
-                  transparent calc(10% - 1.5px),
-                  #a7c9c6 calc(10% - 1.5px),
-                  #a7c9c6 10%
-                );
             }
             .timeline-shift {
               grid-row: 1;
-              min-height: 42px;
+              min-height: 0;
               background: #FFF0D8;
+              opacity: 0.72;
               border-left: 1px solid rgba(226, 194, 67, 0.7);
               border-right: 1px solid rgba(226, 194, 67, 0.7);
               z-index: 0;
             }
+            .timeline-grid-line {
+              position: absolute;
+              top: 0;
+              bottom: 0;
+              width: 0;
+              pointer-events: none;
+              border-left: 1px dashed #d7e1e0;
+              z-index: 1;
+            }
+            .timeline-grid-line.hour { border-left: 1.5px solid #a7c9c6; }
             .timeline-block {
               align-self: stretch;
-              min-height: 23px;
+              height: 23px;
+              box-sizing: border-box;
               margin: 2px 0;
               border: 1px solid;
               border-radius: 6px;
@@ -894,11 +899,22 @@ export default function TransportModal({
               position: relative;
               z-index: 2;
             }
-            .timeline-block span {
+            .timeline-block-meta {
               display: block;
               font-size: 7px;
+              line-height: 7px;
               color: #555;
               font-weight: 700;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .timeline-block-label {
+              display: block;
+              line-height: 8px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
             .timeline-empty {
               grid-row: 1;
@@ -1316,12 +1332,12 @@ export default function TransportModal({
                     <View style={{ width: TIMELINE_WIDTH, position: 'relative' }}>
                       {/* 15分ごとの点線と1時間ごとの実線 */}
                       {Array.from({ length: (END_HOUR - START_HOUR) * 4 }).map((_, i) => (
-                        <View key={i} style={{ position: 'absolute', left: i * COL_WIDTH, width: COL_WIDTH, height: rowHeight, borderLeftWidth: i % 4 === 0 ? 1.5 : 1, borderStyle: i % 4 === 0 ? 'solid' : 'dashed', borderColor: i % 4 === 0 ? '#A7C9C6' : '#D7E1E0' }} />
+                        <View key={i} style={{ position: 'absolute', left: i * COL_WIDTH, width: COL_WIDTH, height: rowHeight, borderLeftWidth: i % 4 === 0 ? 1.5 : 1, borderStyle: i % 4 === 0 ? 'solid' : 'dashed', borderColor: i % 4 === 0 ? '#A7C9C6' : '#D7E1E0', zIndex: 1 }} />
                       ))}
 
                       {/* シフト時間のハイライト（薄い黄色） */}
                       {shiftWidth > 0 && (
-                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: getStaffShiftTimeColor(entry.staffName, sIdx) }} />
+                        <View style={{ position: 'absolute', left: shiftLeft, width: shiftWidth, height: rowHeight, backgroundColor: getStaffShiftTimeColor(entry.staffName, sIdx), opacity: 0.72 }} />
                       )}
 
                       {/* 印刷と同じく、重なる送迎は上下の段へ分けて表示 */}
