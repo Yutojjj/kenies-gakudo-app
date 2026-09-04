@@ -1463,7 +1463,6 @@ export default function TransportModal({
           <View style={styles.header}>
             <View style={styles.headerTopRow}>
               <View style={styles.headerTitleGroup}>
-                <Text style={styles.headerTitle}>送迎一覧</Text>
                 <View style={styles.dateNavigation}>
                   <TouchableOpacity style={styles.dateNavigationButton} onPress={() => changeDate(-1)} accessibilityRole="button" accessibilityLabel="前日へ">
                     <Ionicons name="chevron-back" size={18} color={COLORS.text} />
