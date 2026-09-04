@@ -734,10 +734,11 @@ export default function TransportModal({
               const block = blocks.find((item) => item.key === blockKey);
               if (!block) return '';
               const isLesson = block.type === 'lesson';
-              const kids = (block.kids || []).map((kid: any) => String(kid?.name || '')).filter(Boolean).join('　');
+              const kids = (block.kids || []).map((kid: any) => String(kid?.name || '')).filter(Boolean);
+              const kidsHtml = kids.map((name) => `<span>${escapeHtml(name)}</span>`).join('');
               return `<div class="home-print-stop">
-                <div><span class="home-print-time">${escapeHtml(block.time || '-')}</span><strong class="${isLesson ? 'lesson' : ''}">${escapeHtml(block.nameOnly || block.label)}</strong></div>
-                ${kids ? `<div class="home-print-kids">${escapeHtml(kids)}</div>` : ''}
+                <div class="home-print-main"><span class="home-print-time">${escapeHtml(block.time || '-')}</span><strong class="${isLesson ? 'lesson' : ''}">${escapeHtml(block.nameOnly || block.label)}</strong></div>
+                ${kids.length > 0 ? `<div class="home-print-kids">${kidsHtml}</div>` : ''}
               </div>`;
             }).join('');
             return `<div class="home-print-trip">
@@ -773,19 +774,22 @@ export default function TransportModal({
             .home-print-staff-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; font-size: 11px; }
             .home-print-dot { width: 3mm; height: 3mm; border-radius: 50%; flex: 0 0 auto; }
             .home-print-shift { margin-left: 1mm; padding: 1mm 2mm; border-radius: 3mm; background: #EDF4F4; color: #46585B; font-size: 8px; font-weight: 800; }
-            .home-print-trips { display: block; margin-left: 3mm; padding-left: 4mm; border-left: 2px solid var(--staff-color); }
-            .home-print-trip { position: relative; min-width: 0; padding-left: 6mm; margin-bottom: 2mm; }
+            .home-print-trips { display: block; margin-left: 0; padding-left: 3mm; border-left: 2px solid var(--staff-color); }
+            .home-print-trip { position: relative; min-width: 0; padding-left: 1mm; margin-bottom: 2mm; }
             .home-print-trip:last-child { margin-bottom: 0; }
-            .home-print-number { position: absolute; left: -6.5mm; top: 0; width: 5mm; height: 5mm; border-radius: 50%; border: 1px solid var(--trip-color); background: var(--trip-color); color: #fff; font-size: 8px; font-weight: 900; text-align: center; line-height: 4.7mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .home-print-number { position: absolute; left: -5.5mm; top: 0; width: 5mm; height: 5mm; border-radius: 50%; border: 1px solid var(--trip-color); background: var(--trip-color); color: #fff; font-size: 8px; font-weight: 900; text-align: center; line-height: 4.7mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .home-print-trip-body { min-height: 9mm; border: 1px solid; border-radius: 2.5mm; overflow: hidden; }
-            .home-print-stop { padding: 1.2mm 2mm; font-size: 8px; line-height: 1.25; }
+            .home-print-stop { display: grid; grid-template-columns: minmax(0, 44%) minmax(0, 56%); gap: 2mm; align-items: center; padding: 1.7mm 2.4mm; font-size: 9px; line-height: 1.25; }
             .home-print-stop + .home-print-stop { border-top: 1px solid #E5E5E5; }
-            .home-print-time { display: inline-block; min-width: 10mm; color: #E57D00; font-weight: 900; }
-            .home-print-stop strong { font-size: 8.5px; }
+            .home-print-main { display: flex; align-items: flex-start; gap: 1.5mm; min-width: 0; }
+            .home-print-time { flex: 0 0 13mm; color: #E57D00; font-size: 13px; font-weight: 900; }
+            .home-print-stop strong { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
             .home-print-stop strong.lesson { color: #2577C9; }
-            .home-print-kids { margin-top: 0.8mm; color: #333; font-size: 7px; font-weight: 700; }
+            .home-print-kids { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 1.2mm; row-gap: 0.7mm; min-width: 0; padding-left: 2.4mm; border-left: 1px solid #E5E5E5; color: #333; font-size: 9px; font-weight: 700; }
+            .home-print-kids span { min-width: 0; white-space: nowrap; }
             .home-print-empty { color: #7A8587; font-size: 8px; padding: 1mm 2mm; }
             .home-print-staff.no-transport .home-print-trips { border-left-color: #A3A3A3; }
+            .home-print-staff.no-transport .home-print-kids { grid-template-columns: repeat(3, max-content); column-gap: 6mm; justify-content: start; }
             .home-print-staff.no-transport { grid-column: 1 / -1; }
           </style>
         </head>
