@@ -1753,9 +1753,9 @@ export default function ScheduleScreen() {
               <Text style={styles.modalTitle}>
                   {templateSelectMode === 'edit' ? '習い事を編集・削除' : '習い事を選択'}
               </Text>
-              <View style={{flexDirection: 'row', gap: 16}}>
-                  <TouchableOpacity onPress={() => setTemplateSelectMode(prev => prev === 'edit' ? 'stamping' : 'edit')}>
-                      <Ionicons name={templateSelectMode === 'edit' ? "checkmark" : "settings-outline"} size={24} color={COLORS.primary} />
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
+                  <TouchableOpacity style={styles.templateEditButton} onPress={() => setTemplateSelectMode(prev => prev === 'edit' ? 'stamping' : 'edit')}>
+                      <Text style={styles.templateEditButtonText}>{templateSelectMode === 'edit' ? '完了' : '編集'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={closeTemplateAndMaybeReturnToEdit}>
                     <Ionicons name="close" size={28} color={COLORS.textLight} />
@@ -2709,6 +2709,21 @@ const styles = StyleSheet.create({
   },
   templateList: { 
     flexGrow: 0 
+  },
+  templateEditButton: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF8F8',
+    borderWidth: 1,
+    borderColor: '#8DD5D9',
+  },
+  templateEditButtonText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '900',
   },
   templateCardWrapper: { 
     flexDirection: 'row', 
