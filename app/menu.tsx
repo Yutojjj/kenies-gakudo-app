@@ -17,7 +17,7 @@ import TransportModal from '../components/TransportModal';
 import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
-import { getNotificationState, setupPushToken } from '../utils/setupPushToken';
+import { disablePushSubscription, getNotificationState, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -1253,6 +1253,11 @@ export default function MenuScreen() {
 
   const handleLogout = async () => {
     showAppConfirm('ログアウト', 'ログアウトしますか？', async () => {
+      const raw = await AsyncStorage.getItem('loggedInUser');
+      try {
+        const user = raw ? JSON.parse(raw) : null;
+        await disablePushSubscription(user?.accountId || (user?.role === 'admin' ? 'admin' : ''));
+      } catch {}
       await AsyncStorage.removeItem('loggedInUser');
       router.replace('/');
     });

@@ -171,3 +171,34 @@ export async function refreshPushSubscription(accountId: string): Promise<void> 
     console.warn('[push] refreshPushSubscription failed:', e);
   }
 }
+
+/**
+ * ログアウト時に、このブラウザのPush購読とFirestore上の端末登録を無効化する。
+ * 同じアカウントの別端末までは無効化しない。
+ */
+export async function disablePushSubscription(accountId: string): Promise<void> {
+  if (!accountId || typeof window === 'undefined' || typeof Notification === 'undefined') return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+
+    const json = sub.toJSON() as { endpoint?: string };
+    if (json.endpoint) {
+      const deviceId = deviceIdFromEndpoint(json.endpoint);
+      await setDoc(
+        doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId),
+        { enabled: false, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+    }
+
+    await sub.unsubscribe();
+    console.info('[push] Web Push登録を解除しました:', accountId);
+  } catch (e) {
+    // ログアウト自体は通知解除の失敗で止めない。
+    console.warn('[push] disablePushSubscription failed:', e);
+  }
+}

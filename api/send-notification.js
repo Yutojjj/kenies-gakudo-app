@@ -140,6 +140,20 @@ async function firestoreListDocuments(path, token) {
   return data.documents || [];
 }
 
+async function firestoreDeleteDocument(path, token) {
+  const serviceAccount = parseServiceAccount();
+  const projectId = serviceAccount.project_id || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok && response.status !== 404) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Firestore delete failed: ${response.status} ${text}`);
+  }
+}
+
 async function resolveTargetAccountIds({ accountIds, sendToAll, excludeAccountId }, token) {
   if (!sendToAll) {
     return [...new Set(accountIds)]
@@ -232,6 +246,24 @@ export default async function handler(req, res) {
 
     const results = await Promise.allSettled(
       subscriptions.map(({ subscription }) => webpush.sendNotification(subscription, payload))
+    );
+
+    // アンインストール済み・期限切れの端末は、送信失敗時に登録から外す。
+    await Promise.all(
+      results.map(async (result, index) => {
+        if (result.status !== 'rejected') return;
+        const statusCode = result.reason?.statusCode;
+        if (statusCode !== 404 && statusCode !== 410) return;
+        const target = subscriptions[index];
+        try {
+          await firestoreDeleteDocument(
+            `${PUSH_SUBSCRIPTIONS_COLLECTION}/${encodeURIComponent(target.accountId)}/devices/${encodeURIComponent(target.deviceId)}`,
+            token
+          );
+        } catch (error) {
+          console.error('[push] stale subscription cleanup failed:', error);
+        }
+      })
     );
 
     const sent = results.filter((result) => result.status === 'fulfilled').length;

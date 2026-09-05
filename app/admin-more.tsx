@@ -20,6 +20,7 @@ import {
 import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
+import { disablePushSubscription } from '../utils/setupPushToken';
 import { clearNavigationReturnDestination, setNavigationReturnDestination } from '../utils/navigationHome';
 import { useRequireRole } from '../hooks/useRequireRole';
 
@@ -251,6 +252,7 @@ export default function AdminMoreScreen() {
 
   const logout = () => {
     showConfirm('ログアウト', 'ログアウトしますか？', async () => {
+      await disablePushSubscription(accountId);
       await AsyncStorage.removeItem('loggedInUser');
       router.replace('/');
     });
