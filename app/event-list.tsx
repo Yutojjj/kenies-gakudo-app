@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Modal,
+  Pressable,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -874,10 +875,8 @@ export default function EventListScreen() {
       </Modal>
 
       <Modal visible={!!participationConfirm} transparent animationType="fade">
-        <TouchableOpacity
+        <Pressable
           style={styles.confirmOverlay}
-          activeOpacity={1}
-          focusable={false}
           onPress={() => setParticipationConfirm(null)}
         >
           <TouchableOpacity style={styles.confirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
@@ -903,7 +902,7 @@ export default function EventListScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* 写真フルスクリーンプレビュー */}

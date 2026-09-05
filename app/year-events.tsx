@@ -11,7 +11,7 @@ import {
 } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Image, Modal, Platform,
+  ActivityIndicator, Image, Modal, Platform, Pressable,
   SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
@@ -2292,7 +2292,7 @@ export default function YearEventsScreen() {
 
       {/* イベント写真の追加方法 */}
       <Modal visible={photoSourceModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceModalVisible(false)}>
-        <TouchableOpacity style={styles.photoPickerOverlay} activeOpacity={1} focusable={false} onPress={() => setPhotoSourceModalVisible(false)}>
+        <Pressable style={styles.photoPickerOverlay} onPress={() => setPhotoSourceModalVisible(false)}>
           <View style={styles.photoSourceModal} onStartShouldSetResponder={() => true}>
             <View style={[styles.photoPickerHeader, styles.photoSourceHeader]}>
               <Text style={[styles.photoPickerTitle, styles.photoSourceHeaderTitle]} pointerEvents="none">写真を追加</Text>
@@ -2323,7 +2323,7 @@ export default function YearEventsScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* 既存アルバムの写真選択 */}

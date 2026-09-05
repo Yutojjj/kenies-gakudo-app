@@ -1581,6 +1581,11 @@ export default function TransportModal({
     <>
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
+        <Pressable
+          style={StyleSheet.absoluteFillObject}
+          onPress={onClose}
+          accessibilityLabel="閉じる"
+        />
         <View style={styles.container}>
           {/* ヘッダー */}
           <View style={styles.header}>
@@ -2186,7 +2191,7 @@ export default function TransportModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
   printOnlyOverlay: { flex: 1, backgroundColor: 'transparent' },
   container: { backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
   header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },

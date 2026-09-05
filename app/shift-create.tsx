@@ -1332,7 +1332,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       <MonthPickerModal visible={monthPickerTarget !== null} value={currentDate} mode={monthPickerTarget ?? 'month'} onChange={setCurrentDate} onClose={() => setMonthPickerTarget(null)} />
 
       <Modal visible={photoManagerVisible} transparent animationType="fade" onRequestClose={() => setPhotoManagerVisible(false)}>
-        <TouchableOpacity style={styles.photoManagerOverlay} activeOpacity={1} focusable={false} onPress={() => setPhotoManagerVisible(false)}>
+        <Pressable style={styles.photoManagerOverlay} onPress={() => setPhotoManagerVisible(false)}>
           <TouchableOpacity style={styles.photoManagerPanel} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.photoManagerHeader}>
               <Text style={styles.photoManagerTitle}>印刷写真</Text>
@@ -1360,13 +1360,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </ScrollView>
             {!!photoUploadError && <Text style={styles.photoManagerError}>{photoUploadError}</Text>}
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       <Modal visible={submissionStatusVisible} transparent animationType="fade">
-        <TouchableOpacity
+        <Pressable
           style={styles.submissionStatusOverlay}
-          activeOpacity={1}
           onPress={() => setSubmissionStatusVisible(false)}
         >
           <TouchableOpacity
@@ -1425,7 +1424,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               )}
             </ScrollView>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* ⑥ 勤務時間サマリーポップアップ */}
@@ -1945,9 +1944,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       </Modal>
 
       <Modal visible={monthActionConfirm !== null} transparent animationType="fade">
-        <TouchableOpacity
+        <Pressable
           style={styles.monthConfirmOverlay}
-          activeOpacity={1}
           onPress={() => setMonthActionConfirm(null)}
         >
           {monthActionConfirm === 'autoFill' ? (
@@ -2104,7 +2102,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </View>
           </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* ── 設定モーダル ── */}

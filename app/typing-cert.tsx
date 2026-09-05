@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert, Modal, Platform, SafeAreaView, ScrollView,
+  Alert, Modal, Platform, Pressable, SafeAreaView, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
   ActivityIndicator, FlatList,
 } from 'react-native';
@@ -991,7 +991,7 @@ export default function TypingCertScreen() {
       )}
 
       <Modal visible={clearStagesVisible} transparent animationType="fade" onRequestClose={() => setClearStagesVisible(false)}>
-        <TouchableOpacity style={styles.stageClearOverlay} activeOpacity={1} focusable={false} onPress={() => setClearStagesVisible(false)}>
+        <Pressable style={styles.stageClearOverlay} onPress={() => setClearStagesVisible(false)}>
           <TouchableOpacity style={styles.stageClearDialog} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
             <Text style={styles.stageClearDescription}>8ステージ分のはやさとミス数がすべて消去されます。</Text>
@@ -1004,7 +1004,7 @@ export default function TypingCertScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       <Modal
@@ -1013,7 +1013,7 @@ export default function TypingCertScreen() {
         animationType="slide"
         onRequestClose={() => { setActiveStageInput(null); setStageInputMode('value'); }}
       >
-        <TouchableOpacity style={styles.numberPadBackdrop} activeOpacity={1} focusable={false} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
+        <Pressable style={styles.numberPadBackdrop} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }}>
           <TouchableOpacity style={styles.numberPadSheet} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.numberPadHeader}>
               <View style={styles.numberPadHeading}>
@@ -1078,12 +1078,12 @@ export default function TypingCertScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} focusable={false} onPress={() => setPickerTarget(null)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setPickerTarget(null)}>
           <View style={styles.pickerBox}>
             <Text style={styles.pickerTitle}>
               {pickerTarget === 'student' ? '氏名を選択'
@@ -1146,7 +1146,7 @@ export default function TypingCertScreen() {
               ))}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
     </SafeAreaView>

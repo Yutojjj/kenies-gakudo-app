@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import AdminBottomNav, { ADMIN_BOTTOM_NAV_HEIGHT } from '../components/AdminBottomNav';
 import SwipeTabPager from '../components/SwipeTabPager';
 import TransportModal from '../components/TransportModal';
@@ -955,8 +955,8 @@ export default function AttendanceScreen() {
         </View>
       </ScrollView>
       <Modal visible={statusDatePicker !== null} transparent animationType="fade" onRequestClose={() => setStatusDatePicker(null)}>
-        <TouchableWithoutFeedback onPress={() => setStatusDatePicker(null)}>
-          <View style={styles.statusPickerOverlay}>
+        <View style={styles.statusPickerOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setStatusDatePicker(null)} accessibilityLabel="閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.statusPickerCard}>
                 <View style={styles.statusPickerHeader}>
@@ -1000,8 +1000,7 @@ export default function AttendanceScreen() {
                 </View>
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
       </View>
     );
@@ -1380,8 +1379,8 @@ export default function AttendanceScreen() {
       )}
 
       <Modal visible={!!schoolModalData} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setSchoolModalData(null)}>
-          <View style={styles.modalOverlay}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSchoolModalData(null)} accessibilityLabel="閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
             {schoolModalData && (
@@ -1417,13 +1416,12 @@ export default function AttendanceScreen() {
             )}
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal visible={!!timeModalData} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setTimeModalData(null)}>
-          <View style={styles.modalOverlay}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTimeModalData(null)} accessibilityLabel="閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
             {timeModalData && (
@@ -1459,8 +1457,7 @@ export default function AttendanceScreen() {
             )}
               </View>
             </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
       <AdminBottomNav active="attendance" />
     </SafeAreaView>

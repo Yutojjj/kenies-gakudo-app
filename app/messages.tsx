@@ -22,6 +22,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   SafeAreaView, ScrollView, StyleSheet, Text, TextInput,
   TouchableOpacity, View
 } from 'react-native';
@@ -1158,7 +1159,7 @@ export default function MessagesScreen() {
         />
 
         <Modal visible={!!deleteConversationTarget} transparent animationType="fade" onRequestClose={() => setDeleteConversationTarget(null)}>
-          <TouchableOpacity style={styles.deleteConfirmOverlay} activeOpacity={1} focusable={false} onPress={() => setDeleteConversationTarget(null)}>
+          <Pressable style={styles.deleteConfirmOverlay} onPress={() => setDeleteConversationTarget(null)}>
             <TouchableOpacity style={styles.deleteConfirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
               <Text style={styles.deleteConfirmTitle}>トークを削除しますか？</Text>
               <Text style={styles.deleteConfirmMessage}>
@@ -1173,7 +1174,7 @@ export default function MessagesScreen() {
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
-          </TouchableOpacity>
+          </Pressable>
         </Modal>
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}

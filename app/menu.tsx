@@ -3101,11 +3101,12 @@ export default function MenuScreen() {
         animationType="fade"
         onRequestClose={() => setPickupDatePickerVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.pickupDatePickerBackdrop}
-          activeOpacity={1}
-          onPress={() => setPickupDatePickerVisible(false)}
-        >
+        <View style={styles.pickupDatePickerBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setPickupDatePickerVisible(false)}
+            accessibilityLabel="閉じる"
+          />
           <TouchableWithoutFeedback>
             <View style={styles.pickupDatePickerCard}>
               <View style={styles.pickupDatePickerHeader}>
@@ -3208,7 +3209,7 @@ export default function MenuScreen() {
               </View>
             </View>
           </TouchableWithoutFeedback>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <Modal
@@ -3217,11 +3218,12 @@ export default function MenuScreen() {
         animationType="fade"
         onRequestClose={() => setScheduleDatePickerVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.pickupDatePickerBackdrop}
-          activeOpacity={1}
-          onPress={() => setScheduleDatePickerVisible(false)}
-        >
+        <View style={styles.pickupDatePickerBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setScheduleDatePickerVisible(false)}
+            accessibilityLabel="閉じる"
+          />
           <TouchableWithoutFeedback>
             <View style={styles.pickupDatePickerCard}>
               <View style={styles.pickupDatePickerHeader}>
@@ -3320,7 +3322,7 @@ export default function MenuScreen() {
               </View>
             </View>
           </TouchableWithoutFeedback>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       <Modal visible={adminShiftMenuVisible} transparent animationType="fade">
