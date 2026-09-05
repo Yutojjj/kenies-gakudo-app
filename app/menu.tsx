@@ -3107,8 +3107,7 @@ export default function MenuScreen() {
             onPress={() => setPickupDatePickerVisible(false)}
             accessibilityLabel="閉じる"
           />
-          <TouchableWithoutFeedback>
-            <View style={styles.pickupDatePickerCard}>
+          <View style={styles.pickupDatePickerCard}>
               <View style={styles.pickupDatePickerHeader}>
                 <View>
                   <Text style={styles.pickupDatePickerTitle}>日付を選択</Text>
@@ -3207,8 +3206,7 @@ export default function MenuScreen() {
                   });
                 })()}
               </View>
-            </View>
-          </TouchableWithoutFeedback>
+          </View>
         </View>
       </Modal>
 
@@ -3224,8 +3222,7 @@ export default function MenuScreen() {
             onPress={() => setScheduleDatePickerVisible(false)}
             accessibilityLabel="閉じる"
           />
-          <TouchableWithoutFeedback>
-            <View style={styles.pickupDatePickerCard}>
+          <View style={styles.pickupDatePickerCard}>
               <View style={styles.pickupDatePickerHeader}>
                 <View>
                   <Text style={styles.pickupDatePickerTitle}>日付を選択</Text>
@@ -3320,8 +3317,7 @@ export default function MenuScreen() {
                   });
                 })()}
               </View>
-            </View>
-          </TouchableWithoutFeedback>
+          </View>
         </View>
       </Modal>
 

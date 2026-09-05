@@ -957,8 +957,7 @@ export default function AttendanceScreen() {
       <Modal visible={statusDatePicker !== null} transparent animationType="fade" onRequestClose={() => setStatusDatePicker(null)}>
         <View style={styles.statusPickerOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setStatusDatePicker(null)} accessibilityLabel="ポップアップ外を閉じる" />
-            <TouchableWithoutFeedback>
-              <View style={styles.statusPickerCard}>
+            <View style={styles.statusPickerCard}>
                 <View style={styles.statusPickerHeader}>
                   <Text style={styles.statusPickerTitle}>
                     {statusDatePicker === 'month' ? `${selectedDate.getFullYear()}年の月を選択` : `${selectedDate.getMonth() + 1}月の日付を選択`}
@@ -998,8 +997,7 @@ export default function AttendanceScreen() {
                     );
                   })}
                 </View>
-              </View>
-            </TouchableWithoutFeedback>
+            </View>
         </View>
       </Modal>
       </View>
@@ -1381,8 +1379,7 @@ export default function AttendanceScreen() {
       <Modal visible={!!schoolModalData} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSchoolModalData(null)} accessibilityLabel="ポップアップ外を閉じる" />
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
+            <View style={styles.modalContent}>
             {schoolModalData && (
               <>
                 <View style={styles.modalHeader}>
@@ -1414,16 +1411,14 @@ export default function AttendanceScreen() {
                 </ScrollView>
               </>
             )}
-              </View>
-            </TouchableWithoutFeedback>
+            </View>
         </View>
       </Modal>
 
       <Modal visible={!!timeModalData} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTimeModalData(null)} accessibilityLabel="ポップアップ外を閉じる" />
-            <TouchableWithoutFeedback>
-              <View style={styles.modalContent}>
+            <View style={styles.modalContent}>
             {timeModalData && (
               <>
                 <View style={styles.modalHeader}>
@@ -1455,8 +1450,7 @@ export default function AttendanceScreen() {
                 </ScrollView>
               </>
             )}
-              </View>
-            </TouchableWithoutFeedback>
+            </View>
         </View>
       </Modal>
       <AdminBottomNav active="attendance" />
