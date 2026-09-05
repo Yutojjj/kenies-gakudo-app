@@ -50,6 +50,11 @@ type DailyData = { pickupTime?: string | null; lessons?: LessonTemplate[]; memo?
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 const PICKER_ITEM_HEIGHT = 41;
+
+const isFifthWeekdayOfMonth = (date: Date) => {
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  return date.getDate() + 7 > lastDay;
+};
 const PICKER_VIEW_HEIGHT = 132;
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const SCHEDULE_NOTIFY_DELAY_MS = 5 * 60 * 1000;
@@ -789,7 +794,11 @@ export default function ScheduleScreen() {
     const willAttend = finalPickup !== null && finalPickup !== undefined;
     const regularLessons = (childId && willAttend)
       ? scheduleLessons
-          .filter(l => l.childId === childId && l.dayOfWeek === dow)
+          .filter(l =>
+            l.childId === childId &&
+            l.dayOfWeek === dow &&
+            !(l.lessonName?.trim() === 'スイミング' && isFifthWeekdayOfMonth(d))
+          )
           .map(l => ({ id: l.id, name: l.lessonName, time: l.lessonTime }))
       : [];
     const overrideLessons = userOverride.lessons || [];
