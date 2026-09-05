@@ -3374,7 +3374,7 @@ export default function MenuScreen() {
                 <Ionicons name="close" size={22} color="#7A6254" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.quickEditorList} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.quickEditorList} contentContainerStyle={styles.quickEditorListContent} showsVerticalScrollIndicator={false}>
               {adminQuickOptions.map(item => {
                 const selected = adminQuickVisibleKeys.includes(item.key);
                 return (
@@ -3384,11 +3384,10 @@ export default function MenuScreen() {
                     onPress={() => toggleAdminQuickKey(item.key)}
                     activeOpacity={0.82}
                   >
-                    <View style={[styles.quickEditorIcon, { backgroundColor: item.bg }]}>
-                      <Ionicons name={item.icon} size={21} color={item.color} />
+                    <View style={[styles.quickCandidateIcon, { backgroundColor: item.bg }]}>
+                      <Ionicons name={item.icon} size={17} color={item.color} />
                     </View>
                     <Text style={styles.quickEditorText}>{item.label}</Text>
-                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={23} color={selected ? '#00AEB8' : '#B8ACA3'} />
                   </TouchableOpacity>
                 );
               })}
@@ -3411,7 +3410,7 @@ export default function MenuScreen() {
                 <Ionicons name="close" size={22} color="#7A6254" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.quickEditorList} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.quickEditorList} contentContainerStyle={styles.quickEditorListContent} showsVerticalScrollIndicator={false}>
               {staffQuickOptions.map(item => {
                 const selected = staffQuickVisibleKeys.includes(item.key);
                 return (
@@ -3421,11 +3420,10 @@ export default function MenuScreen() {
                     onPress={() => toggleStaffQuickKey(item.key)}
                     activeOpacity={0.82}
                   >
-                    <View style={[styles.quickEditorIcon, { backgroundColor: item.bg }]}>
-                      <Ionicons name={item.icon} size={21} color={item.color} />
+                    <View style={[styles.quickCandidateIcon, { backgroundColor: item.bg }]}>
+                      <Ionicons name={item.icon} size={17} color={item.color} />
                     </View>
                     <Text style={styles.quickEditorText}>{item.label}</Text>
-                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={23} color={selected ? '#00AEB8' : '#B8ACA3'} />
                   </TouchableOpacity>
                 );
               })}
@@ -4895,17 +4893,25 @@ const styles = StyleSheet.create({
   quickEditorList: {
     marginTop: 4,
   },
+  quickEditorListContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingBottom: 8,
+  },
   quickEditorRow: {
-    minHeight: 56,
+    flexBasis: '30%',
+    flexGrow: 1,
+    minHeight: 62,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F0DEC0',
     backgroundColor: '#FFFDF8',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 10,
-    marginBottom: 8,
+    paddingHorizontal: 8,
+    gap: 6,
+    marginBottom: 0,
   },
   quickEditorRowSelected: {
     borderColor: '#8EDFE4',
@@ -4918,9 +4924,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  quickCandidateIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   quickEditorText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
     color: '#3F302B',
   },
