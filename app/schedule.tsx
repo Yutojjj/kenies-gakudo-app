@@ -1732,7 +1732,7 @@ export default function ScheduleScreen() {
         </View>
       </Modal>
 
-      <Modal visible={templateModalVisible} transparent animationType="slide">
+      <Modal visible={templateModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <TouchableWithoutFeedback onPress={closeTemplateAndMaybeReturnToEdit} accessible={false}>
             <View style={StyleSheet.absoluteFill} />
@@ -2672,10 +2672,17 @@ const styles = StyleSheet.create({
   },
   templateContent: { 
     width: '100%', 
+    maxWidth: 520,
+    alignSelf: 'center',
     backgroundColor: COLORS.white, 
     borderRadius: 16, 
     padding: 20, 
-    maxHeight: '80%' 
+    maxHeight: '80%',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 12,
   },
   templateList: { 
     flexGrow: 0 

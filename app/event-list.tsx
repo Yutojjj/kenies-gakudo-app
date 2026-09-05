@@ -597,7 +597,7 @@ export default function EventListScreen() {
                       <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
                       {evs.map(ev => (
                         <View key={ev.id} style={styles.calEventBadge}>
-                          <Text style={styles.calEventBadgeTitle} numberOfLines={1}>{ev.title}</Text>
+                          <Text style={styles.calEventBadgeTitle}>{ev.title}</Text>
                           {summary && (
                             <Text style={[
                               styles.calEventBadgeStatus,
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
   calCellSelected: { borderWidth: 2, borderColor: COLORS.primary },
   calDayText: { fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
   calEventBadge: { backgroundColor: COLORS.primary + '22', borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1, marginBottom: 2 },
-  calEventBadgeTitle: { fontSize: 8, color: COLORS.primary, fontWeight: 'bold' },
+  calEventBadgeTitle: { flexShrink: 1, fontSize: 8, lineHeight: 11, color: COLORS.primary, fontWeight: 'bold' },
   calEventBadgeStatus: { fontSize: 8, fontWeight: 'bold' },
   modalEventBlock: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
   modalEventTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
