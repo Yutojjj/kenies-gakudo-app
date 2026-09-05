@@ -5,7 +5,7 @@ import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Modal, Platform, SafeAreaView, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View
+  StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
@@ -33,6 +33,7 @@ const customConfirm = (title: string, message: string, onConfirm: () => void) =>
 
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 7);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+const WEEKDAY_ORDER = ['月', '火', '水', '木', '金'];
 
 interface Kid {
   id: string;
@@ -97,7 +98,6 @@ export default function LessonManagementScreen() {
   const [lessonName, setLessonName] = useState('');
   const [isPaid, setIsPaid] = useState(false);
   const [editingLesson, setEditingLesson] = useState<any>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState('月');
   const [selectedTime, setSelectedTime] = useState('15:00');
   const [selectedKidIds, setSelectedKidIds] = useState<string[]>([]);
@@ -114,7 +114,9 @@ export default function LessonManagementScreen() {
   const [filterGrade, setFilterGrade] = useState('');
 
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
-  const [activeDayTab, setActiveDayTab] = useState('全て');
+  const [selectedDayFilters, setSelectedDayFilters] = useState<string[]>([]);
+  const [memberModalLessonName, setMemberModalLessonName] = useState<string | null>(null);
+  const [memberModalDays, setMemberModalDays] = useState<string[]>([]);
 
   // 編集モーダル用
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -215,20 +217,6 @@ export default function LessonManagementScreen() {
     }
   };
 
-  // 一覧はデフォルト閉じた状態
-  // （expandedGroupsの初期値が空のSetのため何もしない）
-
-  // lessonsロード後、習い事名グループ（nameKey）のみを展開。
-  // 時間サブグループ（subKey）は閉じたまま → 画像の状態がデフォルト
-  useEffect(() => {
-    if (lessons.length === 0) return;
-    const keys = new Set<string>();
-    lessons.forEach(l => {
-      keys.add(`name_${l.lessonName}`);
-    });
-    setExpandedGroups(keys);
-  }, [lessons]);
-
   const allSchools = useMemo(() => [...new Set(kids.map(k => k.school).filter(Boolean))].sort(), [kids]);
   const allGrades = useMemo(() => {
     const g = [...new Set(kids.map(k => k.grade).filter(Boolean))];
@@ -238,6 +226,23 @@ export default function LessonManagementScreen() {
       return na - nb;
     });
   }, [kids]);
+
+  const memberModalLessons = useMemo(() => {
+    if (!memberModalLessonName) return [];
+    return lessons
+      .filter(lesson => lesson.lessonName === memberModalLessonName)
+      .filter(lesson => memberModalDays.length === 0 || memberModalDays.includes(lesson.dayOfWeek || ''))
+      .sort((a, b) => {
+        const dayDifference = WEEKDAY_ORDER.indexOf(a.dayOfWeek || '') - WEEKDAY_ORDER.indexOf(b.dayOfWeek || '');
+        if (dayDifference !== 0) return dayDifference;
+        const timeDifference = (a.lessonTime || '').localeCompare(b.lessonTime || '');
+        if (timeDifference !== 0) return timeDifference;
+        const aGrade = kids.find(kid => kid.id === a.childId)?.gradeNum ?? 99;
+        const bGrade = kids.find(kid => kid.id === b.childId)?.gradeNum ?? 99;
+        if (aGrade !== bGrade) return aGrade - bGrade;
+        return a.childName.localeCompare(b.childName, 'ja');
+      });
+  }, [kids, lessons, memberModalDays, memberModalLessonName]);
 
   const filteredKids = useMemo(() => {
     const seen = new Set<string>();
@@ -390,6 +395,11 @@ export default function LessonManagementScreen() {
     setFilterGrade('');
   };
 
+  const closeCreateModal = () => {
+    resetForm();
+    setViewMode('list');
+  };
+
   const openDatePicker = (target: 'start' | 'end') => {
     const current = target === 'start' ? externalStartDate : externalEndDate;
     const parsed = new Date(`${current}T00:00:00`);
@@ -432,50 +442,31 @@ export default function LessonManagementScreen() {
         <Text style={styles.headerTitle}>習い事一覧管理</Text>
       </View>
 
-      <View style={styles.tabSection}>
-        <TouchableOpacity style={[styles.tabBtn, viewMode === 'list' && styles.tabBtnActive]} onPress={() => setViewMode('list')}>
-          <Text style={[styles.tabText, viewMode === 'list' && styles.tabTextActive]}>一覧</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabBtn, viewMode === 'edit' && styles.tabBtnActive]} onPress={() => { resetForm(); setViewMode('edit'); }}>
-          <Text style={[styles.tabText, viewMode === 'edit' && styles.tabTextActive]}>新規追加</Text>
-        </TouchableOpacity>
-      </View>
-
       {viewMode === 'list' ? (
         <>
-          {/* 曜日タブ */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayTabScroll} contentContainerStyle={styles.dayTabContent}>
-            {(['全て', '月', '火', '水', '木', '金'] as const).map((day) => {
-              const count = day === '全て' ? lessons.length : lessons.filter(l => l.dayOfWeek === day).length;
-              return (
+          <ScrollView style={styles.mainScroll} contentContainerStyle={styles.listContent}>
+            <View style={styles.weekdayFilterRow}>
+              {WEEKDAY_ORDER.map(day => (
                 <TouchableOpacity
                   key={day}
-                  style={[styles.dayTab, activeDayTab === day && styles.dayTabActive]}
-                  onPress={() => setActiveDayTab(day)}
+                  style={[styles.weekdayFilterButton, selectedDayFilters.includes(day) && styles.weekdayFilterButtonActive]}
+                  onPress={() => setSelectedDayFilters(current => current.includes(day) ? current.filter(item => item !== day) : [...current, day])}
                 >
-                  <Text style={[styles.dayTabText, activeDayTab === day && styles.dayTabTextActive]}>
-                    {day === '全て' ? '全て' : `${day}曜`}
-                  </Text>
-                  {count > 0 && (
-                    <View style={[styles.dayTabBadge, activeDayTab === day && styles.dayTabBadgeActive]}>
-                      <Text style={[styles.dayTabBadgeText, activeDayTab === day && styles.dayTabBadgeTextActive]}>{count}</Text>
-                    </View>
-                  )}
+                  <Text style={[styles.weekdayFilterText, selectedDayFilters.includes(day) && styles.weekdayFilterTextActive]}>{day}</Text>
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+              ))}
+            </View>
 
-          <ScrollView style={styles.mainScroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
             {(() => {
-              const filtered = activeDayTab === '全て'
+              const dayFiltered = selectedDayFilters.length === 0
                 ? lessons
-                : lessons.filter(l => l.dayOfWeek === (activeDayTab as string));
+                : lessons.filter(l => selectedDayFilters.includes(l.dayOfWeek || ''));
+              const filtered = dayFiltered;
               if (filtered.length === 0) return (
                 <View style={styles.emptyBox}>
                   <Ionicons name="book-outline" size={48} color={COLORS.textLight} />
                   <Text style={styles.emptyText}>
-                    {activeDayTab === '全て' ? '登録されている習い事はありません' : `${activeDayTab}曜日の習い事はありません`}
+                    条件に合う習い事はありません
                   </Text>
                 </View>
               );
@@ -487,31 +478,26 @@ export default function LessonManagementScreen() {
               });
               const nameEntries = [...nameGroups.entries()].sort(([a],[b]) => a.localeCompare(b, 'ja'));
 
-              return nameEntries.map(([lessonName, nameGroup]) => {
+              return (
+                <View style={styles.lessonGrid}>
+                  {nameEntries.map(([lessonName, nameGroup]) => {
                 const nameKey = `name_${lessonName}`;
-                const isNameOpen = expandedGroups.has(nameKey);
                 const isPaid = nameGroup.some(l => l.isPaid);
                 const totalCount = nameGroup.length;
 
-                // 時間でサブグループ化
-                const timeGroups = new Map<string, typeof filtered>();
-                nameGroup.forEach(l => {
-                  const tkey = `${l.lessonTime}||${l.dayOfWeek||''}`;
-                  if (!timeGroups.has(tkey)) timeGroups.set(tkey, []);
-                  timeGroups.get(tkey)!.push(l);
-                });
-                const timeEntries = [...timeGroups.entries()].sort(([a],[b]) => a.localeCompare(b));
-
                 return (
-                  <View key={nameKey} style={[styles.groupCard, { backgroundColor: getLessonColor(lessonName) }]}>
+                  <View
+                    key={nameKey}
+                    style={[
+                      styles.groupCard,
+                      styles.groupCardCompact,
+                      { borderLeftColor: getLessonColor(lessonName) },
+                    ]}
+                  >
                     {/* 習い事名ヘッダー */}
                     <TouchableOpacity
                       style={styles.groupHeader}
-                      onPress={() => {
-                        const next = new Set(expandedGroups);
-                        isNameOpen ? next.delete(nameKey) : next.add(nameKey);
-                        setExpandedGroups(next);
-                      }}
+                      onPress={() => { setMemberModalDays([]); setMemberModalLessonName(lessonName); }}
                       activeOpacity={0.75}
                     >
                       <View style={{ flex:1 }}>
@@ -521,10 +507,7 @@ export default function LessonManagementScreen() {
                         </View>
                         <View style={{ flexDirection:'row', gap:6 }}>
                           <View style={[styles.lessonBadge, { backgroundColor: '#E8F5E9' }]}>
-                            <Text style={[styles.lessonBadgeText, { color:'#388E3C' }]}>計{totalCount}名</Text>
-                          </View>
-                          <View style={styles.lessonBadge}>
-                            <Text style={styles.lessonBadgeText}>{timeGroups.size}クラス</Text>
+                            <Text style={[styles.lessonBadgeText, { color:'#388E3C' }]}>{totalCount}名</Text>
                           </View>
                         </View>
                       </View>
@@ -532,119 +515,39 @@ export default function LessonManagementScreen() {
                         <TouchableOpacity
                           style={styles.groupAddBtn}
                           onPress={() => {
+                            resetForm();
                             setLessonName(lessonName);
                             setIsPaid(!!isPaid);
                             setViewMode('edit');
                           }}
                         >
                           <Ionicons name="person-add-outline" size={16} color={COLORS.primary} />
+                          <Text style={styles.groupAddText}>追加</Text>
                         </TouchableOpacity>
-                        <Ionicons name={isNameOpen ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
                       </View>
                     </TouchableOpacity>
-
-                    {/* 時間別サブグループ（展開時） */}
-                    {isNameOpen && (
-                      <View style={{ paddingHorizontal:8, paddingBottom:8 }}>
-                        {timeEntries.map(([tkey, timeGroup]) => {
-                          const [lessonTime, dayOfWeek] = tkey.split('||');
-                          const subKey = `${nameKey}_${tkey}`;
-                          const isSubOpen = expandedGroups.has(subKey);
-                          return (
-                            <View key={subKey} style={styles.subGroupCard}>
-                              {/* 時間ヘッダー */}
-                              <TouchableOpacity
-                                style={styles.subGroupHeader}
-                                onPress={() => {
-                                  const next = new Set(expandedGroups);
-                                  isSubOpen ? next.delete(subKey) : next.add(subKey);
-                                  setExpandedGroups(next);
-                                }}
-                                activeOpacity={0.75}
-                              >
-                                <View style={{ flexDirection:'row', alignItems:'center', gap:6, flex:1 }}>
-                                  {dayOfWeek && (
-                                    <View style={[styles.lessonBadge, { backgroundColor:'#EDE7F6' }]}>
-                                      <Text style={[styles.lessonBadgeText, { color:'#7B1FA2' }]}>{dayOfWeek}曜</Text>
-                                    </View>
-                                  )}
-                                  <View style={styles.lessonBadge}>
-                                    <Ionicons name="time-outline" size={11} color={COLORS.primary} />
-                                    <Text style={styles.lessonBadgeText}>{lessonTime}</Text>
-                                  </View>
-                                  <Text style={{ fontSize:12, color:COLORS.textLight }}>{timeGroup.length}名</Text>
-                                </View>
-                                <TouchableOpacity
-                                  style={styles.groupAddBtn}
-                                  onPress={() => {
-                                    setLessonName(lessonName);
-                                    setSelectedTime(lessonTime);
-                                    setSelectedDayOfWeek(dayOfWeek || '月');
-                                    setIsPaid(!!isPaid);
-                                    setViewMode('edit');
-                                  }}
-                                >
-                                  <Ionicons name="person-add-outline" size={15} color={COLORS.primary} />
-                                </TouchableOpacity>
-                                <Ionicons name={isSubOpen ? 'chevron-up' : 'chevron-down'} size={15} color={COLORS.textLight} style={{ marginLeft:4 }} />
-                              </TouchableOpacity>
-
-                              {/* 利用者カード（2列グリッド） */}
-                              {isSubOpen && (
-                                <View style={styles.groupChildList}>
-                                  <View style={styles.childGrid}>
-                                  {timeGroup.map(lesson => (
-                                    <View key={lesson.id} style={styles.groupChildRow}>
-                                      <View style={{ flex:1 }}>
-                                        <Text style={styles.groupChildName}>{lesson.childName || (() => { const k = kids.find(k => k.id === lesson.childId); return k ? `${k.name}${k.isStaffChild ? ` [${k.parentName}]` : ''}` : '(名前不明)'; })()}</Text>
-                                        <View style={{ flexDirection:'row', gap:4, marginTop:2 }}>
-                                          {lesson.dayOfWeek && (
-                                            <View style={[styles.lessonBadge, { backgroundColor:'#EDE7F6', paddingHorizontal:5, paddingVertical:1 }]}>
-                                              <Text style={[styles.lessonBadgeText, { color:'#7B1FA2', fontSize:9 }]}>{lesson.dayOfWeek}曜</Text>
-                                            </View>
-                                          )}
-                                           {lesson.isPaid && (
-                                            <View style={[styles.lessonBadge, { backgroundColor:'#FBE9E7', paddingHorizontal:5, paddingVertical:1 }]}>
-                                              <Text style={[styles.lessonBadgeText, { color:'#FF7043', fontSize:9 }]}>有料</Text>
-                                             </View>
-                                           )}
-                                           {lesson.isExternal && lesson.validFrom && lesson.validTo && (
-                                             <View style={[styles.lessonBadge, { backgroundColor:'#FFF3E0', paddingHorizontal:5, paddingVertical:1 }]}>
-                                               <Text style={[styles.lessonBadgeText, { color:'#A65B00', fontSize:9 }]}>外部 {lesson.validFrom.replaceAll('-', '/')}〜{lesson.validTo.replaceAll('-', '/')}</Text>
-                                             </View>
-                                           )}
-                                         </View>
-                                      </View>
-                                      <TouchableOpacity
-                                        style={[styles.groupAddBtn, { marginRight:4 }]}
-                                        onPress={() => openEditModal(lesson)}
-                                      >
-                                        <Ionicons name="pencil-outline" size={15} color={COLORS.primary} />
-                                      </TouchableOpacity>
-                                      <TouchableOpacity
-                                        style={styles.groupChildDeleteBtn}
-                                        onPress={() => handleDelete(lesson.id || '')}
-                                      >
-                                        <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                                      </TouchableOpacity>
-                                    </View>
-                                  ))}
-                                  </View>
-                                </View>
-                              )}
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
                   </View>
                 );
-              });
+                  })}
+                </View>
+              );
             })()}
           </ScrollView>
         </>
       ) : (
-        <ScrollView style={styles.mainScroll} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+        <Modal visible transparent animationType="fade" onRequestClose={closeCreateModal}>
+          <View style={styles.formModalOverlay}>
+            <TouchableWithoutFeedback onPress={closeCreateModal} accessible={false}>
+              <View style={styles.modalBackdropClose} />
+            </TouchableWithoutFeedback>
+            <View style={styles.formModalSurface}>
+              <View style={styles.formModalHeader}>
+                <Text style={styles.formModalTitle}>習い事を新規追加</Text>
+                <TouchableOpacity style={styles.formModalClose} onPress={closeCreateModal} accessibilityLabel="新規追加を閉じる">
+                  <Ionicons name="close" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.formModalScrollContent}>
 
           {/* STEP 1: 習い事の名前 */}
           <View style={styles.stepCard}>
@@ -864,13 +767,93 @@ export default function LessonManagementScreen() {
                 : selectedKidIds.length > 0 ? `${selectedKidIds.length}名に登録する` : '登録する'}
             </Text>
           </TouchableOpacity>
-        </ScrollView>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
 
+      {viewMode === 'list' && (
+        <TouchableOpacity
+          style={styles.floatingAddButton}
+          onPress={() => { resetForm(); setViewMode('edit'); }}
+          accessibilityLabel="習い事を新規追加"
+        >
+          <Ionicons name="add" size={30} color={COLORS.white} />
+        </TouchableOpacity>
+      )}
+
+      <Modal visible={!!memberModalLessonName} transparent animationType="fade" onRequestClose={() => setMemberModalLessonName(null)}>
+        <View style={styles.memberModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setMemberModalLessonName(null)} accessible={false}>
+            <View style={styles.modalBackdropClose} />
+          </TouchableWithoutFeedback>
+          <View style={styles.memberModalSurface}>
+            <View style={styles.memberModalHeader}>
+              <View>
+                <Text style={styles.memberModalTitle}>{memberModalLessonName}</Text>
+                <Text style={styles.memberModalSubtitle}>メンバー</Text>
+              </View>
+              <TouchableOpacity style={styles.formModalClose} onPress={() => setMemberModalLessonName(null)} accessibilityLabel="メンバー一覧を閉じる">
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.memberDayFilterRow}>
+              {WEEKDAY_ORDER.map(day => (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.memberDayFilterButton, memberModalDays.includes(day) && styles.memberDayFilterButtonActive]}
+                  onPress={() => setMemberModalDays(current => current.includes(day) ? current.filter(item => item !== day) : [...current, day])}
+                >
+                  <Text style={[styles.memberDayFilterText, memberModalDays.includes(day) && styles.memberDayFilterTextActive]}>{day}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <ScrollView contentContainerStyle={styles.memberModalList}>
+              {memberModalLessons.map((lesson, index) => {
+                const previousLesson = memberModalLessons[index - 1];
+                const showDayHeading = !previousLesson || previousLesson.dayOfWeek !== lesson.dayOfWeek;
+                const showTimeHeading = showDayHeading || previousLesson?.lessonTime !== lesson.lessonTime;
+                const kid = kids.find(item => item.id === lesson.childId);
+                return (
+                  <React.Fragment key={lesson.id}>
+                    {showDayHeading && <Text style={styles.memberDayHeading}>{lesson.dayOfWeek || '曜日未設定'}曜日</Text>}
+                    {showTimeHeading && <Text style={styles.memberTimeHeading}>{lesson.lessonTime}</Text>}
+                    <View style={styles.memberListRow}>
+                      <TouchableOpacity
+                        style={styles.memberListMain}
+                        onPress={() => { setMemberModalLessonName(null); openEditModal(lesson); }}
+                        accessibilityLabel={`${lesson.childName}を編集`}
+                      >
+                        <View style={styles.memberListIcon}>
+                          <Ionicons name="person" size={17} color={COLORS.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.groupChildName}>{lesson.childName || '(名前不明)'}</Text>
+                          <Text style={styles.groupChildSchool}>{kid ? `${kid.grade}　${kid.school}` : lesson.school || '外部'}</Text>
+                        </View>
+                        {lesson.isPaid && <Text style={styles.memberPaidText}>有料</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(lesson.id || '')} accessibilityLabel={`${lesson.childName}を削除`}>
+                        <Ionicons name="trash-outline" size={19} color={COLORS.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </React.Fragment>
+                );
+              })}
+              {memberModalLessons.length === 0 && <Text style={styles.noResultText}>この曜日に登録されたメンバーはいません</Text>}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── 個別編集モーダル ── */}
-      <Modal visible={editModalVisible} transparent animationType="slide">
-        <View style={styles.pickerOverlay}>
-          <View style={[styles.pickerContent, { padding: 24 }]}>
+      <Modal visible={editModalVisible} transparent animationType="fade" onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.editModalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setEditModalVisible(false)} accessible={false}>
+            <View style={styles.modalBackdropClose} />
+          </TouchableWithoutFeedback>
+          <View style={styles.editModalSurface}>
             <Text style={[styles.pickerTitle, { marginBottom: 16 }]}>{editModalLesson?.childName} の習い事を編集</Text>
 
             <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>習い事名</Text>
@@ -1011,12 +994,22 @@ const styles = StyleSheet.create({
   emptyText: { color: COLORS.textLight, fontSize: 14, marginTop: 16 },
   subGroupCard: { backgroundColor: '#F8F8F8', borderRadius: 12, marginBottom: 6, overflow: 'hidden' },
   subGroupHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8 },
-  groupCard: { backgroundColor: COLORS.white, borderRadius: 16, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2 },
+  listContent: { padding: 16, paddingBottom: 112 },
+  filterHeading: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, marginTop: 18, marginBottom: 9 },
+  weekdayFilterRow: { flexDirection: 'row', borderWidth: 1, borderColor: COLORS.primary, borderRadius: 11, overflow: 'hidden' },
+  weekdayFilterButton: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.primary + '55' },
+  weekdayFilterButtonActive: { backgroundColor: COLORS.primary },
+  weekdayFilterText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  weekdayFilterTextActive: { color: COLORS.white },
+  lessonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  groupCard: { backgroundColor: COLORS.white, borderRadius: 12, borderLeftWidth: 6, marginTop: 14, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2 },
+  groupCardCompact: { width: '48.5%' },
   groupHeader: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   groupName: { fontSize: 16, fontWeight: 'bold', color: COLORS.text },
   paidBadge: { backgroundColor: '#FF7043', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
   paidBadgeText: { fontSize: 10, color: '#fff', fontWeight: 'bold' },
-  groupAddBtn: { padding: 6, backgroundColor: '#EEF5FF', borderRadius: 10 },
+  groupAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, padding: 6, backgroundColor: '#EEF5FF', borderRadius: 10 },
+  groupAddText: { fontSize: 11, fontWeight: 'bold', color: COLORS.primary },
   groupChildList: { borderTopWidth: 1, borderColor: COLORS.border, padding: 10, gap: 6 },
   childGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   groupChildRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#FAFAFA', borderRadius: 12, width: '48%' },
@@ -1094,6 +1087,33 @@ const styles = StyleSheet.create({
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 16, gap: 8, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: COLORS.textLight },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
+  floatingAddButton: { position: 'absolute', right: 22, bottom: 26, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 7 },
+  formModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  modalBackdropClose: { ...StyleSheet.absoluteFillObject },
+  formModalSurface: { width: '100%', maxWidth: 660, maxHeight: '90%', backgroundColor: COLORS.white, borderRadius: 18, overflow: 'hidden', zIndex: 1 },
+  formModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderColor: COLORS.border },
+  formModalTitle: { fontSize: 19, fontWeight: 'bold', color: COLORS.text },
+  formModalClose: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F6F7' },
+  formModalScrollContent: { padding: 16, paddingBottom: 28 },
+  memberModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  memberModalSurface: { width: '100%', maxWidth: 680, maxHeight: '80%', backgroundColor: COLORS.white, borderRadius: 18, overflow: 'hidden', zIndex: 1 },
+  memberModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderColor: COLORS.border },
+  memberModalTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  memberModalSubtitle: { fontSize: 13, fontWeight: 'bold', color: COLORS.primary, marginTop: 2 },
+  memberDayFilterRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 14, borderWidth: 1, borderColor: COLORS.primary, borderRadius: 10, overflow: 'hidden' },
+  memberDayFilterButton: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.primary + '55' },
+  memberDayFilterButtonActive: { backgroundColor: COLORS.primary },
+  memberDayFilterText: { fontSize: 13, fontWeight: 'bold', color: COLORS.text },
+  memberDayFilterTextActive: { color: COLORS.white },
+  memberModalList: { padding: 16, paddingBottom: 24 },
+  memberDayHeading: { fontSize: 14, fontWeight: 'bold', color: '#7B1FA2', marginTop: 8, marginBottom: 7 },
+  memberTimeHeading: { fontSize: 13, fontWeight: 'bold', color: COLORS.primary, marginTop: 4, marginBottom: 6 },
+  memberListRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6, borderRadius: 10, backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#EEF0F2', marginBottom: 7 },
+  memberListMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 6 },
+  memberListIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary + '14' },
+  memberPaidText: { fontSize: 10, fontWeight: 'bold', color: '#FF7043' },
+  editModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  editModalSurface: { width: '100%', maxWidth: 620, backgroundColor: COLORS.white, borderRadius: 18, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 8, zIndex: 1 },
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', justifyContent: 'flex-end' },
   pickerContent: { backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, height: 480 },
   pickerTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, color: COLORS.text },
