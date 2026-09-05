@@ -56,14 +56,10 @@ const SCHEDULE_NOTIFY_DELAY_MS = 5 * 60 * 1000;
 
 type ScheduleNotifyBatch = {
   timer: ReturnType<typeof setTimeout>;
-  accountId: string;
-  dateStr: string;
-  childName: string;
-  actorName: string;
   descriptions: string[];
 };
 
-const scheduleNotifyBatches: Record<string, ScheduleNotifyBatch> = {};
+const adminScheduleNotifyBatches: Record<string, ScheduleNotifyBatch> = {};
 
 const LESSON_ACTION_IMG = require('../assets/menu/lesson_action.png');
 
@@ -249,7 +245,7 @@ export default function ScheduleScreen() {
     return `${y}-${m}-${d}`;
   };
 
-  const queueGuardianScheduleNotification = ({
+  const queueAdminScheduleNotification = ({
     accountId,
     dateStr,
     childName,
@@ -263,41 +259,37 @@ export default function ScheduleScreen() {
     actorName: string;
   }) => {
     if (!accountId || !description) return;
-    const key = `${accountId}_${dateStr}_${childName}`;
-    if (scheduleNotifyBatches[key]) {
-      scheduleNotifyBatches[key].descriptions.push(description);
+    const existingBatch = adminScheduleNotifyBatches[accountId];
+    if (existingBatch) {
+      existingBatch.descriptions.push(`${actorName}さん: ${dateStr} ${childName} ${description}`);
       return;
     }
 
-    const batch: ScheduleNotifyBatch = {
-      accountId,
-      dateStr,
-      childName,
-      actorName,
-      descriptions: [description],
-      timer: setTimeout(() => {
-        const currentBatch = scheduleNotifyBatches[key];
-        if (!currentBatch) return;
-        delete scheduleNotifyBatches[key];
+    // 1件目は即時通知し、その後5分間の追加分だけを別通知にまとめる。
+    sendPushNotification({
+      accountIds: ['admin'],
+      title: 'スケジュールが変更されました',
+      body: `${actorName}さん: ${dateStr} ${childName} ${description}`,
+      url: '/schedule-changes',
+    }).catch(() => {});
 
-        const d = new Date(`${currentBatch.dateStr}T00:00:00`);
-        const label = isNaN(d.getTime())
-          ? currentBatch.dateStr
-          : `${d.getMonth() + 1}月${d.getDate()}日`;
+    adminScheduleNotifyBatches[accountId] = {
+      descriptions: [],
+      timer: setTimeout(() => {
+        const currentBatch = adminScheduleNotifyBatches[accountId];
+        if (!currentBatch) return;
+        delete adminScheduleNotifyBatches[accountId];
         const count = currentBatch.descriptions.length;
-        const body = count >= 2
-          ? `${label}の予定に${count}件の変更がありました。`
-          : `${label} ${currentBatch.childName}: ${currentBatch.descriptions[0]}`;
+        if (count === 0) return;
 
         sendPushNotification({
-          accountIds: [currentBatch.accountId],
-          title: 'スケジュールが変更されました',
-          body,
-          url: '/schedule',
+          accountIds: ['admin'],
+          title: 'スケジュール変更のお知らせ',
+          body: `最初の通知以降、5分以内に${count}件の追加変更がありました。`,
+          url: '/schedule-changes',
         }).catch(() => {});
       }, SCHEDULE_NOTIFY_DELAY_MS),
     };
-    scheduleNotifyBatches[key] = batch;
   };
 
   useEffect(() => {
@@ -668,16 +660,6 @@ export default function ScheduleScreen() {
       await setDoc(doc(db, 'schedules2', docId), saveData, { merge: true });
 
       const desc = buildChangeDesc(data, current);
-      if (desc && loggedInUser && (loggedInUser.role === 'staff' || loggedInUser.role === 'admin')) {
-        queueGuardianScheduleNotification({
-          accountId: parentDocId,
-          dateStr,
-          childName: child.name,
-          description: desc,
-          actorName: loggedInUser.name,
-        });
-      }
-
       if (loggedInUser && desc) {
         const changeKey = buildChangeKey(data, current);
         await addDoc(collection(db, 'scheduleChanges'), {
@@ -699,8 +681,6 @@ export default function ScheduleScreen() {
             changeDay.getFullYear() === today.getFullYear() &&
             changeDay.getMonth() === today.getMonth();
           if (isSameMonth) {
-            const d = new Date(dateStr);
-            const label = `${d.getMonth() + 1}月${d.getDate()}日`;
             let changeNotificationsEnabled = true;
             try {
               const setting = await getDoc(doc(db, 'settings', 'schedule_change_notifications'));
@@ -709,13 +689,14 @@ export default function ScheduleScreen() {
               // 設定が読めない場合は、従来どおり通知を止めない
             }
             if (changeNotificationsEnabled) {
-              // 変更通知は管理者だけに送る。スタッフには送信しない。
-              sendPushNotification({
-                accountIds: ['admin'],
-                title: `${loggedInUser.name}さんがスケジュールを変更`,
-                body: `${label} ${child.name}: ${desc}`,
-                url: '/schedule-changes',
-              }).catch(() => {});
+              // 管理者への変更通知は、直近5分以内の変更を1通にまとめる。
+              queueAdminScheduleNotification({
+                accountId: parentDocId,
+                dateStr,
+                childName: child.name,
+                description: desc,
+                actorName: loggedInUser.name,
+              });
             }
           }
         }
