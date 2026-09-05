@@ -258,7 +258,13 @@ export default function LessonManagementScreen() {
   }, [kids, searchQuery, filterSchool, filterGrade]);
 
   const openTimePicker = () => {
+    setViewMode('list');
     setTimePickerVisible(true);
+  };
+
+  const openEditTimePicker = () => {
+    setEditModalVisible(false);
+    setEditModalTimePickerVisible(true);
   };
 
   const toggleKid = (kidId: string) => {
@@ -405,6 +411,7 @@ export default function LessonManagementScreen() {
     const parsed = new Date(`${current}T00:00:00`);
     setDatePickerTarget(target);
     setDatePickerMonth(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
+    setViewMode('list');
     setDatePickerVisible(true);
   };
 
@@ -416,6 +423,7 @@ export default function LessonManagementScreen() {
       setExternalEndDate(dateKey < externalStartDate ? externalStartDate : dateKey);
     }
     setDatePickerVisible(false);
+    setViewMode('edit');
   };
 
   const calendarCells = useMemo(() => {
@@ -880,7 +888,7 @@ export default function LessonManagementScreen() {
 
             <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>開始時間</Text>
             <TouchableOpacity style={[styles.timeSelectBtn, { marginBottom: 14 }]} onPress={() => {
-              setEditModalTimePickerVisible(true);
+              openEditTimePicker();
             }}>
               <Ionicons name="time-outline" size={20} color={COLORS.primary} />
               <Text style={[styles.timeSelectText, { fontSize: 22 }]}>{editModalTime}</Text>
@@ -913,15 +921,16 @@ export default function LessonManagementScreen() {
         title="開始時間を選択"
         hours={HOURS}
         minutes={MINUTES}
-        onClose={() => setEditModalTimePickerVisible(false)}
+        onClose={() => { setEditModalTimePickerVisible(false); setEditModalVisible(true); }}
         onConfirm={value => {
           setEditModalTime(value);
           setEditModalTimePickerVisible(false);
+          setEditModalVisible(true);
         }}
       />
 
       {/* 外部児童の表示期間 */}
-      <Modal visible={datePickerVisible} transparent animationType="fade" onRequestClose={() => setDatePickerVisible(false)}>
+      <Modal visible={datePickerVisible} transparent animationType="fade" onRequestClose={() => { setDatePickerVisible(false); setViewMode('edit'); }}>
         <View style={[styles.pickerOverlay, { justifyContent: 'center', padding: 18 }]}> 
           <View style={styles.calendarModal}>
             <View style={styles.calendarModalHeader}>
@@ -929,7 +938,7 @@ export default function LessonManagementScreen() {
                 <Text style={styles.calendarModalTitle}>表示期間を選択</Text>
                 <Text style={styles.calendarModalTarget}>{datePickerTarget === 'start' ? '開始日' : '終了日'}</Text>
               </View>
-              <TouchableOpacity style={styles.calendarCloseBtn} onPress={() => setDatePickerVisible(false)}>
+              <TouchableOpacity style={styles.calendarCloseBtn} onPress={() => { setDatePickerVisible(false); setViewMode('edit'); }}>
                 <Ionicons name="close" size={26} color={COLORS.text} />
               </TouchableOpacity>
             </View>
@@ -969,10 +978,11 @@ export default function LessonManagementScreen() {
         title="開始時間を選択"
         hours={HOURS}
         minutes={MINUTES}
-        onClose={() => setTimePickerVisible(false)}
+        onClose={() => { setTimePickerVisible(false); setViewMode('edit'); }}
         onConfirm={value => {
           setSelectedTime(value);
           setTimePickerVisible(false);
+          setViewMode('edit');
         }}
       />
     </SafeAreaView>
