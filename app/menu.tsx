@@ -3030,8 +3030,8 @@ export default function MenuScreen() {
                 const selected = pickupPrintDateTarget === target;
                 const value = target === 'start' ? pickupPrintStartDate : pickupPrintEndDate;
                 return (
-                  <TouchableOpacity key={target} style={[styles.pickupPrintDateTarget, selected && styles.pickupPrintDateTargetActive]} onPress={() => setPickupPrintDateTarget(target)}>
-                    <Text style={styles.pickupPrintDateTargetLabel}>{target === 'start' ? '開始日' : '終了日'}</Text>
+                  <TouchableOpacity key={target} style={[styles.pickupPrintDateTarget, target === 'start' ? styles.pickupPrintDateTargetStart : styles.pickupPrintDateTargetEnd, selected && (target === 'start' ? styles.pickupPrintDateTargetStartActive : styles.pickupPrintDateTargetEndActive)]} onPress={() => setPickupPrintDateTarget(target)}>
+                    <Text style={[styles.pickupPrintDateTargetLabel, target === 'start' && styles.pickupPrintDateTargetStartLabel]}>{target === 'start' ? '開始日' : '終了日'}</Text>
                     <Text style={styles.pickupPrintDateTargetValue}>{value || '未選択'}</Text>
                   </TouchableOpacity>
                 );
@@ -3064,7 +3064,7 @@ export default function MenuScreen() {
                   return (
                     <TouchableOpacity
                       key={dayKey}
-                      style={[styles.pickupPrintCalendarCell, (isStart || isEnd) && styles.pickupPrintCalendarSelected, isInRange && styles.pickupPrintCalendarInRange]}
+                      style={[styles.pickupPrintCalendarCell, isStart && styles.pickupPrintCalendarStart, isEnd && styles.pickupPrintCalendarEnd, isInRange && styles.pickupPrintCalendarInRange]}
                       onPress={() => {
                         if (pickupPrintDateTarget === 'start') {
                           setPickupPrintStartDate(dayKey);
@@ -3078,7 +3078,7 @@ export default function MenuScreen() {
                         }
                       }}
                     >
-                      <Text style={[styles.pickupPrintCalendarDay, dayDate.getDay() === 0 && styles.pickupPrintSunday, dayDate.getDay() === 6 && styles.pickupPrintSaturday, (isStart || isEnd) && styles.pickupPrintCalendarSelectedText]}>{day}</Text>
+                      <Text style={[styles.pickupPrintCalendarDay, dayDate.getDay() === 0 && styles.pickupPrintSunday, dayDate.getDay() === 6 && styles.pickupPrintSaturday, isStart && styles.pickupPrintCalendarStartText, isEnd && styles.pickupPrintCalendarEndText]}>{day}</Text>
                     </TouchableOpacity>
                   );
                 });
@@ -5254,8 +5254,12 @@ const styles = StyleSheet.create({
   pickupPrintDateTitle: { color: '#5D4037', fontSize: 17, fontWeight: '900' },
   pickupPrintDateTargets: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   pickupPrintDateTarget: { flex: 1, minHeight: 60, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1.5, borderColor: '#E5DED8', backgroundColor: '#FAFAFA' },
-  pickupPrintDateTargetActive: { borderColor: '#00AEB8', backgroundColor: '#EAFBFC' },
+  pickupPrintDateTargetStart: { borderColor: '#F3C47A', backgroundColor: '#FFF4E2' },
+  pickupPrintDateTargetEnd: { borderColor: '#A8DEE1', backgroundColor: '#FAFAFA' },
+  pickupPrintDateTargetStartActive: { borderColor: '#E98B1D', backgroundColor: '#FFE6BA' },
+  pickupPrintDateTargetEndActive: { borderColor: '#00AEB8', backgroundColor: '#EAFBFC' },
   pickupPrintDateTargetLabel: { color: '#7A6254', fontSize: 11, fontWeight: '800' },
+  pickupPrintDateTargetStartLabel: { color: '#A85B0A' },
   pickupPrintDateTargetValue: { color: '#333333', fontSize: 15, fontWeight: '900', marginTop: 3 },
   pickupPrintMonthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   pickupPrintMonthText: { color: '#5D4037', fontSize: 17, fontWeight: '900' },
@@ -5265,10 +5269,12 @@ const styles = StyleSheet.create({
   pickupPrintSaturday: { color: '#1565C0' },
   pickupPrintCalendar: { flexDirection: 'row', flexWrap: 'wrap' },
   pickupPrintCalendarCell: { width: '14.285%', height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20 },
-  pickupPrintCalendarSelected: { backgroundColor: '#00AEB8' },
+  pickupPrintCalendarStart: { backgroundColor: '#FFE5BC' },
+  pickupPrintCalendarEnd: { backgroundColor: '#00AEB8' },
   pickupPrintCalendarInRange: { backgroundColor: '#E3F7F8' },
   pickupPrintCalendarDay: { color: '#333333', fontSize: 14, fontWeight: '700' },
-  pickupPrintCalendarSelectedText: { color: '#FFFFFF' },
+  pickupPrintCalendarStartText: { color: '#A85B0A' },
+  pickupPrintCalendarEndText: { color: '#FFFFFF' },
   pickupPrintSubmit: { minHeight: 52, marginTop: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#00AEB8' },
   pickupPrintSubmitDisabled: { backgroundColor: '#B8C9CB' },
   pickupPrintSubmitText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
