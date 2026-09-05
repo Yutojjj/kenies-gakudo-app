@@ -163,10 +163,11 @@ export default function CenteredTimePickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.panel}>
+      <View style={styles.overlay}>
+        <TouchableWithoutFeedback onPress={onClose} accessible={false}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+        <View style={styles.panel}>
               <View style={styles.header}>
                 <Text style={styles.title}>{title}</Text>
                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
@@ -193,17 +194,15 @@ export default function CenteredTimePickerModal({
                   <Text style={styles.confirmText}>決定</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </TouchableWithoutFeedback>
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'transparent' },
-  panel: { width: '100%', maxWidth: 380, borderRadius: 16, padding: 18, backgroundColor: '#FFFFFF' },
+  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
+  panel: { width: '100%', maxWidth: 380, borderRadius: 16, padding: 18, backgroundColor: '#FFFFFF', zIndex: 1 },
   header: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: COLORS.text, fontSize: 18, fontWeight: '900' },
   closeButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F5' },

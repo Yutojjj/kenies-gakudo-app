@@ -1248,10 +1248,11 @@ export default function ScheduleScreen() {
       </View>
 
       <Modal visible={editModalVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setEditModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.editModalContent}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setEditModalVisible(false)} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.editModalContent, styles.modalSurface]}>
             <View style={styles.scheduleSheetHeader}>
               <View style={styles.scheduleDateStepper}>
                 <TouchableOpacity
@@ -1467,17 +1468,16 @@ export default function ScheduleScreen() {
               </TouchableOpacity>
               <View style={{height: 14}} />
             </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal visible={eventModalVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setEventModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.editModalContent}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => setEventModalVisible(false)} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.editModalContent, styles.modalSurface]}>
                   <View style={styles.modalHeader}>
                       <View style={{flexDirection: 'row', alignItems: 'center'}}>
                   <Ionicons name="star" size={24} color="#00AEB8" style={{marginRight: 8}} />
@@ -1528,17 +1528,16 @@ export default function ScheduleScreen() {
                           <Text style={{color: COLORS.primary, textDecorationLine: 'underline'}}>お迎え・習い事の時間を設定する</Text>
                       </TouchableOpacity>
                   </View>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal visible={!!deletePickupTimeTarget} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setDeletePickupTimeTarget(null)}>
-          <View style={styles.deleteConfirmOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.deleteConfirmBox}>
+        <View style={styles.deleteConfirmOverlay}>
+          <TouchableWithoutFeedback onPress={() => setDeletePickupTimeTarget(null)} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.deleteConfirmBox, styles.modalSurface]}>
                 <View style={styles.deleteConfirmIcon}>
                   <Ionicons name="trash-outline" size={24} color="#EF4444" />
                 </View>
@@ -1566,18 +1565,17 @@ export default function ScheduleScreen() {
                     <Text style={styles.deleteConfirmSubmitText}>削除</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       {/* 候補時間追加ピッカー */}
       <Modal visible={addPickupPickerVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setAddPickupPickerVisible(false)}>
-          <View style={styles.pickerOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.pickerContent}>
+        <View style={styles.pickerOverlay}>
+          <TouchableWithoutFeedback onPress={() => setAddPickupPickerVisible(false)} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.pickerContent, styles.modalSurface]}>
             <Text style={styles.pickerTitle}>候補時間を追加</Text>
             <View style={styles.pickerColumns} nativeID="ui-time-wheel-pickup-option">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
@@ -1653,20 +1651,19 @@ export default function ScheduleScreen() {
                 <Text style={styles.pickerConfirmText}>{pickupTimeSaving ? '保存中...' : '保存して入力開始'}</Text>
               </TouchableOpacity>
             </View>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal visible={timePickerVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => {
-          setTimePickerVisible(false);
-          setTimeout(() => setEditModalVisible(true), 300);
-        }}>
-          <View style={styles.pickerOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.pickerContent}>
+        <View style={styles.pickerOverlay}>
+          <TouchableWithoutFeedback onPress={() => {
+            setTimePickerVisible(false);
+            setTimeout(() => setEditModalVisible(true), 300);
+          }} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.pickerContent, styles.modalSurface]}>
             <Text style={styles.pickerTitle}>時間を選択</Text>
             <View style={styles.pickerColumns} nativeID="ui-time-wheel-schedule">
               <View pointerEvents="none" style={styles.pickerSelectionFrame} />
@@ -1731,17 +1728,16 @@ export default function ScheduleScreen() {
                 <Text style={styles.pickerConfirmText}>決定</Text>
               </TouchableOpacity>
             </View>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <Modal visible={templateModalVisible} transparent animationType="slide">
-        <TouchableWithoutFeedback onPress={closeTemplateAndMaybeReturnToEdit}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.templateContent}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={closeTemplateAndMaybeReturnToEdit} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.templateContent, styles.modalSurface]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                   {templateSelectMode === 'edit' ? '習い事を編集・削除' : '習い事を選択'}
@@ -1787,17 +1783,16 @@ export default function ScheduleScreen() {
                   <Text style={{color: COLORS.primary, fontWeight: 'bold'}}>新しい習い事を追加</Text>
               </TouchableOpacity>
             </ScrollView>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
       
       <Modal visible={lessonAddVisible} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => { setLessonAddVisible(false); setTimeout(() => setTemplateModalVisible(true), 300); }}>
-          <View style={styles.pickerOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.pickerContent}>
+        <View style={styles.pickerOverlay}>
+          <TouchableWithoutFeedback onPress={() => { setLessonAddVisible(false); setTimeout(() => setTemplateModalVisible(true), 300); }} accessible={false}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View style={[styles.pickerContent, styles.modalSurface]}>
                   <Text style={styles.pickerTitle}>{editingTemplateId ? '習い事を編集' : '習い事を追加'}</Text>
                   
                   <Text style={{fontWeight: 'bold', marginBottom: 8}}>習い事の名前</Text>
@@ -1870,10 +1865,8 @@ export default function ScheduleScreen() {
                       <Text style={styles.pickerConfirmText}>保存する</Text>
                     </TouchableOpacity>
                   </View>
-              </View>
-            </TouchableWithoutFeedback>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <AdminBottomNav active="schedule" />
@@ -2182,6 +2175,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     paddingHorizontal: 10,
     paddingVertical: 18,
+  },
+  modalSurface: {
+    zIndex: 1,
   },
   modalHeader: { 
     flexDirection: 'row', 

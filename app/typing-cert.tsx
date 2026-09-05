@@ -993,7 +993,7 @@ export default function TypingCertScreen() {
       <Modal visible={clearStagesVisible} transparent animationType="fade" onRequestClose={() => setClearStagesVisible(false)}>
         <View style={styles.stageClearOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setClearStagesVisible(false)} accessibilityLabel="ポップアップ外を閉じる" />
-          <TouchableOpacity style={[styles.stageClearDialog, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
+          <View style={[styles.stageClearDialog, { zIndex: 1 }]}>
             <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
             <Text style={styles.stageClearDescription}>8ステージ分のはやさとミス数がすべて消去されます。</Text>
             <View style={styles.stageClearActions}>
@@ -1004,7 +1004,7 @@ export default function TypingCertScreen() {
                 <Text style={styles.stageClearConfirmText}>すべてクリア</Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -1016,7 +1016,7 @@ export default function TypingCertScreen() {
       >
         <View style={styles.numberPadBackdrop}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }} accessibilityLabel="ポップアップ外を閉じる" />
-          <TouchableOpacity style={[styles.numberPadSheet, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
+          <View style={[styles.numberPadSheet, { zIndex: 1 }]}>
             <View style={styles.numberPadHeader}>
               <View style={styles.numberPadHeading}>
                 <Text style={styles.numberPadStageLabel}>
@@ -1079,7 +1079,7 @@ export default function TypingCertScreen() {
                 <Text style={styles.numberPadDoneText}>次へ</Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
