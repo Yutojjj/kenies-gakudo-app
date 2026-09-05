@@ -68,7 +68,7 @@ export default function EditablePickerModal({ visible, title, items, allowEdit =
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', padding: 20 },
   content: { backgroundColor: COLORS.white, borderRadius: 12, padding: 24, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
   title: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 16, textAlign: 'center' },
   listItem: { flexDirection: 'row', borderBottomWidth: 1, borderColor: COLORS.border, paddingVertical: 12, alignItems: 'center' },

@@ -202,7 +202,7 @@ export default function CenteredTimePickerModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(0,0,0,0.48)' },
+  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'transparent' },
   panel: { width: '100%', maxWidth: 380, borderRadius: 16, padding: 18, backgroundColor: '#FFFFFF' },
   header: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: COLORS.text, fontSize: 18, fontWeight: '900' },

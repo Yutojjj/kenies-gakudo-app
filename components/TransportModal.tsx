@@ -1579,7 +1579,7 @@ export default function TransportModal({
 
   return (
     <>
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="none" transparent>
       <View style={styles.overlay}>
         <TouchableWithoutFeedback onPress={onClose}>
           <View style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]} />
@@ -2189,11 +2189,11 @@ export default function TransportModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 8 },
   printOnlyOverlay: { flex: 1, backgroundColor: 'transparent' },
   modalDismissArea: { zIndex: 0 },
-  container: { backgroundColor: '#FFFFFF', opacity: 1, zIndex: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
-  header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
+  container: { width: '100%', maxWidth: 760, height: '92%', backgroundColor: '#FFFFFF', opacity: 1, zIndex: 1, overflow: 'hidden', borderRadius: 24, shadowColor: '#000000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 16, elevation: 14 },
+  header: { padding: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: COLORS.border },
   headerTopRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   headerTitleGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },

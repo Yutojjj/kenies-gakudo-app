@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 16, gap: 8, marginTop: 8 },
   submitBtnDisabled: { backgroundColor: COLORS.textLight },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
-  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  pickerOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
   pickerContent: { backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, height: 480 },
   pickerTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, color: COLORS.text },
   pickerColumns: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 150 },

@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   saveBtn: { flexDirection: 'row', backgroundColor: COLORS.primary, padding: 16, alignItems: 'center', justifyContent: 'center', margin: 16, borderRadius: 8 },
   saveBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxHeight: '90%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20, overflow: 'hidden' }, // overflow: hiddenを追加
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },

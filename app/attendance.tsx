@@ -1518,7 +1518,7 @@ const styles = StyleSheet.create({
   statusDateSelectors: { flexDirection: 'row', gap: 6, flexShrink: 1 },
   statusDateSelectButton: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 9, backgroundColor: '#EEF9FA', borderWidth: 1, borderColor: '#A8DEE1' },
   statusDateSelectText: { fontSize: 14, fontWeight: '900', color: '#2B2927', textAlign: 'center' },
-  statusPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.46)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  statusPickerOverlay: { flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 18 },
   statusPickerCard: { width: '100%', maxWidth: 500, maxHeight: '78%', borderRadius: 16, backgroundColor: '#fff', padding: 16, zIndex: 1 },
   statusPickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   statusPickerTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: '#2B2927', textAlign: 'center', marginLeft: 38 },
@@ -1529,7 +1529,7 @@ const styles = StyleSheet.create({
   statusPickerOptionText: { fontSize: 12, fontWeight: '800', color: '#34312F', textAlign: 'center' },
   statusPickerOptionTextSelected: { color: '#fff' },
   
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', maxHeight: '70%', backgroundColor: COLORS.white, borderRadius: 16, padding: 24, elevation: 10, zIndex: 1 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   modalSubTitle: { fontSize: 14, color: COLORS.textLight, fontWeight: 'bold' },
