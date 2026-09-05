@@ -1116,10 +1116,7 @@ export default function ScheduleScreen() {
 
             const holidayPeriod = holidays.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
             const holidayBg = holidayPeriod?.color || null;
-            const dayNotice = [
-              publicHolidays[item.dateStr],
-              eventsData[item.dateStr]?.title,
-            ].filter(Boolean).join('・');
+            const dayNotice = publicHolidays[item.dateStr];
 
             return (
               <TouchableOpacity key={item.dateStr} style={[styles.calCell, isStampingMode && styles.calCellStamping, holidayBg && { backgroundColor: holidayBg }]} onPress={() => handleDayPress(item.dateStr)}>
@@ -1129,6 +1126,11 @@ export default function ScheduleScreen() {
                 </View>
                 
                 <View style={styles.cellContent}>
+                  {!!eventsData[item.dateStr]?.title && (
+                    <View style={styles.eventBadge}>
+                      <Text style={styles.eventBadgeText}>{eventsData[item.dateStr].title}</Text>
+                    </View>
+                  )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
                   {(cellData.memo || memoData[getScheduleKey(item.dateStr)]) && (
                     <View style={styles.memoBadge}>
