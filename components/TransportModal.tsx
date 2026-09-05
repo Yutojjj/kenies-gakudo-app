@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import { db } from '../firebase';
 import { playUiSound } from '../utils/uiSounds';
 import { handleWebWheelStep } from '../utils/webWheel';
@@ -1581,11 +1581,9 @@ export default function TransportModal({
     <>
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <Pressable
-          style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]}
-          onPress={onClose}
-          accessibilityLabel="閉じる"
-        />
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]} />
+        </TouchableWithoutFeedback>
         <View style={styles.container}>
           {/* ヘッダー */}
           <View style={styles.header}>
