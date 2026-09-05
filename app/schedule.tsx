@@ -1096,8 +1096,6 @@ export default function ScheduleScreen() {
             const isSunday = d.getDay() === 0;
             const isSaturday = d.getDay() === 6;
             const isPublicHoliday = !!publicHolidays[item.dateStr]; 
-            const isEventDay = !!eventsData[item.dateStr]; 
-
             let dateColor = COLORS.text;
             if (isSunday || isPublicHoliday) {
               dateColor = 'red';
@@ -1107,19 +1105,19 @@ export default function ScheduleScreen() {
 
             const holidayPeriod = holidays.find((h: any) => item.dateStr >= h.start && item.dateStr <= h.end);
             const holidayBg = holidayPeriod?.color || null;
+            const dayNotice = [
+              publicHolidays[item.dateStr],
+              eventsData[item.dateStr]?.title,
+            ].filter(Boolean).join('・');
 
             return (
               <TouchableOpacity key={item.dateStr} style={[styles.calCell, isStampingMode && styles.calCellStamping, holidayBg && { backgroundColor: holidayBg }]} onPress={() => handleDayPress(item.dateStr)}>
-                <Text style={[styles.calDayText, { color: dateColor }]}>
-                  {item.day}
-                </Text>
+                <View style={styles.calDayHeader}>
+                  <Text style={[styles.calDayText, { color: dateColor }]}>{item.day}</Text>
+                  {!!dayNotice && <Text style={styles.calDayNotice} numberOfLines={1}>{dayNotice}</Text>}
+                </View>
                 
                 <View style={styles.cellContent}>
-                  {isEventDay && (
-                    <View style={styles.eventBadge}>
-                      <Text style={styles.eventBadgeText} numberOfLines={1}>{eventsData[item.dateStr].title}</Text>
-                    </View>
-                  )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
                   {(cellData.memo || memoData[getScheduleKey(item.dateStr)]) && (
                     <View style={styles.memoBadge}>
@@ -2039,7 +2037,19 @@ const styles = StyleSheet.create({
   calDayText: { 
     fontSize: 12, 
     fontWeight: 'bold', 
-    marginBottom: 2 
+  },
+  calDayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 2,
+  },
+  calDayNotice: {
+    flex: 1,
+    flexShrink: 1,
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#8A6A38',
   },
   cellContent: { 
     flex: 1 
