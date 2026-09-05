@@ -52,8 +52,7 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
 const PICKER_ITEM_HEIGHT = 41;
 
 const isFifthWeekdayOfMonth = (date: Date) => {
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  return date.getDate() + 7 > lastDay;
+  return Math.floor((date.getDate() - 1) / 7) + 1 === 5;
 };
 const PICKER_VIEW_HEIGHT = 132;
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
@@ -508,7 +507,10 @@ export default function ScheduleScreen() {
 
         addSubscription(onSnapshot(collection(db, 'events'), (snap) => {
           const eData: Record<string, any> = {};
-          snap.forEach(d => { eData[d.id] = d.data(); });
+          snap.forEach(d => {
+            const event: any = { id: d.id, ...d.data() };
+            if (event.dateStr) eData[event.dateStr] = event;
+          });
           setEventsData(eData);
         }));
         
@@ -1127,6 +1129,11 @@ export default function ScheduleScreen() {
                 </View>
                 
                 <View style={styles.cellContent}>
+                  {!!eventsData[item.dateStr]?.description && (
+                    <View style={styles.eventDescriptionBadge}>
+                      <Text style={styles.eventDescriptionText}>{eventsData[item.dateStr].description}</Text>
+                    </View>
+                  )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
                   {(cellData.memo || memoData[getScheduleKey(item.dateStr)]) && (
                     <View style={styles.memoBadge}>
@@ -2059,6 +2066,19 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     color: '#8A6A38',
+  },
+  eventDescriptionBadge: {
+    marginBottom: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+    borderRadius: 3,
+    backgroundColor: '#FFF7D6',
+  },
+  eventDescriptionText: {
+    fontSize: 8,
+    lineHeight: 11,
+    color: '#8A6A38',
+    fontWeight: '700',
   },
   cellContent: { 
     flex: 1 
