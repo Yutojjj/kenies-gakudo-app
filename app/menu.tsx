@@ -2207,9 +2207,6 @@ export default function MenuScreen() {
                   >
                     <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
                     <Text style={styles.staffSectionMemoText}>メモを追加</Text>
-                    {(todayMemos.length + adminNotices.length) > 0 && (
-                      <View style={styles.noticeBadge}><Text style={styles.noticeBadgeText}>{todayMemos.length + adminNotices.length}</Text></View>
-                    )}
                   </TouchableOpacity>
                 </View>
               </View>
