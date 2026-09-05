@@ -1129,11 +1129,6 @@ export default function ScheduleScreen() {
                 </View>
                 
                 <View style={styles.cellContent}>
-                  {!!eventsData[item.dateStr]?.description && (
-                    <View style={styles.eventDescriptionBadge}>
-                      <Text style={styles.eventDescriptionText}>{eventsData[item.dateStr].description}</Text>
-                    </View>
-                  )}
                   {cellData.pickupTime && <View style={styles.pickupBadge}><Text style={styles.pickupText}>迎 {cellData.pickupTime}</Text></View>}
                   {(cellData.memo || memoData[getScheduleKey(item.dateStr)]) && (
                     <View style={styles.memoBadge}>
@@ -2066,19 +2061,6 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     color: '#8A6A38',
-  },
-  eventDescriptionBadge: {
-    marginBottom: 2,
-    paddingHorizontal: 3,
-    paddingVertical: 2,
-    borderRadius: 3,
-    backgroundColor: '#FFF7D6',
-  },
-  eventDescriptionText: {
-    fontSize: 8,
-    lineHeight: 11,
-    color: '#8A6A38',
-    fontWeight: '700',
   },
   cellContent: { 
     flex: 1 
