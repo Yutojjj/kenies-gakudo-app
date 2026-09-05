@@ -1457,8 +1457,9 @@ export default function AlbumScreen() {
 
       {/* 各種モーダル */}
       <Modal visible={!!selectedAlbumDate} transparent animationType="fade" onRequestClose={() => setSelectedAlbumDate(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setSelectedAlbumDate(null)}>
-          <TouchableOpacity style={styles.dateAlbumModal} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSelectedAlbumDate(null)} />
+          <TouchableOpacity style={[styles.dateAlbumModal, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.dateAlbumTopRow}>
               <Text style={styles.dateAlbumTitle}>写真・動画</Text>
               <TouchableOpacity style={styles.dateAlbumCloseButton} onPress={() => {
@@ -1648,12 +1649,13 @@ export default function AlbumScreen() {
               </TouchableOpacity>
             )}
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={bulkDeleteConfirmVisible} transparent animationType="fade" onRequestClose={() => setBulkDeleteConfirmVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setBulkDeleteConfirmVisible(false)}>
-          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setBulkDeleteConfirmVisible(false)} />
+          <TouchableOpacity style={[styles.eventAlbumDeleteModal, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.eventAlbumDeleteTitle}>選択した写真・動画を削除</Text>
             <Text style={styles.eventAlbumDeleteMessage}>{selectedPhotoIds.length}件を完全に削除しますか？</Text>
             <View style={styles.eventAlbumDeleteActions}>
@@ -1668,12 +1670,13 @@ export default function AlbumScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={!!eventAlbumDeleteTarget} transparent animationType="fade" onRequestClose={() => setEventAlbumDeleteTarget(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setEventAlbumDeleteTarget(null)}>
-          <TouchableOpacity style={styles.eventAlbumDeleteModal} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setEventAlbumDeleteTarget(null)} />
+          <TouchableOpacity style={[styles.eventAlbumDeleteModal, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.eventAlbumDeleteTitle}>イベントアルバムを削除</Text>
             <Text style={styles.eventAlbumDeleteMessage}>
               「{eventAlbumDeleteTarget ? getEventDisplayName(eventAlbumDeleteTarget) : ''}」と、中の写真・動画をすべて削除しますか？
@@ -1687,12 +1690,13 @@ export default function AlbumScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={!!dateJumpPicker} transparent animationType="fade" onRequestClose={() => setDateJumpPicker(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setDateJumpPicker(null)}>
-          <TouchableOpacity style={styles.dateJumpModal} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDateJumpPicker(null)} />
+          <TouchableOpacity style={[styles.dateJumpModal, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{dateJumpPicker === 'year' ? '年を選択' : '月を選択'}</Text>
               <TouchableOpacity onPress={() => setDateJumpPicker(null)}>
@@ -1725,7 +1729,7 @@ export default function AlbumScreen() {
               </View>
             )}
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={calendarModalVisible} transparent animationType="fade">
@@ -1764,8 +1768,9 @@ export default function AlbumScreen() {
       </Modal>
 
       <Modal visible={addMenuVisible} transparent animationType="fade" onRequestClose={() => setAddMenuVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}>
-          <TouchableOpacity style={styles.albumAddMenuModal} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }} />
+          <TouchableOpacity style={[styles.albumAddMenuModal, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{addTargetDate ? `${formatAlbumDate(addTargetDate)}に追加` : 'アルバムに追加'}</Text>
               <TouchableOpacity onPress={() => { setAddTargetDate(null); setAddMenuVisible(false); }}><Ionicons name="close" size={28} color={COLORS.text} /></TouchableOpacity>
@@ -1795,7 +1800,7 @@ export default function AlbumScreen() {
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       <Modal visible={eventChoiceModalVisible} transparent animationType="fade">

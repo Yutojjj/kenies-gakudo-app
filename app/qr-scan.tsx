@@ -931,8 +931,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(25, 20, 18, 0.62)',
   },
-  pinDismissArea: { ...StyleSheet.absoluteFillObject },
+  pinDismissArea: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   pinModalCard: {
+    zIndex: 1,
     width: '100%',
     maxWidth: 430,
     maxHeight: '92%',

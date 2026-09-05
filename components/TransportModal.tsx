@@ -1582,7 +1582,7 @@ export default function TransportModal({
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <Pressable
-          style={StyleSheet.absoluteFillObject}
+          style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]}
           onPress={onClose}
           accessibilityLabel="閉じる"
         />
@@ -1972,7 +1972,7 @@ export default function TransportModal({
     >
       <View style={styles.customBlockOverlay}>
         <Pressable
-          style={StyleSheet.absoluteFillObject}
+          style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]}
           onPress={() => setCustomBlockModalVisible(false)}
           accessibilityLabel="閉じる"
         />
@@ -2165,7 +2165,7 @@ export default function TransportModal({
 
     <Modal visible={!!customBlockToDelete} transparent animationType="fade" onRequestClose={() => setCustomBlockToDelete(null)}>
       <View style={styles.customDeleteOverlay}>
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomBlockToDelete(null)} />
+        <Pressable style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]} onPress={() => setCustomBlockToDelete(null)} />
         <View style={styles.customDeletePanel}>
           <View style={styles.customDeleteIcon}>
             <Ionicons name="trash-outline" size={24} color="#C94B4B" />
@@ -2193,7 +2193,8 @@ export default function TransportModal({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
   printOnlyOverlay: { flex: 1, backgroundColor: 'transparent' },
-  container: { backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
+  modalDismissArea: { zIndex: 0 },
+  container: { backgroundColor: '#FFFFFF', opacity: 1, zIndex: 1, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '92%' },
   header: { padding: 12, backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomWidth: 1, borderColor: COLORS.border },
   headerTopRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
@@ -2337,7 +2338,7 @@ const styles = StyleSheet.create({
   detailCloseBtn: { marginTop: 14, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   detailCloseBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   customBlockOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  customBlockPanel: { width: '100%', maxWidth: 520, maxHeight: '88%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 12 },
+  customBlockPanel: { width: '100%', maxWidth: 520, maxHeight: '88%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 12, zIndex: 1 },
   customBlockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   customBlockTitle: { fontSize: 18, fontWeight: '900', color: '#222222' },
   customBlockSub: { marginTop: 3, fontSize: 11, fontWeight: '600', color: '#6D777A' },
@@ -2374,7 +2375,7 @@ const styles = StyleSheet.create({
   customBlockSaveBtn: { flex: 1.5, minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#36A9B5' },
   customBlockSaveText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   customDeleteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  customDeletePanel: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 20, backgroundColor: '#FFFFFF', alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  customDeletePanel: { width: '100%', maxWidth: 360, borderRadius: 18, padding: 20, backgroundColor: '#FFFFFF', alignItems: 'center', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12, zIndex: 1 },
   customDeleteIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0F0', marginBottom: 10 },
   customDeleteTitle: { fontSize: 17, fontWeight: '900', color: '#222222' },
   customDeleteDescription: { marginTop: 8, fontSize: 14, fontWeight: '800', color: '#333333', textAlign: 'center' },

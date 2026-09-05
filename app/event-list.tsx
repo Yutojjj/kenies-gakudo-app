@@ -875,11 +875,9 @@ export default function EventListScreen() {
       </Modal>
 
       <Modal visible={!!participationConfirm} transparent animationType="fade">
-        <Pressable
-          style={styles.confirmOverlay}
-          onPress={() => setParticipationConfirm(null)}
-        >
-          <TouchableOpacity style={styles.confirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
+        <View style={styles.confirmOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setParticipationConfirm(null)} />
+          <TouchableOpacity style={[styles.confirmCard, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.confirmTitle}>
               {participationConfirm?.isJoined ? '申し込みを取り消す' : 'イベントに申し込む'}
             </Text>
@@ -902,7 +900,7 @@ export default function EventListScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* 写真フルスクリーンプレビュー */}

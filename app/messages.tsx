@@ -1159,8 +1159,9 @@ export default function MessagesScreen() {
         />
 
         <Modal visible={!!deleteConversationTarget} transparent animationType="fade" onRequestClose={() => setDeleteConversationTarget(null)}>
-          <Pressable style={styles.deleteConfirmOverlay} onPress={() => setDeleteConversationTarget(null)}>
-            <TouchableOpacity style={styles.deleteConfirmCard} activeOpacity={1} focusable={false} onPress={() => {}}>
+          <View style={styles.deleteConfirmOverlay}>
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDeleteConversationTarget(null)} />
+            <TouchableOpacity style={[styles.deleteConfirmCard, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
               <Text style={styles.deleteConfirmTitle}>トークを削除しますか？</Text>
               <Text style={styles.deleteConfirmMessage}>
                 「{deleteConversationTarget?.name || 'トーク'}」を削除します。削除後は元に戻せません。
@@ -1174,7 +1175,7 @@ export default function MessagesScreen() {
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
-          </Pressable>
+          </View>
         </Modal>
 
         {/* グループ作成モーダル - 縦スクロール方式に変更 */}

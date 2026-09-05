@@ -2292,8 +2292,9 @@ export default function YearEventsScreen() {
 
       {/* イベント写真の追加方法 */}
       <Modal visible={photoSourceModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceModalVisible(false)}>
-        <Pressable style={styles.photoPickerOverlay} onPress={() => setPhotoSourceModalVisible(false)}>
-          <View style={styles.photoSourceModal} onStartShouldSetResponder={() => true}>
+        <View style={styles.photoPickerOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPhotoSourceModalVisible(false)} />
+          <View style={[styles.photoSourceModal, { zIndex: 1 }]}>
             <View style={[styles.photoPickerHeader, styles.photoSourceHeader]}>
               <Text style={[styles.photoPickerTitle, styles.photoSourceHeaderTitle]} pointerEvents="none">写真を追加</Text>
               <TouchableOpacity style={[styles.photoPickerClose, styles.photoSourceHeaderClose]} onPress={() => setPhotoSourceModalVisible(false)}>
@@ -2323,7 +2324,7 @@ export default function YearEventsScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* 既存アルバムの写真選択 */}
