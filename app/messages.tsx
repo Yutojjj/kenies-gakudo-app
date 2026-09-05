@@ -1647,8 +1647,8 @@ const styles = StyleSheet.create({
   readOnlyText: { fontSize: 13, color: COLORS.textLight, fontWeight: 'bold' },
 
   // モーダル強化 (縦スクロール・ゆったり配置)
-  modalOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
-  deleteConfirmOverlay: { flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', justifyContent: 'flex-end' },
+  deleteConfirmOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', alignItems: 'center', justifyContent: 'center', padding: 22 },
   deleteConfirmCard: { width: '100%', maxWidth: 420, borderRadius: 16, backgroundColor: '#fff', padding: 22, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 },
   deleteConfirmTitle: { fontSize: 19, fontWeight: '900', color: '#2B2522', textAlign: 'center' },
   deleteConfirmMessage: { marginTop: 12, fontSize: 14, lineHeight: 21, color: '#665F5B', textAlign: 'center' },

@@ -2192,7 +2192,7 @@ export default function TransportModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 8 },
+  overlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', alignItems: 'center', justifyContent: 'center', padding: 8 },
   printOnlyOverlay: { flex: 1, backgroundColor: 'transparent' },
   modalDismissArea: { zIndex: 0 },
   container: { width: '100%', maxWidth: 760, height: '92%', backgroundColor: '#FFFFFF', opacity: 1, zIndex: 1, overflow: 'hidden', borderRadius: 24, shadowColor: '#000000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 16, elevation: 14 },

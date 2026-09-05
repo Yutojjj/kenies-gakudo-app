@@ -791,7 +791,7 @@ const styles = StyleSheet.create({
   eventBadgeText: { fontSize: 8, color: COLORS.white, fontWeight: 'bold', textAlign: 'center' },
   calHint: { fontSize: 11, color: COLORS.textLight, textAlign: 'center', marginTop: 12, lineHeight: 16 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'transparent', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: COLORS.white, height: '92%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, borderBottomWidth: 1, borderColor: COLORS.border },
   modalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
@@ -803,7 +803,7 @@ const styles = StyleSheet.create({
   deadlineClearButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 2 },
   deadlineClearText: { fontSize: 12, color: COLORS.textLight },
 
-  deadlineModalOverlay: { flex: 1, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  deadlineModalOverlay: { flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)', alignItems: 'center', justifyContent: 'center', padding: 18 },
   deadlineModalCard: { width: '100%', maxWidth: 420, backgroundColor: COLORS.white, borderRadius: 18, padding: 16 },
   deadlineModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   deadlineModalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },

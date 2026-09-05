@@ -94,7 +94,7 @@ export default function MonthPickerModal({ visible, value, mode, onChange, onClo
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'transparent' },
+  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
   dismissArea: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   panel: { width: '100%', maxWidth: 430, borderRadius: 18, padding: 20, backgroundColor: '#FFFDFC', zIndex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -1056,7 +1056,7 @@ const styles = StyleSheet.create({
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   photoThumbWrap: { position: 'relative' },
   photoThumb: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#EEE' },
-  confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'transparent' },
+  confirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: 'rgba(17, 24, 39, 0.45)' },
   confirmCard: { width: '100%', maxWidth: 420, borderRadius: 16, padding: 20, backgroundColor: '#FFFDF9', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, elevation: 8 },
   confirmTitle: { color: '#3F3531', fontSize: 19, fontWeight: 'bold', textAlign: 'center' },
   confirmMessage: { marginTop: 10, color: '#625752', fontSize: 14, lineHeight: 22, textAlign: 'center' },
