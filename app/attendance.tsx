@@ -956,7 +956,7 @@ export default function AttendanceScreen() {
       </ScrollView>
       <Modal visible={statusDatePicker !== null} transparent animationType="fade" onRequestClose={() => setStatusDatePicker(null)}>
         <View style={styles.statusPickerOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setStatusDatePicker(null)} accessibilityLabel="閉じる" />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setStatusDatePicker(null)} accessibilityLabel="ポップアップ外を閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.statusPickerCard}>
                 <View style={styles.statusPickerHeader}>
@@ -1380,7 +1380,7 @@ export default function AttendanceScreen() {
 
       <Modal visible={!!schoolModalData} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSchoolModalData(null)} accessibilityLabel="閉じる" />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSchoolModalData(null)} accessibilityLabel="ポップアップ外を閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
             {schoolModalData && (
@@ -1421,7 +1421,7 @@ export default function AttendanceScreen() {
 
       <Modal visible={!!timeModalData} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTimeModalData(null)} accessibilityLabel="閉じる" />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setTimeModalData(null)} accessibilityLabel="ポップアップ外を閉じる" />
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
             {timeModalData && (

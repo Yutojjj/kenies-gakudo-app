@@ -876,7 +876,7 @@ export default function EventListScreen() {
 
       <Modal visible={!!participationConfirm} transparent animationType="fade">
         <View style={styles.confirmOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setParticipationConfirm(null)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setParticipationConfirm(null)} accessibilityLabel="ポップアップ外を閉じる" />
           <TouchableOpacity style={[styles.confirmCard, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
             <Text style={styles.confirmTitle}>
               {participationConfirm?.isJoined ? '申し込みを取り消す' : 'イベントに申し込む'}

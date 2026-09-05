@@ -2293,7 +2293,7 @@ export default function YearEventsScreen() {
       {/* イベント写真の追加方法 */}
       <Modal visible={photoSourceModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoSourceModalVisible(false)}>
         <View style={styles.photoPickerOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPhotoSourceModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPhotoSourceModalVisible(false)} accessibilityLabel="ポップアップ外を閉じる" />
           <View style={[styles.photoSourceModal, { zIndex: 1 }]}>
             <View style={[styles.photoPickerHeader, styles.photoSourceHeader]}>
               <Text style={[styles.photoPickerTitle, styles.photoSourceHeaderTitle]} pointerEvents="none">写真を追加</Text>

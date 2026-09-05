@@ -992,7 +992,7 @@ export default function TypingCertScreen() {
 
       <Modal visible={clearStagesVisible} transparent animationType="fade" onRequestClose={() => setClearStagesVisible(false)}>
         <View style={styles.stageClearOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setClearStagesVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setClearStagesVisible(false)} accessibilityLabel="ポップアップ外を閉じる" />
           <TouchableOpacity style={[styles.stageClearDialog, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <Text style={styles.stageClearTitle}>ステージ入力をすべて消しますか？</Text>
             <Text style={styles.stageClearDescription}>8ステージ分のはやさとミス数がすべて消去されます。</Text>
@@ -1015,7 +1015,7 @@ export default function TypingCertScreen() {
         onRequestClose={() => { setActiveStageInput(null); setStageInputMode('value'); }}
       >
         <View style={styles.numberPadBackdrop}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => { setActiveStageInput(null); setStageInputMode('value'); }} accessibilityLabel="ポップアップ外を閉じる" />
           <TouchableOpacity style={[styles.numberPadSheet, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={event => event.stopPropagation()}>
             <View style={styles.numberPadHeader}>
               <View style={styles.numberPadHeading}>
@@ -1086,7 +1086,7 @@ export default function TypingCertScreen() {
       {/* ══════════ ピッカーモーダル ══════════ */}
       <Modal visible={pickerTarget !== null} transparent animationType="fade" onRequestClose={() => setPickerTarget(null)}>
         <View style={styles.pickerOverlay}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPickerTarget(null)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPickerTarget(null)} accessibilityLabel="ポップアップ外を閉じる" />
           <View style={[styles.pickerBox, { zIndex: 1 }]}>
             <Text style={styles.pickerTitle}>
               {pickerTarget === 'student' ? '氏名を選択'

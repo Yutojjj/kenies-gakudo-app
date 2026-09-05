@@ -1581,7 +1581,10 @@ export default function TransportModal({
     <>
     <Modal visible={visible} animationType="none" transparent>
       <View style={styles.overlay}>
-        <TouchableWithoutFeedback onPress={onClose}>
+        <TouchableWithoutFeedback
+          onPress={onClose}
+          accessibilityLabel="ポップアップ外を閉じる"
+        >
           <View style={[StyleSheet.absoluteFillObject, styles.modalDismissArea]} />
         </TouchableWithoutFeedback>
         <View style={styles.container}>

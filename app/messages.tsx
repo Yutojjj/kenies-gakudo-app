@@ -1160,7 +1160,7 @@ export default function MessagesScreen() {
 
         <Modal visible={!!deleteConversationTarget} transparent animationType="fade" onRequestClose={() => setDeleteConversationTarget(null)}>
           <View style={styles.deleteConfirmOverlay}>
-            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDeleteConversationTarget(null)} />
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDeleteConversationTarget(null)} accessibilityLabel="ポップアップ外を閉じる" />
             <TouchableOpacity style={[styles.deleteConfirmCard, { zIndex: 1 }]} activeOpacity={1} focusable={false} onPress={() => {}}>
               <Text style={styles.deleteConfirmTitle}>トークを削除しますか？</Text>
               <Text style={styles.deleteConfirmMessage}>
