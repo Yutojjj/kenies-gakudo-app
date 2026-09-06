@@ -2580,14 +2580,6 @@ export default function MenuScreen() {
                 <View style={styles.eventPlanTitleBar} />
                 <Text style={styles.eventPlanTitle}>イベント予定</Text>
               </View>
-              <TouchableOpacity
-                style={styles.eventPlanJoinButton}
-                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
-                activeOpacity={0.82}
-              >
-                <Text style={styles.eventPlanJoinText}>イベント表を見る</Text>
-                <Ionicons name="chevron-forward" size={15} color="#fff" />
-              </TouchableOpacity>
             </View>
 
             {visibleMenuEvents.length > 0 ? (
@@ -2890,6 +2882,14 @@ export default function MenuScreen() {
                 <View style={styles.eventPlanTitleBar} />
                 <Text style={styles.eventPlanTitle}>イベント予定</Text>
               </View>
+              <TouchableOpacity
+                style={styles.eventPlanJoinButton}
+                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.eventPlanJoinText}>イベント表を見る</Text>
+                <Ionicons name="chevron-forward" size={15} color="#fff" />
+              </TouchableOpacity>
             </View>
 
             {visibleMenuEvents.length > 0 ? (
