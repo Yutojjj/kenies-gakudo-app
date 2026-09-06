@@ -2252,7 +2252,7 @@ export default function MenuScreen() {
             <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
-            <Text style={styles.staffHeaderTime} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            <Text style={styles.staffHeaderTime} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
               {`${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}:${String(currentClock.getSeconds()).padStart(2, '0')}`}
             </Text>
             <TouchableOpacity style={styles.staffHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
