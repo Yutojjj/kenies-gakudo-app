@@ -410,7 +410,7 @@ export default function MenuScreen() {
   const openOfficialSite = async () => {
     const url = 'https://kanyes-club.com/';
     if (Platform.OS === 'web') {
-      await WebBrowser.openBrowserAsync(url);
+      window.location.assign(url);
       return;
     }
     setOfficialSiteVisible(true);
@@ -2176,9 +2176,6 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.userHeader}>
-            <View style={styles.userHeaderAnimal}>
-              <Image source={ANIMALS.bear} style={styles.userHeaderAnimalImage} resizeMode="contain" />
-            </View>
             <TouchableOpacity onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
@@ -4548,17 +4545,6 @@ const styles = StyleSheet.create({
   userHeaderLogo: {
     width: 116,
     height: 58,
-  },
-  userHeaderAnimal: {
-    position: 'absolute',
-    left: 8,
-    bottom: 4,
-    width: 48,
-    height: 48,
-  },
-  userHeaderAnimalImage: {
-    width: '100%',
-    height: '100%',
   },
   officialSiteOverlay: {
     flex: 1,
