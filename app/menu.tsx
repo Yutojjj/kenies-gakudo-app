@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
   ImageSourcePropType, Linking, Modal,
-  Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
+  KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -2198,6 +2198,20 @@ export default function MenuScreen() {
           </View>
         )}
 
+        {(role === 'admin' || role === 'staff') && (
+          <View style={styles.userHeader}>
+            <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
+              <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+            </TouchableOpacity>
+            <Text style={styles.staffHeaderTime}>
+              {`${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}:${String(currentClock.getSeconds()).padStart(2, '0')}`}
+            </Text>
+            <TouchableOpacity style={styles.staffHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
+              <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Modal visible={officialSiteVisible} transparent animationType="slide" onRequestClose={() => setOfficialSiteVisible(false)}>
           <View style={styles.officialSiteOverlay}>
             <TouchableWithoutFeedback onPress={() => setOfficialSiteVisible(false)} accessible={false}>
@@ -2232,7 +2246,12 @@ export default function MenuScreen() {
             <TouchableWithoutFeedback onPress={() => setUserSettingsVisible(false)} accessible={false}>
               <View style={styles.officialSiteBackdrop} />
             </TouchableWithoutFeedback>
-            <View style={styles.userSettingsSurface}>
+            <View
+              style={[
+                styles.userSettingsSurface,
+                role === 'user' ? styles.userSettingsSurfaceLeft : styles.userSettingsSurfaceRight,
+              ]}
+            >
               <TouchableOpacity style={styles.userSettingsRow} onPress={() => { setUserSettingsVisible(false); openPasswordModal(); }}>
                 <Ionicons name="lock-closed-outline" size={23} color="#795548" />
                 <Text style={styles.userSettingsRowText}>パスワード変更</Text>
@@ -2248,15 +2267,6 @@ export default function MenuScreen() {
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
         {(role === 'staff' || role === 'admin') && (
           <View style={styles.staffTodaySection}>
-            <View style={styles.staffMenuTitleWrap}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                  <View style={styles.todayPlanTitleBar} />
-                  <Text style={styles.staffMenuTitle}>今日の予定</Text>
-                </View>
-              <Text style={styles.currentClockText}>
-                {`${currentClock.getHours()}時${String(currentClock.getMinutes()).padStart(2, '0')}分${String(currentClock.getSeconds()).padStart(2, '0')}秒`}
-              </Text>
-            </View>
             <Animated.View
               style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
             >
@@ -2439,7 +2449,6 @@ export default function MenuScreen() {
         {role === 'user' && unreadMessageItems.length > 0 && (
           <View style={styles.userConfirmSection}>
             <View style={styles.userConfirmTitleRow}>
-              <View style={styles.todayPlanTitleBar} />
               <Text style={styles.userConfirmTitle}>確認事項</Text>
               <View style={styles.userConfirmBadge}>
                 <Text style={styles.userConfirmBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
@@ -2465,10 +2474,6 @@ export default function MenuScreen() {
 
         {role === 'user' && isPaidTransportMember && (
           <View style={styles.userPaidQuickSection}>
-            <View style={styles.userConfirmTitleRow}>
-              <View style={styles.todayPlanTitleBar} />
-              <Text style={styles.userConfirmTitle}>クイックメニュー</Text>
-            </View>
             <TouchableOpacity
               style={styles.userPaidQuickCard}
               onPress={() => router.push({ pathname: '/paid-transport', params: { role: 'user', name: name || '' } } as any)}
@@ -2522,8 +2527,6 @@ export default function MenuScreen() {
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoStar]}>✦</Text>
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoFlower]}>✿</Text>
               <Image source={TODAY_PLAN_IMAGES.pickup} style={styles.todayPlanIllust} resizeMode="contain" />
               <View style={styles.todayPlanTextBox}>
                 <Text style={styles.todayPlanCardTitle}>おむかえ</Text>
@@ -2540,8 +2543,6 @@ export default function MenuScreen() {
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoNote]}>♪</Text>
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoSmallStar]}>✧</Text>
               <Image source={TODAY_PLAN_IMAGES.lesson} style={styles.todayPlanIllust} resizeMode="contain" />
               <View style={styles.todayPlanTextBox}>
                 <Text style={styles.todayPlanCardTitle}>習い事</Text>
@@ -2558,8 +2559,6 @@ export default function MenuScreen() {
               onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
               activeOpacity={0.84}
             >
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoLeaf]}>⌒</Text>
-              <Text style={[styles.todayPlanDeco, styles.todayPlanDecoDot]}>•</Text>
               <Image source={TODAY_PLAN_IMAGES.memo} style={styles.todayPlanIllust} resizeMode="contain" />
               <View style={styles.todayPlanTextBox}>
                 <Text style={styles.todayPlanCardTitle}>連絡</Text>
@@ -2692,14 +2691,6 @@ export default function MenuScreen() {
 
         {role !== 'user' && (
           <View>
-            {/* ── セクションラベル ── */}
-            <View style={styles.sectionLabelWrap}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ width: 4, height: 28, backgroundColor: '#00C0C7', borderRadius: 2 }} />
-                <Text style={styles.sectionLabel}>クイックメニュー</Text>
-              </View>
-            </View>
-
             {/* ── メニューグリッド ── */}
             <View style={styles.grid}>
               {role === 'admin' ? (
@@ -4254,6 +4245,11 @@ export default function MenuScreen() {
 
       <Modal visible={passwordModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.passwordKeyboardAvoiding}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={40}
+          >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🔒 パスワード変更</Text>
             <TextInput
@@ -4272,6 +4268,7 @@ export default function MenuScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -4637,8 +4634,7 @@ const styles = StyleSheet.create({
   },
   userSettingsSurface: {
     position: 'absolute',
-    top: 62,
-    left: 10,
+    top: 66,
     width: 240,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -4649,6 +4645,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
     zIndex: 1,
+  },
+  userSettingsSurfaceLeft: {
+    left: 10,
+    top: 76,
+  },
+  userSettingsSurfaceRight: {
+    right: 10,
+    top: 120,
   },
   userSettingsHeader: {
     flexDirection: 'row',
@@ -4684,6 +4688,35 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 12,
     right: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  staffHeaderTime: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 21,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  staffHeaderLogoButton: {
+    position: 'absolute',
+    left: 12,
+    top: 3,
+    height: 58,
+    justifyContent: 'center',
+  },
+  staffHeaderGearButton: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -6332,6 +6365,7 @@ const styles = StyleSheet.create({
 
   // ── モーダル ──
   modalOverlay: { flex: 1, backgroundColor: 'rgba(45,42,34,0.55)', justifyContent: 'center', padding: 20 },
+  passwordKeyboardAvoiding: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   modalContent: { backgroundColor: '#FFF8F0', padding: 24, borderRadius: 24 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#5D4037' },
   modalBtn: { flex: 1, padding: 16, alignItems: 'center', borderRadius: 14 },
