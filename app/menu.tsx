@@ -4729,7 +4729,7 @@ const styles = StyleSheet.create({
     top: 3,
     paddingHorizontal: 71,
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: '#E4F5F2',
     fontSize: 48,
     lineHeight: 58,
     fontWeight: '900',
