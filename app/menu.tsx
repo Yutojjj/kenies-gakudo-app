@@ -29,6 +29,7 @@ const ANIMALS = {
   rabbit:  require('../assets/animals/rabbit.png'),
 };
 const KANYES_LOGO = require('../assets/kanyes-logo.png');
+const USER_HEADER_LOGO = require('../assets/footer_logo.png');
 const ADMIN_MORE_IMAGE = require('../assets/bottom-nav-v2/menu.png');
 
 // ── メニューアイコン画像（assets/menu/に配置済みのファイルを使用）──
@@ -2161,6 +2162,24 @@ export default function MenuScreen() {
           </Animated.View>
         )}
 
+        {role === 'user' && (
+          <View style={styles.userHeader}>
+            <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+            <TouchableOpacity
+              style={styles.userHeaderNoticeButton}
+              onPress={() => setAnnouncementListVisible(true)}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="お知らせを開く"
+            >
+              <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
+              {unreadAnnouncementCount > 0 && (
+                <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</Text></View>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
         {(role === 'staff' || role === 'admin') && (
           <View style={styles.staffTodaySection}>
@@ -2403,25 +2422,6 @@ export default function MenuScreen() {
         {role === 'user' && (
           <View style={styles.todayPlanSection}>
               <View style={styles.todayPlanHeader}>
-              <View style={styles.todayPlanTitleRow}>
-                <View style={styles.userGreeting}>
-                  <Text style={styles.userGreetingText}>こんにちは</Text>
-                  <Ionicons name="paw-outline" size={27} color="#8A5B08" />
-                  <Text style={styles.userGreetingText}>{name || 'ゲスト'}さん</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.userAnnouncementButton}
-                  onPress={() => setAnnouncementListVisible(true)}
-                  activeOpacity={0.82}
-                  accessibilityRole="button"
-                  accessibilityLabel="お知らせを開く"
-                >
-                  <Ionicons name="notifications-outline" size={23} color="#8A5B08" />
-                  {unreadAnnouncementCount > 0 && (
-                    <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</Text></View>
-                  )}
-                </TouchableOpacity>
-              </View>
               <View style={styles.todayPlanHeaderTop}>
                 <View style={styles.todayPlanDateWrap}>
                   <TouchableOpacity
@@ -4491,19 +4491,28 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#333333',
   },
-  userGreeting: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
+  userHeader: {
+    height: 126,
+    marginBottom: 12,
+    backgroundColor: '#08B8C0',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    position: 'relative',
   },
-  userGreetingText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#333333',
+  userHeaderLogo: {
+    width: 220,
+    height: 112,
+  },
+  userHeaderNoticeButton: {
+    position: 'absolute',
+    top: 12,
+    right: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   userConfirmBadge: {
     minWidth: 26,
