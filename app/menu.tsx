@@ -2320,7 +2320,7 @@ export default function MenuScreen() {
         {(role === 'staff' || role === 'admin') && (
           <View style={styles.staffTodaySection}>
             <Animated.View
-              style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
+              style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 0, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
             >
               {role === 'admin' && (
                 <View style={styles.staffPickupTopRow}>
@@ -5410,7 +5410,7 @@ const styles = StyleSheet.create({
   // ── 今日の送迎先 ──
   staffTodaySection: {
     marginHorizontal: 12,
-    marginTop: 16,
+    marginTop: 0,
     marginBottom: 8,
   },
   staffMenuTitleWrap: {
