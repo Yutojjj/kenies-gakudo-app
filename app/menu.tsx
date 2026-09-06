@@ -2322,10 +2322,10 @@ export default function MenuScreen() {
             <Animated.View
               style={[styles.pickupSection, { borderLeftWidth: 4, borderLeftColor: '#00AEB8', marginTop: 8, marginHorizontal: 0 }, todayPlanItemAnimatedStyle(0)]}
             >
-              <View style={styles.staffPickupTopRow}>
-                <Text style={styles.staffPickupCardTitle}>送迎担当</Text>
-                <View style={styles.staffPickupTopActions}>
-                  {role === 'admin' && (
+              {role === 'admin' && (
+                <View style={styles.staffPickupTopRow}>
+                  <View />
+                  <View style={styles.staffPickupTopActions}>
                     <TouchableOpacity
                       ref={pickupPrintButtonRef}
                       style={styles.staffSectionPrintBtn}
@@ -2341,21 +2341,21 @@ export default function MenuScreen() {
                         : <Ionicons name="print-outline" size={17} color="#137E87" />}
                       <Text style={styles.staffSectionPrintText}>印刷</Text>
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    ref={noticeButtonRef}
-                    style={styles.staffSectionMemoBtn}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      openNoticePopover();
-                    }}
-                    activeOpacity={0.82}
-                  >
-                    <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
-                    <Text style={styles.staffSectionMemoText}>メモを追加</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      ref={noticeButtonRef}
+                      style={styles.staffSectionMemoBtn}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        openNoticePopover();
+                      }}
+                      activeOpacity={0.82}
+                    >
+                      <Ionicons name="add-circle-outline" size={17} color="#7B4E8E" />
+                      <Text style={styles.staffSectionMemoText}>メモを追加</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              )}
               <View style={styles.staffPickupDateRow}>
                 <View style={styles.staffDateWrap}>
                   <TouchableOpacity
@@ -4727,7 +4727,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 3,
+    top: 9,
     paddingHorizontal: 71,
     textAlign: 'center',
     color: '#E4F5F2',
