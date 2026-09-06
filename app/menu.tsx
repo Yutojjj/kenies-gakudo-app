@@ -465,6 +465,7 @@ export default function MenuScreen() {
   const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
   const [currentClock, setCurrentClock] = useState(() => new Date());
+  const [clockShowsSeconds, setClockShowsSeconds] = useState(false);
   const [todayPlanLoading, setTodayPlanLoading] = useState(false);
   const [menuEvents, setMenuEvents] = useState<MenuEventItem[]>([]);
   const [menuEventDetails, setMenuEventDetails] = useState<Record<string, boolean>>({});
@@ -1158,6 +1159,12 @@ export default function MenuScreen() {
   useEffect(() => {
     const clockTimer = setInterval(() => setCurrentClock(new Date()), 1000);
     return () => clearInterval(clockTimer);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('headerClockShowsSeconds').then(value => {
+      if (value === 'true') setClockShowsSeconds(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -2035,6 +2042,15 @@ export default function MenuScreen() {
   };
 
   const settingsMenuTop = pushState === 'denied' ? 202 : pushState === 'default' ? 160 : 76;
+  const headerTime = `${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}${clockShowsSeconds ? `:${String(currentClock.getSeconds()).padStart(2, '0')}` : ''}`;
+  const headerClockFontSize = Math.min(38, Math.max(20, (width - 142) * 0.19));
+  const toggleClockSeconds = () => {
+    setClockShowsSeconds(current => {
+      const next = !current;
+      void AsyncStorage.setItem('headerClockShowsSeconds', String(next));
+      return next;
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2254,9 +2270,19 @@ export default function MenuScreen() {
             <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.staffHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
-            <Text style={styles.staffHeaderTime} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
-              {`${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}:${String(currentClock.getSeconds()).padStart(2, '0')}`}
-            </Text>
+            <View style={styles.staffHeaderTimeWrap} pointerEvents="box-none">
+              <TouchableOpacity
+                style={styles.staffHeaderTimeButton}
+                onPress={toggleClockSeconds}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={clockShowsSeconds ? '秒表示を隠す' : '秒表示を表示する'}
+              >
+                <Text style={[styles.staffHeaderTime, { fontSize: headerClockFontSize, lineHeight: headerClockFontSize + 8 }]} numberOfLines={1}>
+                  {headerTime}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity style={styles.staffHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
               <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
             </TouchableOpacity>
@@ -4724,18 +4750,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   staffHeaderTime: {
+    textAlign: 'center',
+    color: '#E4F5F2',
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false,
+  },
+  staffHeaderTimeWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 9,
-    paddingHorizontal: 71,
-    textAlign: 'center',
-    color: '#E4F5F2',
-    fontSize: 38,
-    lineHeight: 46,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-    includeFontPadding: false,
+    alignItems: 'center',
+  },
+  staffHeaderTimeButton: {
+    alignSelf: 'center',
   },
   staffHeaderLogoButton: {
     position: 'absolute',
