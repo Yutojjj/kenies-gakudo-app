@@ -2176,8 +2176,12 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.userHeader}>
-            <TouchableOpacity onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
+            <TouchableOpacity style={styles.userHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+              <View style={styles.userHeaderLinkHint}>
+                <Ionicons name="open-outline" size={11} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.userHeaderLinkHintText}>公式サイト</Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.userHeaderNoticeButton}
@@ -4545,6 +4549,26 @@ const styles = StyleSheet.create({
   userHeaderLogo: {
     width: 116,
     height: 58,
+  },
+  userHeaderLogoButton: {
+    position: 'absolute',
+    left: 12,
+    top: 3,
+    height: 58,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  userHeaderLinkHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: 6,
+  },
+  userHeaderLinkHintText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: 'rgba(255,255,255,0.85)',
   },
   officialSiteOverlay: {
     flex: 1,
