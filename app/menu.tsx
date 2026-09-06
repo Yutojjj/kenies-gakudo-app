@@ -2250,7 +2250,7 @@ export default function MenuScreen() {
         {(role === 'admin' || role === 'staff') && (
           <View style={styles.userHeader}>
             <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
-              <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+              <Image source={USER_HEADER_LOGO} style={styles.staffHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
             <Text style={styles.staffHeaderTime} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
               {`${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}:${String(currentClock.getSeconds()).padStart(2, '0')}`}
@@ -4737,10 +4737,17 @@ const styles = StyleSheet.create({
   },
   staffHeaderLogoButton: {
     position: 'absolute',
-    left: 12,
+    left: 0,
     top: 3,
     height: 58,
+    width: 71,
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  staffHeaderLogo: {
+    width: 71,
+    height: 58,
+    marginLeft: 0,
   },
   staffHeaderGearButton: {
     position: 'absolute',
