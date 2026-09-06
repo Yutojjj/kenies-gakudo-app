@@ -2283,9 +2283,6 @@ export default function MenuScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.staffHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
-              <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
         )}
 
