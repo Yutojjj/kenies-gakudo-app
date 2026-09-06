@@ -410,10 +410,10 @@ export default function MenuScreen() {
   const openOfficialSite = async () => {
     const url = 'https://kanyes-club.com/';
     if (Platform.OS === 'web') {
-      setOfficialSiteVisible(true);
+      await WebBrowser.openBrowserAsync(url);
       return;
     }
-    await WebBrowser.openBrowserAsync(url, { toolbarColor: '#08B8C0' });
+    setOfficialSiteVisible(true);
   };
 
   const isNoticeVisibleOnDate = (notice: any, dateStr: string, audience: 'staff' | 'user') => {
