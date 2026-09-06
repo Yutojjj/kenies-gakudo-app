@@ -475,6 +475,7 @@ export default function MenuScreen() {
   const [announcementReadsLoaded, setAnnouncementReadsLoaded] = useState(false);
   const [announcementListVisible, setAnnouncementListVisible] = useState(false);
   const [officialSiteVisible, setOfficialSiteVisible] = useState(false);
+  const [userSettingsVisible, setUserSettingsVisible] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
@@ -2176,12 +2177,11 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.userHeader}>
+            <TouchableOpacity style={styles.userHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
+              <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.userHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
-              <View style={styles.userHeaderLinkHint}>
-                <Ionicons name="open-outline" size={11} color="rgba(255,255,255,0.85)" />
-                <Text style={styles.userHeaderLinkHintText}>公式サイト</Text>
-              </View>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.userHeaderNoticeButton}
@@ -2223,6 +2223,32 @@ export default function MenuScreen() {
                     javaScriptEnabled
                     domStorageEnabled
                   />}
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={userSettingsVisible} transparent animationType="slide" onRequestClose={() => setUserSettingsVisible(false)}>
+          <View style={styles.userSettingsOverlay}>
+            <TouchableWithoutFeedback onPress={() => setUserSettingsVisible(false)} accessible={false}>
+              <View style={styles.officialSiteBackdrop} />
+            </TouchableWithoutFeedback>
+            <View style={styles.userSettingsSurface}>
+              <View style={styles.userSettingsHeader}>
+                <Text style={styles.userSettingsTitle}>設定</Text>
+                <TouchableOpacity style={styles.officialSiteClose} onPress={() => setUserSettingsVisible(false)} accessibilityLabel="設定を閉じる">
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.userSettingsRow} onPress={() => { setUserSettingsVisible(false); openPasswordModal(); }}>
+                <Ionicons name="lock-closed-outline" size={23} color="#795548" />
+                <Text style={styles.userSettingsRowText}>パスワード変更</Text>
+                <Ionicons name="chevron-forward" size={18} color="#999" />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.userSettingsRow, styles.userSettingsLogoutRow]} onPress={() => { setUserSettingsVisible(false); handleLogout(); }}>
+                <Ionicons name="log-out-outline" size={23} color="#E53935" />
+                <Text style={[styles.userSettingsRowText, { color: '#E53935' }]}>ログアウト</Text>
+                <Ionicons name="chevron-forward" size={18} color="#E53935" />
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -4552,23 +4578,21 @@ const styles = StyleSheet.create({
   },
   userHeaderLogoButton: {
     position: 'absolute',
-    left: 12,
+    left: '50%',
     top: 3,
+    marginLeft: -58,
     height: 58,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 4,
   },
-  userHeaderLinkHint: {
-    flexDirection: 'row',
+  userHeaderGearButton: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: 2,
-    marginBottom: 6,
-  },
-  userHeaderLinkHintText: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: 'rgba(255,255,255,0.85)',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   officialSiteOverlay: {
     flex: 1,
@@ -4606,6 +4630,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F3F5F5',
+  },
+  userSettingsOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(17, 24, 39, 0.5)',
+  },
+  userSettingsSurface: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    paddingBottom: 24,
+    zIndex: 1,
+  },
+  userSettingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  userSettingsTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#333333',
+  },
+  userSettingsRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#FFF8F0',
+    marginTop: 8,
+  },
+  userSettingsLogoutRow: {
+    backgroundColor: '#FFF1F1',
+  },
+  userSettingsRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#4A3A32',
   },
   userHeaderNoticeButton: {
     position: 'absolute',
