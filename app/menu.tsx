@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
   ImageSourcePropType, Linking, Modal,
-  KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
+  KeyboardAvoidingView, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
@@ -265,6 +265,223 @@ function MenuCard({
         </Animated.View>
       </TouchableWithoutFeedback>
     </Animated.View>
+  );
+}
+
+type QuickSortableItem = { key: string; label: string };
+
+function QuickSortableGrid({
+  items,
+  onPress,
+  onReorder,
+  renderItem,
+  footer,
+}: {
+  items: QuickSortableItem[];
+  onPress: (item: QuickSortableItem) => void;
+  onReorder: (keys: string[]) => void;
+  footer?: React.ReactNode;
+  renderItem: (
+    item: QuickSortableItem,
+    index: number,
+    interactionHandlers: Record<string, any>,
+    interactionStyle: any,
+    onItemPress: () => void,
+    isDragging: boolean,
+  ) => React.ReactNode;
+}) {
+  const [orderedKeys, setOrderedKeys] = useState(items.map(item => item.key));
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const gridRef = useRef<View>(null);
+  const gridOriginRef = useRef({ x: 0, y: 0 });
+  const cardLayoutsRef = useRef<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const respondersRef = useRef<Record<string, any>>({});
+  const longPressTimersRef = useRef<Record<string, ReturnType<typeof setTimeout> | null>>({});
+  const touchStartRef = useRef<Record<string, { x: number; y: number }>>({});
+  const draggingKeyRef = useRef<string | null>(null);
+  const orderedKeysRef = useRef(orderedKeys);
+  const suppressPressRef = useRef(false);
+
+  useEffect(() => {
+    const nextKeys = items.map(item => item.key);
+    orderedKeysRef.current = nextKeys;
+    setOrderedKeys(nextKeys);
+  }, [items]);
+
+  const clearLongPress = (key: string) => {
+    const timer = longPressTimersRef.current[key];
+    if (timer) clearTimeout(timer);
+    longPressTimersRef.current[key] = null;
+  };
+
+  const updateDropTarget = (key: string, moveX: number, moveY: number) => {
+    const layouts = cardLayoutsRef.current;
+    const candidates = orderedKeysRef.current
+      .filter(itemKey => itemKey !== key && layouts[itemKey])
+      .map(itemKey => {
+        const layout = layouts[itemKey];
+        const centerX = gridOriginRef.current.x + layout.x + layout.width / 2;
+        const centerY = gridOriginRef.current.y + layout.y + layout.height / 2;
+        return { itemKey, distance: Math.hypot(moveX - centerX, moveY - centerY) };
+      })
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (!candidates) return;
+
+    const currentIndex = orderedKeysRef.current.indexOf(key);
+    const targetIndex = orderedKeysRef.current.indexOf(candidates.itemKey);
+    if (currentIndex < 0 || targetIndex < 0 || currentIndex === targetIndex) return;
+
+    const nextKeys = [...orderedKeysRef.current];
+    nextKeys.splice(currentIndex, 1);
+    nextKeys.splice(targetIndex, 0, key);
+    orderedKeysRef.current = nextKeys;
+    setOrderedKeys(nextKeys);
+  };
+
+  const beginDrag = (key: string) => {
+    clearLongPress(key);
+    draggingKeyRef.current = key;
+    suppressPressRef.current = true;
+    setDraggingKey(key);
+    setDragOffset({ x: 0, y: 0 });
+    gridRef.current?.measureInWindow?.((x, y) => {
+      gridOriginRef.current = { x, y };
+    });
+    if (Platform.OS === 'web') {
+      (globalThis as any).navigator?.vibrate?.(18);
+    }
+  };
+
+  const finishDrag = (key: string) => {
+    if (draggingKeyRef.current !== key) return;
+    clearLongPress(key);
+    draggingKeyRef.current = null;
+    setDraggingKey(null);
+    setDragOffset({ x: 0, y: 0 });
+    onReorder(orderedKeysRef.current);
+    setTimeout(() => { suppressPressRef.current = false; }, 80);
+  };
+
+  const getResponder = (key: string) => {
+    if (respondersRef.current[key]) return respondersRef.current[key];
+    respondersRef.current[key] = PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_event, gesture) => {
+        if (draggingKeyRef.current !== key) {
+          if (Math.hypot(gesture.dx, gesture.dy) > 8) clearLongPress(key);
+          return false;
+        }
+        return true;
+      },
+      onMoveShouldSetPanResponderCapture: (_event, gesture) => {
+        if (draggingKeyRef.current !== key) {
+          if (Math.hypot(gesture.dx, gesture.dy) > 8) clearLongPress(key);
+          return false;
+        }
+        return true;
+      },
+      onPanResponderGrant: () => {
+        if (draggingKeyRef.current === key) setDragOffset({ x: 0, y: 0 });
+      },
+      onPanResponderMove: (_event, gesture) => {
+        if (draggingKeyRef.current !== key) return;
+        setDragOffset({ x: gesture.dx, y: gesture.dy });
+        updateDropTarget(key, gesture.moveX, gesture.moveY);
+      },
+      onPanResponderRelease: () => {
+        finishDrag(key);
+      },
+      onPanResponderTerminate: () => {
+        finishDrag(key);
+      },
+      onPanResponderTerminationRequest: () => draggingKeyRef.current !== key,
+    });
+    return respondersRef.current[key];
+  };
+
+  const orderedItems = orderedKeys
+    .map(key => items.find(item => item.key === key))
+    .filter((item): item is QuickSortableItem => Boolean(item));
+
+  return (
+    <View
+      ref={gridRef}
+      style={styles.quickFeatureGrid}
+      onLayout={() => {
+        gridRef.current?.measureInWindow?.((x, y) => {
+          gridOriginRef.current = { x, y };
+        });
+      }}
+    >
+      {orderedItems.map((item, index) => {
+        const responder = getResponder(item.key);
+        const isDragging = draggingKey === item.key;
+        const interactionHandlers = {
+          ...responder.panHandlers,
+          onLayout: (event: any) => {
+            const { x, y, width: cardWidth, height: cardHeight } = event.nativeEvent.layout;
+            cardLayoutsRef.current[item.key] = { x, y, width: cardWidth, height: cardHeight };
+          },
+          onTouchStart: (event: any) => {
+            clearLongPress(item.key);
+            const touch = event.nativeEvent;
+            touchStartRef.current[item.key] = { x: touch.pageX || 0, y: touch.pageY || 0 };
+            longPressTimersRef.current[item.key] = setTimeout(() => beginDrag(item.key), 500);
+          },
+          onTouchMove: (event: any) => {
+            const touch = event.nativeEvent;
+            const start = touchStartRef.current[item.key];
+            if (draggingKeyRef.current === item.key) {
+              const pageX = touch.pageX || start?.x || 0;
+              const pageY = touch.pageY || start?.y || 0;
+              setDragOffset({ x: pageX - (start?.x || pageX), y: pageY - (start?.y || pageY) });
+              updateDropTarget(item.key, pageX, pageY);
+            } else if (start && Math.hypot((touch.pageX || 0) - start.x, (touch.pageY || 0) - start.y) > 8) {
+              clearLongPress(item.key);
+            }
+          },
+          onTouchEnd: () => {
+            if (draggingKeyRef.current === item.key) finishDrag(item.key);
+            else clearLongPress(item.key);
+          },
+          onMouseDown: (event: any) => {
+            clearLongPress(item.key);
+            const mouse = event.nativeEvent || event;
+            touchStartRef.current[item.key] = { x: mouse.pageX || 0, y: mouse.pageY || 0 };
+            longPressTimersRef.current[item.key] = setTimeout(() => beginDrag(item.key), 500);
+          },
+          onMouseMove: (event: any) => {
+            const mouse = event.nativeEvent || event;
+            const start = touchStartRef.current[item.key];
+            if (draggingKeyRef.current === item.key) {
+              const pageX = mouse.pageX || start?.x || 0;
+              const pageY = mouse.pageY || start?.y || 0;
+              setDragOffset({ x: pageX - (start?.x || pageX), y: pageY - (start?.y || pageY) });
+              updateDropTarget(item.key, pageX, pageY);
+            } else if (start && Math.hypot((mouse.pageX || 0) - start.x, (mouse.pageY || 0) - start.y) > 8) {
+              clearLongPress(item.key);
+            }
+          },
+          onMouseUp: () => {
+            if (draggingKeyRef.current === item.key) finishDrag(item.key);
+            else clearLongPress(item.key);
+          },
+        };
+        const interactionStyle = isDragging
+          ? { zIndex: 20, elevation: 12, opacity: 0.92, transform: [{ translateX: dragOffset.x }, { translateY: dragOffset.y }, { scale: 1.04 }] }
+          : undefined;
+        const onItemPress = () => {
+          if (suppressPressRef.current) {
+            suppressPressRef.current = false;
+            return;
+          }
+          onPress(item);
+        };
+        return renderItem(item, index, interactionHandlers, interactionStyle, onItemPress, isDragging);
+      })}
+      {footer}
+    </View>
   );
 }
 
@@ -2791,10 +3008,7 @@ export default function MenuScreen() {
               {visibleAdminQuickOptions.map((item, index) => (
                 <AnimatedTouchableOpacity
                   key={item.key}
-                  style={[
-                    styles.quickFeatureCard,
-                    quickItemAnimatedStyle(index),
-                  ]}
+                  style={[styles.quickFeatureCard, quickItemAnimatedStyle(index)]}
                   onPress={() => handleQuickCardPress(item.onPress)}
                   onLongPress={() => openQuickReorder('admin')}
                   delayLongPress={550}
@@ -2840,10 +3054,7 @@ export default function MenuScreen() {
               {visibleStaffQuickOptions.map((item, index) => (
                 <AnimatedTouchableOpacity
                   key={item.key}
-                  style={[
-                    styles.quickFeatureCard,
-                    quickItemAnimatedStyle(index),
-                  ]}
+                  style={[styles.quickFeatureCard, quickItemAnimatedStyle(index)]}
                   onPress={() => handleQuickCardPress(item.onPress)}
                   onLongPress={() => openQuickReorder('staff')}
                   delayLongPress={550}
@@ -2870,7 +3081,6 @@ export default function MenuScreen() {
                 accessibilityLabel="クイックメニューを追加"
               >
                 <Ionicons name="add" size={32} color="#7A7897" />
-                
               </TouchableOpacity>
             </View>
               ) : (
@@ -3564,9 +3774,9 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.quickReorderList} showsVerticalScrollIndicator={false}>
-                {quickReorderRole === 'admin'
-                  ? visibleAdminQuickOptions.map((item, index) => (
-                    <View key={item.key} style={styles.quickReorderRow}>
+                <View style={styles.quickReorderGrid}>
+                  {(quickReorderRole === 'admin' ? visibleAdminQuickOptions : visibleStaffQuickOptions).map((item, index, options) => (
+                    <View key={item.key} style={styles.quickReorderCard}>
                       {item.image ? (
                         <Image source={item.image} style={styles.quickReorderImage} resizeMode="contain" />
                       ) : (
@@ -3574,53 +3784,34 @@ export default function MenuScreen() {
                           <Ionicons name={item.icon} size={21} color={item.color} />
                         </View>
                       )}
-                      <Text style={styles.quickReorderText}>{item.label}</Text>
-                      <TouchableOpacity
-                        style={[styles.quickReorderButton, index === 0 && styles.quickReorderButtonDisabled]}
-                        disabled={index === 0}
-                        onPress={() => moveAdminQuickKey(item.key, -1)}
-                        activeOpacity={0.75}
-                      >
-                        <Ionicons name="chevron-up" size={22} color={index === 0 ? '#C8C1BB' : '#167B87'} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.quickReorderButton, index === visibleAdminQuickOptions.length - 1 && styles.quickReorderButtonDisabled]}
-                        disabled={index === visibleAdminQuickOptions.length - 1}
-                        onPress={() => moveAdminQuickKey(item.key, 1)}
-                        activeOpacity={0.75}
-                      >
-                        <Ionicons name="chevron-down" size={22} color={index === visibleAdminQuickOptions.length - 1 ? '#C8C1BB' : '#167B87'} />
-                      </TouchableOpacity>
-                    </View>
-                  ))
-                  : visibleStaffQuickOptions.map((item, index) => (
-                    <View key={item.key} style={styles.quickReorderRow}>
-                      {item.image ? (
-                        <Image source={item.image} style={styles.quickReorderImage} resizeMode="contain" />
-                      ) : (
-                        <View style={[styles.quickEditorIcon, { backgroundColor: item.bg }]}>
-                          <Ionicons name={item.icon} size={21} color={item.color} />
-                        </View>
-                      )}
-                      <Text style={styles.quickReorderText}>{item.label}</Text>
-                      <TouchableOpacity
-                        style={[styles.quickReorderButton, index === 0 && styles.quickReorderButtonDisabled]}
-                        disabled={index === 0}
-                        onPress={() => moveStaffQuickKey(item.key, -1)}
-                        activeOpacity={0.75}
-                      >
-                        <Ionicons name="chevron-up" size={22} color={index === 0 ? '#C8C1BB' : '#167B87'} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.quickReorderButton, index === visibleStaffQuickOptions.length - 1 && styles.quickReorderButtonDisabled]}
-                        disabled={index === visibleStaffQuickOptions.length - 1}
-                        onPress={() => moveStaffQuickKey(item.key, 1)}
-                        activeOpacity={0.75}
-                      >
-                        <Ionicons name="chevron-down" size={22} color={index === visibleStaffQuickOptions.length - 1 ? '#C8C1BB' : '#167B87'} />
-                      </TouchableOpacity>
+                      <Text style={styles.quickReorderText} numberOfLines={2}>{item.label}</Text>
+                      <View style={styles.quickReorderArrowRow}>
+                        <TouchableOpacity
+                          style={[styles.quickReorderButton, index === 0 && styles.quickReorderButtonDisabled]}
+                          disabled={index === 0}
+                          onPress={() => quickReorderRole === 'admin'
+                            ? moveAdminQuickKey(item.key as AdminQuickKey, -1)
+                            : moveStaffQuickKey(item.key as StaffQuickKey, -1)}
+                          activeOpacity={0.75}
+                          accessibilityLabel={`${item.label}を左へ移動`}
+                        >
+                          <Ionicons name="chevron-back" size={20} color={index === 0 ? '#C8C1BB' : '#167B87'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.quickReorderButton, index === options.length - 1 && styles.quickReorderButtonDisabled]}
+                          disabled={index === options.length - 1}
+                          onPress={() => quickReorderRole === 'admin'
+                            ? moveAdminQuickKey(item.key as AdminQuickKey, 1)
+                            : moveStaffQuickKey(item.key as StaffQuickKey, 1)}
+                          activeOpacity={0.75}
+                          accessibilityLabel={`${item.label}を右へ移動`}
+                        >
+                          <Ionicons name="chevron-forward" size={20} color={index === options.length - 1 ? '#C8C1BB' : '#167B87'} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   ))}
+                </View>
               </ScrollView>
               <TouchableOpacity style={styles.quickReorderDoneButton} onPress={closeQuickReorder} activeOpacity={0.82}>
                 <Text style={styles.quickReorderDoneText}>完了</Text>
@@ -5240,27 +5431,41 @@ const styles = StyleSheet.create({
   quickReorderList: {
     marginTop: 2,
   },
-  quickReorderRow: {
-    minHeight: 62,
+  quickReorderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+    paddingBottom: 4,
+  },
+  quickReorderCard: {
+    width: '31.7%',
+    minHeight: 142,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E8DDD2',
     backgroundColor: '#FFFDF9',
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 9,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
   },
   quickReorderImage: {
-    width: 46,
-    height: 46,
+    width: 58,
+    height: 58,
   },
   quickReorderText: {
-    flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: '#332B27',
+    textAlign: 'center',
+    minHeight: 34,
+    paddingHorizontal: 2,
+  },
+  quickReorderArrowRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
   },
   quickReorderButton: {
     width: 40,
