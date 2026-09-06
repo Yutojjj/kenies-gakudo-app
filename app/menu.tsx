@@ -2421,6 +2421,24 @@ export default function MenuScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {showAllPickup && (
+                <TouchableOpacity
+                  style={styles.pickupExpandToggle}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    togglePickupInlineOverview();
+                  }}
+                  disabled={pickupOverviewLoadingAction !== null}
+                  activeOpacity={0.78}
+                  accessibilityRole="button"
+                  accessibilityLabel="送迎担当を折りたたむ"
+                >
+                  {pickupOverviewLoadingAction === 'view'
+                    ? <ActivityIndicator size="small" color="#007A82" />
+                    : <Ionicons name="chevron-up" size={17} color="#007A82" />}
+                  <Text style={styles.pickupExpandToggleText}>折りたたむ</Text>
+                </TouchableOpacity>
+              )}
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
                 <TouchableOpacity
                   style={[
