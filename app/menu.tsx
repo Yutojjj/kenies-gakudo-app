@@ -2227,27 +2227,19 @@ export default function MenuScreen() {
           </View>
         </Modal>
 
-        <Modal visible={userSettingsVisible} transparent animationType="slide" onRequestClose={() => setUserSettingsVisible(false)}>
+        <Modal visible={userSettingsVisible} transparent animationType="fade" onRequestClose={() => setUserSettingsVisible(false)}>
           <View style={styles.userSettingsOverlay}>
             <TouchableWithoutFeedback onPress={() => setUserSettingsVisible(false)} accessible={false}>
               <View style={styles.officialSiteBackdrop} />
             </TouchableWithoutFeedback>
             <View style={styles.userSettingsSurface}>
-              <View style={styles.userSettingsHeader}>
-                <Text style={styles.userSettingsTitle}>設定</Text>
-                <TouchableOpacity style={styles.officialSiteClose} onPress={() => setUserSettingsVisible(false)} accessibilityLabel="設定を閉じる">
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
               <TouchableOpacity style={styles.userSettingsRow} onPress={() => { setUserSettingsVisible(false); openPasswordModal(); }}>
                 <Ionicons name="lock-closed-outline" size={23} color="#795548" />
                 <Text style={styles.userSettingsRowText}>パスワード変更</Text>
-                <Ionicons name="chevron-forward" size={18} color="#999" />
               </TouchableOpacity>
               <TouchableOpacity style={[styles.userSettingsRow, styles.userSettingsLogoutRow]} onPress={() => { setUserSettingsVisible(false); handleLogout(); }}>
                 <Ionicons name="log-out-outline" size={23} color="#E53935" />
                 <Text style={[styles.userSettingsRowText, { color: '#E53935' }]}>ログアウト</Text>
-                <Ionicons name="chevron-forward" size={18} color="#E53935" />
               </TouchableOpacity>
             </View>
           </View>
@@ -4641,16 +4633,21 @@ const styles = StyleSheet.create({
   },
   userSettingsOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(17, 24, 39, 0.5)',
+    backgroundColor: 'transparent',
   },
   userSettingsSurface: {
-    width: '100%',
+    position: 'absolute',
+    top: 62,
+    left: 10,
+    width: 240,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 14,
     padding: 16,
-    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
     zIndex: 1,
   },
   userSettingsHeader: {
