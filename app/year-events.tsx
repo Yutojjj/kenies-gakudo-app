@@ -128,6 +128,11 @@ const VAC_COLORS: Record<VacTab, { bg: string; border: string; text: string; lab
 };
 
 const MONTH_NAMES = ['', '1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const MONTH_ACCENT_COLORS: Record<number, string> = {
+  1: '#B56A5E', 2: '#6C83A6', 3: '#9B6A9A', 4: '#E34D7A',
+  5: '#4F9B61', 6: '#4D86C8', 7: '#E69A19', 8: '#D4773D',
+  9: '#C86B39', 10: '#D06B32', 11: '#B65A3C', 12: '#5F7896',
+};
 
 const PERIOD_IMAGES = {
   term1: require('../assets/event-periods/term-1.png'),
@@ -136,6 +141,21 @@ const PERIOD_IMAGES = {
   summer: require('../assets/event-periods/summer.png'),
   winter: require('../assets/event-periods/winter.png'),
   spring: require('../assets/event-periods/spring.png'),
+};
+const TERM_IMAGES = {
+  term1: require('../assets/event-periods/term-spring-illustration.png'),
+  term2: require('../assets/event-periods/term-autumn-illustration.png'),
+  term3: require('../assets/event-periods/term-winter-spring-illustration.png'),
+};
+const TERM_LANDSCAPES = {
+  term1: require('../assets/event-periods/term-spring-landscape.png'),
+  term2: require('../assets/event-periods/term-autumn-landscape.png'),
+  term3: require('../assets/event-periods/term-winter-spring-landscape.png'),
+};
+const VACATION_LANDSCAPES = {
+  summer: require('../assets/event-periods/summer-landscape.png'),
+  winter: require('../assets/event-periods/winter-landscape.png'),
+  spring: require('../assets/event-periods/spring-landscape.png'),
 };
 
 // ─── リッチテキストレンダラー ───────────────────────────────────
@@ -1408,7 +1428,7 @@ export default function YearEventsScreen() {
   };
 
   // ─── 月カードのペアレンダリング ───────────────────────────
-  const MonthPair = ({ months, termColor }: { months: number[]; termColor: any }) => {
+  const MonthPair = ({ months }: { months: number[] }) => {
     const pairs: number[][] = [];
     for (let i = 0; i < months.length; i += 2) pairs.push(months.slice(i, i + 2));
     return (
@@ -1421,8 +1441,8 @@ export default function YearEventsScreen() {
               const evs = eventsForMonth(dataYear, m)
                 .filter(ev => (canEditEvents || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
               return (
-                <View key={m} style={[styles.monthCard, { flex: 1, borderTopColor: termColor.border }]}>
-                  <Text style={[styles.monthCardLabel, { color: termColor.text }]}>{m}月</Text>
+                <View key={m} style={[styles.monthCard, { flex: 1 }]}>
+                  <Text style={[styles.monthCardLabel, { color: MONTH_ACCENT_COLORS[m] }]}>{m}月</Text>
                   {evs.length === 0 ? (
                     <View style={styles.noEventBox}>
                       <Ionicons name="camera-outline" size={21} color="#C7CAC7" />
@@ -1557,7 +1577,7 @@ export default function YearEventsScreen() {
   const DetailModal = (
     <Modal visible={detailOpen} animationType="none">
       {detailEvent ? (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF0F3' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFDF9' }}>
           {/* ヘッダー */}
           <View style={styles.detailHeader}>
             <TouchableOpacity onPress={() => setDetailOpen(false)}>
@@ -1593,17 +1613,17 @@ export default function YearEventsScreen() {
             <Image source={{ uri: detailEvent.coverImage }} style={styles.detailCover} resizeMode="cover" />
           )}
 
-          <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}>
 
             {/* ── セクション①：説明・日時 */}
-            <View style={[styles.section, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }]}>
-              <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#D6EEFF' }]} onPress={() => setSecDesc(!secDesc)}>
-                <Ionicons name="document-text-outline" size={18} color="#4A90C4" />
-                <Text style={[styles.sectionTitle, { color: '#3A7AAA' }]}>説明・日時</Text>
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecDesc(!secDesc)}>
+                <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>説明・日時</Text>
                 <View style={{ flex: 1 }} />
-                <Ionicons name={secDesc ? 'chevron-up' : 'chevron-down'} size={18} color="#4A90C4" />
+                <Ionicons name={secDesc ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
               </TouchableOpacity>
-              <View style={[styles.sectionBody, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }, !secDesc && { display: 'none' }]}>
+              <View style={[styles.sectionBody, !secDesc && { display: 'none' }]}>
                 <Text style={styles.dateText}>{formatDateWithDay(detailEvent.dateStr)}</Text>
                 {editDesc ? (
                   <View style={{ marginTop: 10 }}>
@@ -1632,14 +1652,14 @@ export default function YearEventsScreen() {
             </View>
 
             {/* ── セクション②：持ち込み・参加費等 */}
-            <View style={[styles.section, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }]}>
-              <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#C8EFD4' }]} onPress={() => setSecItems(!secItems)}>
-                <Ionicons name="bag-outline" size={18} color="#4A9A6A" />
-                <Text style={[styles.sectionTitle, { color: '#3A7A55' }]}>持ち込み・参加費等</Text>
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecItems(!secItems)}>
+                <Ionicons name="bag-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>持ち込み・参加費等</Text>
                 <View style={{ flex: 1 }} />
-                <Ionicons name={secItems ? 'chevron-up' : 'chevron-down'} size={18} color="#4A9A6A" />
+                <Ionicons name={secItems ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
               </TouchableOpacity>
-              <View style={[styles.sectionBody, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }, !secItems && { display: 'none' }]}>
+              <View style={[styles.sectionBody, !secItems && { display: 'none' }]}>
                 {editItems ? (
                   <View>
                     <RichEditor value={itemsDraft} onChange={setItemsDraft} />
@@ -1667,15 +1687,15 @@ export default function YearEventsScreen() {
             </View>
 
             {/* ── セクション③：去年の写真 */}
-            <View style={[styles.section, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
-              <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#E8D6F5' }]} onPress={() => setSecPhotos(!secPhotos)}>
-                <Ionicons name="images-outline" size={18} color="#8A5BB5" />
-                <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecPhotos(!secPhotos)}>
+                <Ionicons name="images-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.sectionTitle}>去年の写真</Text>
                 <View style={{ flex: 1 }} />
-                <Text style={[styles.photoCount, { color: '#8A5BB5' }]}>{detailPhotos.length}件</Text>
-                <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
+                <Text style={styles.photoCount}>{detailPhotos.length}件</Text>
+                <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
               </TouchableOpacity>
-              <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
+              <View style={[styles.sectionBody, !secPhotos && { display: 'none' }]}>
               {canEditEventDetail && (
                 <TouchableOpacity style={styles.uploadPhotoBtn} onPress={() => openPhotoSourceMenu('past')}>
                     <Ionicons name="add" size={18} color={COLORS.primary} />
@@ -1786,19 +1806,24 @@ export default function YearEventsScreen() {
                   style={[styles.termSection, { borderTopColor: tc.border }]}>
                   <View style={styles.termHeadingRow}>
                     <Image
-                      source={term === 1 ? PERIOD_IMAGES.term1 : term === 2 ? PERIOD_IMAGES.term2 : PERIOD_IMAGES.term3}
+                      source={term === 1 ? TERM_IMAGES.term1 : term === 2 ? TERM_IMAGES.term2 : TERM_IMAGES.term3}
                       style={styles.periodHeadingImage}
                       resizeMode="contain"
                     />
                     <View style={styles.termHeadingText}>
-                      <Text style={[styles.termLabel, { color: tc.text }]}>{term}学期</Text>
+                  <Text style={styles.termLabel}>{term}学期</Text>
                       <Text style={styles.termMonthRange}>
                         {months[0]}月〜{months[months.length - 1]}月
                       </Text>
                     </View>
+                    <Image
+                      source={term === 1 ? TERM_LANDSCAPES.term1 : term === 2 ? TERM_LANDSCAPES.term2 : TERM_LANDSCAPES.term3}
+                      style={styles.termHeadingLandscape}
+                      resizeMode="contain"
+                    />
                   </View>
-                  <View style={[styles.termHeadingLine, { backgroundColor: tc.border }]} />
-                  <MonthPair months={months} termColor={tc} />
+                   <View style={styles.termHeadingLine} />
+                   <MonthPair months={months} />
                 </View>
               );
             })}
@@ -1815,6 +1840,7 @@ export default function YearEventsScreen() {
                     {vacTab === 'summer' ? '7月〜8月' : vacTab === 'winter' ? '12月〜1月' : '3月〜4月'}
                   </Text>
                 </View>
+                <Image source={VACATION_LANDSCAPES[vacTab]} style={styles.termHeadingLandscape} resizeMode="contain" />
               </View>
               <View style={[styles.vacationHeadingLine, { backgroundColor: VAC_COLORS[vacTab].border }]} />
             </View>
@@ -1875,10 +1901,13 @@ export default function YearEventsScreen() {
                   const parts = mgmtParticipants[ev.id] || [];
                   const attending = parts.filter((p: any) => p.status === '参加').length + (ev.externalParticipants?.length || 0);
                   return (
-                    <TouchableOpacity key={ev.id} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: COLORS.primary, shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 }}
-                      onPress={() => mgmtOpenModal(ev.dateStr)}>
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#333' }}>{ev.dateStr}　{ev.title}</Text>
-                      <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>参加 {attending}名</Text>
+                    <TouchableOpacity key={ev.id} style={styles.monthEventRow} onPress={() => mgmtOpenModal(ev.dateStr)}>
+                      <View style={styles.monthEventDateBlock}>
+                        <Text style={styles.monthEventDate}>{ev.dateStr?.slice(5).replace('-', '/')}</Text>
+                        <Text style={styles.monthEventCount}>参加 {attending}名</Text>
+                      </View>
+                      <Text style={styles.monthEventTitle} numberOfLines={2}>{ev.title}</Text>
+                      <Ionicons name="chevron-forward" size={17} color="#8A817A" />
                     </TouchableOpacity>
                   );
                 })
@@ -2504,31 +2533,37 @@ const styles = StyleSheet.create({
   termJumpText: { fontSize: 13, fontWeight: 'bold' },
 
   // 学期セクション
-  termSection: { borderWidth: 1, borderColor: '#E7E8E5', borderRadius: 9, padding: 10, marginBottom: 12, backgroundColor: '#FCFCFB', shadowColor: '#000', shadowOpacity: 0.035, shadowRadius: 5, elevation: 1 },
-  termHeadingRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8 },
+  termSection: { paddingTop: 2, marginBottom: 22, backgroundColor: 'transparent' },
+  termHeadingRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8, paddingHorizontal: 8, backgroundColor: '#FFF7ED', borderRadius: 4 },
   periodHeadingImage: { width: 34, height: 34 },
   termHeadingText: { flexShrink: 0 },
-  termHeadingLine: { width: '100%', height: 2, borderRadius: 1, marginBottom: 10 },
-  termLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 1 },
-  termMonthRange: { fontSize: 10, color: '#777' },
+  termHeadingLandscape: { width: '42%', height: 64, marginLeft: 'auto' },
+  termHeadingLine: { width: '100%', height: 1, backgroundColor: '#E4DDD5', marginBottom: 12 },
+  termLabel: { fontSize: 18, fontWeight: '900', marginBottom: 1, color: '#3F3631' },
+  termMonthRange: { fontSize: 11, color: '#777' },
 
   // 月カード
-  monthCard: { borderWidth: 1, borderColor: '#E6E7E4', borderRadius: 7, padding: 7, minHeight: 156, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.025, shadowRadius: 3, elevation: 1 },
-  monthCardLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 6, color: '#3F3C39' },
-  noEventBox: { flex: 1, minHeight: 112, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  noEventText: { fontSize: 10, color: '#B5B8B5', textAlign: 'center' },
+  monthCard: { padding: 0, minHeight: 0, backgroundColor: 'transparent' },
+  monthCardLabel: { fontSize: 16, fontWeight: '900', marginBottom: 7, paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: '#E4DDD5', color: '#3F3C39' },
+  noEventBox: { minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  noEventText: { fontSize: 11, color: '#92908C', textAlign: 'center' },
+  monthEventRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E4DDD5' },
+  monthEventDateBlock: { width: 76 },
+  monthEventDate: { fontSize: 12, fontWeight: '900', color: '#4A403A' },
+  monthEventCount: { marginTop: 2, fontSize: 10, color: '#8A817A' },
+  monthEventTitle: { flex: 1, fontSize: 13, fontWeight: '800', color: '#3F3631' },
 
   // イベントチップ
-  eventChip: { borderRadius: 6, overflow: 'hidden', marginBottom: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E6E6E3', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
+  eventChip: { borderRadius: 4, overflow: 'hidden', marginBottom: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3DED8' },
   eventChipHeader: { padding: 8 },
-  eventCoverImgFull: { width: '100%', height: 92 },
+  eventCoverImgFull: { width: '100%', height: 104 },
   eventCoverPlaceholderFull: { width: '100%', height: 70, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   eventCoverImg: { width: 60, height: 60 },
   eventCoverPlaceholder: { width: 60, height: 60, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   eventChipInfo: { padding: 7, borderTopWidth: 1, borderColor: '#F0F0F0' },
   eventChipImgWrap: { position: 'relative' },
   eventChipGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.28)', paddingHorizontal: 6, paddingVertical: 3 },
-  eventChipCaption: { paddingHorizontal: 6, paddingVertical: 5, minHeight: 42, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEEB' },
+  eventChipCaption: { paddingHorizontal: 7, paddingVertical: 6, minHeight: 42, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEEB' },
   eventChipOverlay: { padding: 6, backgroundColor: 'rgba(0,0,0,0.42)' },
   eventChipTitle: { fontSize: 10, fontWeight: '800', color: '#393633' },
   eventChipMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4, marginTop: 2 },
@@ -2553,7 +2588,7 @@ const styles = StyleSheet.create({
 
   // 長期休みセクション
   vacationHeadingBlock: { marginBottom: 10 },
-  vacationScreenHeading: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2, marginBottom: 1 },
+  vacationScreenHeading: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 1, backgroundColor: '#FFF7ED', borderRadius: 4 },
   vacationHeadingLine: { width: '100%', height: 2, borderRadius: 1 },
   vacationScreenTitle: { fontSize: 17, fontWeight: '900' },
   vacationScreenRange: { fontSize: 10, color: '#777', marginTop: 1 },
@@ -2575,10 +2610,10 @@ const styles = StyleSheet.create({
   detailCover: { width: '100%', height: 180, backgroundColor: '#EEE' },
 
   // セクション
-  section: { borderRadius: 14, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 3, borderWidth: 1 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8 },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#333' },
-  sectionBody: { padding: 14, paddingTop: 12, borderTopWidth: 1 },
+  section: { borderBottomWidth: 1, borderBottomColor: '#DED8D0', overflow: 'hidden' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, gap: 8, backgroundColor: '#FFFDF9' },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#3F3631' },
+  sectionBody: { paddingBottom: 16, paddingTop: 0, backgroundColor: '#FFFDF9' },
   dateText: { fontSize: 14, fontWeight: 'bold', color: '#5D4037', marginBottom: 6 },
   photoCount: { fontSize: 12, color: '#aaa', marginRight: 4 },
   emptyText: { color: '#bbb', fontSize: 13, textAlign: 'center', paddingVertical: 12 },

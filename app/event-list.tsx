@@ -63,6 +63,11 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const TERM1_MONTHS = [4, 5, 6, 7];
 const TERM2_MONTHS = [9, 10, 11, 12];
 const TERM3_MONTHS = [1, 2, 3];
+const MONTH_ACCENT_COLORS: Record<number, string> = {
+  1: '#B56A5E', 2: '#6C83A6', 3: '#9B6A9A', 4: '#E34D7A',
+  5: '#4F9B61', 6: '#4D86C8', 7: '#E69A19', 8: '#D4773D',
+  9: '#C86B39', 10: '#D06B32', 11: '#B65A3C', 12: '#5F7896',
+};
 const VAC_MONTHS: Record<VacTab, number[]> = { summer: [7, 8], winter: [12, 1], spring: [3, 4] };
 const TERM_COLORS = {
   1: { bg: '#FFF8E1', border: '#FFD54F', text: '#F57F17', light: '#FFFDE7' },
@@ -81,6 +86,21 @@ const PERIOD_IMAGES = {
   summer: require('../assets/event-periods/summer.png'),
   winter: require('../assets/event-periods/winter.png'),
   spring: require('../assets/event-periods/spring.png'),
+};
+const TERM_IMAGES = {
+  term1: require('../assets/event-periods/term-spring-illustration.png'),
+  term2: require('../assets/event-periods/term-autumn-illustration.png'),
+  term3: require('../assets/event-periods/term-winter-spring-illustration.png'),
+};
+const TERM_LANDSCAPES = {
+  term1: require('../assets/event-periods/term-spring-landscape.png'),
+  term2: require('../assets/event-periods/term-autumn-landscape.png'),
+  term3: require('../assets/event-periods/term-winter-spring-landscape.png'),
+};
+const VACATION_LANDSCAPES = {
+  summer: require('../assets/event-periods/summer-landscape.png'),
+  winter: require('../assets/event-periods/winter-landscape.png'),
+  spring: require('../assets/event-periods/spring-landscape.png'),
 };
 
 // ── ユーティリティ ────────────────────────────────────────────
@@ -397,7 +417,7 @@ export default function EventListScreen() {
   );
 
   // ── MonthPairコンポーネント ───────────────────────────────
-  const MonthPair = ({ months, termColor }: { months: number[]; termColor: any }) => {
+  const MonthPair = ({ months }: { months: number[] }) => {
     const pairs: number[][] = [];
     for (let i = 0; i < months.length; i += 2) pairs.push(months.slice(i, i + 2));
     return (
@@ -408,8 +428,8 @@ export default function EventListScreen() {
               const dataYear = m >= 4 ? currentFY : currentFY + 1;
               const evs = eventsForMonth(dataYear, m).filter(ev => !ev.hidden && !isInAnyHoliday(ev.dateStr) && isCurrentFY(ev.dateStr));
               return (
-                <View key={m} style={[styles.monthCard, { flex: 1, borderTopColor: termColor.border }]}>
-                  <Text style={[styles.monthCardLabel, { color: termColor.text }]}>{m}月</Text>
+                <View key={m} style={[styles.monthCard, { flex: 1 }]}>
+                  <Text style={[styles.monthCardLabel, { color: MONTH_ACCENT_COLORS[m] }]}>{m}月</Text>
                   {evs.length === 0 ? (
                     <View style={styles.noEventBox}>
                       <Ionicons name="camera-outline" size={21} color="#C7CAC7" />
@@ -751,12 +771,17 @@ export default function EventListScreen() {
                           resizeMode="contain"
                         />
                         <View style={styles.termHeadingText}>
-                          <Text style={[styles.termLabel, { color: tc.text }]}>{term}学期</Text>
-                          <Text style={styles.termMonthRange}>{months[0]}月〜{months[months.length - 1]}月</Text>
-                        </View>
+                      <Text style={styles.termLabel}>{term}学期</Text>
+                        <Text style={styles.termMonthRange}>{months[0]}月〜{months[months.length - 1]}月</Text>
                       </View>
-                      <View style={[styles.termHeadingLine, { backgroundColor: tc.border }]} />
-                      <MonthPair months={months} termColor={tc} />
+                      <Image
+                        source={term === 1 ? TERM_LANDSCAPES.term1 : term === 2 ? TERM_LANDSCAPES.term2 : TERM_LANDSCAPES.term3}
+                        style={styles.termHeadingLandscape}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <View style={styles.termHeadingLine} />
+                    <MonthPair months={months} />
                     </View>
                   );
                 })}
@@ -773,6 +798,7 @@ export default function EventListScreen() {
                         {vacTab === 'summer' ? '7月〜8月' : vacTab === 'winter' ? '12月〜1月' : '3月〜4月'}
                       </Text>
                     </View>
+                    <Image source={VACATION_LANDSCAPES[vacTab]} style={styles.termHeadingLandscape} resizeMode="contain" />
                   </View>
                   <View style={[styles.vacationHeadingLine, { backgroundColor: VAC_COLORS[vacTab].border }]} />
                 </View>
@@ -1011,27 +1037,28 @@ const styles = StyleSheet.create({
   eventContentScroll: { padding: 12, paddingBottom: 40 },
 
   // 年行事
-  termSection: { borderWidth: 1, borderColor: '#E7E8E5', borderRadius: 9, padding: 10, marginBottom: 12, backgroundColor: '#FCFCFB', shadowColor: '#000', shadowOpacity: 0.035, shadowRadius: 5, elevation: 1 },
-  termHeadingRow: { minHeight: 36, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8 },
+  termSection: { paddingTop: 2, marginBottom: 22, backgroundColor: 'transparent' },
+  termHeadingRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8, paddingHorizontal: 8, backgroundColor: '#FFF7ED', borderRadius: 4 },
   periodHeadingImage: { width: 34, height: 34 },
   termHeadingText: { flexShrink: 0 },
-  termHeadingLine: { width: '100%', height: 2, borderRadius: 1, marginBottom: 10 },
-  termLabel: { fontSize: 16, fontWeight: 'bold', marginBottom: 1 },
-  termMonthRange: { fontSize: 10, color: '#777' },
-  monthCard: { borderWidth: 1, borderColor: '#E6E7E4', borderRadius: 7, padding: 7, minHeight: 156, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.025, shadowRadius: 3, elevation: 1 },
-  monthCardLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 6, color: '#3F3C39' },
-  noEventBox: { flex: 1, minHeight: 112, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  noEventText: { fontSize: 10, color: '#B5B8B5', textAlign: 'center' },
-  eventChip: { borderRadius: 6, overflow: 'hidden', marginBottom: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E6E6E3', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
+  termHeadingLandscape: { width: '42%', height: 64, marginLeft: 'auto' },
+  termHeadingLine: { width: '100%', height: 1, backgroundColor: '#E4DDD5', marginBottom: 12 },
+  termLabel: { fontSize: 18, fontWeight: '900', marginBottom: 1, color: '#3F3631' },
+  termMonthRange: { fontSize: 11, color: '#777' },
+  monthCard: { padding: 0, minHeight: 0, backgroundColor: 'transparent' },
+  monthCardLabel: { fontSize: 16, fontWeight: '900', marginBottom: 7, paddingBottom: 5, borderBottomWidth: 1, borderBottomColor: '#E4DDD5' },
+  noEventBox: { minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  noEventText: { fontSize: 11, color: '#92908C', textAlign: 'center' },
+  eventChip: { borderRadius: 4, overflow: 'hidden', marginBottom: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E3DED8' },
   eventChipImgWrap: { position: 'relative' },
-  eventCoverImgFull: { width: '100%', height: 92 },
+  eventCoverImgFull: { width: '100%', height: 104 },
   eventChipCaption: { paddingHorizontal: 6, paddingVertical: 5, minHeight: 42, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EEEEEB' },
   eventChipTitle: { fontSize: 10, fontWeight: '800', color: '#393633' },
   eventChipDate: { fontSize: 8, color: '#85817D', marginTop: 2 },
 
   // 長期休み
   vacationHeadingBlock: { marginBottom: 10 },
-  vacationScreenHeading: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  vacationScreenHeading: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, backgroundColor: '#FFF7ED', borderRadius: 4 },
   vacationScreenTitle: { fontSize: 16, fontWeight: 'bold' },
   vacationScreenRange: { marginTop: 1, fontSize: 10, color: '#777' },
   vacationHeadingLine: { width: '100%', height: 2, borderRadius: 1, marginTop: 3 },
