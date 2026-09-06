@@ -2406,7 +2406,7 @@ export default function MenuScreen() {
               <View style={styles.todayPlanTitleRow}>
                 <View style={styles.userGreeting}>
                   <Text style={styles.userGreetingText}>こんにちは</Text>
-                  <Image source={ANIMALS.koala} style={styles.userGreetingAnimal} resizeMode="contain" />
+                  <Ionicons name="paw-outline" size={27} color="#8A5B08" />
                   <Text style={styles.userGreetingText}>{name || 'ゲスト'}さん</Text>
                 </View>
                 <TouchableOpacity
@@ -4504,10 +4504,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: '#333333',
-  },
-  userGreetingAnimal: {
-    width: 30,
-    height: 30,
   },
   userConfirmBadge: {
     minWidth: 26,
