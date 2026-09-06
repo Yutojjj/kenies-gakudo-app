@@ -618,6 +618,17 @@ export default function MenuScreen() {
     setPushState(getNotificationState());
   }, [authChecked]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const refreshNotificationState = () => setPushState(getNotificationState());
+    window.addEventListener('focus', refreshNotificationState);
+    document.addEventListener('visibilitychange', refreshNotificationState);
+    return () => {
+      window.removeEventListener('focus', refreshNotificationState);
+      document.removeEventListener('visibilitychange', refreshNotificationState);
+    };
+  }, []);
+
   // アンケート公開件数を購読（管理者は全件、それ以外は公開中のみ）
   useEffect(() => {
     const q = role === 'admin'
@@ -2013,6 +2024,16 @@ export default function MenuScreen() {
 
   const adminTodoTotalCount = adminTodayChangeCount + unreadCount + adminTodayScheduleMemoCount;
 
+  const openBrowserNotificationSettings = () => {
+    if (Platform.OS !== 'web') return;
+    const settingsScheme = /Edg\//.test(navigator.userAgent) ? 'edge' : 'chrome';
+    const settingsUrl = `${settingsScheme}://settings/content/siteDetails?site=${encodeURIComponent(window.location.origin)}`;
+    const opened = window.open(settingsUrl, '_blank');
+    if (!opened) {
+      window.alert('アドレスバー左の鍵アイコンから「通知」を「許可」に変更してください。');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <DecoBackground />
@@ -2088,6 +2109,10 @@ export default function MenuScreen() {
               }}
               onPress={async () => {
                 if (!accountId || pushRequesting) return;
+                if (getNotificationState() === 'denied') {
+                  openBrowserNotificationSettings();
+                  return;
+                }
                 setPushRequesting(true);
                 const result = await setupPushToken(accountId);
                 setPushState(getNotificationState());
