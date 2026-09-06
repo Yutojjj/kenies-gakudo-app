@@ -4832,15 +4832,16 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   userHeaderLogo: {
-    width: 116,
-    height: 58,
+    width: 104,
+    height: 54,
   },
   userHeaderLogoButton: {
     position: 'absolute',
     left: '50%',
-    top: 9,
-    marginLeft: -58,
-    height: 58,
+    top: 5,
+    marginLeft: -52,
+    width: 104,
+    height: 54,
   },
   userHeaderGearButton: {
     position: 'absolute',
