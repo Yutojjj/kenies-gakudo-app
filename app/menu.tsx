@@ -4724,9 +4724,10 @@ const styles = StyleSheet.create({
   },
   staffHeaderTime: {
     position: 'absolute',
-    left: 132,
-    right: 60,
+    left: 0,
+    right: 0,
     top: 3,
+    paddingHorizontal: 71,
     textAlign: 'center',
     color: '#FFFFFF',
     fontSize: 48,
