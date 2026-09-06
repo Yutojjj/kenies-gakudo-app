@@ -2034,6 +2034,8 @@ export default function MenuScreen() {
     }
   };
 
+  const settingsMenuTop = pushState === 'denied' ? 202 : pushState === 'default' ? 160 : 76;
+
   return (
     <SafeAreaView style={styles.container}>
       <DecoBackground />
@@ -2298,6 +2300,7 @@ export default function MenuScreen() {
             <View
               style={[
                 styles.userSettingsSurface,
+                { top: settingsMenuTop },
                 role === 'user' ? styles.userSettingsSurfaceLeft : styles.userSettingsSurfaceRight,
               ]}
             >
@@ -4675,11 +4678,9 @@ const styles = StyleSheet.create({
   },
   userSettingsSurfaceLeft: {
     left: 10,
-    top: 76,
   },
   userSettingsSurfaceRight: {
     right: 10,
-    top: 120,
   },
   userSettingsHeader: {
     flexDirection: 'row',
