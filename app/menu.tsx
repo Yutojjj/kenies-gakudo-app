@@ -31,6 +31,7 @@ const ANIMALS = {
 };
 const KANYES_LOGO = require('../assets/kanyes-logo.png');
 const USER_HEADER_LOGO = require('../assets/footer_logo.png');
+const NativeWebView: any = Platform.OS === 'web' ? null : require('react-native-webview').WebView;
 const ADMIN_MORE_IMAGE = require('../assets/bottom-nav-v2/menu.png');
 
 // ── メニューアイコン画像（assets/menu/に配置済みのファイルを使用）──
@@ -2208,11 +2209,19 @@ export default function MenuScreen() {
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
-              {Platform.OS === 'web' && React.createElement('iframe', {
-                src: 'https://kanyes-club.com/',
-                title: "Kanye's Club公式サイト",
-                style: { width: '100%', flex: 1, border: 'none' },
-              })}
+              {Platform.OS === 'web'
+                ? React.createElement('iframe', {
+                    src: 'https://kanyes-club.com/',
+                    title: "Kanye's Club公式サイト",
+                    style: { width: '100%', height: '100%', border: 'none' },
+                  })
+                : <NativeWebView
+                    source={{ uri: 'https://kanyes-club.com/' }}
+                    style={{ flex: 1 }}
+                    startInLoadingState
+                    javaScriptEnabled
+                    domStorageEnabled
+                  />}
             </View>
           </View>
         </Modal>
