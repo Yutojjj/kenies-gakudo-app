@@ -2404,9 +2404,10 @@ export default function MenuScreen() {
           <View style={styles.todayPlanSection}>
               <View style={styles.todayPlanHeader}>
               <View style={styles.todayPlanTitleRow}>
-                <View style={styles.todayPlanTitleWrap}>
-                  <View style={styles.todayPlanTitleBar} />
-                  <Text style={styles.todayPlanTitle}>本日の予定</Text>
+                <View style={styles.userGreeting}>
+                  <Text style={styles.userGreetingText}>こんにちは</Text>
+                  <Image source={ANIMALS.koala} style={styles.userGreetingAnimal} resizeMode="contain" />
+                  <Text style={styles.userGreetingText}>{name || 'ゲスト'}さん</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.userAnnouncementButton}
@@ -2415,7 +2416,7 @@ export default function MenuScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="お知らせを開く"
                 >
-                  <Ionicons name="bulb-outline" size={23} color="#8A5B08" />
+                  <Ionicons name="notifications-outline" size={23} color="#8A5B08" />
                   {unreadAnnouncementCount > 0 && (
                     <View style={styles.userAnnouncementBadge}><Text style={styles.userAnnouncementBadgeText}>{unreadAnnouncementCount > 99 ? '99+' : unreadAnnouncementCount}</Text></View>
                   )}
@@ -2449,14 +2450,6 @@ export default function MenuScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.todayPlanScheduleHeaderButton}
-                onPress={() => router.push({ pathname: '/schedule', params: { name } } as any)}
-                activeOpacity={0.82}
-              >
-                <Text style={styles.todayPlanScheduleHeaderText}>スケジュール表を表示</Text>
-                <Ionicons name="chevron-forward" size={15} color="#fff" />
-              </TouchableOpacity>
             </View>
 
             <AnimatedTouchableOpacity
@@ -2522,14 +2515,6 @@ export default function MenuScreen() {
                 <View style={styles.eventPlanTitleBar} />
                 <Text style={styles.eventPlanTitle}>イベント予定</Text>
               </View>
-              <TouchableOpacity
-                style={styles.eventPlanJoinButton}
-                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
-                activeOpacity={0.82}
-              >
-                <Text style={styles.eventPlanJoinText}>イベントカレンダーを表示</Text>
-                <Ionicons name="chevron-forward" size={15} color="#fff" />
-              </TouchableOpacity>
             </View>
 
             {visibleMenuEvents.length > 0 ? (
@@ -2832,14 +2817,6 @@ export default function MenuScreen() {
                 <View style={styles.eventPlanTitleBar} />
                 <Text style={styles.eventPlanTitle}>イベント予定</Text>
               </View>
-              <TouchableOpacity
-                style={styles.eventPlanJoinButton}
-                onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
-                activeOpacity={0.82}
-              >
-                <Text style={styles.eventPlanJoinText}>イベントカレンダーを表示</Text>
-                <Ionicons name="chevron-forward" size={15} color="#fff" />
-              </TouchableOpacity>
             </View>
 
             {visibleMenuEvents.length > 0 ? (
@@ -4513,6 +4490,24 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: '#333333',
+  },
+  userGreeting: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  userGreetingText: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#333333',
+  },
+  userGreetingAnimal: {
+    width: 30,
+    height: 30,
   },
   userConfirmBadge: {
     minWidth: 26,
