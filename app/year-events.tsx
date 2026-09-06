@@ -133,6 +133,7 @@ const MONTH_ACCENT_COLORS: Record<number, string> = {
   5: '#4F9B61', 6: '#4D86C8', 7: '#E69A19', 8: '#D4773D',
   9: '#C86B39', 10: '#D06B32', 11: '#B65A3C', 12: '#5F7896',
 };
+const TERM_DIVIDER_COLORS: Record<number, string> = { 1: '#E7A0B5', 2: '#D6A05B', 3: '#91B6D2' };
 
 const PERIOD_IMAGES = {
   term1: require('../assets/event-periods/term-1.png'),
@@ -1822,7 +1823,7 @@ export default function YearEventsScreen() {
                       resizeMode="contain"
                     />
                   </View>
-                   <View style={styles.termHeadingLine} />
+                   <View style={[styles.termHeadingLine, { backgroundColor: TERM_DIVIDER_COLORS[term] }]} />
                    <MonthPair months={months} />
                 </View>
               );
@@ -2524,7 +2525,7 @@ const styles = StyleSheet.create({
   contentSelectorOptionActive: { backgroundColor: '#E9F8F8' },
   contentSelectorOptionText: { fontSize: 14, fontWeight: '800', color: '#4D4743' },
   contentSelectorOptionTextActive: { color: COLORS.primary },
-  eventContentBackground: { flex: 1, backgroundColor: '#F7F8F7' },
+  eventContentBackground: { flex: 1, backgroundColor: '#FFFFFF' },
   eventContentScroll: { padding: 12, paddingBottom: 40 },
 
   // 学期ジャンプ
@@ -2534,11 +2535,11 @@ const styles = StyleSheet.create({
 
   // 学期セクション
   termSection: { paddingTop: 2, marginBottom: 22, backgroundColor: 'transparent' },
-  termHeadingRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8, paddingHorizontal: 8, backgroundColor: '#FFF7ED', borderRadius: 4 },
+  termHeadingRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', marginBottom: 1, gap: 8, paddingHorizontal: 8, backgroundColor: '#FFFFFF', borderRadius: 4 },
   periodHeadingImage: { width: 34, height: 34 },
   termHeadingText: { flexShrink: 0 },
   termHeadingLandscape: { width: '42%', height: 64, marginLeft: 'auto' },
-  termHeadingLine: { width: '100%', height: 1, backgroundColor: '#E4DDD5', marginBottom: 12 },
+  termHeadingLine: { width: '100%', height: 2, backgroundColor: '#E4DDD5', marginBottom: 12 },
   termLabel: { fontSize: 18, fontWeight: '900', marginBottom: 1, color: '#3F3631' },
   termMonthRange: { fontSize: 11, color: '#777' },
 
@@ -2588,7 +2589,7 @@ const styles = StyleSheet.create({
 
   // 長期休みセクション
   vacationHeadingBlock: { marginBottom: 10 },
-  vacationScreenHeading: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 1, backgroundColor: '#FFF7ED', borderRadius: 4 },
+  vacationScreenHeading: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, marginBottom: 1, backgroundColor: '#FFFFFF', borderRadius: 4 },
   vacationHeadingLine: { width: '100%', height: 2, borderRadius: 1 },
   vacationScreenTitle: { fontSize: 17, fontWeight: '900' },
   vacationScreenRange: { fontSize: 10, color: '#777', marginTop: 1 },
