@@ -4,6 +4,7 @@ import * as Crypto from 'crypto-js';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadString } from 'firebase/storage';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
@@ -405,6 +406,15 @@ export default function MenuScreen() {
     setAppDialog({ visible: true, title, message, confirm: true, onConfirm });
   };
 
+  const openOfficialSite = async () => {
+    const url = 'https://kanyes-club.com/';
+    if (Platform.OS === 'web') {
+      setOfficialSiteVisible(true);
+      return;
+    }
+    await WebBrowser.openBrowserAsync(url, { toolbarColor: '#08B8C0' });
+  };
+
   const isNoticeVisibleOnDate = (notice: any, dateStr: string, audience: 'staff' | 'user') => {
     const noticeAudience = notice.audience || 'staff';
     if (noticeAudience !== audience) return false;
@@ -463,6 +473,7 @@ export default function MenuScreen() {
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
   const [announcementReadsLoaded, setAnnouncementReadsLoaded] = useState(false);
   const [announcementListVisible, setAnnouncementListVisible] = useState(false);
+  const [officialSiteVisible, setOfficialSiteVisible] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
@@ -2164,7 +2175,12 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.userHeader}>
-            <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+            <View style={styles.userHeaderAnimal}>
+              <Image source={ANIMALS.bear} style={styles.userHeaderAnimalImage} resizeMode="contain" />
+            </View>
+            <TouchableOpacity onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
+              <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.userHeaderNoticeButton}
               onPress={() => setAnnouncementListVisible(true)}
@@ -2179,6 +2195,27 @@ export default function MenuScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        <Modal visible={officialSiteVisible} transparent animationType="slide" onRequestClose={() => setOfficialSiteVisible(false)}>
+          <View style={styles.officialSiteOverlay}>
+            <TouchableWithoutFeedback onPress={() => setOfficialSiteVisible(false)} accessible={false}>
+              <View style={styles.officialSiteBackdrop} />
+            </TouchableWithoutFeedback>
+            <View style={styles.officialSiteSurface}>
+              <View style={styles.officialSiteHeader}>
+                <Text style={styles.officialSiteTitle}>Kanye's Club</Text>
+                <TouchableOpacity style={styles.officialSiteClose} onPress={() => setOfficialSiteVisible(false)} accessibilityLabel="公式サイトを閉じる">
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              {Platform.OS === 'web' && React.createElement('iframe', {
+                src: 'https://kanyes-club.com/',
+                title: "Kanye's Club公式サイト",
+                style: { width: '100%', flex: 1, border: 'none' },
+              })}
+            </View>
+          </View>
+        </Modal>
 
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
         {(role === 'staff' || role === 'admin') && (
@@ -4492,7 +4529,7 @@ const styles = StyleSheet.create({
     color: '#333333',
   },
   userHeader: {
-    height: 126,
+    height: 64,
     marginBottom: 12,
     backgroundColor: '#08B8C0',
     alignItems: 'center',
@@ -4500,8 +4537,56 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   userHeaderLogo: {
-    width: 220,
-    height: 112,
+    width: 116,
+    height: 58,
+  },
+  userHeaderAnimal: {
+    position: 'absolute',
+    left: 8,
+    bottom: 4,
+    width: 48,
+    height: 48,
+  },
+  userHeaderAnimalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  officialSiteOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(17, 24, 39, 0.5)',
+  },
+  officialSiteBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  officialSiteSurface: {
+    width: '100%',
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  officialSiteHeader: {
+    height: 52,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E3E7E8',
+  },
+  officialSiteTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#333333',
+  },
+  officialSiteClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F5F5',
   },
   userHeaderNoticeButton: {
     position: 'absolute',
