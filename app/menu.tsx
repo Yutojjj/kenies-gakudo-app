@@ -2079,6 +2079,30 @@ export default function MenuScreen() {
                 ブラウザのアドレスバー左の🔒から「通知→許可」に変更してください
               </Text>
             </View>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 4,
+                minHeight: 32,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={async () => {
+                if (!accountId || pushRequesting) return;
+                setPushRequesting(true);
+                const result = await setupPushToken(accountId);
+                setPushState(getNotificationState());
+                setPushRequesting(false);
+                if (result === 'denied') {
+                  Alert.alert('ブラウザの設定が必要です', 'アドレスバー左の🔒から「通知→許可」に変更してください。');
+                }
+              }}
+              disabled={pushRequesting}
+              activeOpacity={0.82}
+            >
+              <Text style={{ color: '#C76A63', fontWeight: 'bold', fontSize: 11 }}>
+                {pushRequesting ? '設定中...' : '通知を許可する'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
         {Platform.OS === 'web' && pushState === 'ios-not-standalone' && (
@@ -2203,7 +2227,7 @@ export default function MenuScreen() {
             <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.userHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
-            <Text style={styles.staffHeaderTime}>
+            <Text style={styles.staffHeaderTime} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
               {`${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}:${String(currentClock.getSeconds()).padStart(2, '0')}`}
             </Text>
             <TouchableOpacity style={styles.staffHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
@@ -2856,18 +2880,7 @@ export default function MenuScreen() {
         )}
 
         {role === 'user' && (
-          <Animated.View
-            style={[
-              styles.eventPlanSection,
-              {
-                opacity: eventRevealAnim,
-                transform: [
-                  { translateY: eventRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [32, 0] }) },
-                  { scale: eventRevealAnim.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) },
-                ],
-              },
-            ]}
-          >
+          <View style={styles.eventPlanSection}>
             <View style={styles.eventPlanHeader}>
               <View style={styles.eventPlanTitleWrap}>
                 <View style={styles.eventPlanTitleBar} />
@@ -2903,18 +2916,7 @@ export default function MenuScreen() {
                   }}
                 >
                   {visibleMenuEvents.map((event) => (
-                    <Animated.View
-                      key={event.id}
-                      style={[
-                        styles.eventPlanCard,
-                        {
-                          transform: [
-                            { translateY: eventFloatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) },
-                            { scale: eventFloatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.006] }) },
-                          ],
-                        },
-                      ]}
-                    >
+                    <View key={event.id} style={styles.eventPlanCard}>
                       {event.coverImage ? (
                         <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
                       ) : (
@@ -2964,7 +2966,7 @@ export default function MenuScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                    </Animated.View>
+                    </View>
                   ))}
                 </ScrollView>
                 <View style={styles.eventPlanPager}>
@@ -2996,7 +2998,7 @@ export default function MenuScreen() {
                 </View>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         )}
 
 
@@ -4697,14 +4699,15 @@ const styles = StyleSheet.create({
   },
   staffHeaderTime: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 21,
+    left: 132,
+    right: 60,
+    top: 15,
     textAlign: 'center',
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
+    includeFontPadding: false,
   },
   staffHeaderLogoButton: {
     position: 'absolute',
