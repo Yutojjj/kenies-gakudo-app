@@ -2346,6 +2346,15 @@ export default function MenuScreen() {
   const settingsMenuTop = pushState === 'denied' ? 202 : pushState === 'default' ? 160 : 76;
   const headerTime = `${String(currentClock.getHours()).padStart(2, '0')}:${String(currentClock.getMinutes()).padStart(2, '0')}${clockShowsSeconds ? `:${String(currentClock.getSeconds()).padStart(2, '0')}` : ''}`;
   const headerClockFontSize = Math.min(38, Math.max(20, (width - 142) * 0.19));
+  const headerClockOutlineStyle = Platform.OS === 'web'
+    ? ({ WebkitTextStrokeWidth: 4.5, WebkitTextStrokeColor: '#F08AB8', paintOrder: 'stroke fill' } as any)
+    : {};
+  const headerClockTextMetrics = {
+    fontSize: headerClockFontSize,
+    lineHeight: headerClockFontSize + 8,
+    letterSpacing: 0.2,
+    fontFamily: Platform.OS === 'web' ? 'Arial Rounded MT Bold, Arial Black, Nunito, Trebuchet MS, sans-serif' : undefined,
+  };
   const toggleClockSeconds = () => {
     setClockShowsSeconds(current => {
       const next = !current;
@@ -2609,9 +2618,14 @@ export default function MenuScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={clockShowsSeconds ? '秒表示を隠す' : '秒表示を表示する'}
               >
-                <Text style={[styles.staffHeaderTime, { fontSize: headerClockFontSize, lineHeight: headerClockFontSize + 8 }]} numberOfLines={1}>
-                  {headerTime}
-                </Text>
+                <View style={[styles.staffHeaderTimeStack, { height: headerClockFontSize + 8 }]}>
+                  <Text style={[styles.staffHeaderTime, styles.staffHeaderTimeOutline, headerClockOutlineStyle, headerClockTextMetrics]} numberOfLines={1}>
+                    {headerTime}
+                  </Text>
+                  <Text style={[styles.staffHeaderTime, headerClockTextMetrics]} numberOfLines={1}>
+                    {headerTime}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
             <TouchableOpacity
@@ -5331,9 +5345,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
-    textShadowColor: '#27BFC8',
+  },
+  staffHeaderTimeStack: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  staffHeaderTimeOutline: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    color: '#F08AB8',
+    textShadowColor: '#D9689A',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 5,
+    textShadowRadius: 2,
   },
   staffHeaderTimeWrap: {
     position: 'absolute',
