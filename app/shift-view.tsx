@@ -401,13 +401,6 @@ export default function ShiftViewScreen() {
           </View>
         ) : identityLoaded ? (
           <View style={styles.staffHeaderActions}>
-            <TouchableOpacity
-              style={styles.notificationHeaderBtn}
-              onPress={() => setNotificationVisible(true)}
-              accessibilityLabel="勤務通知の設定"
-            >
-              <Ionicons name={shiftNotifyEnabled ? 'notifications' : 'notifications-outline'} size={20} color="#176E72" />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.submitHeaderBtn} onPress={() => setSubmissionVisible(true)}>
               <Text style={styles.submitHeaderBtnText}>シフト提出画面へ</Text>
             </TouchableOpacity>
@@ -447,79 +440,6 @@ export default function ShiftViewScreen() {
           <Ionicons name={showOnlyMine ? 'people-outline' : 'person-outline'} size={25} color="#FFFFFF" />
         </TouchableOpacity>
       )}
-
-      <Modal visible={notificationVisible} transparent animationType="fade" onRequestClose={() => setNotificationVisible(false)}>
-        <View style={styles.notificationOverlay}>
-          <View style={styles.notificationModal}>
-            <View style={styles.notificationTitleRow}>
-              <Text style={styles.notificationTitle}>勤務通知</Text>
-              <TouchableOpacity style={styles.notificationClose} onPress={() => setNotificationVisible(false)}>
-                <Ionicons name="close" size={25} color="#5D4037" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.notificationHint}>自分の勤務日の開始前に通知します</Text>
-
-            <Text style={styles.notificationLabel}>通知</Text>
-            <View style={styles.segmentRow}>
-              <TouchableOpacity
-                style={[styles.segmentButton, !shiftNotifyEnabled && styles.segmentButtonSelectedOff]}
-                onPress={() => setShiftNotifyEnabled(false)}
-              >
-                <Text style={[styles.segmentText, !shiftNotifyEnabled && styles.segmentTextSelected]}>通知しない</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.segmentButton, shiftNotifyEnabled && styles.segmentButtonSelectedOn]}
-                onPress={() => setShiftNotifyEnabled(true)}
-              >
-                <Text style={[styles.segmentText, shiftNotifyEnabled && styles.segmentTextSelected]}>通知する</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.notificationLabel}>通知する日</Text>
-            <View style={styles.segmentRow}>
-              <TouchableOpacity
-                style={[styles.segmentButton, shiftNotifyTiming === 'sameDay' && styles.segmentButtonSelectedOn]}
-                onPress={() => setShiftNotifyTiming('sameDay')}
-              >
-                <Text style={[styles.segmentText, shiftNotifyTiming === 'sameDay' && styles.segmentTextSelected]}>勤務当日</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.segmentButton, shiftNotifyTiming === 'previousDay' && styles.segmentButtonSelectedOn]}
-                onPress={() => setShiftNotifyTiming('previousDay')}
-              >
-                <Text style={[styles.segmentText, shiftNotifyTiming === 'previousDay' && styles.segmentTextSelected]}>前日</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.notificationLabel}>通知する時刻</Text>
-            <TouchableOpacity style={styles.timeSelectButton} onPress={() => setTimePickerVisible(true)}>
-              <Ionicons name="time-outline" size={22} color="#176E72" />
-              <Text style={styles.timeSelectText}>{shiftNotifyTime}</Text>
-              <Ionicons name="chevron-forward" size={20} color="#8A7770" />
-            </TouchableOpacity>
-            <Text style={styles.notificationDescription}>件名「勤務通知」／内容「開始時間〜終了時間」</Text>
-            {!!notificationMessage && (
-              <Text style={styles.notificationError}>{notificationMessage}</Text>
-            )}
-
-            <TouchableOpacity
-              style={[styles.notificationSaveButton, notificationSaving && styles.notificationSaveButtonDisabled]}
-              onPress={saveShiftNotificationSettings}
-              disabled={notificationSaving}
-            >
-              <Text style={styles.notificationSaveText}>{notificationSaving ? '保存中...' : '設定を保存'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <CenteredTimePickerModal
-        visible={timePickerVisible}
-        value={shiftNotifyTime}
-        title="通知時刻を選択"
-        onClose={() => setTimePickerVisible(false)}
-        onConfirm={value => { setShiftNotifyTime(value); setTimePickerVisible(false); }}
-      />
 
       <Modal visible={submissionVisible} transparent animationType="fade" onRequestClose={() => setSubmissionVisible(false)}>
         <View style={styles.submissionOverlay}>

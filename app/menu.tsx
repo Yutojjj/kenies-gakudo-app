@@ -15,10 +15,11 @@ import {
 import AdminBottomNav from '../components/AdminBottomNav';
 import SignaturePad from '../components/SignaturePad';
 import TransportModal from '../components/TransportModal';
+import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
-import { disablePushSubscription, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
+import { disablePushSubscription, getCurrentPushDeviceId, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -697,6 +698,13 @@ export default function MenuScreen() {
   const [pickupNotificationEnabled, setPickupNotificationEnabled] = useState(true);
   const [pickupNotificationSaving, setPickupNotificationSaving] = useState(false);
   const [shiftTestSending, setShiftTestSending] = useState(false);
+  const [shiftNotificationVisible, setShiftNotificationVisible] = useState(false);
+  const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
+  const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
+  const [shiftNotifyTime, setShiftNotifyTime] = useState('08:00');
+  const [shiftNotifyTimePickerVisible, setShiftNotifyTimePickerVisible] = useState(false);
+  const [shiftNotificationSaving, setShiftNotificationSaving] = useState(false);
+  const [shiftNotificationMessage, setShiftNotificationMessage] = useState('');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
@@ -736,6 +744,8 @@ export default function MenuScreen() {
     setShiftTestSending(true);
     try {
       const origin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '';
+      const deviceId = await getCurrentPushDeviceId();
+      if (!deviceId) throw new Error('この端末の通知購読が登録されていません。');
       const response = await fetch(`${origin}/api/send-notification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -745,6 +755,7 @@ export default function MenuScreen() {
           body: 'この端末への通知テストです。',
           url: '/shift-view',
           notificationType: 'shift',
+          deviceIds: [deviceId],
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -759,6 +770,53 @@ export default function MenuScreen() {
       showAppAlert('テスト通知エラー', String(error?.message || '通知を送信できませんでした。'));
     } finally {
       setShiftTestSending(false);
+    }
+  };
+
+  const openShiftNotificationSettings = async () => {
+    if (!accountId) return;
+    setUserSettingsVisible(false);
+    setShiftNotificationMessage('');
+    try {
+      const snapshot = await getDoc(doc(db, 'staff_shift_notification_settings', accountId));
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setShiftNotifyEnabled(data.enabled === true);
+        setShiftNotifyTiming(data.timing === 'previousDay' ? 'previousDay' : 'sameDay');
+        if (typeof data.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(data.time)) setShiftNotifyTime(data.time);
+      }
+    } catch {}
+    setShiftNotificationVisible(true);
+  };
+
+  const saveShiftNotificationSettings = async () => {
+    if (!accountId || !name || shiftNotificationSaving) return;
+    setShiftNotificationSaving(true);
+    setShiftNotificationMessage('');
+    try {
+      const notificationApiOrigin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '';
+      await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+        accountId,
+        staffName: role === 'admin' ? '稲熊' : name,
+        role,
+        enabled: shiftNotifyEnabled,
+        timing: shiftNotifyTiming,
+        time: shiftNotifyTime,
+        notificationApiOrigin,
+        updatedAt: new Date(),
+      }, { merge: true });
+      if (shiftNotifyEnabled) {
+        const pushResult = await setupPushToken(accountId);
+        if (pushResult !== 'granted') {
+          setShiftNotificationMessage(pushResult === 'denied' ? '設定は保存しました。端末の通知を許可してください。' : '設定は保存しました。通知先端末を登録できませんでした。');
+          return;
+        }
+      }
+      setShiftNotificationVisible(false);
+    } catch {
+      setShiftNotificationMessage('通知設定を保存できませんでした。通信状態を確認してください。');
+    } finally {
+      setShiftNotificationSaving(false);
     }
   };
 
@@ -2628,6 +2686,13 @@ export default function MenuScreen() {
                   />
                 </View>
               )}
+              {(role === 'staff' || role === 'admin') && (
+                <TouchableOpacity style={styles.userSettingsRow} onPress={openShiftNotificationSettings}>
+                  <Ionicons name="notifications-outline" size={23} color="#176E72" />
+                  <Text style={styles.userSettingsRowText}>シフト通知設定</Text>
+                  <Ionicons name="chevron-forward" size={19} color="#8A7770" />
+                </TouchableOpacity>
+              )}
               {role === 'staff' && name.replace(/\s/g, '') === '渡邉' && (
                 <TouchableOpacity
                   style={styles.userSettingsRow}
@@ -2645,6 +2710,60 @@ export default function MenuScreen() {
             </View>
           </View>
         </Modal>
+
+        <Modal visible={shiftNotificationVisible} transparent animationType="fade" onRequestClose={() => setShiftNotificationVisible(false)}>
+          <View style={styles.shiftNotificationOverlay}>
+            <View style={styles.shiftNotificationModal}>
+              <View style={styles.shiftNotificationTitleRow}>
+                <Text style={styles.shiftNotificationTitle}>シフト通知設定</Text>
+                <TouchableOpacity style={styles.notificationClose} onPress={() => setShiftNotificationVisible(false)}>
+                  <Ionicons name="close" size={25} color="#5D4037" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.notificationHint}>自分の勤務日の開始前に通知します</Text>
+
+              <Text style={styles.notificationLabel}>通知</Text>
+              <View style={styles.segmentRow}>
+                <TouchableOpacity style={[styles.segmentButton, !shiftNotifyEnabled && styles.segmentButtonSelectedOff]} onPress={() => setShiftNotifyEnabled(false)}>
+                  <Text style={[styles.segmentText, !shiftNotifyEnabled && styles.segmentTextSelected]}>通知しない</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.segmentButton, shiftNotifyEnabled && styles.segmentButtonSelectedOn]} onPress={() => setShiftNotifyEnabled(true)}>
+                  <Text style={[styles.segmentText, shiftNotifyEnabled && styles.segmentTextSelected]}>通知する</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.notificationLabel}>通知する日</Text>
+              <View style={styles.segmentRow}>
+                <TouchableOpacity style={[styles.segmentButton, shiftNotifyTiming === 'sameDay' && styles.segmentButtonSelectedOn]} onPress={() => setShiftNotifyTiming('sameDay')}>
+                  <Text style={[styles.segmentText, shiftNotifyTiming === 'sameDay' && styles.segmentTextSelected]}>勤務当日</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.segmentButton, shiftNotifyTiming === 'previousDay' && styles.segmentButtonSelectedOn]} onPress={() => setShiftNotifyTiming('previousDay')}>
+                  <Text style={[styles.segmentText, shiftNotifyTiming === 'previousDay' && styles.segmentTextSelected]}>前日</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.notificationLabel}>通知する時刻</Text>
+              <TouchableOpacity style={styles.timeSelectButton} onPress={() => setShiftNotifyTimePickerVisible(true)}>
+                <Ionicons name="time-outline" size={22} color="#176E72" />
+                <Text style={styles.timeSelectText}>{shiftNotifyTime}</Text>
+                <Ionicons name="chevron-forward" size={20} color="#8A7770" />
+              </TouchableOpacity>
+              <Text style={styles.notificationDescription}>件名「勤務通知」／内容「開始時間〜終了時間」</Text>
+              {!!shiftNotificationMessage && <Text style={styles.notificationError}>{shiftNotificationMessage}</Text>}
+              <TouchableOpacity style={[styles.notificationSaveButton, shiftNotificationSaving && styles.notificationSaveButtonDisabled]} onPress={saveShiftNotificationSettings} disabled={shiftNotificationSaving}>
+                <Text style={styles.notificationSaveText}>{shiftNotificationSaving ? '保存中...' : '設定を保存'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <CenteredTimePickerModal
+          visible={shiftNotifyTimePickerVisible}
+          value={shiftNotifyTime}
+          title="通知時刻を選択"
+          onClose={() => setShiftNotifyTimePickerVisible(false)}
+          onConfirm={value => { setShiftNotifyTime(value); setShiftNotifyTimePickerVisible(false); }}
+        />
 
         {/* ── 選択日の送迎先（スタッフ・管理者用） ── */}
         {(role === 'staff' || role === 'admin') && (
@@ -4921,6 +5040,135 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
+  shiftNotificationOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    backgroundColor: 'rgba(35, 30, 27, 0.55)',
+  },
+  shiftNotificationModal: {
+    width: '100%',
+    maxWidth: 460,
+    borderRadius: 20,
+    padding: 20,
+    backgroundColor: '#FFFDFC',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  shiftNotificationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  shiftNotificationTitle: {
+    color: '#3D2A24',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  notificationClose: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1DD',
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DED8D3',
+    backgroundColor: '#FFFFFF',
+  },
+  segmentButtonSelectedOn: {
+    borderColor: '#08AEB8',
+    backgroundColor: '#EAFBFC',
+  },
+  segmentButtonSelectedOff: {
+    borderColor: '#D8C8BC',
+    backgroundColor: '#F8F3EF',
+  },
+  segmentText: {
+    color: '#8A7770',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  segmentTextSelected: {
+    color: '#176E72',
+  },
+  notificationLabel: {
+    marginTop: 18,
+    marginBottom: 8,
+    color: '#3D2A24',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  timeSelectButton: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7DCDD',
+    backgroundColor: '#EFFBFC',
+  },
+  timeSelectText: {
+    flex: 1,
+    color: '#176E72',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  notificationHint: {
+    marginTop: 4,
+    color: '#89766C',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  notificationDescription: {
+    marginTop: 8,
+    color: '#89766C',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notificationError: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    color: '#9B2C2C',
+    backgroundColor: '#FFF0F0',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '800',
+  },
+  notificationSaveButton: {
+    minHeight: 52,
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#08AEB8',
+  },
+  notificationSaveButtonDisabled: {
+    opacity: 0.55,
+  },
+  notificationSaveText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
   userHeaderLogo: {
     width: 104,
     height: 54,
@@ -5525,7 +5773,8 @@ const styles = StyleSheet.create({
   quickReorderGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    columnGap: 8,
     rowGap: 10,
     paddingBottom: 4,
   },
