@@ -168,7 +168,7 @@ async function resolveTargetAccountIds({ accountIds, sendToAll, excludeAccountId
     .filter((id) => id && id !== excludeAccountId);
 }
 
-async function loadSubscriptions(accountIds, token) {
+async function loadSubscriptions(accountIds, token, notificationType) {
   const subscriptions = [];
   await Promise.all(
     accountIds.map(async (accountId) => {
@@ -181,6 +181,7 @@ async function loadSubscriptions(accountIds, token) {
         const data = firestoreDocToJson(doc);
         console.log(`[push] Device ${deviceId}: enabled=${data.enabled}, hasEndpoint=${!!data.subscription?.endpoint}`);
         if (data.enabled === false) return;
+        if (notificationType === 'pickup' && data.pickupNotificationEnabled === false) return;
         if (data.subscription?.endpoint) {
           subscriptions.push({ accountId, deviceId, subscription: data.subscription });
         }
@@ -195,7 +196,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { accountIds, sendToAll, excludeAccountId, title, body, url } = req.body ?? {};
+    const { accountIds, sendToAll, excludeAccountId, title, body, url, notificationType } = req.body ?? {};
 
     if (!sendToAll && (!Array.isArray(accountIds) || !accountIds.length)) {
       return res.status(200).json({ sent: 0, total: 0 });
@@ -229,7 +230,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ sent: 0, total: 0 });
     }
 
-    const subscriptions = await loadSubscriptions(targetAccountIds, token);
+    const subscriptions = await loadSubscriptions(targetAccountIds, token, notificationType);
     console.log(`[push] total subscriptions found: ${subscriptions.length}`);
 
     if (!subscriptions.length) {

@@ -237,13 +237,13 @@ function trustedNotificationApiOrigin(value) {
   return "";
 }
 
-async function sendStaffShiftPush(setting, accountId, title, body, url) {
+async function sendStaffShiftPush(setting, accountId, title, body, url, notificationType) {
   const apiOrigin = trustedNotificationApiOrigin(setting.notificationApiOrigin) || DEFAULT_NOTIFICATION_API_ORIGIN;
   if (apiOrigin) {
     const response = await fetch(`${apiOrigin}/api/send-notification`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountIds: [accountId], title, body, url }),
+        body: JSON.stringify({ accountIds: [accountId], title, body, url, notificationType }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -624,7 +624,8 @@ exports.sendStaffShiftReminders = onSchedule(
           accountId,
           hasPickupPlan ? "送迎担当通知" : "勤務通知",
           hasPickupPlan ? `${pickupStaffName}: ${shifts.join("、")}（15分前）` : shifts.join("、"),
-          "/shift-view"
+          "/shift-view",
+          hasPickupPlan ? "pickup" : "shift"
         );
       } catch (error) {
         result = { sent: 0, total: 0, errors: [{ message: String(error?.message || error) }] };
