@@ -18,7 +18,7 @@ import TransportModal from '../components/TransportModal';
 import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
-import { disablePushSubscription, getNotificationState, setupPushToken } from '../utils/setupPushToken';
+import { disablePushSubscription, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -709,10 +709,8 @@ export default function MenuScreen() {
   useEffect(() => {
     if ((role !== 'staff' && role !== 'admin') || !accountId) return;
     let cancelled = false;
-    getDoc(doc(db, 'staff_shift_notification_settings', accountId)).then(snapshot => {
-      if (!cancelled && snapshot.exists()) {
-        setPickupNotificationEnabled(snapshot.data().pickupNotificationEnabled !== false);
-      }
+    loadPickupNotificationPreference(accountId).then(enabled => {
+      if (!cancelled) setPickupNotificationEnabled(enabled);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [accountId, role]);
@@ -722,13 +720,8 @@ export default function MenuScreen() {
     setPickupNotificationEnabled(enabled);
     setPickupNotificationSaving(true);
     try {
-      await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
-        accountId,
-        staffName: role === 'admin' ? '稲熊' : name,
-        role,
-        pickupNotificationEnabled: enabled,
-        updatedAt: new Date(),
-      }, { merge: true });
+      const saved = await savePickupNotificationPreference(accountId, enabled);
+      if (!saved) throw new Error('push device is not registered');
     } catch (error) {
       setPickupNotificationEnabled(!enabled);
       showAppAlert('保存エラー', '送迎通知の設定を保存できませんでした。');

@@ -1,4 +1,5 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 const PUSH_SUBSCRIPTIONS_COLLECTION = 'push_subscriptions_v2';
@@ -23,8 +24,45 @@ function arrayBufferEquals(a?: ArrayBuffer | null, b?: ArrayBuffer | null): bool
 }
 
 /** 端末固有IDを生成（endpoint末尾を使用） */
-function deviceIdFromEndpoint(endpoint: string): string {
+export function deviceIdFromEndpoint(endpoint: string): string {
   return endpoint.slice(-60).replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+const pickupPreferenceKey = (accountId: string, deviceId: string) =>
+  `pickupNotificationEnabled:${accountId}:${deviceId}`;
+
+export async function getCurrentPushDeviceId(): Promise<string | null> {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  try {
+    const subscription = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+    const endpoint = subscription?.toJSON().endpoint;
+    return endpoint ? deviceIdFromEndpoint(endpoint) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadPickupNotificationPreference(accountId: string): Promise<boolean> {
+  const deviceId = await getCurrentPushDeviceId();
+  if (!deviceId) return true;
+  const local = await AsyncStorage.getItem(pickupPreferenceKey(accountId, deviceId)).catch(() => null);
+  if (local === 'false') return false;
+  if (local === 'true') return true;
+  const snapshot = await getDoc(doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId)).catch(() => null);
+  return snapshot?.exists() ? snapshot.data().pickupNotificationEnabled !== false : true;
+}
+
+export async function savePickupNotificationPreference(accountId: string, enabled: boolean): Promise<boolean> {
+  const deviceId = await getCurrentPushDeviceId();
+  if (!deviceId) return false;
+  await AsyncStorage.setItem(pickupPreferenceKey(accountId, deviceId), String(enabled));
+  await setDoc(
+    doc(db, PUSH_SUBSCRIPTIONS_COLLECTION, accountId, 'devices', deviceId),
+    { pickupNotificationEnabled: enabled, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  return true;
 }
 
 /**
@@ -101,6 +139,7 @@ export async function setupPushToken(accountId: string): Promise<'granted' | 'de
         subscription: json,
         userAgent: navigator.userAgent,
         enabled: true,
+        pickupNotificationEnabled: (await AsyncStorage.getItem(pickupPreferenceKey(accountId, deviceId))) !== 'false',
         updatedAt: serverTimestamp(),
       },
       { merge: true }
@@ -162,6 +201,7 @@ export async function refreshPushSubscription(accountId: string): Promise<void> 
         subscription: json,
         userAgent: navigator.userAgent,
         enabled: true,
+        pickupNotificationEnabled: (await AsyncStorage.getItem(pickupPreferenceKey(accountId, deviceId))) !== 'false',
         updatedAt: serverTimestamp(),
       },
       { merge: true }
