@@ -9,6 +9,7 @@ const ALLOWED_URL_PREFIXES = [
   '/qr-scan',
   '/schedule-changes',
   '/survey',
+  '/shift-view',
 ];
 
 const PUSH_SUBSCRIPTIONS_COLLECTION = 'push_subscriptions_v2';

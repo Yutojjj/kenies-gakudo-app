@@ -14,6 +14,7 @@ const DEFAULT_NOTIFICATION_API_ORIGIN = "https://kenies-gakudo-app.vercel.app";
 const ALLOWED_URL_PREFIXES = [
   "/menu", "/messages", "/schedule", "/album",
   "/qr-scan", "/schedule-changes", "/survey",
+  "/shift-view",
 ];
 
 function isAllowedUrl(url) {
@@ -458,6 +459,10 @@ function timeToMinutes(time) {
   return hour * 60 + minute;
 }
 
+function normalizeStaffName(value) {
+  return String(value || "").replace(/\s/g, "");
+}
+
 // スタッフ本人が有効にした勤務通知を、指定時刻に各端末へ送る。
 // lastSentDateKeyで同じ勤務日への重複通知を防ぐ。
 exports.sendStaffShiftReminders = onSchedule(
@@ -520,7 +525,7 @@ exports.sendStaffShiftReminders = onSchedule(
       }
 
       const shifts = (shiftDoc.data().staff || [])
-        .filter(shift => String(shift.name || "") === staffName)
+        .filter(shift => normalizeStaffName(shift.name) === normalizeStaffName(staffName))
         .map(shift => `${String(shift.start || "")}〜${String(shift.end || "")}`)
         .filter(Boolean);
       if (!shifts.length) {
