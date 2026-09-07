@@ -562,9 +562,10 @@ export default function TransportModal({
     resetCustomBlockForm();
   };
 
-  const confirmMergeIntoPickup = async (destinationBlock: Block) => {
-    if (!mergePrompt) return;
-    const members = (mergePrompt.source.kids || [])
+  const confirmMergeIntoPickup = async (destinationBlock: Block, promptOverride?: NonNullable<typeof mergePrompt>) => {
+    const activePrompt = promptOverride || mergePrompt;
+    if (!activePrompt) return;
+    const members = (activePrompt.source.kids || [])
       .map((kid: any) => String(kid?.name || '').trim())
       .filter(Boolean);
     if (members.length === 0) {
@@ -591,18 +592,18 @@ export default function TransportModal({
         };
         if (index === noTransportEntryIndex) {
           const nextExclusions = { ...(entry.memberExclusions || {}) };
-          nextExclusions[mergePrompt.source.key] = Array.from(new Set([...(nextExclusions[mergePrompt.source.key] || []), ...members]));
+          nextExclusions[activePrompt.source.key] = Array.from(new Set([...(nextExclusions[activePrompt.source.key] || []), ...members]));
           nextEntry.memberExclusions = nextExclusions;
         }
         return nextEntry;
       }
       if (index === noTransportEntryIndex) {
-        const current = entry.memberExclusions?.[mergePrompt.source.key] || [];
+        const current = entry.memberExclusions?.[activePrompt.source.key] || [];
         return {
           ...entry,
           memberExclusions: {
             ...(entry.memberExclusions || {}),
-            [mergePrompt.source.key]: Array.from(new Set([...current, ...members])),
+            [activePrompt.source.key]: Array.from(new Set([...current, ...members])),
           },
         };
       }
