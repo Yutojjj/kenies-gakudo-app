@@ -641,9 +641,7 @@ export default function TransportModal({
     const candidates = blocks
       .filter(block => block.type === 'school'
         && block.key !== sourceBlock.key
-        && normalizeDestination(block.nameOnly) === normalizeDestination(sourceBlock.nameOnly)
-        && !!block.time
-        && toMinutes(block.time) > toMinutes(sourceBlock.time))
+        && normalizeDestination(block.nameOnly) === normalizeDestination(sourceBlock.nameOnly))
       .sort((left, right) => toMinutes(left.time) - toMinutes(right.time));
     if (currentMembers.length > 0 && candidates.length > 0) {
       setMergePrompt({ source: { ...sourceBlock, kids: currentMembers }, candidates, sourceEntryIndex: sourceEntry ? staffEntries.indexOf(sourceEntry) : undefined });
