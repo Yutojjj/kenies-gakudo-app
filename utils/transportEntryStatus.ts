@@ -50,14 +50,18 @@ export const getTransportEntryStatus = (
     }
   } catch {}
 
+  // memberOverrides and customBlocks are metadata, not staff assignments.
+  // In particular, adding members to another destination must not make the
+  // day appear complete while destination cards are still unassigned.
   if (assignedBlockKeys.size === 0) {
-    const hasLegacyEntry = Object.entries(savedData).some(([key, value]) =>
-      key !== 'entries' && key !== 'customBlocks' && typeof value === 'string' && value.trim().length > 0
-    );
+    const hasLegacyEntry = [...expectedBlockKeys].some(key => {
+      const value = savedData[key];
+      return typeof value === 'string' && value.trim().length > 0;
+    });
     return hasLegacyEntry ? 'complete' : 'empty';
   }
 
-  if (expectedBlockKeys.size === 0) return 'complete';
+  if (expectedBlockKeys.size === 0) return 'empty';
   const assignedExpectedCount = [...expectedBlockKeys].filter(key => assignedBlockKeys.has(key)).length;
   return assignedExpectedCount >= expectedBlockKeys.size ? 'complete' : 'partial';
 };

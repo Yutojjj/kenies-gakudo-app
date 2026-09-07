@@ -1965,7 +1965,7 @@ export default function MenuScreen() {
       }
       return false;
     };
-    const getBlockMembers = (blockKey: string) => {
+    const getBlockMembers = (blockKey: string, entry?: any) => {
       const getGradeOrder = (grade: any) => {
         const value = String(grade || '').replace(/\s/g, '');
         const kindergartenOrder: Record<string, number> = { '年少': 0, '年中': 1, '年長': 2 };
@@ -1977,18 +1977,24 @@ export default function MenuScreen() {
         return 99;
       };
       const sortMembersByGrade = (members: any[]) => [...members].sort((a, b) => getGradeOrder(a.grade) - getGradeOrder(b.grade));
+      const applyChanges = (members: string[]) => {
+        const excluded = new Set(entry?.memberExclusions?.[blockKey] || []);
+        const filtered = members.filter(member => !excluded.has(member));
+        const existing = new Set(filtered);
+        return [...filtered, ...(entry?.memberOverrides?.[blockKey] || []).filter((member: string) => member && !existing.has(member))];
+      };
       const customBlock = customBlockMap.get(blockKey);
-      if (customBlock) return Array.isArray(customBlock.members) ? customBlock.members : [];
+      if (customBlock) return applyChanges(Array.isArray(customBlock.members) ? customBlock.members : []);
       if (!pickupOverviewData) return [];
 
       for (const [school, times] of Object.entries(pickupOverviewData.attendance.schools || {})) {
         for (const [time, kids] of Object.entries(times || {})) {
           if (`${school}_${time}` !== blockKey) continue;
-          return sortMembersByGrade(kids || []).map((kid: any) => kid.name || '名前未登録');
+          return applyChanges(sortMembersByGrade(kids || []).map((kid: any) => kid.name || '名前未登録'));
         }
       }
       const lessonKids = pickupOverviewData.attendance.lessons?.[blockKey] || [];
-      return sortMembersByGrade(lessonKids).map((kid: any) => kid.name || '名前未登録');
+      return applyChanges(sortMembersByGrade(lessonKids).map((kid: any) => kid.name || '名前未登録'));
     };
     if (parsedEntries.length === 0) {
       return <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: '#BDBDBD', fontSize: 13 }}>送迎の予定はありません</Text></View>;
@@ -2007,7 +2013,8 @@ export default function MenuScreen() {
       const shiftTime = getPickupStaffShift(entry.staffName);
       const activeTrips = entry.trips
         ? entry.trips
-            .filter((t: any) => t.blockKeys && t.blockKeys.length > 0)
+            .map((trip: any) => ({ ...trip, blockKeys: (trip.blockKeys || []).filter((key: string) => getBlockMembers(key, entry).length > 0) }))
+            .filter((t: any) => t.blockKeys.length > 0)
             .sort((a: any, b: any) => Number(a.tripIndex ?? 0) - Number(b.tripIndex ?? 0))
         : [];
       if (activeTrips.length === 0) return null;
@@ -2038,7 +2045,8 @@ export default function MenuScreen() {
       const nextTripOrder = activeTrips.findIndex((trip: any) => getTripStatus(trip) === 'future');
       const markerTripOrder = currentTripOrder >= 0 ? currentTripOrder : nextTripOrder >= 0 ? nextTripOrder : activeTrips.length - 1;
       if (entry.staffName === '送迎しない') {
-        const noTransportBlockKeys = Array.from(new Set(activeTrips.flatMap((trip: any) => trip.blockKeys))) as string[];
+        const noTransportBlockKeys = (Array.from(new Set(activeTrips.flatMap((trip: any) => trip.blockKeys))) as string[])
+          .filter((bk: string) => getBlockMembers(bk, entry).length > 0) as string[];
         return (
           <AnimatedTouchableOpacity
             key={`${entry.staffName}-${sIdx}`}
@@ -2056,7 +2064,7 @@ export default function MenuScreen() {
               {noTransportBlockKeys.map((bk: string) => {
                 const blockDisplay = getBlockDisplay(bk);
                 const isManualPickup = !blockDisplay.isLesson && isManualPickupBlock(bk);
-                const members = showAll ? getBlockMembers(bk) : [];
+                const members = showAll ? getBlockMembers(bk, entry) : [];
                 return (
                   <View key={bk} style={styles.noTransportItem}>
                     <View style={styles.pickupDestinationRow}>
@@ -2084,7 +2092,7 @@ export default function MenuScreen() {
       activeTrips.forEach((trip: any) => {
         const blockCount = Array.isArray(trip.blockKeys) ? trip.blockKeys.length : 0;
         const memberLineCount = showAll
-          ? trip.blockKeys.reduce((total: number, key: string) => total + Math.ceil(Math.min(getBlockMembers(key).length, 4) / 2), 0)
+          ? trip.blockKeys.reduce((total: number, key: string) => total + Math.ceil(Math.min(getBlockMembers(key, entry).length, 4) / 2), 0)
           : 0;
         const estimatedHeight = 48 + blockCount * 31 + memberLineCount * 18;
         if (columnIndex === 0 && tripColumns[0].length > 0 && columnHeights[0] + estimatedHeight > 330) {
@@ -2142,7 +2150,7 @@ export default function MenuScreen() {
                         {trip.blockKeys.map((bk: string, bkIdx: number) => {
                           const blockDisplay = getBlockDisplay(bk);
                           const isManualPickup = !blockDisplay.isLesson && isManualPickupBlock(bk);
-                          const members = showAll ? getBlockMembers(bk) : [];
+                          const members = showAll ? getBlockMembers(bk, entry) : [];
                           return (
                             <View key={bk} style={bkIdx > 0 ? styles.pickupBlockDivider : undefined}>
                               <View style={styles.pickupDestinationRow}>

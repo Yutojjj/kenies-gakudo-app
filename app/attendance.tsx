@@ -1312,6 +1312,7 @@ export default function AttendanceScreen() {
               setTransportCalendarMonth(new Date(next.getFullYear(), next.getMonth(), 1));
             }}
             attendance={getAttendanceForDay(new Date(selectedTransportDate + 'T00:00:00'))}
+            allMembers={kids}
             shiftStaff={assignedShifts[selectedTransportDate] || []}
             allStaffList={allStaffList}
             assignments={pickupAssignments[selectedTransportDate] || {}}
