@@ -175,7 +175,7 @@ exports.sendNotification = onRequest(
   }
 );
 
-async function sendAnnouncementPush(accountIds, title, body, url) {
+async function sendAnnouncementPush(accountIds, title, body, url, notificationType) {
   const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || process.env.EXPO_PUBLIC_FIREBASE_VAPID_KEY;
   const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
   const vapidSubject = process.env.VAPID_SUBJECT;
@@ -189,7 +189,11 @@ async function sendAnnouncementPush(accountIds, title, body, url) {
     const devices = await db.collection("push_subscriptions_v2").doc(accountId).collection("devices").get();
     devices.forEach(device => {
       const data = device.data();
-      if (data.enabled !== false && data.subscription?.endpoint) {
+       if (
+         data.enabled !== false &&
+         !(notificationType === "pickup" && data.pickupNotificationEnabled === false) &&
+         data.subscription?.endpoint
+       ) {
         subscriptions.push({ accountId, deviceId: device.id, subscription: data.subscription });
       }
     });
@@ -257,7 +261,7 @@ async function sendStaffShiftPush(setting, accountId, title, body, url, notifica
         : [],
     };
   }
-  return sendAnnouncementPush([accountId], title, body, url);
+  return sendAnnouncementPush([accountId], title, body, url, notificationType);
 }
 
 const WEEKDAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
@@ -501,10 +505,6 @@ function getPickupStaffName(setting, accountId, staffName) {
   return isAdmin ? "稲熊" : staffName;
 }
 
-function isPickupNotificationEnabled(setting) {
-  return setting.pickupNotificationEnabled !== false;
-}
-
 // スタッフ本人が有効にした勤務通知を、指定時刻に各端末へ送る。
 // lastSentDateKeyで同じ勤務日への重複通知を防ぐ。
 exports.sendStaffShiftReminders = onSchedule(
@@ -536,8 +536,6 @@ exports.sendStaffShiftReminders = onSchedule(
 
     await Promise.all(settingsSnap.docs.map(async settingDoc => {
       const setting = settingDoc.data();
-      // 送迎通知は未設定ならオン。明示的にオフ、かつ勤務通知もオフの設定だけ除外する。
-      if (setting.enabled !== true && setting.pickupNotificationEnabled === false) return;
       if (currentMinutes === null) {
         diagnostics.invalidTime++;
         return;
@@ -555,13 +553,74 @@ exports.sendStaffShiftReminders = onSchedule(
 
       const pickupDoc = await db.collection("pickup_assignments").doc(targetDateKey).get();
       const pickupStaffName = getPickupStaffName(setting, accountId, staffName);
-      const pickupPlan = isPickupNotificationEnabled(setting) && pickupDoc.exists
+      const pickupPlan = pickupDoc.exists
         ? getPickupNotificationPlan(pickupDoc.data(), pickupStaffName)
         : { found: false, times: [] };
-      const hasPickupPlan = pickupPlan.found;
-      const scheduledMinutes = hasPickupPlan
-        ? pickupPlan.notificationMinutes
-        : timeToMinutes(setting.time);
+      if (pickupPlan.found && pickupPlan.times.length) {
+        const pickupMinutes = pickupPlan.notificationMinutes;
+        const minutesSincePickupNotification = currentMinutes - pickupMinutes;
+        if (minutesSincePickupNotification >= 0 && minutesSincePickupNotification < 10) {
+          const claimedPickup = await db.runTransaction(async transaction => {
+            const fresh = await transaction.get(settingDoc.ref);
+            const freshData = fresh.data() || {};
+            const processingAt = freshData.notificationProcessingAt?.toDate?.();
+            const processingIsFresh =
+              freshData.notificationProcessingDateKey === targetDateKey &&
+              freshData.notificationProcessingKind === "pickup" &&
+              processingAt instanceof Date &&
+              now.getTime() - processingAt.getTime() < 2 * 60 * 1000;
+            if (
+              freshData.lastSentPickupDateKey === targetDateKey ||
+              processingIsFresh
+            ) return false;
+            transaction.update(settingDoc.ref, {
+              notificationProcessingDateKey: targetDateKey,
+              notificationProcessingKind: "pickup",
+              notificationProcessingAt: now,
+            });
+            return true;
+          });
+          if (claimedPickup) {
+            const pickupTimes = pickupPlan.times.map(minutes =>
+              String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0")
+            );
+            let pickupResult;
+            try {
+              pickupResult = await sendStaffShiftPush(
+                setting,
+                accountId,
+                "送迎担当通知",
+                pickupStaffName + ": " + pickupTimes.join("、") + "（15分前）",
+                "/shift-view",
+                "pickup"
+              );
+            } catch (error) {
+              pickupResult = { sent: 0, total: 0, errors: [{ message: String(error?.message || error) }] };
+            }
+            if (pickupResult.sent > 0) {
+              diagnostics.sent += pickupResult.sent;
+              await settingDoc.ref.update({
+                lastSentPickupDateKey: targetDateKey,
+                notificationProcessingDateKey: null,
+                notificationProcessingKind: null,
+                notificationProcessingAt: null,
+              });
+            } else {
+              await settingDoc.ref.update({
+                notificationProcessingDateKey: null,
+                notificationProcessingKind: null,
+                notificationProcessingAt: null,
+                lastSendError: String(pickupResult.errors?.[0]?.message || "pickup push failed").slice(0, 300),
+                lastSendErrorAt: new Date(),
+              });
+            }
+          }
+        }
+      }
+
+      // シフト通知は送迎通知とは別に、従来の設定時刻で送る。
+      const hasPickupPlan = false;
+      const scheduledMinutes = timeToMinutes(setting.time);
       if (scheduledMinutes === null || scheduledMinutes === undefined) {
         diagnostics.invalidTime++;
         return;
@@ -599,6 +658,7 @@ exports.sendStaffShiftReminders = onSchedule(
         const processingAt = freshData.notificationProcessingAt?.toDate?.();
         const processingIsFresh =
           freshData.notificationProcessingDateKey === targetDateKey &&
+          freshData.notificationProcessingKind === "shift" &&
           processingAt instanceof Date &&
           now.getTime() - processingAt.getTime() < 2 * 60 * 1000;
         if (
@@ -608,6 +668,7 @@ exports.sendStaffShiftReminders = onSchedule(
         ) return false;
         transaction.update(settingDoc.ref, {
           notificationProcessingDateKey: targetDateKey,
+          notificationProcessingKind: "shift",
           notificationProcessingAt: now,
         });
         return true;
@@ -637,6 +698,7 @@ exports.sendStaffShiftReminders = onSchedule(
           lastSentDateKey: targetDateKey,
           lastSentAt: new Date(),
           notificationProcessingDateKey: null,
+          notificationProcessingKind: null,
           notificationProcessingAt: null,
           lastSendError: null,
         });
@@ -645,6 +707,7 @@ exports.sendStaffShiftReminders = onSchedule(
         else diagnostics.pushFailed++;
         await settingDoc.ref.update({
           notificationProcessingDateKey: null,
+          notificationProcessingKind: null,
           notificationProcessingAt: null,
           lastSendError: result.total === 0
             ? "push subscription not found"
