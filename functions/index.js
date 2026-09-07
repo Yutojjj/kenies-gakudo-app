@@ -463,6 +463,48 @@ function normalizeStaffName(value) {
   return String(value || "").replace(/\s/g, "");
 }
 
+function parsePickupTime(value) {
+  const match = String(value || "").match(/(?:^|_)(\d{1,2}):(\d{2})(?:\s|_|$)/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function getPickupNotificationPlan(data, staffName) {
+  let entries = data?.entries;
+  if (typeof entries === "string") {
+    try { entries = JSON.parse(entries); } catch { entries = null; }
+  }
+  if (entries && !Array.isArray(entries) && Array.isArray(entries.entries)) {
+    entries = entries.entries;
+  }
+  if (!Array.isArray(entries)) return { found: false, times: [] };
+
+  const entry = entries.find(item => normalizeStaffName(item?.staffName) === normalizeStaffName(staffName));
+  if (!entry) return { found: false, times: [] };
+
+  const times = (Array.isArray(entry.trips) ? entry.trips : [])
+    .slice(0, 2)
+    .flatMap(trip => Array.isArray(trip?.blockKeys) ? trip.blockKeys : [])
+    .map(parsePickupTime)
+    .filter(value => value !== null)
+    .sort((a, b) => a - b);
+
+  return { found: true, times, notificationMinutes: times.length ? times[0] - 15 : null };
+}
+
+function getPickupStaffName(setting, accountId, staffName) {
+  const role = String(setting.role || setting.accountRole || "").toLowerCase();
+  const isAdmin = role === "admin" || accountId === "admin" || normalizeStaffName(staffName) === "管理者";
+  return isAdmin ? "稲熊" : staffName;
+}
+
+function isPickupNotificationEnabled(setting) {
+  return setting.pickupNotificationEnabled !== false;
+}
+
 // スタッフ本人が有効にした勤務通知を、指定時刻に各端末へ送る。
 // lastSentDateKeyで同じ勤務日への重複通知を防ぐ。
 exports.sendStaffShiftReminders = onSchedule(
@@ -477,9 +519,7 @@ exports.sendStaffShiftReminders = onSchedule(
     const todayKey = tokyoDateKey(now);
     const currentTime = tokyoTimeKey(now);
     const currentMinutes = timeToMinutes(currentTime);
-    const settingsSnap = await db.collection("staff_shift_notification_settings")
-      .where("enabled", "==", true)
-      .get();
+    const settingsSnap = await db.collection("staff_shift_notification_settings").get();
 
     const diagnostics = {
       enabledSettings: settingsSnap.size,
@@ -496,16 +536,10 @@ exports.sendStaffShiftReminders = onSchedule(
 
     await Promise.all(settingsSnap.docs.map(async settingDoc => {
       const setting = settingDoc.data();
-      const scheduledMinutes = timeToMinutes(setting.time);
-      if (currentMinutes === null || scheduledMinutes === null) {
+      // 送迎通知は未設定ならオン。明示的にオフ、かつ勤務通知もオフの設定だけ除外する。
+      if (setting.enabled !== true && setting.pickupNotificationEnabled === false) return;
+      if (currentMinutes === null) {
         diagnostics.invalidTime++;
-        return;
-      }
-      // Schedulerは実行時刻が数分ずれることがあるため、設定時刻から10分以内を対象にする。
-      // lastSentDateKeyで同じ勤務日の二重送信を防ぐ。
-      const minutesSinceScheduled = currentMinutes - scheduledMinutes;
-      if (minutesSinceScheduled < 0 || minutesSinceScheduled >= 10) {
-        diagnostics.outsideWindow++;
         return;
       }
 
@@ -518,13 +552,39 @@ exports.sendStaffShiftReminders = onSchedule(
 
       const timing = setting.timing === "previousDay" ? "previousDay" : "sameDay";
       const targetDateKey = timing === "previousDay" ? addDaysToDateKey(todayKey, 1) : todayKey;
-      const shiftDoc = await db.collection("assigned_shifts").doc(targetDateKey).get();
-      if (!shiftDoc.exists) {
+
+      const pickupDoc = await db.collection("pickup_assignments").doc(targetDateKey).get();
+      const pickupStaffName = getPickupStaffName(setting, accountId, staffName);
+      const pickupPlan = isPickupNotificationEnabled(setting) && pickupDoc.exists
+        ? getPickupNotificationPlan(pickupDoc.data(), pickupStaffName)
+        : { found: false, times: [] };
+      const hasPickupPlan = pickupPlan.found;
+      const scheduledMinutes = hasPickupPlan
+        ? pickupPlan.notificationMinutes
+        : timeToMinutes(setting.time);
+      if (scheduledMinutes === null || scheduledMinutes === undefined) {
+        diagnostics.invalidTime++;
+        return;
+      }
+
+      // Schedulerの実行ずれを吸収し、lastSentDateKeyで二重送信を防ぐ。
+      const minutesSinceScheduled = currentMinutes - scheduledMinutes;
+      if (minutesSinceScheduled < 0 || minutesSinceScheduled >= 10) {
+        diagnostics.outsideWindow++;
+        return;
+      }
+
+      const shiftDoc = hasPickupPlan
+        ? null
+        : await db.collection("assigned_shifts").doc(targetDateKey).get();
+      if (!hasPickupPlan && !shiftDoc.exists) {
         diagnostics.missingShiftDocument++;
         return;
       }
 
-      const shifts = (shiftDoc.data().staff || [])
+      const shifts = hasPickupPlan
+        ? pickupPlan.times.map(minutes => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`)
+        : (shiftDoc.data().staff || [])
         .filter(shift => normalizeStaffName(shift.name) === normalizeStaffName(staffName))
         .map(shift => `${String(shift.start || "")}〜${String(shift.end || "")}`)
         .filter(Boolean);
@@ -562,8 +622,8 @@ exports.sendStaffShiftReminders = onSchedule(
         result = await sendStaffShiftPush(
           setting,
           accountId,
-          "勤務通知",
-          shifts.join("、"),
+          hasPickupPlan ? "送迎担当通知" : "勤務通知",
+          hasPickupPlan ? `${pickupStaffName}: ${shifts.join("、")}（15分前）` : shifts.join("、"),
           "/shift-view"
         );
       } catch (error) {

@@ -10,7 +10,7 @@ import {
   ActivityIndicator, Alert, Animated, Dimensions, Image,
   ImageSourcePropType, Linking, Modal,
   KeyboardAvoidingView, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, TouchableWithoutFeedback, View
+  TextInput, TouchableOpacity, TouchableWithoutFeedback, View, Switch
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SignaturePad from '../components/SignaturePad';
@@ -694,6 +694,8 @@ export default function MenuScreen() {
   const [announcementListVisible, setAnnouncementListVisible] = useState(false);
   const [officialSiteVisible, setOfficialSiteVisible] = useState(false);
   const [userSettingsVisible, setUserSettingsVisible] = useState(false);
+  const [pickupNotificationEnabled, setPickupNotificationEnabled] = useState(true);
+  const [pickupNotificationSaving, setPickupNotificationSaving] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
@@ -703,6 +705,37 @@ export default function MenuScreen() {
   const unreadAnnouncementCount = announcementReadsLoaded
     ? announcements.filter(item => !readAnnouncementIds.includes(item.id)).length
     : 0;
+
+  useEffect(() => {
+    if ((role !== 'staff' && role !== 'admin') || !accountId) return;
+    let cancelled = false;
+    getDoc(doc(db, 'staff_shift_notification_settings', accountId)).then(snapshot => {
+      if (!cancelled && snapshot.exists()) {
+        setPickupNotificationEnabled(snapshot.data().pickupNotificationEnabled !== false);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [accountId, role]);
+
+  const savePickupNotificationSetting = async (enabled: boolean) => {
+    if (!accountId || pickupNotificationSaving) return;
+    setPickupNotificationEnabled(enabled);
+    setPickupNotificationSaving(true);
+    try {
+      await setDoc(doc(db, 'staff_shift_notification_settings', accountId), {
+        accountId,
+        staffName: role === 'admin' ? '稲熊' : name,
+        role,
+        pickupNotificationEnabled: enabled,
+        updatedAt: new Date(),
+      }, { merge: true });
+    } catch (error) {
+      setPickupNotificationEnabled(!enabled);
+      showAppAlert('保存エラー', '送迎通知の設定を保存できませんでした。');
+    } finally {
+      setPickupNotificationSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (role !== 'user') {
@@ -2500,6 +2533,15 @@ export default function MenuScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={styles.staffHeaderGearButton}
+              onPress={() => setUserSettingsVisible(true)}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="設定を開く"
+            >
+              <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -2548,6 +2590,19 @@ export default function MenuScreen() {
                 <Ionicons name="lock-closed-outline" size={23} color="#795548" />
                 <Text style={styles.userSettingsRowText}>パスワード変更</Text>
               </TouchableOpacity>
+              {(role === 'staff' || role === 'admin') && (
+                <View style={styles.userSettingsRow}>
+                  <Ionicons name="car-outline" size={23} color="#176E72" />
+                  <Text style={styles.userSettingsRowText}>送迎通知</Text>
+                  <Switch
+                    value={pickupNotificationEnabled}
+                    onValueChange={savePickupNotificationSetting}
+                    disabled={pickupNotificationSaving}
+                    trackColor={{ false: '#D9DFDF', true: '#9EDADD' }}
+                    thumbColor={pickupNotificationEnabled ? '#08AEB8' : '#FFFFFF'}
+                  />
+                </View>
+              )}
               <TouchableOpacity style={[styles.userSettingsRow, styles.userSettingsLogoutRow]} onPress={() => { setUserSettingsVisible(false); handleLogout(); }}>
                 <Ionicons name="log-out-outline" size={23} color="#E53935" />
                 <Text style={[styles.userSettingsRowText, { color: '#E53935' }]}>ログアウト</Text>
