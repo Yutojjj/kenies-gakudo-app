@@ -2368,7 +2368,7 @@ export default function MenuScreen() {
     <View pointerEvents="none" style={styles.headerDecorationLayer}>
       <Image
         source={STAFF_HEADER_LEFT}
-        style={[styles.headerLeftDecoration, { left: role === 'user' ? -62 : 78, width: 86 * headerSceneVerticalScale, height: 72 * headerSceneVerticalScale }]}
+        style={[styles.headerLeftDecoration, { left: role === 'user' ? 58 : 78, width: 86 * headerSceneVerticalScale, height: 72 * headerSceneVerticalScale }]}
         resizeMode="contain"
       />
       <View style={[styles.headerMeadowDecoration, { height: 8 * headerSceneScale }]} />
@@ -5232,6 +5232,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     top: 10,
+    zIndex: 4,
     width: 44,
     height: 44,
     borderRadius: 22,
