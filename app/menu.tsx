@@ -696,6 +696,7 @@ export default function MenuScreen() {
   const [userSettingsVisible, setUserSettingsVisible] = useState(false);
   const [pickupNotificationEnabled, setPickupNotificationEnabled] = useState(true);
   const [pickupNotificationSaving, setPickupNotificationSaving] = useState(false);
+  const [shiftTestSending, setShiftTestSending] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [promotionalAnnouncement, setPromotionalAnnouncement] = useState<MenuAnnouncement | null>(null);
   const [accountId, setAccountId] = useState<string>('');
@@ -727,6 +728,37 @@ export default function MenuScreen() {
       showAppAlert('保存エラー', '送迎通知の設定を保存できませんでした。');
     } finally {
       setPickupNotificationSaving(false);
+    }
+  };
+
+  const sendWatanabeShiftTestNotification = async () => {
+    if (!accountId || shiftTestSending) return;
+    setShiftTestSending(true);
+    try {
+      const origin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '';
+      const response = await fetch(`${origin}/api/send-notification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountIds: [accountId],
+          title: 'シフト通知テスト',
+          body: 'この端末への通知テストです。',
+          url: '/shift-view',
+          notificationType: 'shift',
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || '通知送信に失敗しました');
+      showAppAlert(
+        'テスト通知',
+        Number(result.sent || 0) > 0
+          ? '通知を送信しました。'
+          : '送信先端末が登録されていません。通知の許可と購読登録を確認してください。'
+      );
+    } catch (error: any) {
+      showAppAlert('テスト通知エラー', String(error?.message || '通知を送信できませんでした。'));
+    } finally {
+      setShiftTestSending(false);
     }
   };
 
@@ -2595,6 +2627,16 @@ export default function MenuScreen() {
                     thumbColor={pickupNotificationEnabled ? '#08AEB8' : '#FFFFFF'}
                   />
                 </View>
+              )}
+              {role === 'staff' && name.replace(/\s/g, '') === '渡邉' && (
+                <TouchableOpacity
+                  style={styles.userSettingsRow}
+                  onPress={sendWatanabeShiftTestNotification}
+                  disabled={shiftTestSending}
+                >
+                  <Ionicons name="paper-plane-outline" size={23} color="#176E72" />
+                  <Text style={styles.userSettingsRowText}>{shiftTestSending ? '送信中...' : 'シフト通知テスト'}</Text>
+                </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.userSettingsRow, styles.userSettingsLogoutRow]} onPress={() => { setUserSettingsVisible(false); handleLogout(); }}>
                 <Ionicons name="log-out-outline" size={23} color="#E53935" />
