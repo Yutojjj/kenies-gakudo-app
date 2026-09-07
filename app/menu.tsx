@@ -19,7 +19,7 @@ import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
-import { disablePushSubscription, getCurrentPushDeviceId, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
+import { disablePushSubscription, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -697,7 +697,6 @@ export default function MenuScreen() {
   const [userSettingsVisible, setUserSettingsVisible] = useState(false);
   const [pickupNotificationEnabled, setPickupNotificationEnabled] = useState(true);
   const [pickupNotificationSaving, setPickupNotificationSaving] = useState(false);
-  const [shiftTestSending, setShiftTestSending] = useState(false);
   const [shiftNotificationVisible, setShiftNotificationVisible] = useState(false);
   const [shiftNotifyEnabled, setShiftNotifyEnabled] = useState(false);
   const [shiftNotifyTiming, setShiftNotifyTiming] = useState<'sameDay' | 'previousDay'>('sameDay');
@@ -736,40 +735,6 @@ export default function MenuScreen() {
       showAppAlert('保存エラー', '送迎通知の設定を保存できませんでした。');
     } finally {
       setPickupNotificationSaving(false);
-    }
-  };
-
-  const sendWatanabeShiftTestNotification = async () => {
-    if (!accountId || shiftTestSending) return;
-    setShiftTestSending(true);
-    try {
-      const origin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '';
-      const deviceId = await getCurrentPushDeviceId();
-      if (!deviceId) throw new Error('この端末の通知購読が登録されていません。');
-      const response = await fetch(`${origin}/api/send-notification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountIds: [accountId],
-          title: 'シフト通知テスト',
-          body: 'この端末への通知テストです。',
-          url: '/shift-view',
-          notificationType: 'shift',
-          deviceIds: [deviceId],
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || '通知送信に失敗しました');
-      showAppAlert(
-        'テスト通知',
-        Number(result.sent || 0) > 0
-          ? '通知を送信しました。'
-          : '送信先端末が登録されていません。通知の許可と購読登録を確認してください。'
-      );
-    } catch (error: any) {
-      showAppAlert('テスト通知エラー', String(error?.message || '通知を送信できませんでした。'));
-    } finally {
-      setShiftTestSending(false);
     }
   };
 
@@ -2690,17 +2655,6 @@ export default function MenuScreen() {
                 <TouchableOpacity style={styles.userSettingsRow} onPress={openShiftNotificationSettings}>
                   <Ionicons name="notifications-outline" size={23} color="#176E72" />
                   <Text style={styles.userSettingsRowText}>シフト通知設定</Text>
-                  <Ionicons name="chevron-forward" size={19} color="#8A7770" />
-                </TouchableOpacity>
-              )}
-              {role === 'staff' && name.replace(/\s/g, '') === '渡邉' && (
-                <TouchableOpacity
-                  style={styles.userSettingsRow}
-                  onPress={sendWatanabeShiftTestNotification}
-                  disabled={shiftTestSending}
-                >
-                  <Ionicons name="paper-plane-outline" size={23} color="#176E72" />
-                  <Text style={styles.userSettingsRowText}>{shiftTestSending ? '送信中...' : 'シフト通知テスト'}</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={[styles.userSettingsRow, styles.userSettingsLogoutRow]} onPress={() => { setUserSettingsVisible(false); handleLogout(); }}>
