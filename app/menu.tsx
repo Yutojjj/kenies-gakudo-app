@@ -32,6 +32,10 @@ const ANIMALS = {
 };
 const KANYES_LOGO = require('../assets/kanyes-logo.png');
 const USER_HEADER_LOGO = require('../assets/footer_logo.png');
+const STAFF_HEADER_LEFT = require('../assets/menu/staff-header-left.png');
+const STAFF_HEADER_RIGHT = require('../assets/menu/staff-header-right.png');
+const STAFF_HEADER_SQUIRREL = require('../assets/menu/staff-header-squirrel.png');
+const STAFF_HEADER_BUTTERFLY = require('../assets/menu/staff-header-butterfly.png');
 const NativeWebView: any = Platform.OS === 'web' ? null : require('react-native-webview').WebView;
 const ADMIN_MORE_IMAGE = require('../assets/bottom-nav-v2/menu.png');
 
@@ -2349,6 +2353,33 @@ export default function MenuScreen() {
       return next;
     });
   };
+  const headerSceneScale = Math.max(0.72, Math.min(1.45, width / 430));
+  const headerSceneVerticalScale = Math.min(0.9, headerSceneScale);
+  const renderHeaderDecoration = () => (
+    <View pointerEvents="none" style={styles.headerDecorationLayer}>
+      <Image
+        source={STAFF_HEADER_LEFT}
+        style={[styles.headerLeftDecoration, { left: role === 'user' ? -10 : 78, width: 86 * headerSceneVerticalScale, height: 72 * headerSceneVerticalScale }]}
+        resizeMode="contain"
+      />
+      <View style={[styles.headerMeadowDecoration, { height: 8 * headerSceneScale }]} />
+      <Image
+        source={STAFF_HEADER_SQUIRREL}
+        style={[styles.headerSquirrelDecoration, { width: 34 * headerSceneVerticalScale, height: 34 * headerSceneVerticalScale, left: '30%', marginLeft: -17 * headerSceneVerticalScale }]}
+        resizeMode="contain"
+      />
+      <Image
+        source={STAFF_HEADER_BUTTERFLY}
+        style={[styles.headerButterflyDecoration, { width: 34 * headerSceneVerticalScale, height: 34 * headerSceneVerticalScale, left: '70%', marginLeft: -17 * headerSceneVerticalScale }]}
+        resizeMode="contain"
+      />
+      <Image
+        source={STAFF_HEADER_RIGHT}
+        style={[styles.headerRightDecoration, { width: 106 * headerSceneVerticalScale, height: 84 * headerSceneVerticalScale }]}
+        resizeMode="contain"
+      />
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -2542,6 +2573,7 @@ export default function MenuScreen() {
 
         {role === 'user' && (
           <View style={styles.userHeader}>
+            {renderHeaderDecoration()}
             <TouchableOpacity style={styles.userHeaderGearButton} onPress={() => setUserSettingsVisible(true)} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="設定を開く">
               <Ionicons name="settings-outline" size={23} color="#FFFFFF" />
             </TouchableOpacity>
@@ -2565,6 +2597,7 @@ export default function MenuScreen() {
 
         {(role === 'admin' || role === 'staff') && (
           <View style={styles.userHeader}>
+            {renderHeaderDecoration()}
             <TouchableOpacity style={styles.staffHeaderLogoButton} onPress={openOfficialSite} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel="公式サイトを開く">
               <Image source={USER_HEADER_LOGO} style={styles.staffHeaderLogo} resizeMode="contain" />
             </TouchableOpacity>
@@ -4993,6 +5026,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  headerDecorationLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  headerLeftDecoration: {
+    position: 'absolute',
+    left: -10,
+    bottom: -8,
+    zIndex: 1,
+    opacity: 0.94,
+  },
+  headerMeadowDecoration: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#83C967',
+    borderTopWidth: 2,
+    borderTopColor: '#A8DF77',
+    opacity: 0.95,
+  },
+  headerSquirrelDecoration: {
+    position: 'absolute',
+    marginLeft: -17,
+    bottom: -3,
+    opacity: 0.98,
+  },
+  headerButterflyDecoration: {
+    position: 'absolute',
+    bottom: 26,
+    opacity: 0.96,
+  },
+  headerRightDecoration: {
+    position: 'absolute',
+    right: 44,
+    bottom: -8,
+    zIndex: 1,
+    opacity: 0.94,
   },
   shiftNotificationOverlay: {
     flex: 1,
@@ -5250,10 +5327,13 @@ const styles = StyleSheet.create({
   },
   staffHeaderTime: {
     textAlign: 'center',
-    color: '#E4F5F2',
+    color: '#FFFDF4',
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
+    textShadowColor: '#27BFC8',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
   },
   staffHeaderTimeWrap: {
     position: 'absolute',
