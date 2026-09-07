@@ -257,6 +257,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [staffOrderVisible, setStaffOrderVisible] = useState(false);
+  const [staffOrderDraft, setStaffOrderDraft] = useState<string[]>([]);
   const [settingsTab, setSettingsTab] = useState<'dow'|'staff'|'order'>('dow');
   const [pdfOrder, setPdfOrder] = useState<string[]>([]);
   const [settingTimeTarget, setSettingTimeTarget] = useState<{ staffIndex: number; field: 'start' | 'end' } | null>(null);
@@ -266,10 +268,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [autoFillSettings, setAutoFillSettings] = useState<{
     staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
     dayMaxCount: { '月':number; '火':number; '水':number; '木':number; '金':number };
+    lateStaffCount: number;
     pdfOrder?: string[];
   }>({
     staffSettings: [],
     dayMaxCount: { '月':3, '火':3, '水':3, '木':3, '金':3 },
+    lateStaffCount: 1,
   });
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
@@ -336,14 +340,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             ? {
                 name: staff.name,
                 start: found.start || '14:00',
-                end: found.end || '18:30',
+                end: found.end || '18:15',
                 priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
                 enabled: found.enabled !== false,
               }
             : {
                 name: staff.name,
                 start: staff.name === '稲熊' ? '11:00' : '14:00',
-                end: staff.name === '稲熊' ? '20:00' : '18:30',
+                end: staff.name === '稲熊' ? '20:00' : '18:15',
                 priority: savedStaff.length + index + 1,
                 enabled: true,
               };
@@ -359,6 +363,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       setAutoFillSettings({
         staffSettings: merged,
         dayMaxCount: savedSettings.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
+        lateStaffCount: Math.max(1, Math.min(5, Number(savedSettings.lateStaffCount) || 1)),
         pdfOrder: normalizedPdfOrder,
       });
     };
@@ -1066,8 +1071,57 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     await setDoc(doc(db, 'settings', 'autoFillSettings'), { ...settings, updatedAt: new Date() }, { merge: true });
   };
 
+  const getStaffOrder = () => {
+    const savedOrder = Array.isArray(autoFillSettings.pdfOrder) ? autoFillSettings.pdfOrder.filter(Boolean) : [];
+    const priorityOrder = autoFillSettings.staffSettings
+      .slice()
+      .sort((a, b) => a.priority - b.priority)
+      .map(item => item.name);
+    const configuredOrder = savedOrder.length > 0 ? savedOrder : priorityOrder;
+    return [...configuredOrder, ...allStaff.map(item => item.name).filter(name => !configuredOrder.includes(name))];
+  };
+
+  const sortStaffByConfiguredOrder = <T extends { name: string }>(staff: T[]) => {
+    const order = getStaffOrder();
+    return [...staff].sort((a, b) => {
+      const aIndex = order.indexOf(a.name);
+      const bIndex = order.indexOf(b.name);
+      return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+    });
+  };
+
+  const openStaffOrderSettings = () => {
+    setStaffOrderDraft(getStaffOrder());
+    setStaffOrderVisible(true);
+  };
+
+  const moveStaffOrder = (index: number, offset: -1 | 1) => {
+    const target = index + offset;
+    if (target < 0 || target >= staffOrderDraft.length) return;
+    const next = [...staffOrderDraft];
+    [next[index], next[target]] = [next[target], next[index]];
+    setStaffOrderDraft(next);
+  };
+
+  const saveStaffOrderSettings = async () => {
+    const order = staffOrderDraft;
+    const currentByName = new Map(autoFillSettings.staffSettings.map(item => [item.name, item]));
+    const staffSettings = order.map((name, index) => ({
+      ...(currentByName.get(name) || { name, start: '14:00', end: '18:15', enabled: true }),
+      name,
+      priority: index + 1,
+    }));
+    await saveAutoFillSettings({ ...autoFillSettings, staffSettings, pdfOrder: order });
+    setStaffOrderVisible(false);
+  };
+
+  const orderedCurrentDayAssigned = [...currentDayAssigned].sort((a, b) => {
+    const order = getStaffOrder();
+    return order.indexOf(a.name) - order.indexOf(b.name);
+  });
+
   const openSettingTimePicker = (staffIndex: number, field: 'start' | 'end') => {
-    const value = autoFillSettings.staffSettings[staffIndex]?.[field] || (field === 'start' ? '14:00' : '18:30');
+    const value = autoFillSettings.staffSettings[staffIndex]?.[field] || (field === 'start' ? '14:00' : '18:15');
     const [hour, minute] = value.split(':').map(Number);
     setSettingTimeHour(Number.isFinite(hour) ? hour : 14);
     setSettingTimeMinute(Number.isFinite(minute) ? minute : 0);
@@ -1118,6 +1172,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         const already = assignedShifts[dateStr] || [];
         const assignedNames = [...already.map((s: any) => s.name)];
         const newEntries: { name: string; start: string; end: string }[] = [...already];
+        const autoAddedStaffNames: string[] = [];
+        const autoAddedConfiguredLateStaffNames: string[] = [];
         const dowName = ['日','月','火','水','木','金','土'][date.getDay()] as '月'|'火'|'水'|'木'|'金';
         const maxCount = (autoFillSettings.dayMaxCount as any)[dowName] ?? 3;
         const sortedSettings = [...autoFillSettings.staffSettings]
@@ -1130,8 +1186,34 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isInaguma = setting.name === '稲熊';
           const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
           if (!isInaguma && othersCount >= maxCount) continue;
-          newEntries.push({ name: setting.name, start: setting.start, end: setting.end });
+          const end = isInaguma ? setting.end : setting.end === '18:30' ? '18:30' : '18:15';
+          newEntries.push({ name: setting.name, start: setting.start, end });
+          if (!isInaguma) {
+            autoAddedStaffNames.push(setting.name);
+            if (setting.end === '18:30') autoAddedConfiguredLateStaffNames.push(setting.name);
+          }
           assignedNames.push(setting.name);
+        }
+        const targetLateStaffCount = Math.max(1, Math.min(5, Number(autoFillSettings.lateStaffCount) || 1));
+        const existingLateStaffNames = new Set(
+          already.filter(s => s.name !== '稲熊' && s.end === '18:30').map(s => s.name)
+        );
+        const lateStaffNames = new Set(existingLateStaffNames);
+        autoAddedConfiguredLateStaffNames.forEach(name => lateStaffNames.add(name));
+        const candidates = [...new Set(autoAddedStaffNames)];
+        const rotationCandidates = candidates.filter(name => !lateStaffNames.has(name));
+        if (lateStaffNames.size < targetLateStaffCount && rotationCandidates.length > 0) {
+          const yearStart = new Date(year, 0, 1).getTime();
+          const dayIndex = Math.floor((date.getTime() - yearStart) / (24 * 60 * 60 * 1000));
+          for (let offset = 0; lateStaffNames.size < targetLateStaffCount && offset < rotationCandidates.length; offset++) {
+            lateStaffNames.add(rotationCandidates[(dayIndex + offset) % rotationCandidates.length]);
+          }
+        }
+        for (let index = already.length; index < newEntries.length; index++) {
+          const entry = newEntries[index];
+          if (entry.name !== '稲熊') {
+            newEntries[index] = { ...entry, end: lateStaffNames.has(entry.name) ? '18:30' : '18:15' };
+          }
         }
         if (newEntries.length === already.length) continue;
         await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() }, { merge: true });
@@ -1200,7 +1282,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 )}
 
                 <View style={{ flex: 1, marginTop: 3 }}>
-                  {(assignedShifts[item.dateStr] || []).map((st, i) => {
+                  {sortStaffByConfiguredOrder(assignedShifts[item.dateStr] || []).map((st, i) => {
                     const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === st.name));
                     return (
                       <View
@@ -1694,9 +1776,19 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               <View style={[styles.shiftEditorColumns, isCompact && styles.shiftEditorColumnsCompact]}>
                 <View style={styles.shiftAssignedPane}>
                   {/* 決定済みを左側にまとめ、横幅を広く使う */}
-                  <Text style={[styles.sectionTitle, styles.assignedSectionTitle]}>決定したシフト</Text>
+                  <View style={styles.assignedSectionHeader}>
+                    <Text style={[styles.sectionTitle, styles.assignedSectionTitle]}>決定したシフト</Text>
+                    <TouchableOpacity
+                      style={styles.staffOrderGearButton}
+                      onPress={openStaffOrderSettings}
+                      accessibilityLabel="メンバー表示順を設定"
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="settings-outline" size={19} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
                   {currentDayAssigned.length === 0 && <Text style={styles.shiftEmptyText}>追加されていません</Text>}
-                  {currentDayAssigned.map((s, i) => (
+                  {orderedCurrentDayAssigned.map((s, i) => (
                     <View key={i} style={[styles.assignedCard, isCompact && styles.assignedCardCompact]}>
                       <View style={[styles.assignedCardContent, isCompact && styles.assignedCardContentCompact]}>
                         <Text style={styles.assignedName}>{s.name}</Text>
@@ -1775,7 +1867,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </View>
 
                   <Text style={styles.staffGroupLabel}>出勤可能</Text>
-                  {availableStaff.map((s, i) => {
+                  {sortStaffByConfiguredOrder(availableStaff).map((s, i) => {
                     const isAssigned = currentDayAssigned.some(a => a.name === s.name);
                     return (
                       <TouchableOpacity key={`available-${i}`} style={styles.staffRow} onPress={() => !isAssigned && addStaffToShift(s.name, false)} activeOpacity={isAssigned ? 1 : 0.6}>
@@ -1790,7 +1882,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   })}
 
                   <Text style={[styles.staffGroupLabel, styles.unavailableGroupLabel]}>出勤不可</Text>
-                  {unavailableStaff.map((s, i) => {
+                  {sortStaffByConfiguredOrder(unavailableStaff).map((s, i) => {
                     const isAssigned = currentDayAssigned.some(a => a.name === s.name);
                     return (
                       <TouchableOpacity key={`unavailable-${i}`} style={[styles.staffRow, styles.unavailableStaffRow]} onPress={() => !isAssigned && addStaffToShift(s.name, true)} activeOpacity={isAssigned ? 1 : 0.6}>
@@ -1814,6 +1906,52 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </View>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      <Modal visible={staffOrderVisible} transparent animationType="fade" onRequestClose={() => setStaffOrderVisible(false)}>
+        <View style={styles.staffOrderOverlay}>
+          <View style={styles.staffOrderModal}>
+            <View style={styles.staffOrderHeader}>
+              <Text style={styles.staffOrderTitle}>メンバー表示順</Text>
+              <TouchableOpacity onPress={() => setStaffOrderVisible(false)} style={styles.staffOrderCloseButton}>
+                <Ionicons name="close" size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.staffOrderDescription}>シフト確認画面と印刷の表示順に反映されます。</Text>
+            <ScrollView style={styles.staffOrderList}>
+              {staffOrderDraft.map((name, index) => (
+                <View key={name} style={styles.staffOrderRow}>
+                  <Text style={styles.staffOrderNumber}>{index + 1}</Text>
+                  <Text style={styles.staffOrderName}>{name}</Text>
+                  <View style={styles.staffOrderActions}>
+                    <TouchableOpacity
+                      style={[styles.staffOrderMoveButton, index === 0 && styles.staffOrderMoveButtonDisabled]}
+                      disabled={index === 0}
+                      onPress={() => moveStaffOrder(index, -1)}
+                    >
+                      <Ionicons name="chevron-up" size={18} color={index === 0 ? '#B8C0C2' : COLORS.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.staffOrderMoveButton, index === staffOrderDraft.length - 1 && styles.staffOrderMoveButtonDisabled]}
+                      disabled={index === staffOrderDraft.length - 1}
+                      onPress={() => moveStaffOrder(index, 1)}
+                    >
+                      <Ionicons name="chevron-down" size={18} color={index === staffOrderDraft.length - 1 ? '#B8C0C2' : COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.staffOrderFooter}>
+              <TouchableOpacity style={styles.staffOrderCancelButton} onPress={() => setStaffOrderVisible(false)}>
+                <Text style={styles.staffOrderCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.staffOrderSaveButton} onPress={saveStaffOrderSettings}>
+                <Text style={styles.staffOrderSaveText}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* --- 時間変更＆候補追加モーダル --- */}
@@ -1978,6 +2116,23 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                       </View>
                     </View>
                   ))}
+                </View>
+                <Text style={styles.monthAutoReviewSectionTitle}>18:30メンバー人数</Text>
+                <View style={styles.monthAutoReviewSection}>
+                  <View style={styles.settingRow}>
+                    <Text style={[styles.settingLabel, styles.lateStaffCountLabel]}>1日あたり</Text>
+                    <View style={{ flexDirection:'row', gap:6 }}>
+                      {[1,2,3,4,5].map(n => (
+                        <TouchableOpacity
+                          key={n}
+                          style={[styles.settingNumBtn, autoFillSettings.lateStaffCount === n && styles.settingNumBtnActive]}
+                          onPress={() => saveAutoFillSettings({ ...autoFillSettings, lateStaffCount: n })}
+                        >
+                          <Text style={[styles.settingNumText, autoFillSettings.lateStaffCount === n && { color:'#fff' }]}>{n}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
                 </View>
               </>}
 
@@ -2150,6 +2305,22 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </View>
                 </View>
               ))}
+
+              <Text style={styles.settingSectionTitle}>18:30メンバー人数</Text>
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, styles.lateStaffCountLabel]}>1日あたり</Text>
+                <View style={{ flexDirection:'row', gap:6 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <TouchableOpacity
+                      key={n}
+                      style={[styles.settingNumBtn, autoFillSettings.lateStaffCount === n && styles.settingNumBtnActive]}
+                      onPress={() => saveAutoFillSettings({ ...autoFillSettings, lateStaffCount: n })}
+                    >
+                      <Text style={[styles.settingNumText, autoFillSettings.lateStaffCount === n && { color:'#fff' }]}>{n}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
               </>}
 
@@ -2494,6 +2665,8 @@ const styles = StyleSheet.create({
   shiftStaffPane: { flex: 0.75, minWidth: 150, paddingLeft: 10, borderLeftWidth: 1, borderColor: '#E5E7EB' },
   shiftStaffPaneCompact: { flex: 0.65, minWidth: 106, paddingLeft: 5 },
   assignedSectionTitle: { borderColor: COLORS.accent, marginBottom: 8 },
+  assignedSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  staffOrderGearButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF8F8', borderWidth: 1, borderColor: '#B8E4E5', marginBottom: 8 },
   shiftEmptyText: { color: COLORS.textLight, fontStyle: 'italic', marginBottom: 16 },
   assignedHint: { fontSize: 10, color: COLORS.textLight, marginTop: 2 },
   staffPaneHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 },
@@ -2593,6 +2766,7 @@ const styles = StyleSheet.create({
   settingSectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#444', marginBottom: 10 },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F5F5F5', borderRadius: 10 },
   settingLabel: { fontSize: 14, fontWeight: 'bold', color: '#333', width: 44 },
+  lateStaffCountLabel: { width: 78, flexShrink: 0 },
   settingNumBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: '#CCC', alignItems: 'center', justifyContent: 'center' },
   settingNumBtnActive: { backgroundColor: '#5B9BD5', borderColor: '#5B9BD5' },
   settingNumText: { fontSize: 13, fontWeight: 'bold', color: '#555' },
@@ -2606,6 +2780,24 @@ const styles = StyleSheet.create({
   settingTimeInput: { width: 62, minHeight: 34, borderWidth: 1, borderColor: '#BCC9CC', borderRadius: 8, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
   settingTimeValue: { fontSize: 13, fontWeight: '800', textAlign: 'center', color: '#263238' },
   settingTimePickerPanel: { maxWidth: 340, padding: 16 },
+  staffOrderOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  staffOrderModal: { width: '100%', maxWidth: 460, maxHeight: '82%', backgroundColor: COLORS.white, borderRadius: 16, padding: 18, overflow: 'hidden' },
+  staffOrderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  staffOrderTitle: { fontSize: 20, fontWeight: '900', color: COLORS.text },
+  staffOrderCloseButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  staffOrderDescription: { fontSize: 12, color: COLORS.textLight, marginBottom: 12 },
+  staffOrderList: { maxHeight: 430 },
+  staffOrderRow: { flexDirection: 'row', alignItems: 'center', minHeight: 50, paddingHorizontal: 10, marginBottom: 7, borderRadius: 9, backgroundColor: '#F7FBFB', borderWidth: 1, borderColor: '#D7E9EA' },
+  staffOrderNumber: { width: 26, fontSize: 13, fontWeight: '900', color: COLORS.primary },
+  staffOrderName: { flex: 1, fontSize: 15, fontWeight: '800', color: COLORS.text },
+  staffOrderActions: { flexDirection: 'row', gap: 5 },
+  staffOrderMoveButton: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8F7F7' },
+  staffOrderMoveButtonDisabled: { backgroundColor: '#F0F2F2' },
+  staffOrderFooter: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  staffOrderCancelButton: { flex: 1, minHeight: 44, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F3' },
+  staffOrderCancelText: { fontSize: 14, fontWeight: '800', color: COLORS.textLight },
+  staffOrderSaveButton: { flex: 1, minHeight: 44, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  staffOrderSaveText: { fontSize: 14, fontWeight: '900', color: COLORS.white },
   settingTimePickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   settingTimePickerTitle: { fontSize: 17, fontWeight: '900', color: '#222222' },
   settingTimePickerSub: { marginTop: 3, fontSize: 12, fontWeight: '700', color: '#697578' },

@@ -46,6 +46,7 @@ export default function ShiftViewScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [identityLoaded, setIdentityLoaded] = useState(false);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
+  const [staffOrder, setStaffOrder] = useState<string[]>([]);
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
@@ -111,7 +112,23 @@ export default function ShiftViewScreen() {
       setEventsData(eData);
     }, onSubscriptionError('events'));
 
-    return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); };
+    const unsubStaffOrder = onSnapshot(doc(db, 'settings', 'autoFillSettings'), snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const priorityNames = Array.isArray(data.staffSettings)
+        ? data.staffSettings
+            .slice()
+            .sort((a: any, b: any) => Number(a.priority || 0) - Number(b.priority || 0))
+            .map((item: any) => String(item.name || '').trim())
+            .filter(Boolean)
+        : [];
+      const savedPdfOrder = Array.isArray(data.pdfOrder)
+        ? data.pdfOrder.map((name: any) => String(name || '').trim()).filter(Boolean)
+        : [];
+      setStaffOrder(savedPdfOrder.length > 0 ? savedPdfOrder : priorityNames);
+    }, onSubscriptionError('staff order'));
+
+    return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); unsubStaffOrder(); };
   }, [subscriptionKey]);
 
   useEffect(() => {
@@ -288,9 +305,14 @@ export default function ShiftViewScreen() {
 
   const weeks = ['日', '月', '火', '水', '木', '金', '土'];
 
+  const orderedAllStaff = [...allStaff].sort((a, b) => {
+    const aIndex = staffOrder.indexOf(a.name);
+    const bIndex = staffOrder.indexOf(b.name);
+    return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) - (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex);
+  });
   const displayStaff = showOnlyMine
-    ? allStaff.filter(s => s.name === myName)
-    : allStaff;
+    ? orderedAllStaff.filter(s => s.name === myName)
+    : orderedAllStaff;
   const renderMonthCalendar = (date: Date) => {
     const days = generateDays(date);
 
