@@ -47,6 +47,11 @@ type CustomTransportBlock = {
   members: string[];
   type: 'school' | 'lesson';
 };
+type ReferenceWeekData = {
+  entries: StaffEntry[];
+  customBlocks: CustomTransportBlock[];
+  memberOverrides: Record<string, string[]>;
+};
 type Props = {
   visible: boolean; dateStr: string; onClose: () => void;
   attendance: { schools: Record<string, Record<string, any[]>>; lessons: Record<string, any[]>; totalCount: number };
@@ -101,13 +106,19 @@ export default function TransportModal({
 }: Props) {
   const [staffEntries, setStaffEntries] = useState<StaffEntry[]>([]);
   const [memberOverrides, setMemberOverrides] = useState<Record<string, string[]>>({});
+  const [memberExclusions, setMemberExclusions] = useState<Record<string, string[]>>({});
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [showLastWeek, setShowLastWeek] = useState(false);
   const [lastWeekModalVisible, setLastWeekModalVisible] = useState(false);
+  const [referenceWeeksAgo, setReferenceWeeksAgo] = useState(1);
   const [lastWeekEntries, setLastWeekEntries] = useState<StaffEntry[]>([]);
   const [lastWeekCustomBlocks, setLastWeekCustomBlocks] = useState<CustomTransportBlock[]>([]);
+  const [lastWeekMemberOverrides, setLastWeekMemberOverrides] = useState<Record<string, string[]>>({});
   const [lastWeekLoading, setLastWeekLoading] = useState(false);
   const [slotDetail, setSlotDetail] = useState<{sIdx:number; tIdx:number} | null>(null);
+  const [memberAddTarget, setMemberAddTarget] = useState<{ sIdx: number; blockKey: string; global?: boolean } | null>(null);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [memberSelectionNames, setMemberSelectionNames] = useState<string[]>([]);
   const [showTimeline, setShowTimeline] = useState(false); // タイムライン（全体確認）の表示状態
   const [timelineZoomVisible, setTimelineZoomVisible] = useState(false);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -127,6 +138,7 @@ export default function TransportModal({
   const [customTransportType, setCustomTransportType] = useState<'school' | 'lesson'>('school');
   const [customBlockError, setCustomBlockError] = useState('');
   const [customBlockToDelete, setCustomBlockToDelete] = useState<CustomTransportBlock | null>(null);
+  const [resetConfirmVisible, setResetConfirmVisible] = useState(false);
   const [mergePrompt, setMergePrompt] = useState<{ source: Block; candidates: Block[]; sourceEntryIndex?: number } | null>(null);
   const [locallyAssignedBlockKeys, setLocallyAssignedBlockKeys] = useState<Set<string>>(new Set());
   const [defaultShiftTimes, setDefaultShiftTimes] = useState<Record<string, { start: string; end: string }>>({});
@@ -192,7 +204,7 @@ export default function TransportModal({
     onDateChange(`${year}-${month}-${day}`);
   };
   const lastWeekDate = new Date(date);
-  lastWeekDate.setDate(date.getDate() - 7);
+  lastWeekDate.setDate(date.getDate() - 7 * referenceWeeksAgo);
 
   useEffect(() => {
     setLocallyAssignedBlockKeys(new Set());
@@ -293,6 +305,14 @@ export default function TransportModal({
       setMemberOverrides(parsedMemberOverrides && typeof parsedMemberOverrides === 'object' ? parsedMemberOverrides : {});
     } catch {
       setMemberOverrides({});
+    }
+    try {
+      const parsedMemberExclusions = assignments?.memberExclusions
+        ? JSON.parse(String(assignments.memberExclusions))
+        : {};
+      setMemberExclusions(parsedMemberExclusions && typeof parsedMemberExclusions === 'object' ? parsedMemberExclusions : {});
+    } catch {
+      setMemberExclusions({});
     }
     
     // シフト作成画面で出勤が確定しているメンバーの名前リスト ＋ 「送迎しない」
@@ -622,7 +642,10 @@ export default function TransportModal({
   };
 
   const getBlockKids = (block: Block, entry?: StaffEntry) => {
-    const excluded = new Set(entry?.memberExclusions?.[block.key] || []);
+    const excluded = new Set([
+      ...(memberExclusions[block.key] || []),
+      ...(entry?.memberExclusions?.[block.key] || []),
+    ]);
     const baseKids = (block.kids || []).filter((kid: any) => !excluded.has(String(kid?.name || '')));
     const existingNames = new Set(baseKids.map((kid: any) => String(kid?.name || '')));
     const addedKids = [...(memberOverrides[block.key] || []), ...(entry?.memberOverrides?.[block.key] || [])]
@@ -631,18 +654,22 @@ export default function TransportModal({
     return [...baseKids, ...addedKids];
   };
 
-  const openMemberMergePrompt = (sourceBlock: Block, sourceEntry?: StaffEntry) => {
-    const currentMembers = getBlockKids(sourceBlock, sourceEntry);
+  const getMergeCandidates = (sourceBlock: Block) => {
     const normalizeDestination = (value?: string) => String(value || '').replace(/[\s　]/g, '');
     const toMinutes = (value?: string) => {
       const [hour, minute] = String(value || '').split(':').map(Number);
       return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : -1;
     };
-    const candidates = blocks
+    return blocks
       .filter(block => block.type === 'school'
         && block.key !== sourceBlock.key
         && normalizeDestination(block.nameOnly) === normalizeDestination(sourceBlock.nameOnly))
       .sort((left, right) => toMinutes(left.time) - toMinutes(right.time));
+  };
+
+  const openMemberMergePrompt = (sourceBlock: Block, sourceEntry?: StaffEntry) => {
+    const currentMembers = getBlockKids(sourceBlock, sourceEntry);
+    const candidates = getMergeCandidates(sourceBlock);
     if (currentMembers.length > 0 && candidates.length > 0) {
       setMergePrompt({ source: { ...sourceBlock, kids: currentMembers }, candidates, sourceEntryIndex: sourceEntry ? staffEntries.indexOf(sourceEntry) : undefined });
     }
@@ -652,7 +679,7 @@ export default function TransportModal({
     if (!customBlockToDelete) return;
     const blockId = customBlockToDelete.id;
     const nextBlocks = customBlocks.filter(block => block.id !== blockId);
-    const nextEntries = staffEntries.map(entry => ({
+    const nextEntries: StaffEntry[] = staffEntries.map(entry => ({
       ...entry,
       trips: entry.trips.map(trip => ({
         ...trip,
@@ -673,11 +700,14 @@ export default function TransportModal({
   };
 
   // 先週の同日データをFirestoreから取得してポップアップ表示
-  const openLastWeekModal = async () => {
+  const openLastWeekModal = async (weeksAgo = 1) => {
+    setReferenceWeeksAgo(weeksAgo);
     setLastWeekLoading(true);
     setLastWeekModalVisible(true);
     try {
-      const lwDateStr = `${lastWeekDate.getFullYear()}-${String(lastWeekDate.getMonth()+1).padStart(2,'0')}-${String(lastWeekDate.getDate()).padStart(2,'0')}`;
+      const referenceDate = new Date(date);
+      referenceDate.setDate(date.getDate() - 7 * weeksAgo);
+      const lwDateStr = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth()+1).padStart(2,'0')}-${String(referenceDate.getDate()).padStart(2,'0')}`;
       const snap = await getDoc(doc(db, 'pickup_assignments', lwDateStr));
       if (snap.exists() && snap.data()?.entries) {
         const data = snap.data();
@@ -685,15 +715,53 @@ export default function TransportModal({
         const rawCustomBlocks = data.customBlocks
           ? (typeof data.customBlocks === 'string' ? JSON.parse(data.customBlocks) : data.customBlocks)
           : [];
+        const rawMemberOverrides = data.memberOverrides
+          ? (typeof data.memberOverrides === 'string' ? JSON.parse(data.memberOverrides) : data.memberOverrides)
+          : {};
         setLastWeekEntries(Array.isArray(rawEntries) ? rawEntries : (rawEntries?.entries || []));
         setLastWeekCustomBlocks(Array.isArray(rawCustomBlocks) ? rawCustomBlocks : []);
+        setLastWeekMemberOverrides(rawMemberOverrides && typeof rawMemberOverrides === 'object' ? rawMemberOverrides : {});
       } else {
         setLastWeekEntries([]);
         setLastWeekCustomBlocks([]);
+        setLastWeekMemberOverrides({});
       }
     } catch (e) {
       setLastWeekEntries([]);
       setLastWeekCustomBlocks([]);
+      setLastWeekMemberOverrides({});
+    } finally {
+      setLastWeekLoading(false);
+    }
+  };
+
+  const applyLastWeekAutomatically = async () => {
+    setLastWeekLoading(true);
+    try {
+      const referenceDate = new Date(date);
+      referenceDate.setDate(date.getDate() - 7);
+      const referenceDateStr = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`;
+      const snap = await getDoc(doc(db, 'pickup_assignments', referenceDateStr));
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const rawEntries = data.entries
+        ? (typeof data.entries === 'string' ? JSON.parse(data.entries) : data.entries)
+        : null;
+      const rawCustomBlocks = data.customBlocks
+        ? (typeof data.customBlocks === 'string' ? JSON.parse(data.customBlocks) : data.customBlocks)
+        : [];
+      const rawMemberOverrides = data.memberOverrides
+        ? (typeof data.memberOverrides === 'string' ? JSON.parse(data.memberOverrides) : data.memberOverrides)
+        : {};
+      const entries = Array.isArray(rawEntries) ? rawEntries : (rawEntries?.entries || []);
+      if (entries.length === 0) return;
+      await applyLastWeekAssignments({
+        entries,
+        customBlocks: Array.isArray(rawCustomBlocks) ? rawCustomBlocks : [],
+        memberOverrides: rawMemberOverrides && typeof rawMemberOverrides === 'object' ? rawMemberOverrides : {},
+      });
+    } catch (error) {
+      console.warn('先週の送迎担当の自動反映に失敗しました', error);
     } finally {
       setLastWeekLoading(false);
     }
@@ -720,6 +788,27 @@ export default function TransportModal({
     });
     setLocallyAssignedBlockKeys(current => new Set([...current, blockKey]));
     save(updated);
+    if (targetStaff?.staffName === '送迎しない' && sourceBlock?.type === 'school') {
+      openMemberMergePrompt(sourceBlock, targetStaff);
+    }
+    setSelectedBlock(null);
+  };
+
+  const insertBlockBeforeFirst = (sIdx: number, blockKey: string) => {
+    const targetStaff = staffEntries[sIdx];
+    const sourceBlock = blocks.find(block => block.key === blockKey);
+    const updated = staffEntries.map((entry, index) => {
+      if (index !== sIdx) return entry;
+      return {
+        ...entry,
+        trips: [
+          { tripIndex: 0, blockKeys: [blockKey] },
+          ...entry.trips.map((trip, tripIndex) => ({ ...trip, tripIndex: tripIndex + 1 })),
+        ],
+      };
+    });
+    setLocallyAssignedBlockKeys(current => new Set([...current, blockKey]));
+    void save(updated);
     if (targetStaff?.staffName === '送迎しない' && sourceBlock?.type === 'school') {
       openMemberMergePrompt(sourceBlock, targetStaff);
     }
@@ -785,6 +874,213 @@ export default function TransportModal({
     const match = blockKey.match(/^(.*)_(\d{1,2}:\d{2})$/);
     if (match) return `${match[1].replace(/_/g, ' ')} ${match[2]}`;
     return blockKey.replace(/_/g, ' ');
+  };
+
+  const resolveLastWeekBlockKey = (blockKey: string, referenceCustomBlocks = lastWeekCustomBlocks) => {
+    const exact = blocks.find(block => block.key === blockKey);
+    if (exact) return exact.key;
+
+    const oldCustomBlock = referenceCustomBlocks.find(block => block.id === blockKey);
+    if (oldCustomBlock) {
+      const matchedCustomBlock = customBlocks.find(block => (
+        block.type === oldCustomBlock.type
+        && block.destination.trim() === oldCustomBlock.destination.trim()
+        && block.time === oldCustomBlock.time
+      ));
+      return matchedCustomBlock?.id;
+    }
+
+    const lessonMatch = blockKey.match(/^(\d{1,2}:\d{2})\s+(.+)$/);
+    const schoolMatch = blockKey.match(/^(.*)_(\d{1,2}:\d{2})$/);
+    const time = lessonMatch?.[1] || schoolMatch?.[2];
+    const name = lessonMatch?.[2] || schoolMatch?.[1]?.replace(/_/g, ' ');
+    if (!time || !name) return undefined;
+    return blocks.find(block => (
+      block.time === time
+      && block.nameOnly?.replace(/[\s　]/g, '') === name.replace(/[\s　]/g, '')
+    ))?.key;
+  };
+
+  const applyLastWeekAssignments = async (referenceData?: ReferenceWeekData) => {
+    const sourceEntries = referenceData?.entries || lastWeekEntries;
+    const sourceCustomBlocks = referenceData?.customBlocks || lastWeekCustomBlocks;
+    const sourceMemberOverrides = referenceData?.memberOverrides || lastWeekMemberOverrides;
+    if (sourceEntries.length === 0) return;
+    const currentStaffNames = staffEntries
+      .filter(entry => entry.staffName !== '送迎しない')
+      .map(entry => entry.staffName);
+    const currentStaffIndex = new Map(staffEntries.map((entry, index) => [entry.staffName, index]));
+    const nextEntries: StaffEntry[] = staffEntries.map(entry => ({
+      ...entry,
+      trips: [{ tripIndex: 0, blockKeys: [] }],
+      memberOverrides: undefined,
+      memberExclusions: undefined,
+    }));
+    const nextMemberOverrides: Record<string, string[]> = {};
+    Object.entries(sourceMemberOverrides).forEach(([oldKey, names]) => {
+      const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+      if (!currentKey) return;
+      nextMemberOverrides[currentKey] = Array.from(new Set([
+        ...(nextMemberOverrides[currentKey] || []),
+        ...(Array.isArray(names) ? names : []),
+      ]));
+    });
+
+    sourceEntries.forEach((lastEntry) => {
+      let targetIndex: number | undefined;
+      if (lastEntry.staffName === '送迎しない') {
+        targetIndex = currentStaffIndex.get('送迎しない');
+      } else {
+        const regularStaffPosition = sourceEntries
+          .slice(0, sourceEntries.indexOf(lastEntry))
+          .filter(entry => entry.staffName !== '送迎しない').length;
+        const targetStaffName = currentStaffNames[regularStaffPosition];
+        targetIndex = targetStaffName ? currentStaffIndex.get(targetStaffName) : undefined;
+      }
+      if (targetIndex === undefined) return;
+
+      lastEntry.trips.forEach((lastTrip, tripIndex) => {
+        const mappedKeys = lastTrip.blockKeys
+          .map(key => resolveLastWeekBlockKey(key, sourceCustomBlocks))
+          .filter((key): key is string => !!key);
+        if (mappedKeys.length === 0) return;
+        while (nextEntries[targetIndex].trips.length <= tripIndex) {
+          nextEntries[targetIndex].trips.push({ tripIndex: nextEntries[targetIndex].trips.length, blockKeys: [] });
+        }
+        nextEntries[targetIndex].trips[tripIndex].blockKeys = Array.from(new Set([
+          ...nextEntries[targetIndex].trips[tripIndex].blockKeys,
+          ...mappedKeys,
+        ]));
+      });
+      Object.entries(lastEntry.memberOverrides || {}).forEach(([oldKey, names]) => {
+        const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+        if (!currentKey) return;
+        const currentOverrides = nextEntries[targetIndex].memberOverrides || {};
+        nextEntries[targetIndex].memberOverrides = {
+          ...currentOverrides,
+          [currentKey]: Array.from(new Set([
+            ...(currentOverrides[currentKey] || []),
+            ...(Array.isArray(names) ? names : []),
+          ])),
+        };
+      });
+      Object.entries(lastEntry.memberExclusions || {}).forEach(([oldKey, names]) => {
+        const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+        if (!currentKey) return;
+        const currentExclusions = nextEntries[targetIndex].memberExclusions || {};
+        nextEntries[targetIndex].memberExclusions = {
+          ...currentExclusions,
+          [currentKey]: Array.from(new Set([
+            ...(currentExclusions[currentKey] || []),
+            ...(Array.isArray(names) ? names : []),
+          ])),
+        };
+      });
+    });
+
+    await save(nextEntries);
+    setMemberOverrides(nextMemberOverrides);
+    await onAssign(dateStr, 'memberOverrides', JSON.stringify(nextMemberOverrides));
+    setLocallyAssignedBlockKeys(new Set(nextEntries.flatMap(entry => entry.trips.flatMap(trip => trip.blockKeys))));
+    setSelectedBlock(null);
+    setLastWeekModalVisible(false);
+  };
+
+  const resetAllAssignments = async () => {
+    const resetEntries = staffEntries.map(entry => ({
+      ...entry,
+      trips: [{ tripIndex: 0, blockKeys: [] }],
+      memberOverrides: undefined,
+      memberExclusions: undefined,
+    }));
+    await save(resetEntries);
+    setMemberOverrides({});
+    await onAssign(dateStr, 'memberOverrides', JSON.stringify({}));
+    setMemberExclusions({});
+    await onAssign(dateStr, 'memberExclusions', JSON.stringify({}));
+    setLocallyAssignedBlockKeys(new Set());
+    setSelectedBlock(null);
+  };
+
+  const saveMemberChanges = async () => {
+    if (!memberAddTarget) return;
+    const entry = memberAddTarget.global ? undefined : staffEntries[memberAddTarget.sIdx];
+    const block = blocks.find(item => item.key === memberAddTarget.blockKey);
+    if (!block || (!memberAddTarget.global && !entry)) return;
+    const baseNames = (block.kids || []).map((kid: any) => String(kid?.name || '').trim()).filter(Boolean);
+    const selectedNames = Array.from(new Set(memberSelectionNames.filter(Boolean)));
+    const currentGlobalNames = memberOverrides[block.key] || [];
+    const selectedAddedNames = selectedNames.filter(name => !baseNames.includes(name));
+    const nextGlobalNames = memberAddTarget.global
+      ? selectedAddedNames
+      : currentGlobalNames.filter(name => selectedNames.includes(name));
+    const nextEntryNames = selectedAddedNames.filter(name => !nextGlobalNames.includes(name));
+    const nextGlobalOverrides = { ...memberOverrides };
+    if (nextGlobalNames.length > 0) nextGlobalOverrides[block.key] = nextGlobalNames;
+    else delete nextGlobalOverrides[block.key];
+    const nextGlobalExclusions = { ...memberExclusions };
+    const excludedNames = baseNames.filter(name => !selectedNames.includes(name));
+    if (excludedNames.length > 0) nextGlobalExclusions[block.key] = excludedNames;
+    else delete nextGlobalExclusions[block.key];
+    const updated = staffEntries.map((entry, index) => {
+      if (memberAddTarget.global) return entry;
+      if (index !== memberAddTarget.sIdx) return entry;
+      const nextMemberOverrides = { ...(entry.memberOverrides || {}) };
+      if (nextEntryNames.length > 0) nextMemberOverrides[memberAddTarget.blockKey] = nextEntryNames;
+      else delete nextMemberOverrides[memberAddTarget.blockKey];
+      const nextMemberExclusions = { ...(entry.memberExclusions || {}) };
+      if (excludedNames.length > 0) nextMemberExclusions[memberAddTarget.blockKey] = excludedNames;
+      else delete nextMemberExclusions[memberAddTarget.blockKey];
+      return {
+        ...entry,
+        memberOverrides: nextMemberOverrides,
+        memberExclusions: nextMemberExclusions,
+      };
+    });
+    if (!memberAddTarget.global) await save(updated);
+    setMemberOverrides(nextGlobalOverrides);
+    await onAssign(dateStr, 'memberOverrides', JSON.stringify(nextGlobalOverrides));
+    setMemberExclusions(nextGlobalExclusions);
+    await onAssign(dateStr, 'memberExclusions', JSON.stringify(nextGlobalExclusions));
+    setNewMemberName('');
+    setMemberSelectionNames([]);
+    setMemberAddTarget(null);
+  };
+
+  const addTypedMemberToSelection = () => {
+    const name = newMemberName.trim();
+    if (!name) return;
+    setMemberSelectionNames(current => Array.from(new Set([...current, name])));
+    setNewMemberName('');
+  };
+
+  const getMemberAddCandidates = () => {
+    if (!memberAddTarget) return [];
+    const entry = memberAddTarget.global ? undefined : staffEntries[memberAddTarget.sIdx];
+    const block = blocks.find(item => item.key === memberAddTarget.blockKey);
+    if (!block || block.type !== 'school') return [];
+    const school = String(block.nameOnly || '').replace(/[\s　]/g, '');
+    const candidates = allMembers
+      .filter((member: any) => (
+        String(member?.school || '').replace(/[\s　]/g, '') === school
+        && String(member?.name || '').trim()
+      ))
+      .map((member: any) => ({ name: String(member.name).trim(), grade: String(member.grade || ''), school: String(member.school || '') }));
+    const knownNames = new Set(candidates.map(member => member.name));
+    (block.kids || []).forEach((kid: any) => {
+      const name = String(kid?.name || '').trim();
+      if (name && !knownNames.has(name)) candidates.push({ name, grade: String(kid?.grade || ''), school: String(block.nameOnly || '') });
+    });
+    return candidates
+      .sort((left: any, right: any) => (
+        getMemberGradeOrder(left.grade) - getMemberGradeOrder(right.grade)
+        || SCHOOL_ORDER.indexOf(left.school) - SCHOOL_ORDER.indexOf(right.school)
+        || String(left.name).localeCompare(String(right.name), 'ja')
+      ));
+  };
+
+  const confirmResetAllAssignments = () => {
+    setResetConfirmVisible(true);
   };
 
   const getTimelinePrintRows = () => {
@@ -1055,13 +1351,27 @@ export default function TransportModal({
         const parsed = page.assignments?.entries ? JSON.parse(String(page.assignments.entries)) : null;
         if (parsed?.entries) loadedEntries = parsed.entries.map((entry: any) => ({ ...entry, trips: (entry.trips || []).map((trip: any) => ({ ...trip, blockKeys: trip.blockKeys || (trip.blockKey ? [trip.blockKey] : []) })) }));
       } catch {}
+      let pageMemberOverrides: Record<string, string[]> = {};
+      let pageMemberExclusions: Record<string, string[]> = {};
+      try {
+        const parsed = page.assignments?.memberOverrides ? JSON.parse(String(page.assignments.memberOverrides)) : {};
+        if (parsed && typeof parsed === 'object') pageMemberOverrides = parsed;
+      } catch {}
+      try {
+        const parsed = page.assignments?.memberExclusions ? JSON.parse(String(page.assignments.memberExclusions)) : {};
+        if (parsed && typeof parsed === 'object') pageMemberExclusions = parsed;
+      } catch {}
       const pageEntries = [...page.shiftStaff.map(staff => staff.name), '送迎しない'].map((staffName) => loadedEntries.find(entry => entry.staffName === staffName) || ({ staffName, trips: [{ tripIndex: 0, blockKeys: [] }] }));
       const getPageBlockKids = (block: Block, entry: StaffEntry) => {
-        const excluded = new Set(entry.memberExclusions?.[block.key] || []);
+        const excluded = new Set([
+          ...(pageMemberExclusions[block.key] || []),
+          ...(entry.memberExclusions?.[block.key] || []),
+        ]);
         const baseKids = (block.kids || []).filter((kid: any) => !excluded.has(String(kid?.name || '')));
         const existingNames = new Set(baseKids.map((kid: any) => String(kid?.name || '')));
-        const addedKids = (entry.memberOverrides?.[block.key] || [])
-          .filter(name => name && !existingNames.has(name))
+        const addedNames = [...(pageMemberOverrides[block.key] || []), ...(entry.memberOverrides?.[block.key] || [])]
+          .filter((name, index, names) => name && !existingNames.has(name) && names.indexOf(name) === index);
+        const addedKids = addedNames
           .map(name => ({ name }));
         return [...baseKids, ...addedKids];
       };
@@ -1942,8 +2252,8 @@ export default function TransportModal({
                     <TouchableOpacity style={styles.printIconBtn} onPress={printTimeline} accessibilityLabel="印刷">
                       <Ionicons name="print-outline" size={20} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={openLastWeekModal}>
-                      <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>先週</Text>
+                    <TouchableOpacity style={[styles.lastWeekBtn, showLastWeek && styles.lastWeekBtnActive]} onPress={() => { void openLastWeekModal(1); }}>
+                      <Text style={[styles.lastWeekBtnText, showLastWeek && { color: '#fff' }]}>自動入力</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -2001,6 +2311,16 @@ export default function TransportModal({
                       </View>
 
                       <View style={styles.tripsRow}>
+                        {selectedBlock && entry.trips[0]?.blockKeys.length > 0 && (
+                          <TouchableOpacity
+                            style={[styles.tripSlot, styles.tripSlotAdd]}
+                            onPress={() => insertBlockBeforeFirst(sIdx, selectedBlock.key)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+                            <Text style={styles.addSlotText}>先頭に追加</Text>
+                          </TouchableOpacity>
+                        )}
                         {entry.trips.map((trip, tIdx) => {
                           return (
                             <TouchableOpacity
@@ -2072,6 +2392,14 @@ export default function TransportModal({
                     </View>
                   );
                 })}
+                <TouchableOpacity
+                  style={styles.resetAssignmentsButton}
+                  onPress={confirmResetAllAssignments}
+                  activeOpacity={0.78}
+                >
+                  <Ionicons name="refresh-outline" size={15} color="#607D8B" />
+                  <Text style={styles.resetAssignmentsButtonText}>送迎先をリセット</Text>
+                </TouchableOpacity>
                 <View style={{ height: 60 }} />
               </ScrollView>
 
@@ -2102,6 +2430,12 @@ export default function TransportModal({
                         }}
                         onLongPress={() => {
                           if (customBlock) setCustomBlockToDelete(customBlock);
+                          else if (block.type === 'school') {
+                            const noTransportIndex = staffEntries.findIndex(entry => entry.staffName === '送迎しない');
+                            setNewMemberName('');
+                            setMemberSelectionNames(getBlockKids(block).map((kid: any) => String(kid?.name || '').trim()).filter(Boolean));
+                            setMemberAddTarget({ sIdx: noTransportIndex, blockKey: block.key, global: true });
+                          }
                         }}
                         delayLongPress={550}
                         activeOpacity={0.75}
@@ -2200,10 +2534,11 @@ export default function TransportModal({
                           )}
                           {blk && entry.staffName === '送迎しない'
                             && blk.type === 'school'
+                            && getMergeCandidates(blk).length > 0
                             && getBlockKids(blk, entry).length > 0 && (
-                            <TouchableOpacity
-                              style={styles.addMembersToPickupButton}
-                              onPress={() => openMemberMergePrompt(blk, entry)}
+                          <TouchableOpacity
+                            style={styles.addMembersToPickupButton}
+                            onPress={() => openMemberMergePrompt(blk, entry)}
                               activeOpacity={0.8}
                             >
                               <Ionicons name="person-add-outline" size={15} color="#607D8B" />
@@ -2244,6 +2579,17 @@ export default function TransportModal({
                           )}
                           <TouchableOpacity
                             style={styles.detailActionBtn}
+                            onPress={() => {
+                              setNewMemberName('');
+                              setMemberSelectionNames(getBlockKids(blk as Block, entry).map((kid: any) => String(kid?.name || '').trim()).filter(Boolean));
+                              setMemberAddTarget({ sIdx: slotDetail.sIdx, blockKey: bk });
+                            }}
+                            accessibilityLabel="メンバーを追加"
+                          >
+                            <Ionicons name="add" size={20} color={COLORS.primary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.detailActionBtn}
                             onPress={() => { removeBlockFromTrip(slotDetail.sIdx, slotDetail.tIdx, bk); }}
                           >
                             <Ionicons name="trash-outline" size={16} color={COLORS.danger} />
@@ -2263,6 +2609,59 @@ export default function TransportModal({
       </View>
     </Modal>
 
+    <Modal visible={!!memberAddTarget} transparent animationType="fade" onRequestClose={() => setMemberAddTarget(null)}>
+      <View style={styles.memberAddOverlay}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMemberAddTarget(null)} />
+        <View style={styles.memberAddPanel}>
+          <Text style={styles.memberAddTitle}>
+            メンバー（{memberAddTarget ? getBlockKids(
+              blocks.find(block => block.key === memberAddTarget.blockKey) || { key: '', label: '', count: 0 },
+              memberAddTarget.global ? undefined : staffEntries[memberAddTarget.sIdx],
+            ).length : 0}名）
+          </Text>
+          <ScrollView style={styles.memberAddCandidateScroll} contentContainerStyle={styles.memberAddCandidateList}>
+            {getMemberAddCandidates().map((member: any) => (
+              <TouchableOpacity
+                key={member.name}
+                style={[styles.memberAddCandidate, memberSelectionNames.includes(member.name) && styles.memberAddCandidateSelected]}
+                onPress={() => setMemberSelectionNames(current => current.includes(member.name)
+                  ? current.filter(name => name !== member.name)
+                  : [...current, member.name])}
+                activeOpacity={0.78}
+              >
+                <Text style={[styles.memberAddCandidateName, memberSelectionNames.includes(member.name) && styles.memberAddCandidateNameSelected]}>{member.name}</Text>
+                {!!member.grade && <Text style={[styles.memberAddCandidateGrade, memberSelectionNames.includes(member.name) && styles.memberAddCandidateGradeSelected]}>{member.grade}</Text>}
+              </TouchableOpacity>
+            ))}
+            {getMemberAddCandidates().length === 0 && (
+              <Text style={styles.memberAddEmptyText}>追加できるメンバーがありません</Text>
+            )}
+          </ScrollView>
+          <View style={styles.memberAddManualRow}>
+            <TextInput
+              style={[styles.memberAddInput, { flex: 1, marginTop: 0 }]}
+              value={newMemberName}
+              onChangeText={setNewMemberName}
+              placeholder="名前で追加"
+              placeholderTextColor="#9AA5A8"
+              onSubmitEditing={addTypedMemberToSelection}
+            />
+            <TouchableOpacity style={styles.memberAddManualButton} onPress={addTypedMemberToSelection}>
+              <Text style={styles.memberAddManualButtonText}>追加</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.memberAddActions}>
+            <TouchableOpacity style={styles.memberAddCancelButton} onPress={() => setMemberAddTarget(null)}>
+              <Text style={styles.memberAddCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.memberAddConfirmButton} onPress={() => { void saveMemberChanges(); }}>
+              <Text style={styles.memberAddConfirmText}>変更する</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
     {/* 先週参照ポップアップ */}
     <Modal visible={lastWeekModalVisible} transparent animationType="fade">
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
@@ -2270,11 +2669,20 @@ export default function TransportModal({
           {/* ヘッダー */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#F7FBFA', borderBottomWidth: 1, borderColor: '#CFE4E2' }}>
             <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#222222' }}>
-              {lastWeekDate.getMonth()+1}/{lastWeekDate.getDate()}（{DOW_JP[lastWeekDate.getDay()]}）の送迎担当
+              {referenceWeeksAgo === 1 ? '先週 ' : '先々週 '}{lastWeekDate.getMonth()+1}/{lastWeekDate.getDate()}（{DOW_JP[lastWeekDate.getDay()]}）の送迎担当
             </Text>
-            <TouchableOpacity onPress={() => setLastWeekModalVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CFE4E2' }}>
-              <Ionicons name="close" size={24} color="#333333" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => { void openLastWeekModal(referenceWeeksAgo === 2 ? 1 : 2); }}
+                disabled={lastWeekLoading}
+                style={[styles.referenceWeekButton, lastWeekLoading && styles.lastWeekApplyButtonDisabled]}
+              >
+                <Text style={styles.referenceWeekButtonText}>{referenceWeeksAgo === 2 ? '先週' : '先々週'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setLastWeekModalVisible(false)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CFE4E2' }}>
+                <Ionicons name="close" size={24} color="#333333" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {lastWeekLoading ? (
@@ -2287,6 +2695,7 @@ export default function TransportModal({
               <Text style={{ color: '#888', fontSize: 14, marginTop: 12 }}>先週のデータはありません</Text>
             </View>
           ) : (
+            <View style={{ flexShrink: 1 }}>
             <ScrollView style={{ padding: 16 }}>
               {lastWeekEntries.map((entry, idx) => (
                 <View key={entry.staffName} style={{ marginBottom: 10, padding: 12, backgroundColor: LAST_WEEK_CARD_COLORS[idx % LAST_WEEK_CARD_COLORS.length].background, borderRadius: 12, borderWidth: 1, borderColor: '#E4E7E8', borderLeftWidth: 5, borderLeftColor: LAST_WEEK_CARD_COLORS[idx % LAST_WEEK_CARD_COLORS.length].border }}>
@@ -2312,7 +2721,41 @@ export default function TransportModal({
               ))}
               <View style={{ height: 20 }} />
             </ScrollView>
+            <TouchableOpacity
+              onPress={() => { void applyLastWeekAssignments(); }}
+              disabled={lastWeekLoading}
+              style={[styles.lastWeekApplyFixedButton, lastWeekLoading && styles.lastWeekApplyButtonDisabled]}
+            >
+              <Text style={styles.lastWeekApplyBottomButtonText}>反映する</Text>
+            </TouchableOpacity>
+            </View>
           )}
+        </View>
+      </View>
+    </Modal>
+
+    <Modal visible={resetConfirmVisible} transparent animationType="fade" onRequestClose={() => setResetConfirmVisible(false)}>
+      <View style={styles.resetConfirmOverlay}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setResetConfirmVisible(false)} />
+        <View style={styles.resetConfirmPanel}>
+          <Text style={styles.resetConfirmTitle}>送迎先をリセットしますか？</Text>
+          <Text style={styles.resetConfirmDescription}>
+            担当カードとメンバーの追加・除外情報がすべて元に戻ります。
+          </Text>
+          <View style={styles.resetConfirmActions}>
+            <TouchableOpacity style={styles.resetConfirmCancelButton} onPress={() => setResetConfirmVisible(false)}>
+              <Text style={styles.resetConfirmCancelText}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.resetConfirmButton}
+              onPress={() => {
+                setResetConfirmVisible(false);
+                void resetAllAssignments();
+              }}
+            >
+              <Text style={styles.resetConfirmButtonText}>リセットする</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -2670,11 +3113,19 @@ const styles = StyleSheet.create({
   printBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
   overviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, minWidth: 104, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 18, backgroundColor: '#5B9BD5' },
   overviewBtnText: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
-  lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 68, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
+  lastWeekBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 40, minWidth: 88, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.primary, backgroundColor: '#fff' },
   lastWeekBtnActive: { backgroundColor: COLORS.primary },
   lastWeekBtnText: { fontSize: 14, color: COLORS.primary, fontWeight: 'bold' },
   lastWeekBanner: { backgroundColor: '#FFF9C4', padding: 7, alignItems: 'center' },
   lastWeekBannerText: { fontSize: 11, color: '#856404', fontWeight: 'bold' },
+  lastWeekApplyButton: { minHeight: 40, paddingHorizontal: 13, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#4C9CCA' },
+  lastWeekApplyButtonDisabled: { opacity: 0.45 },
+  lastWeekApplyButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  lastWeekApplyBottomButton: { width: '100%', minHeight: 56, marginTop: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4C9CCA' },
+  lastWeekApplyFixedButton: { minHeight: 56, marginHorizontal: 16, marginBottom: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4C9CCA' },
+  lastWeekApplyBottomButtonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
+  referenceWeekButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#4C9CCA' },
+  referenceWeekButtonText: { color: '#4C9CCA', fontSize: 13, fontWeight: '900' },
 
   body: { flex: 1, flexDirection: 'row' },
   overviewScroll: { flex: 1, backgroundColor: '#fff' },
@@ -2775,6 +3226,17 @@ const styles = StyleSheet.create({
   tripSlot: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#CCC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, minWidth: 80 },
   tripSlotSelectable: { borderColor: '#FF9800', borderStyle: 'solid', backgroundColor: '#FFF8E1' },
   tripSlotAdd: { borderColor: COLORS.primary, borderStyle: 'dashed', backgroundColor: '#F0F8FF' },
+  resetAssignmentsButton: { alignSelf: 'flex-start', marginTop: 9, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CDD7DC' },
+  resetAssignmentsButtonText: { fontSize: 12, fontWeight: '900', color: '#34454E' },
+  resetConfirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 18 },
+  resetConfirmPanel: { width: '100%', maxWidth: 420, padding: 20, borderRadius: 14, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 12, zIndex: 1 },
+  resetConfirmTitle: { fontSize: 17, fontWeight: '900', color: '#252525' },
+  resetConfirmDescription: { marginTop: 9, fontSize: 13, lineHeight: 20, fontWeight: '600', color: '#626B6D' },
+  resetConfirmActions: { flexDirection: 'row', gap: 8, marginTop: 18 },
+  resetConfirmCancelButton: { flex: 1, minHeight: 44, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CDD7DC' },
+  resetConfirmCancelText: { fontSize: 13, fontWeight: '900', color: '#526466' },
+  resetConfirmButton: { flex: 1, minHeight: 44, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4C9CCA' },
+  resetConfirmButtonText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   tripLabelText: { fontSize: 9, fontWeight: 'bold', color: COLORS.textLight },
   slotFilledText: { flex: 1, fontSize: 10, fontWeight: 'bold', color: COLORS.text },
   slotEmptyText: { fontSize: 10, color: '#BBB' },
@@ -2790,6 +3252,27 @@ const styles = StyleSheet.create({
   detailMemberNames: { marginTop: 5, fontSize: 12, lineHeight: 18, fontWeight: '700', color: '#3F3A37' },
   detailRowActions: { flexDirection: 'row', gap: 6 },
   detailActionBtn: { padding: 4 },
+  memberAddOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 18 },
+  memberAddPanel: { width: '100%', maxWidth: 420, padding: 20, borderRadius: 14, backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 12, zIndex: 1 },
+  memberAddTitle: { fontSize: 17, fontWeight: '900', color: '#252525' },
+  memberAddInput: { minHeight: 46, marginTop: 14, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1, borderColor: '#C9D6D8', backgroundColor: '#FAFCFC', fontSize: 15, fontWeight: '700', color: '#222222' },
+  memberAddCandidateScroll: { maxHeight: 260, marginTop: 12 },
+  memberAddCandidateList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  memberAddCandidate: { minHeight: 50, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 6, justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D4DEDF' },
+  memberAddCandidateSelected: { backgroundColor: '#31C6D0', borderColor: '#0B9DA8', borderWidth: 1.5 },
+  memberAddCandidateName: { fontSize: 14, fontWeight: '900', color: '#3F4B4D' },
+  memberAddCandidateNameSelected: { color: '#FFFFFF' },
+  memberAddCandidateGrade: { marginTop: 2, fontSize: 11, fontWeight: '700', color: '#7A888A' },
+  memberAddCandidateGradeSelected: { color: '#E8FFFF' },
+  memberAddEmptyText: { paddingVertical: 12, fontSize: 13, fontWeight: '700', color: '#8A9698' },
+  memberAddManualRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  memberAddManualButton: { minHeight: 46, paddingHorizontal: 14, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#AAB9BC' },
+  memberAddManualButtonText: { fontSize: 13, fontWeight: '900', color: '#405256' },
+  memberAddActions: { flexDirection: 'row', gap: 8, marginTop: 16 },
+  memberAddCancelButton: { flex: 1, minHeight: 44, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CDD7DC' },
+  memberAddCancelText: { fontSize: 13, fontWeight: '900', color: '#526466' },
+  memberAddConfirmButton: { flex: 1, minHeight: 44, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4C9CCA' },
+  memberAddConfirmText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
   detailCloseBtn: { marginTop: 14, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   detailCloseBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   restoreMembersButton: { alignSelf: 'flex-start', marginTop: 9, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#CDD7DC' },

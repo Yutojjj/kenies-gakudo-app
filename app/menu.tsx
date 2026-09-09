@@ -1920,6 +1920,8 @@ export default function MenuScreen() {
         })
       : filteredEntries;
     const customBlockMap = new Map<string, any>();
+    let globalMemberOverrides: Record<string, string[]> = {};
+    let globalMemberExclusions: Record<string, string[]> = {};
     try {
       const customBlocks = todayPickup.customBlocks
         ? JSON.parse(String(todayPickup.customBlocks))
@@ -1929,6 +1931,18 @@ export default function MenuScreen() {
           if (block?.id) customBlockMap.set(String(block.id), block);
         });
       }
+    } catch {}
+    try {
+      const parsedExclusions = todayPickup.memberExclusions
+        ? JSON.parse(String(todayPickup.memberExclusions))
+        : {};
+      if (parsedExclusions && typeof parsedExclusions === 'object') globalMemberExclusions = parsedExclusions;
+    } catch {}
+    try {
+      const parsedOverrides = todayPickup.memberOverrides
+        ? JSON.parse(String(todayPickup.memberOverrides))
+        : {};
+      if (parsedOverrides && typeof parsedOverrides === 'object') globalMemberOverrides = parsedOverrides;
     } catch {}
 
     const getBlockLabel = (blockKey: string) => {
@@ -1978,10 +1992,19 @@ export default function MenuScreen() {
       };
       const sortMembersByGrade = (members: any[]) => [...members].sort((a, b) => getGradeOrder(a.grade) - getGradeOrder(b.grade));
       const applyChanges = (members: string[]) => {
-        const excluded = new Set(entry?.memberExclusions?.[blockKey] || []);
+        const excluded = new Set([
+          ...(globalMemberExclusions[blockKey] || []),
+          ...(entry?.memberExclusions?.[blockKey] || []),
+        ]);
         const filtered = members.filter(member => !excluded.has(member));
         const existing = new Set(filtered);
-        return [...filtered, ...(entry?.memberOverrides?.[blockKey] || []).filter((member: string) => member && !existing.has(member))];
+        const added = [
+          ...(globalMemberOverrides[blockKey] || []),
+          ...(entry?.memberOverrides?.[blockKey] || []),
+        ].filter((member: string, index: number, members: string[]) => (
+          member && !existing.has(member) && members.indexOf(member) === index
+        ));
+        return [...filtered, ...added];
       };
       const customBlock = customBlockMap.get(blockKey);
       if (customBlock) return applyChanges(Array.isArray(customBlock.members) ? customBlock.members : []);
