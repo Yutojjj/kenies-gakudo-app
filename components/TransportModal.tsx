@@ -2515,6 +2515,8 @@ export default function TransportModal({
                 <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
                   {blocks.map((block, bIdx) => {
+                    const noTransportEntry = staffEntries.find(entry => entry.staffName === '送迎しない');
+                    const unassignedKids = getBlockKids(block, noTransportEntry);
                     const bColor = STAFF_COLORS[bIdx % STAFF_COLORS.length];
                     const nameColor = block.type === 'lesson' ? '#2577C9' : '#111111';
                     const isAssigned = assignedBlockKeys.has(block.key);
@@ -2537,7 +2539,7 @@ export default function TransportModal({
                           else if (block.type === 'school') {
                             const noTransportIndex = staffEntries.findIndex(entry => entry.staffName === '送迎しない');
                             setNewMemberName('');
-                            setMemberSelectionNames(getBlockKids(block).map((kid: any) => String(kid?.name || '').trim()).filter(Boolean));
+                            setMemberSelectionNames(unassignedKids.map((kid: any) => String(kid?.name || '').trim()).filter(Boolean));
                             setMemberAddTarget({ sIdx: noTransportIndex, blockKey: block.key, global: true });
                           }
                         }}
@@ -2546,7 +2548,7 @@ export default function TransportModal({
                       >
                         <Text style={[styles.blockChipText, { color: nameColor }]}>{block.label}</Text>
                         <View style={[styles.countBadge, { backgroundColor: bColor }]}>
-                          <Text style={styles.countText}>{getBlockKids(block).length}名</Text>
+                          <Text style={styles.countText}>{unassignedKids.length}名</Text>
                         </View>
                         {isSelected && (
                           <>
@@ -2554,7 +2556,7 @@ export default function TransportModal({
                               <Text style={styles.selectedMarkText}>選択中</Text>
                             </View>
                             <View style={styles.blockMemberList}>
-                              {getBlockKids(block).map((kid, kidIdx) => (
+                              {unassignedKids.map((kid, kidIdx) => (
                                 <Text key={`${block.key}-${kid.id || kid.name || kidIdx}`} style={styles.blockMemberText} numberOfLines={1}>
                                   {kid.name}{kid.grade ? ` (${kid.grade})` : ''}
                                 </Text>
