@@ -926,35 +926,103 @@ export default function TransportModal({
       ]));
     });
 
-    sourceEntries.forEach((lastEntry) => {
-      let targetIndex: number | undefined;
-      if (lastEntry.staffName === '送迎しない') {
-        targetIndex = currentStaffIndex.get('送迎しない');
-      } else {
-        const regularStaffPosition = sourceEntries
-          .slice(0, sourceEntries.indexOf(lastEntry))
-          .filter(entry => entry.staffName !== '送迎しない').length;
-        const targetStaffName = currentStaffNames[regularStaffPosition];
-        targetIndex = targetStaffName ? currentStaffIndex.get(targetStaffName) : undefined;
+    const sourceStaffPositions = new Map<StaffEntry, number>();
+    let sourceRegularPosition = 0;
+    sourceEntries.forEach(entry => {
+      if (entry.staffName === '送迎しない') sourceStaffPositions.set(entry, -1);
+      else {
+        sourceStaffPositions.set(entry, sourceRegularPosition);
+        sourceRegularPosition += 1;
       }
-      if (targetIndex === undefined) return;
+    });
+    const sourceMemberPositionVotes = new Map<string, Map<number, number>>();
+    const addMemberPositionVote = (name: string, position: number) => {
+      if (!name || position < 0) return;
+      const votes = sourceMemberPositionVotes.get(name) || new Map<number, number>();
+      votes.set(position, (votes.get(position) || 0) + 1);
+      sourceMemberPositionVotes.set(name, votes);
+    };
+    sourceEntries.forEach(sourceEntry => {
+      const position = sourceStaffPositions.get(sourceEntry) ?? -1;
+      if (position < 0) return;
+      sourceEntry.trips.forEach(trip => {
+        trip.blockKeys.forEach(oldKey => {
+          const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+          if (!currentKey) return;
+          const currentBlock = blocks.find(block => block.key === currentKey);
+          const names = [
+            ...(currentBlock?.kids || []).map((kid: any) => String(kid?.name || '').trim()),
+            ...(sourceMemberOverrides[oldKey] || []),
+            ...(sourceEntry.memberOverrides?.[oldKey] || []),
+          ];
+          Array.from(new Set(names.filter(Boolean))).forEach(name => addMemberPositionVote(name, position));
+        });
+      });
+    });
+    const preferredPositionByBlock = new Map<string, number>();
+    sourceEntries.forEach(sourceEntry => {
+      const fallbackPosition = sourceStaffPositions.get(sourceEntry) ?? -1;
+      sourceEntry.trips.forEach(trip => {
+        trip.blockKeys.forEach(oldKey => {
+          const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+          if (!currentKey || fallbackPosition < 0) return;
+          const currentBlock = blocks.find(block => block.key === currentKey);
+          const names = [
+            ...(currentBlock?.kids || []).map((kid: any) => String(kid?.name || '').trim()),
+            ...(sourceMemberOverrides[oldKey] || []),
+            ...(sourceEntry.memberOverrides?.[oldKey] || []),
+          ];
+          const blockVotes = new Map<number, number>();
+          Array.from(new Set(names.filter(Boolean))).forEach(name => {
+            const votes = sourceMemberPositionVotes.get(name);
+            if (!votes) return;
+            votes.forEach((count, position) => blockVotes.set(position, (blockVotes.get(position) || 0) + count));
+          });
+          const preferredPosition = Array.from(blockVotes.entries())
+            .sort((left, right) => right[1] - left[1])[0]?.[0];
+          preferredPositionByBlock.set(currentKey, preferredPosition ?? fallbackPosition);
+        });
+      });
+    });
+    const getTargetIndexForBlock = (currentKey: string, fallbackIndex?: number, namedTargetIndex?: number) => {
+      if (namedTargetIndex !== undefined) return namedTargetIndex;
+      const preferredPosition = preferredPositionByBlock.get(currentKey);
+      const targetPosition = preferredPosition ?? fallbackIndex;
+      if (targetPosition === undefined || targetPosition < 0) return undefined;
+      const targetStaffName = currentStaffNames[targetPosition];
+      return targetStaffName ? currentStaffIndex.get(targetStaffName) : undefined;
+    };
 
+    sourceEntries.forEach((lastEntry) => {
+      const fallbackPosition = sourceStaffPositions.get(lastEntry) ?? -1;
+      const fallbackTargetIndex = lastEntry.staffName === '送迎しない'
+        ? currentStaffIndex.get('送迎しない')
+        : undefined;
+      const namedTargetIndex = lastEntry.staffName === '送迎しない'
+        ? undefined
+        : currentStaffIndex.get(lastEntry.staffName);
       lastEntry.trips.forEach((lastTrip, tripIndex) => {
-        const mappedKeys = lastTrip.blockKeys
-          .map(key => resolveLastWeekBlockKey(key, sourceCustomBlocks))
-          .filter((key): key is string => !!key);
-        if (mappedKeys.length === 0) return;
-        while (nextEntries[targetIndex].trips.length <= tripIndex) {
-          nextEntries[targetIndex].trips.push({ tripIndex: nextEntries[targetIndex].trips.length, blockKeys: [] });
-        }
-        nextEntries[targetIndex].trips[tripIndex].blockKeys = Array.from(new Set([
-          ...nextEntries[targetIndex].trips[tripIndex].blockKeys,
-          ...mappedKeys,
-        ]));
+        lastTrip.blockKeys.forEach(oldKey => {
+          const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
+          if (!currentKey) return;
+          const targetIndex = fallbackTargetIndex ?? getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
+          if (targetIndex === undefined) return;
+          while (nextEntries[targetIndex].trips.length <= tripIndex) {
+            nextEntries[targetIndex].trips.push({ tripIndex: nextEntries[targetIndex].trips.length, blockKeys: [] });
+          }
+          nextEntries[targetIndex].trips[tripIndex].blockKeys = Array.from(new Set([
+            ...nextEntries[targetIndex].trips[tripIndex].blockKeys,
+            currentKey,
+          ]));
+        });
       });
       Object.entries(lastEntry.memberOverrides || {}).forEach(([oldKey, names]) => {
         const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
         if (!currentKey) return;
+        const targetIndex = lastEntry.staffName === '送迎しない'
+          ? currentStaffIndex.get('送迎しない')
+          : getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
+        if (targetIndex === undefined) return;
         const currentOverrides = nextEntries[targetIndex].memberOverrides || {};
         nextEntries[targetIndex].memberOverrides = {
           ...currentOverrides,
@@ -967,6 +1035,10 @@ export default function TransportModal({
       Object.entries(lastEntry.memberExclusions || {}).forEach(([oldKey, names]) => {
         const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
         if (!currentKey) return;
+        const targetIndex = lastEntry.staffName === '送迎しない'
+          ? currentStaffIndex.get('送迎しない')
+          : getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
+        if (targetIndex === undefined) return;
         const currentExclusions = nextEntries[targetIndex].memberExclusions || {};
         nextEntries[targetIndex].memberExclusions = {
           ...currentExclusions,
