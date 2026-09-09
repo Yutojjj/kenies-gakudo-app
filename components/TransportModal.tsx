@@ -1022,22 +1022,53 @@ export default function TransportModal({
     const excludedNames = baseNames.filter(name => !selectedNames.includes(name));
     if (excludedNames.length > 0) nextGlobalExclusions[block.key] = excludedNames;
     else delete nextGlobalExclusions[block.key];
+    const normalizedDestination = String(block.nameOnly || '').replace(/[\s　]/g, '');
+    const otherTimeBlocks = blocks.filter(otherBlock => (
+      otherBlock.type === 'school'
+      && otherBlock.key !== block.key
+      && String(otherBlock.nameOnly || '').replace(/[\s　]/g, '') === normalizedDestination
+    ));
+    otherTimeBlocks.forEach(otherBlock => {
+      const otherNames = (otherBlock.kids || []).map((kid: any) => String(kid?.name || '').trim());
+      const movedNames = selectedAddedNames.filter(name => otherNames.includes(name));
+      if (movedNames.length > 0) {
+        nextGlobalExclusions[otherBlock.key] = Array.from(new Set([
+          ...(nextGlobalExclusions[otherBlock.key] || []),
+          ...movedNames,
+        ]));
+      }
+      const remainingOverrides = (nextGlobalOverrides[otherBlock.key] || []).filter(name => !selectedAddedNames.includes(name));
+      if (remainingOverrides.length > 0) nextGlobalOverrides[otherBlock.key] = remainingOverrides;
+      else delete nextGlobalOverrides[otherBlock.key];
+    });
     const updated = staffEntries.map((entry, index) => {
-      if (memberAddTarget.global) return entry;
-      if (index !== memberAddTarget.sIdx) return entry;
+      const shouldUpdateTargetEntry = !memberAddTarget.global && index === memberAddTarget.sIdx;
+      const shouldCleanOtherTimeEntries = otherTimeBlocks.length > 0;
+      if (!shouldUpdateTargetEntry && !shouldCleanOtherTimeEntries) return entry;
       const nextMemberOverrides = { ...(entry.memberOverrides || {}) };
-      if (nextEntryNames.length > 0) nextMemberOverrides[memberAddTarget.blockKey] = nextEntryNames;
-      else delete nextMemberOverrides[memberAddTarget.blockKey];
+      if (shouldUpdateTargetEntry) {
+        if (nextEntryNames.length > 0) nextMemberOverrides[memberAddTarget.blockKey] = nextEntryNames;
+        else delete nextMemberOverrides[memberAddTarget.blockKey];
+      }
+      if (shouldCleanOtherTimeEntries) {
+        otherTimeBlocks.forEach(otherBlock => {
+          const remainingNames = (nextMemberOverrides[otherBlock.key] || []).filter(name => !selectedAddedNames.includes(name));
+          if (remainingNames.length > 0) nextMemberOverrides[otherBlock.key] = remainingNames;
+          else delete nextMemberOverrides[otherBlock.key];
+        });
+      }
       const nextMemberExclusions = { ...(entry.memberExclusions || {}) };
-      if (excludedNames.length > 0) nextMemberExclusions[memberAddTarget.blockKey] = excludedNames;
-      else delete nextMemberExclusions[memberAddTarget.blockKey];
+      if (shouldUpdateTargetEntry) {
+        if (excludedNames.length > 0) nextMemberExclusions[memberAddTarget.blockKey] = excludedNames;
+        else delete nextMemberExclusions[memberAddTarget.blockKey];
+      }
       return {
         ...entry,
         memberOverrides: nextMemberOverrides,
         memberExclusions: nextMemberExclusions,
       };
     });
-    if (!memberAddTarget.global) await save(updated);
+    await save(updated);
     setMemberOverrides(nextGlobalOverrides);
     await onAssign(dateStr, 'memberOverrides', JSON.stringify(nextGlobalOverrides));
     setMemberExclusions(nextGlobalExclusions);
