@@ -1550,9 +1550,10 @@ export default function TransportModal({
             .home-print-staff-column { display: flex; flex-direction: column; gap: 2mm; min-width: 0; }
             .home-print-staff { break-inside: avoid; border: 4px solid var(--staff-color); border-radius: 4mm; padding: 2.4mm 3mm; }
             .home-print-staff.no-transport { background: #FAFAFA; }
-            .home-print-staff-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; font-size: 11px; }
+            .home-print-staff-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 2mm; font-size: 15px; }
+            .home-print-staff-head strong { font-size: 15px; }
             .home-print-dot { width: 3mm; height: 3mm; border-radius: 50%; flex: 0 0 auto; }
-            .home-print-shift { margin-left: 1mm; padding: 1mm 2mm; border-radius: 3mm; background: #EDF4F4; color: #46585B; font-size: 8px; font-weight: 800; }
+            .home-print-shift { margin-left: 1mm; padding: 1mm 2mm; border-radius: 3mm; background: #EDF4F4; color: #46585B; font-size: 10px; font-weight: 800; }
             .home-print-trips { display: block; margin-left: 0; padding-left: 3mm; border-left: 2px solid var(--staff-color); }
             .home-print-trip { position: relative; min-width: 0; padding-left: 1mm; margin-bottom: 2mm; }
             .home-print-trip:last-child { margin-bottom: 0; }
