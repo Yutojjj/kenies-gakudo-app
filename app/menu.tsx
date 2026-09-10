@@ -151,6 +151,10 @@ const { width } = Dimensions.get('window');
 const EVENT_PLAN_CARD_HEIGHT = width <= 390 ? 220 : 250;
 const EVENT_PLAN_CARD_WIDTH = Math.min(width - 24, 760);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+const HOME_SCHEDULE_HOURS = Array.from({ length: 14 }, (_, index) => index + 7);
+const HOME_SCHEDULE_MINUTES = Array.from({ length: 12 }, (_, index) => index * 5);
+const HOME_PICKER_ITEM_HEIGHT = 41;
+const HOME_PICKER_VIEW_HEIGHT = HOME_PICKER_ITEM_HEIGHT * 5;
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 type TodayPlanSummary = {
@@ -690,6 +694,13 @@ export default function MenuScreen() {
   const [homeScheduleInputKind, setHomeScheduleInputKind] = useState<'pickupTime' | 'pickupCandidate' | 'lesson' | null>(null);
   const [homeScheduleInputValue, setHomeScheduleInputValue] = useState('');
   const [homeScheduleSaving, setHomeScheduleSaving] = useState(false);
+  const [homeSavedPickupTimes, setHomeSavedPickupTimes] = useState<string[]>([]);
+  const [homeDeletePickupTimeTarget, setHomeDeletePickupTimeTarget] = useState<string | null>(null);
+  const [homeScheduleTimePickerVisible, setHomeScheduleTimePickerVisible] = useState(false);
+  const [homeLessonSelectVisible, setHomeLessonSelectVisible] = useState(false);
+  const [homeLessonTime, setHomeLessonTime] = useState('16:00');
+  const [homeLessonHour, setHomeLessonHour] = useState(16);
+  const [homeLessonMinute, setHomeLessonMinute] = useState(0);
   const [scheduleDatePickerVisible, setScheduleDatePickerVisible] = useState(false);
   const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
@@ -1262,9 +1273,35 @@ export default function MenuScreen() {
     }, { merge: true });
   };
 
-  const openHomeSchedulePopup = () => {
+  const openHomeSchedulePopup = async () => {
     setHomeScheduleMemoDraft(todayPlan.memos[0] || '');
     setHomeSchedulePopupVisible(true);
+    try {
+      const parentId = await findHomeParentId();
+      if (!parentId) return;
+      const accountDoc = await getDoc(doc(db, 'accounts', parentId));
+      const saved = accountDoc.exists() && Array.isArray(accountDoc.data().pickupTimes) ? accountDoc.data().pickupTimes : [];
+      setHomeSavedPickupTimes(saved.filter((time: any) => typeof time === 'string'));
+    } catch {
+      setHomeSavedPickupTimes([]);
+    }
+  };
+
+  const removeHomeSavedPickupTime = async (time: string) => {
+    if (homeScheduleSaving) return;
+    setHomeScheduleSaving(true);
+    try {
+      const parentId = await findHomeParentId();
+      const accountDoc = await getDoc(doc(db, 'accounts', parentId));
+      const current = accountDoc.exists() && Array.isArray(accountDoc.data().pickupTimes) ? accountDoc.data().pickupTimes : [];
+      const updated = current.filter((savedTime: string) => savedTime !== time);
+      await setDoc(doc(db, 'accounts', parentId), { pickupTimes: updated }, { merge: true });
+      setHomeSavedPickupTimes(updated);
+    } catch {
+      showAppAlert('削除エラー', '候補時刻を削除できませんでした。');
+    } finally {
+      setHomeScheduleSaving(false);
+    }
   };
 
   const saveHomeMemo = async (closeAfterSave = false) => {
@@ -1291,6 +1328,16 @@ export default function MenuScreen() {
     }
   };
 
+  const saveHomePickupCandidate = async (time: string) => {
+    const parentId = await findHomeParentId();
+    if (!parentId) throw new Error('account not found');
+    const accountDoc = await getDoc(doc(db, 'accounts', parentId));
+    const current = accountDoc.exists() && Array.isArray(accountDoc.data().pickupTimes) ? accountDoc.data().pickupTimes : [];
+    const pickupTimes = Array.from(new Set([...current, time])).sort();
+    await setDoc(doc(db, 'accounts', parentId), { pickupTimes }, { merge: true });
+    setHomeSavedPickupTimes(pickupTimes);
+  };
+
   const submitHomeScheduleInput = async () => {
     const value = homeScheduleInputValue.trim();
     if (!value || homeScheduleSaving) return;
@@ -1308,19 +1355,17 @@ export default function MenuScreen() {
           showAppAlert('入力エラー', '時刻は 19:20 の形式で入力してください。');
           return;
         }
-        const parentId = await findHomeParentId();
-        const accountDoc = await getDoc(doc(db, 'accounts', parentId));
-        const current = accountDoc.exists() && Array.isArray(accountDoc.data().pickupTimes) ? accountDoc.data().pickupTimes : [];
-        const pickupTimes = Array.from(new Set([...current, value])).sort();
-        await setDoc(doc(db, 'accounts', parentId), { pickupTimes }, { merge: true });
+        await saveHomePickupCandidate(value);
       } else if (homeScheduleInputKind === 'lesson') {
         const currentLessons = todayPlan.lessons.map(item => {
           const match = item.match(/^(\d{1,2}:\d{2})\s+(.*)$/);
           return match ? { time: match[1], name: match[2] } : { time: '', name: item };
         });
-        currentLessons.push({ time: '', name: value });
+        const selectedLessonTime = `${String(homeLessonHour).padStart(2, '0')}:${String(homeLessonMinute).padStart(2, '0')}`;
+        currentLessons.push({ time: selectedLessonTime, name: value });
         await saveHomeScheduleData({ lessons: currentLessons });
-        setTodayPlan(prev => ({ ...prev, lessons: [...prev.lessons, value] }));
+        setHomeLessonTime(selectedLessonTime);
+        setTodayPlan(prev => ({ ...prev, lessons: [...prev.lessons, `${selectedLessonTime} ${value}`] }));
       }
       setHomeScheduleInputKind(null);
       setHomeScheduleInputValue('');
@@ -5038,19 +5083,28 @@ export default function MenuScreen() {
                 {!!todayPlan.pickupTimes[0] && <TouchableOpacity onPress={async () => { await saveHomeScheduleData({ pickupTime: null }); setTodayPlan(prev => ({ ...prev, pickupTimes: [] })); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={22} color="#CBD5E1" /></TouchableOpacity>}
               </TouchableOpacity>
               <View style={styles.homeSchedulePopupChipRow}>
-                <View style={styles.homeSchedulePopupChip}><Text style={styles.homeSchedulePopupChipText}>{todayPlan.pickupTimes[0] || '利用なし'}　×</Text></View>
-                <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={() => setHomeScheduleInputKind('pickupCandidate')} activeOpacity={0.8}>
+                {homeSavedPickupTimes.map(time => (
+                  <View key={time} style={[styles.homeSchedulePopupChipWithDelete, time === todayPlan.pickupTimes[0] && styles.homeSchedulePopupChipActive]}>
+                    <Text style={[styles.homeSchedulePopupChipText, time === todayPlan.pickupTimes[0] && styles.homeSchedulePopupChipTextActive]}>{time}</Text>
+                    <TouchableOpacity onPress={() => setHomeDeletePickupTimeTarget(time)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={[styles.homeSchedulePopupChipDelete, time === todayPlan.pickupTimes[0] && styles.homeSchedulePopupChipDeleteActive]}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={() => { setHomeScheduleInputKind('pickupCandidate'); setHomeScheduleInputValue(''); setHomeScheduleTimePickerVisible(true); }} activeOpacity={0.8}>
                   <Text style={styles.homeSchedulePopupDashedText}>⊕ 候補追加</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={() => todayPlan.pickupTimes[0] && saveHomeScheduleData({ pickupTime: todayPlan.pickupTimes[0] }).catch(() => showAppAlert('保存エラー', 'この時刻を保存できませんでした。'))} activeOpacity={0.8}>
-                  <Text style={styles.homeSchedulePopupDashedText}>＋ この時刻を保存</Text>
-                </TouchableOpacity>
+                {!!todayPlan.pickupTimes[0] && !homeSavedPickupTimes.includes(todayPlan.pickupTimes[0]) && (
+                  <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={async () => { if (homeScheduleSaving) return; setHomeScheduleSaving(true); try { await saveHomePickupCandidate(todayPlan.pickupTimes[0]); } catch { showAppAlert('保存エラー', 'この時刻を保存できませんでした。'); } finally { setHomeScheduleSaving(false); } }} activeOpacity={0.8}>
+                    <Text style={styles.homeSchedulePopupDashedText}>＋ この時刻を保存</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             <View style={styles.homeSchedulePopupSimpleSection}>
               <View style={styles.homeSchedulePopupSectionHeader}>
                 <Text style={styles.homeSchedulePopupSectionTitle}>習い事</Text>
-                <TouchableOpacity onPress={() => setHomeScheduleInputKind('lesson')} activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => setHomeLessonSelectVisible(true)} activeOpacity={0.8}>
                   <Text style={styles.homeSchedulePopupAddText}>＋ 習い事を追加</Text>
                 </TouchableOpacity>
               </View>
@@ -5070,21 +5124,111 @@ export default function MenuScreen() {
           </View>
         </View>
       </Modal>
-      <Modal visible={homeScheduleInputKind !== null} transparent animationType="fade" onRequestClose={() => setHomeScheduleInputKind(null)}>
+      <Modal visible={homeDeletePickupTimeTarget !== null} transparent animationType="fade" onRequestClose={() => setHomeDeletePickupTimeTarget(null)}>
+        <View style={styles.homeDeletePickupBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setHomeDeletePickupTimeTarget(null)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+          <View style={styles.homeDeletePickupCard}>
+            <View style={styles.homeDeletePickupIcon}><Ionicons name="trash-outline" size={30} color="#FF4D55" /></View>
+            <Text style={styles.homeDeletePickupTitle}>候補を削除しますか？</Text>
+            <Text style={styles.homeDeletePickupMessage}>{homeDeletePickupTimeTarget} を候補から削除します。</Text>
+            <View style={styles.homeDeletePickupActions}>
+              <TouchableOpacity style={styles.homeDeletePickupCancel} onPress={() => setHomeDeletePickupTimeTarget(null)} activeOpacity={0.85}>
+                <Text style={styles.homeDeletePickupCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.homeDeletePickupSubmit} onPress={async () => { const target = homeDeletePickupTimeTarget; setHomeDeletePickupTimeTarget(null); if (target) await removeHomeSavedPickupTime(target); }} activeOpacity={0.88}>
+                <Text style={styles.homeDeletePickupSubmitText}>削除</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={homeLessonSelectVisible} transparent animationType="fade" onRequestClose={() => setHomeLessonSelectVisible(false)}>
+        <View style={styles.homeLessonSelectBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setHomeLessonSelectVisible(false)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+          <View style={styles.homeLessonSelectCard}>
+            <View style={styles.homeLessonSelectHeader}>
+              <Text style={styles.homeLessonSelectTitle}>習い事を選択</Text>
+              <View style={styles.homeLessonSelectActions}>
+                <TouchableOpacity style={styles.homeLessonSelectEdit} onPress={() => router.push('/lessons' as any)}>
+                  <Text style={styles.homeLessonSelectEditText}>編集</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.homeLessonSelectClose} onPress={() => setHomeLessonSelectVisible(false)}>
+                  <Ionicons name="close" size={30} color="#8A8A8A" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.homeLessonSelectDivider} />
+            <Text style={styles.homeLessonSelectEmpty}>登録された習い事はありません</Text>
+            <TouchableOpacity
+              style={styles.homeLessonSelectAdd}
+              onPress={() => { setHomeLessonSelectVisible(false); setHomeScheduleInputValue(''); setHomeLessonHour(16); setHomeLessonMinute(0); setHomeScheduleInputKind('lesson'); }}
+              activeOpacity={0.82}
+            >
+              <Text style={styles.homeLessonSelectAddText}>＋ 新しい習い事を追加</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={homeScheduleInputKind === 'lesson' || homeScheduleInputKind === 'pickupTime'} transparent animationType="fade" onRequestClose={() => setHomeScheduleInputKind(null)}>
         <View style={styles.homeScheduleInputBackdrop}>
           <TouchableWithoutFeedback onPress={() => setHomeScheduleInputKind(null)}>
             <View style={StyleSheet.absoluteFillObject} />
           </TouchableWithoutFeedback>
           <View style={styles.homeScheduleInputCard}>
             <Text style={styles.homeScheduleInputTitle}>{homeScheduleInputKind === 'lesson' ? '習い事を追加' : homeScheduleInputKind === 'pickupTime' ? 'お迎え時間を変更' : '候補時刻を追加'}</Text>
-            <TextInput style={styles.homeScheduleInput} autoFocus placeholder={homeScheduleInputKind === 'lesson' ? '習い事名を入力' : '19:20'} placeholderTextColor="#94A3B8" value={homeScheduleInputValue} onChangeText={setHomeScheduleInputValue} />
+            {homeScheduleInputKind === 'lesson' ? (
+              <>
+                <Text style={styles.homeScheduleFieldLabel}>習い事の名前</Text>
+                <TextInput style={styles.homeScheduleInput} autoFocus placeholder="例: スイミング" placeholderTextColor="#BBBBBB" value={homeScheduleInputValue} onChangeText={setHomeScheduleInputValue} />
+                <Text style={styles.homeScheduleFieldLabel}>送迎時間</Text>
+                <View style={styles.homeSchedulePickerColumns}>
+                  <View pointerEvents="none" style={styles.homeSchedulePickerSelectionFrame} />
+                  <ScrollView style={styles.homeSchedulePickerScroll} contentContainerStyle={styles.homeSchedulePickerScrollContent} showsVerticalScrollIndicator={false} contentOffset={{ x: 0, y: Math.max(0, HOME_SCHEDULE_HOURS.indexOf(homeLessonHour)) * HOME_PICKER_ITEM_HEIGHT }} snapToInterval={HOME_PICKER_ITEM_HEIGHT} snapToAlignment="center" onMomentumScrollEnd={event => setHomeLessonHour(HOME_SCHEDULE_HOURS[Math.round(event.nativeEvent.contentOffset.y / HOME_PICKER_ITEM_HEIGHT)] ?? homeLessonHour)}>
+                    {HOME_SCHEDULE_HOURS.map(hour => <TouchableOpacity key={`home-lesson-hour-${hour}`} style={styles.homeSchedulePickerItem} onPress={() => setHomeLessonHour(hour)}><Text style={[styles.homeSchedulePickerItemText, homeLessonHour === hour && styles.homeSchedulePickerItemTextActive]}>{hour}</Text></TouchableOpacity>)}
+                  </ScrollView>
+                  <Text style={styles.homeSchedulePickerColon}>:</Text>
+                  <ScrollView style={styles.homeSchedulePickerScroll} contentContainerStyle={styles.homeSchedulePickerScrollContent} showsVerticalScrollIndicator={false} contentOffset={{ x: 0, y: Math.max(0, HOME_SCHEDULE_MINUTES.indexOf(homeLessonMinute)) * HOME_PICKER_ITEM_HEIGHT }} snapToInterval={HOME_PICKER_ITEM_HEIGHT} snapToAlignment="center" onMomentumScrollEnd={event => setHomeLessonMinute(HOME_SCHEDULE_MINUTES[Math.round(event.nativeEvent.contentOffset.y / HOME_PICKER_ITEM_HEIGHT)] ?? homeLessonMinute)}>
+                    {HOME_SCHEDULE_MINUTES.map(minute => <TouchableOpacity key={`home-lesson-minute-${minute}`} style={styles.homeSchedulePickerItem} onPress={() => setHomeLessonMinute(minute)}><Text style={[styles.homeSchedulePickerItemText, homeLessonMinute === minute && styles.homeSchedulePickerItemTextActive]}>{String(minute).padStart(2, '0')}</Text></TouchableOpacity>)}
+                  </ScrollView>
+                </View>
+              </>
+            ) : (
+              <TextInput style={styles.homeScheduleInput} autoFocus placeholder="14:10" placeholderTextColor="#94A3B8" value={homeScheduleInputValue} onChangeText={setHomeScheduleInputValue} />
+            )}
             <View style={styles.homeScheduleInputActions}>
               <TouchableOpacity onPress={() => setHomeScheduleInputKind(null)} style={styles.homeScheduleInputCancel}><Text style={styles.homeScheduleInputCancelText}>キャンセル</Text></TouchableOpacity>
-              <TouchableOpacity onPress={submitHomeScheduleInput} style={styles.homeScheduleInputSubmit}><Text style={styles.homeScheduleInputSubmitText}>追加する</Text></TouchableOpacity>
+              <TouchableOpacity onPress={submitHomeScheduleInput} style={styles.homeScheduleInputSubmit}><Text style={styles.homeScheduleInputSubmitText}>保存する</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+      <CenteredTimePickerModal
+        visible={homeScheduleTimePickerVisible}
+        value={homeScheduleInputKind === 'lesson' ? homeLessonTime : homeScheduleInputValue}
+        hours={HOME_SCHEDULE_HOURS}
+        minutes={HOME_SCHEDULE_MINUTES}
+        showValue={true}
+        compact={true}
+        title={homeScheduleInputKind === 'lesson' ? '習い事の時刻を選択' : '候補時刻を選択'}
+        onClose={() => setHomeScheduleTimePickerVisible(false)}
+        onConfirm={value => {
+          if (homeScheduleInputKind === 'lesson') {
+            setHomeLessonTime(value);
+            setHomeScheduleTimePickerVisible(false);
+          } else {
+            setHomeScheduleTimePickerVisible(false);
+            setHomeScheduleInputKind(null);
+            setHomeScheduleSaving(true);
+            saveHomePickupCandidate(value)
+              .catch(() => showAppAlert('保存エラー', '候補時刻を追加できませんでした。'))
+              .finally(() => setHomeScheduleSaving(false));
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -7359,7 +7503,12 @@ const styles = StyleSheet.create({
   homeSchedulePopupMainText: { fontSize: 20, fontWeight: '900', color: '#172033' },
   homeSchedulePopupChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   homeSchedulePopupChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F8C76A' },
+  homeSchedulePopupChipWithDelete: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F8C76A' },
+  homeSchedulePopupChipActive: { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
   homeSchedulePopupChipText: { color: '#8A5200', fontWeight: '900' },
+  homeSchedulePopupChipTextActive: { color: '#FFFFFF' },
+  homeSchedulePopupChipDelete: { color: '#8A5200', fontWeight: '900', fontSize: 16 },
+  homeSchedulePopupChipDeleteActive: { color: '#FFFFFF' },
   homeSchedulePopupDashedChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#F8C76A' },
   homeSchedulePopupDashedText: { color: '#9A5C00', fontWeight: '800' },
   homeSchedulePopupSimpleSection: { marginTop: 8, marginBottom: 10 },
@@ -7374,15 +7523,48 @@ const styles = StyleSheet.create({
   homeSchedulePopupContinueText: { color: '#2D7FE8', fontSize: 17, fontWeight: '900' },
   homeSchedulePopupSave: { alignItems: 'center', paddingVertical: 15, borderRadius: 20, backgroundColor: '#2F80ED', marginTop: 10 },
   homeSchedulePopupSaveText: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
-  homeScheduleInputBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(35,29,24,0.42)' },
-  homeScheduleInputCard: { width: '100%', maxWidth: 420, padding: 20, borderRadius: 20, backgroundColor: '#FFFDF9' },
-  homeScheduleInputTitle: { marginBottom: 12, fontSize: 20, fontWeight: '900', color: '#172033' },
-  homeScheduleInput: { height: 48, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#C7DDFF', backgroundColor: '#FFFFFF', color: '#172033', fontSize: 16 },
-  homeScheduleInputActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
-  homeScheduleInputCancel: { paddingHorizontal: 14, paddingVertical: 11 },
-  homeScheduleInputCancelText: { color: '#64748B', fontWeight: '800' },
-  homeScheduleInputSubmit: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 14, backgroundColor: '#2F80ED' },
-  homeScheduleInputSubmitText: { color: '#FFFFFF', fontWeight: '900' },
+  homeScheduleInputBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 22 },
+  homeScheduleInputCard: { width: '100%', maxWidth: 340, borderRadius: 24, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 16, backgroundColor: '#FFFFFF' },
+  homeScheduleInputTitle: { marginBottom: 12, fontSize: 17, fontWeight: '900', textAlign: 'center', color: '#333333' },
+  homeScheduleInput: { height: 48, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#EAEAEA', backgroundColor: '#FFFFFF', color: '#333333', fontSize: 16, marginBottom: 20 },
+  homeScheduleFieldLabel: { marginBottom: 8, color: '#172033', fontSize: 15, fontWeight: '900' },
+  homeSchedulePickerColumns: { height: 165, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' },
+  homeSchedulePickerSelectionFrame: { position: 'absolute', left: 8, right: 8, top: 20, height: 41, borderRadius: 14, backgroundColor: '#FFF5D6', borderWidth: 1, borderColor: '#F4D778' },
+  homeSchedulePickerScroll: { width: 88, height: 165 },
+  homeSchedulePickerScrollContent: { paddingVertical: 20 },
+  homeSchedulePickerItem: { height: 41, alignItems: 'center', justifyContent: 'center' },
+  homeSchedulePickerItemText: { color: '#858585', fontSize: 19, fontWeight: '700' },
+  homeSchedulePickerItemTextActive: { color: '#D6A91E', fontSize: 22, fontWeight: '900' },
+  homeSchedulePickerColon: { marginHorizontal: 8, color: '#7A7068', fontSize: 24, fontWeight: '900' },
+  homeScheduleInputActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 16 },
+  homeScheduleInputCancel: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#FAFAFA', alignItems: 'center' },
+  homeScheduleInputCancelText: { fontSize: 14, fontWeight: 'bold', color: '#858585' },
+  homeScheduleInputSubmit: { flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: '#D6B336', alignItems: 'center' },
+  homeScheduleInputSubmitText: { fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' },
+  homeDeletePickupBackdrop: { flex: 1, backgroundColor: 'rgba(17,24,39,0.42)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  homeDeletePickupCard: { width: '100%', maxWidth: 496, padding: 28, borderRadius: 24, backgroundColor: '#FFFDF9', alignItems: 'center' },
+  homeDeletePickupIcon: { width: 78, height: 78, borderRadius: 39, alignItems: 'center', justifyContent: 'center', marginBottom: 18, backgroundColor: '#FFE1E3' },
+  homeDeletePickupTitle: { color: '#172033', fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  homeDeletePickupMessage: { marginTop: 12, color: '#64748B', fontSize: 17, textAlign: 'center' },
+  homeDeletePickupActions: { width: '100%', flexDirection: 'row', gap: 14, marginTop: 28 },
+  homeDeletePickupCancel: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F1F3F6' },
+  homeDeletePickupCancelText: { color: '#4B5563', fontSize: 17, fontWeight: '900' },
+  homeDeletePickupSubmit: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#F44349' },
+  homeDeletePickupSubmitText: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
+  homeLessonSelectBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 0 },
+  homeLessonSelectCard: { width: '100%', maxWidth: 700, alignSelf: 'center', padding: 18, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, backgroundColor: '#FFFFFF' },
+  homeLessonSelectHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  homeLessonSelectTitle: { color: '#172033', fontSize: 22, fontWeight: '900' },
+  homeLessonSelectActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  homeLessonSelectEdit: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#00AEB8', backgroundColor: '#F1FEFF' },
+  homeLessonSelectEditText: { color: '#00AEB8', fontWeight: '900' },
+  homeLessonSelectClose: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  homeLessonSelectDivider: { height: 1, backgroundColor: '#E5E7EB' },
+  homeLessonSelectEmpty: { marginVertical: 54, color: '#999999', fontSize: 18, textAlign: 'center' },
+  homeLessonSelectAdd: { minHeight: 82, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#00AEB8', backgroundColor: '#F1F8FF' },
+  homeLessonSelectAddText: { color: '#00AEB8', fontSize: 20, fontWeight: '900' },
+  homeScheduleLessonTimeButton: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, marginTop: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#C7DDFF', backgroundColor: '#F2F7FF' },
+  homeScheduleLessonTimeText: { flex: 1, color: '#2F80ED', fontSize: 18, fontWeight: '900' },
   passwordKeyboardAvoiding: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   modalContent: { backgroundColor: '#FFF8F0', padding: 24, borderRadius: 24 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#5D4037' },

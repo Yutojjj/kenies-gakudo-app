@@ -30,6 +30,8 @@ type Props = {
   title?: string;
   hours?: number[];
   minutes?: number[];
+  showValue?: boolean;
+  compact?: boolean;
   onClose: () => void;
   onConfirm: (value: string) => void;
 };
@@ -43,6 +45,8 @@ export default function CenteredTimePickerModal({
   title = '時刻を選択',
   hours = DEFAULT_HOURS,
   minutes = DEFAULT_MINUTES,
+  showValue = true,
+  compact = false,
   onClose,
   onConfirm,
 }: Props) {
@@ -112,14 +116,15 @@ export default function CenteredTimePickerModal({
     setter: (next: number) => void,
     ref: React.RefObject<ScrollView | null>,
     pad: boolean,
+    isCompact: boolean,
     wheelLockRef: React.MutableRefObject<number>,
     wrapRef: React.MutableRefObject<any>,
   ) => (
-    <View ref={wrapRef} style={styles.wheelColumn}>
+      <View ref={wrapRef} style={[styles.wheelColumn, isCompact && styles.wheelColumnCompact]}>
       <WebScrollView
         ref={ref}
-        style={styles.wheelScroll}
-        contentContainerStyle={styles.wheelContent}
+        style={[styles.wheelScroll, isCompact && styles.wheelScrollCompact]}
+        contentContainerStyle={[styles.wheelContent, isCompact && styles.wheelContentCompact]}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         snapToOffsets={values.map((_, index) => index * ITEM_HEIGHT)}
@@ -174,14 +179,16 @@ export default function CenteredTimePickerModal({
                   <Ionicons name="close" size={24} color={COLORS.text} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.valueText}>
-                {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
-              </Text>
-              <View style={styles.wheels}>
-                <View pointerEvents="none" style={styles.selectionFrame} />
-                {renderWheel(hours, hour, setHour, hourRef, true, hourWheelLockRef, hourWrapRef)}
+              {showValue && (
+                <Text style={styles.valueText}>
+                  {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}
+                </Text>
+              )}
+              <View style={[styles.wheels, compact && styles.wheelsCompact]}>
+                <View pointerEvents="none" style={[styles.selectionFrame, compact && styles.selectionFrameCompact]} />
+                {renderWheel(hours, hour, setHour, hourRef, true, compact, hourWheelLockRef, hourWrapRef)}
                 <Text pointerEvents="none" style={styles.colon}>:</Text>
-                {renderWheel(minutes, minute, setMinute, minuteRef, true, minuteWheelLockRef, minuteWrapRef)}
+                {renderWheel(minutes, minute, setMinute, minuteRef, true, compact, minuteWheelLockRef, minuteWrapRef)}
               </View>
               <View style={styles.actions}>
                 <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -208,11 +215,16 @@ const styles = StyleSheet.create({
   closeButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F5F5' },
   valueText: { marginVertical: 8, color: COLORS.primary, fontSize: 28, fontWeight: '900', textAlign: 'center' },
   wheels: { height: WHEEL_HEIGHT, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  wheelsCompact: { height: 180 },
   selectionFrame: { position: 'absolute', left: 18, right: 18, top: (WHEEL_HEIGHT - ITEM_HEIGHT) / 2, height: ITEM_HEIGHT, borderRadius: 10, backgroundColor: '#FFF5D6', borderWidth: 1, borderColor: '#F4D778' },
+  selectionFrameCompact: { top: (180 - ITEM_HEIGHT) / 2 },
   wheelColumn: { width: 104, height: WHEEL_HEIGHT },
   wheelScroll: { flex: 1 },
+  wheelScrollCompact: { height: 180 },
   wheelContent: { paddingVertical: WHEEL_PADDING },
+  wheelContentCompact: { paddingVertical: (180 - ITEM_HEIGHT) / 2 },
   wheelItem: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' },
+  wheelColumnCompact: { height: 180 },
   wheelItemText: { color: '#858585', fontSize: 21, fontWeight: '700' },
   wheelItemTextSelected: { color: '#D6A91E', fontSize: 25, fontWeight: '900' },
   colon: { zIndex: 2, width: 28, color: COLORS.textLight, fontSize: 25, fontWeight: '900', textAlign: 'center' },
