@@ -935,6 +935,8 @@ export default function TransportModal({
         sourceRegularPosition += 1;
       }
     });
+    const sourceRegularStaffCount = sourceRegularPosition;
+    const staffShortage = currentStaffNames.length < sourceRegularStaffCount;
     const sourceMemberPositionVotes = new Map<string, Map<number, number>>();
     const addMemberPositionVote = (name: string, position: number) => {
       if (!name || position < 0) return;
@@ -992,6 +994,25 @@ export default function TransportModal({
       const targetStaffName = currentStaffNames[targetPosition];
       return targetStaffName ? currentStaffIndex.get(targetStaffName) : undefined;
     };
+    const getSourceBlockMemberCount = (oldKey: string, currentKey: string, sourceEntry: StaffEntry) => {
+      const currentBlock = blocks.find(block => block.key === currentKey);
+      if (!currentBlock) return 0;
+      const excluded = new Set(sourceEntry.memberExclusions?.[oldKey] || []);
+      const names = (currentBlock.kids || [])
+        .map((kid: any) => String(kid?.name || '').trim())
+        .filter(name => name && !excluded.has(name));
+      const existingNames = new Set(names);
+      [
+        ...(sourceMemberOverrides[oldKey] || []),
+        ...(sourceEntry.memberOverrides?.[oldKey] || []),
+      ].forEach(name => {
+        if (name && !excluded.has(name) && !existingNames.has(name)) {
+          names.push(name);
+          existingNames.add(name);
+        }
+      });
+      return names.length;
+    };
 
     sourceEntries.forEach((lastEntry) => {
       const fallbackPosition = sourceStaffPositions.get(lastEntry) ?? -1;
@@ -1005,6 +1026,8 @@ export default function TransportModal({
         lastTrip.blockKeys.forEach(oldKey => {
           const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
           if (!currentKey) return;
+          if (lastEntry.staffName === '送迎しない' && getSourceBlockMemberCount(oldKey, currentKey, lastEntry) > 0) return;
+          if (lastEntry.staffName !== '送迎しない' && namedTargetIndex === undefined && staffShortage) return;
           const targetIndex = fallbackTargetIndex ?? getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
           if (targetIndex === undefined) return;
           while (nextEntries[targetIndex].trips.length <= tripIndex) {
@@ -1019,6 +1042,8 @@ export default function TransportModal({
       Object.entries(lastEntry.memberOverrides || {}).forEach(([oldKey, names]) => {
         const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
         if (!currentKey) return;
+        if (lastEntry.staffName === '送迎しない' && getSourceBlockMemberCount(oldKey, currentKey, lastEntry) > 0) return;
+        if (lastEntry.staffName !== '送迎しない' && namedTargetIndex === undefined && staffShortage) return;
         const targetIndex = lastEntry.staffName === '送迎しない'
           ? currentStaffIndex.get('送迎しない')
           : getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
@@ -1035,6 +1060,8 @@ export default function TransportModal({
       Object.entries(lastEntry.memberExclusions || {}).forEach(([oldKey, names]) => {
         const currentKey = resolveLastWeekBlockKey(oldKey, sourceCustomBlocks);
         if (!currentKey) return;
+        if (lastEntry.staffName === '送迎しない' && getSourceBlockMemberCount(oldKey, currentKey, lastEntry) > 0) return;
+        if (lastEntry.staffName !== '送迎しない' && namedTargetIndex === undefined && staffShortage) return;
         const targetIndex = lastEntry.staffName === '送迎しない'
           ? currentStaffIndex.get('送迎しない')
           : getTargetIndexForBlock(currentKey, fallbackPosition, namedTargetIndex);
