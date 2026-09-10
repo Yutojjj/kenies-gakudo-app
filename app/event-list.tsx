@@ -395,7 +395,7 @@ export default function EventListScreen() {
   useEffect(() => {
     if (!targetEventId || openDetailParam !== '1' || loading) return;
     const target = Object.values(yearEvents).flat().find(ev => ev.id === targetEventId);
-    if (!target || !details[targetEventId]) return;
+    if (!target) return;
     setTab('detail');
     openDetail(target);
   }, [targetEventId, openDetailParam, loading, yearEvents, details]);
@@ -816,68 +816,59 @@ export default function EventListScreen() {
       />
 
       {/* ══ イベント詳細モーダル ═══════════════════════════════ */}
-      <Modal visible={detailOpen} animationType="none">
+      <Modal visible={detailOpen} animationType="fade" transparent statusBarTranslucent>
         {detailEvent && (
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF0F3' }}>
+          <View style={styles.detailModalBackdrop}>
+            <SafeAreaView style={styles.detailModalCard}>
             <View style={styles.detailHeader}>
-              <TouchableOpacity onPress={() => setDetailOpen(false)}>
-                <Ionicons name="chevron-back" size={24} color="#5D4037" />
-              </TouchableOpacity>
+              <View style={styles.detailHeaderSide} />
               <Text style={styles.detailTitle} numberOfLines={1}>{detailEvent.title}</Text>
-              {myAccountId && (
-                <TouchableOpacity
-                  style={[styles.joinBtn, myParticipations[detailEvent.id] === '参加' ? styles.joinBtnActive : styles.joinBtnInactive]}
-                  onPress={() => toggleMyParticipation(detailEvent.id)}
-                >
-                  <Ionicons name={myParticipations[detailEvent.id] === '参加' ? 'checkmark-circle' : 'add-circle-outline'} size={15} color="#fff" />
-                  <Text style={{ fontSize: 11, marginLeft: 3, color: '#fff', fontWeight: 'bold' }}>
-                    {myParticipations[detailEvent.id] === '参加' ? '申し込み済み' : '参加する'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={styles.detailCloseButton} onPress={() => setDetailOpen(false)} accessibilityLabel="イベント詳細を閉じる">
+                <Ionicons name="close" size={25} color="#5D4037" />
+              </TouchableOpacity>
             </View>
 
             {detailEvent.coverImage && (
               <Image source={{ uri: detailEvent.coverImage }} style={styles.detailCover} resizeMode="cover" />
             )}
 
-            <ScrollView contentContainerStyle={{ padding: 14, gap: 10 }}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 96 }}>
               {/* 説明・日時 */}
-              <View style={[styles.section, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }]}>
-                <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#D6EEFF' }]} onPress={() => setSecDesc(!secDesc)}>
-                  <Ionicons name="document-text-outline" size={18} color="#4A90C4" />
-                  <Text style={[styles.sectionTitle, { color: '#3A7AAA' }]}>説明・日時</Text>
+              <View style={styles.section}>
+                <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecDesc(!secDesc)}>
+                  <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.sectionTitle}>説明・日時</Text>
                   <View style={{ flex: 1 }} />
-                  <Ionicons name={secDesc ? 'chevron-up' : 'chevron-down'} size={18} color="#4A90C4" />
+                  <Ionicons name={secDesc ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
                 </TouchableOpacity>
-                <View style={[styles.sectionBody, { borderColor: '#D6EEFF', backgroundColor: '#EEF7FF' }, !secDesc && { display: 'none' }]}>
+                <View style={[styles.sectionBody, !secDesc && { display: 'none' }]}>
                     <Text style={styles.detailDateText}>{formatDateWithDay(detailEvent.dateStr)}</Text>
                     {detailDet?.description ? <RichText doc={detailDet.description} /> : <Text style={styles.emptyText}>説明はまだありません</Text>}
                 </View>
               </View>
 
               {/* 持ち込み・参加費 */}
-              <View style={[styles.section, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }]}>
-                <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#C8EFD4' }]} onPress={() => setSecItems(!secItems)}>
-                  <Ionicons name="bag-outline" size={18} color="#4A9A6A" />
-                  <Text style={[styles.sectionTitle, { color: '#3A7A55' }]}>持ち込み・参加費等</Text>
+              <View style={styles.section}>
+                <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecItems(!secItems)}>
+                  <Ionicons name="bag-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.sectionTitle}>持ち込み・参加費等</Text>
                   <View style={{ flex: 1 }} />
-                  <Ionicons name={secItems ? 'chevron-up' : 'chevron-down'} size={18} color="#4A9A6A" />
+                  <Ionicons name={secItems ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
                 </TouchableOpacity>
-                <View style={[styles.sectionBody, { borderColor: '#C8EFD4', backgroundColor: '#EEF9F2' }, !secItems && { display: 'none' }]}>
+                <View style={[styles.sectionBody, !secItems && { display: 'none' }]}>
                     {detailDet?.items ? <RichText doc={detailDet.items} /> : <Text style={styles.emptyText}>情報はまだありません</Text>}
                 </View>
               </View>
               {/* 去年の写真 */}
-              <View style={[styles.section, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }]}>
-                <TouchableOpacity style={[styles.sectionHeader, { backgroundColor: '#E8D6F5' }]} onPress={() => setSecPhotos(!secPhotos)}>
-                  <Ionicons name="images-outline" size={18} color="#8A5BB5" />
-                  <Text style={[styles.sectionTitle, { color: '#7A4A9A' }]}>去年の写真</Text>
+              <View style={styles.section}>
+                <TouchableOpacity style={styles.sectionHeader} onPress={() => setSecPhotos(!secPhotos)}>
+                  <Ionicons name="images-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.sectionTitle}>去年の写真</Text>
                   <View style={{ flex: 1 }} />
-                  <Text style={[styles.photoCount, { color: '#8A5BB5' }]}>{detailPhotos.length}件</Text>
-                  <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#8A5BB5" />
+                  <Text style={styles.photoCount}>{detailPhotos.length}件</Text>
+                  <Ionicons name={secPhotos ? 'chevron-up' : 'chevron-down'} size={18} color="#6D625B" />
                 </TouchableOpacity>
-                <View style={[styles.sectionBody, { borderColor: '#E8D6F5', backgroundColor: '#F5EEFF' }, !secPhotos && { display: 'none' }]}>
+                <View style={[styles.sectionBody, !secPhotos && { display: 'none' }]}>
                     {detailPhotos.length === 0
                       ? <Text style={styles.emptyText}>写真・動画はまだありません</Text>
                       : (
@@ -897,7 +888,18 @@ export default function EventListScreen() {
 
               <View style={{ height: 40 }} />
             </ScrollView>
-          </SafeAreaView>
+            {myAccountId && (
+              <TouchableOpacity
+                style={[styles.detailFloatingJoin, myParticipations[detailEvent.id] === '参加' && styles.detailFloatingJoinActive]}
+                onPress={() => toggleMyParticipation(detailEvent.id)}
+                activeOpacity={0.82}
+                accessibilityLabel={myParticipations[detailEvent.id] === '参加' ? '参加を取り消す' : 'イベントに参加する'}
+              >
+                <Ionicons name={myParticipations[detailEvent.id] === '参加' ? 'checkmark' : 'add'} size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+            </SafeAreaView>
+          </View>
         )}
       </Modal>
 
@@ -1069,17 +1071,20 @@ const styles = StyleSheet.create({
 
   // 詳細モーダル
   detailHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF8F0', gap: 8 },
-  detailTitle: { flex: 1, fontSize: 17, fontWeight: 'bold', color: '#5D4037' },
+  detailModalBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: 'rgba(35, 29, 24, 0.42)' },
+  detailModalCard: { width: '100%', maxWidth: 760, height: '88%', maxHeight: 860, overflow: 'hidden', borderRadius: 18, backgroundColor: '#FFFDF9' },
+  detailHeaderSide: { width: 38, height: 38 },
+  detailTitle: { flex: 1, fontSize: 17, fontWeight: 'bold', color: '#5D4037', textAlign: 'center' },
+  detailCloseButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   detailCover: { width: '100%', height: 180, backgroundColor: '#EEE' },
-  joinBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
-  joinBtnActive: { backgroundColor: '#4CAF50' },
-  joinBtnInactive: { backgroundColor: COLORS.primary },
-  section: { borderRadius: 14, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 3, borderWidth: 1 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', flex: 1 },
-  sectionBody: { padding: 14, paddingTop: 12, borderTopWidth: 1 },
+  detailFloatingJoin: { position: 'absolute', right: 22, bottom: 24, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 7, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  detailFloatingJoinActive: { backgroundColor: '#4CAF50' },
+  section: { borderBottomWidth: 1, borderBottomColor: '#DED8D0', overflow: 'hidden' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 15, backgroundColor: '#FFFDF9' },
+  sectionTitle: { fontSize: 16, fontWeight: '900', color: '#3F3631' },
+  sectionBody: { paddingBottom: 16, paddingTop: 0, backgroundColor: '#FFFDF9' },
   detailDateText: { fontSize: 14, fontWeight: 'bold', color: '#5D4037', marginBottom: 6 },
-  photoCount: { fontSize: 12, marginRight: 4 },
+  photoCount: { fontSize: 12, color: '#AAA', marginRight: 4 },
   emptyText: { fontSize: 13, color: '#BDBDBD', fontStyle: 'italic', textAlign: 'center', paddingVertical: 12 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   photoThumbWrap: { position: 'relative' },

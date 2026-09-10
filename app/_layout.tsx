@@ -246,9 +246,10 @@ export default function RootLayout() {
                 <Stack.Screen name="menu" />
                 <Stack.Screen name="attendance" />
                 <Stack.Screen name="album" />
-                <Stack.Screen name="schedule" />
+                <Stack.Screen name="schedule" options={{ presentation: 'transparentModal', animation: 'fade' }} />
                 <Stack.Screen name="shift" />
                 <Stack.Screen name="event-management" />
+                <Stack.Screen name="event-list" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
                 <Stack.Screen name="messages" />
                 <Stack.Screen name="schedule-changes" />
               </Stack>

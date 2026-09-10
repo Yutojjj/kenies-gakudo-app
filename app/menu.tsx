@@ -13,6 +13,7 @@ import {
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View, Switch
 } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
+import EventDetailPopup from '../components/EventDetailPopup';
 import SignaturePad from '../components/SignaturePad';
 import TransportModal from '../components/TransportModal';
 import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
@@ -147,7 +148,8 @@ const STAFF_COLORS = [
 const TRIP_LABELS = ['1回目','2回目','3回目','4回目','5回目'];
 
 const { width } = Dimensions.get('window');
-const EVENT_PLAN_CARD_HEIGHT = width <= 390 ? 192 : 208;
+const EVENT_PLAN_CARD_HEIGHT = width <= 390 ? 220 : 250;
+const EVENT_PLAN_CARD_WIDTH = Math.min(width - 24, 760);
 const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -221,8 +223,8 @@ const formatEventDateLabel = (dateStr: string) => {
 };
 
 const formatDeadlineLabel = (dateStr?: string) => dateStr
-  ? `しめきり ${formatEventDateLabel(dateStr)}`
-  : 'しめきりなし';
+  ? `締切 ${formatEventDateLabel(dateStr)}`
+  : '締切なし';
 
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
@@ -683,6 +685,11 @@ export default function MenuScreen() {
   const suppressQuickPressRef = useRef(false);
   const [surveyCount, setSurveyCount] = useState(0); // 公開中アンケート件数
   const [scheduleDate, setScheduleDate] = useState(new Date());
+  const [homeSchedulePopupVisible, setHomeSchedulePopupVisible] = useState(false);
+  const [homeScheduleMemoDraft, setHomeScheduleMemoDraft] = useState('');
+  const [homeScheduleInputKind, setHomeScheduleInputKind] = useState<'pickupTime' | 'pickupCandidate' | 'lesson' | null>(null);
+  const [homeScheduleInputValue, setHomeScheduleInputValue] = useState('');
+  const [homeScheduleSaving, setHomeScheduleSaving] = useState(false);
   const [scheduleDatePickerVisible, setScheduleDatePickerVisible] = useState(false);
   const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [todayPlan, setTodayPlan] = useState<TodayPlanSummary>({ pickupTimes: [], lessons: [], memos: [] });
@@ -692,6 +699,7 @@ export default function MenuScreen() {
   const [menuEvents, setMenuEvents] = useState<MenuEventItem[]>([]);
   const [menuEventDetails, setMenuEventDetails] = useState<Record<string, boolean>>({});
   const [menuEventParticipations, setMenuEventParticipations] = useState<Record<string, string>>({});
+  const [menuEventPopup, setMenuEventPopup] = useState<MenuEventItem | null>(null);
   const [menuEventIndex, setMenuEventIndex] = useState(0);
   const [announcements, setAnnouncements] = useState<MenuAnnouncement[]>([]);
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<string[]>([]);
@@ -1230,6 +1238,99 @@ export default function MenuScreen() {
     return () => { cancelled = true; };
   }, [role, name, scheduleDate]);
 
+  const findHomeParentId = async () => {
+    if (accountId && accountId !== 'admin') return accountId;
+    const accountSnap = await getDocs(collection(db, 'accounts'));
+    const matched = accountSnap.docs.find(accountDoc => {
+      const data = accountDoc.data();
+      return data.name === name || data.childName === name || data.siblings?.some((s: any) => s.name === name);
+    });
+    return matched?.id || '';
+  };
+
+  const saveHomeScheduleData = async (data: Record<string, any>) => {
+    const parentId = await findHomeParentId();
+    if (!parentId) throw new Error('account not found');
+    const dateStr = makeDateStr(scheduleDate);
+    await setDoc(doc(db, 'schedules2', `${parentId}_${dateStr}`), {
+      parentId,
+      childId: parentId,
+      childName: name,
+      dateStr,
+      ...data,
+      updatedAt: new Date(),
+    }, { merge: true });
+  };
+
+  const openHomeSchedulePopup = () => {
+    setHomeScheduleMemoDraft(todayPlan.memos[0] || '');
+    setHomeSchedulePopupVisible(true);
+  };
+
+  const saveHomeMemo = async (closeAfterSave = false) => {
+    if (homeScheduleSaving) return;
+    setHomeScheduleSaving(true);
+    try {
+      const parentId = await findHomeParentId();
+      if (!parentId) throw new Error('account not found');
+      const dateStr = makeDateStr(scheduleDate);
+      await setDoc(doc(db, 'schedule_memos', `${parentId}_${dateStr}`), {
+        parentId,
+        childId: parentId,
+        childName: name,
+        dateStr,
+        memo: homeScheduleMemoDraft,
+        updatedAt: new Date(),
+      }, { merge: true });
+      setTodayPlan(prev => ({ ...prev, memos: homeScheduleMemoDraft ? [homeScheduleMemoDraft] : [] }));
+      if (closeAfterSave) setHomeSchedulePopupVisible(false);
+    } catch {
+      showAppAlert('保存エラー', 'メモを保存できませんでした。');
+    } finally {
+      setHomeScheduleSaving(false);
+    }
+  };
+
+  const submitHomeScheduleInput = async () => {
+    const value = homeScheduleInputValue.trim();
+    if (!value || homeScheduleSaving) return;
+    setHomeScheduleSaving(true);
+    try {
+      if (homeScheduleInputKind === 'pickupTime') {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+          showAppAlert('入力エラー', '時刻は 14:10 の形式で入力してください。');
+          return;
+        }
+        await saveHomeScheduleData({ pickupTime: value });
+        setTodayPlan(prev => ({ ...prev, pickupTimes: [value] }));
+      } else if (homeScheduleInputKind === 'pickupCandidate') {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+          showAppAlert('入力エラー', '時刻は 19:20 の形式で入力してください。');
+          return;
+        }
+        const parentId = await findHomeParentId();
+        const accountDoc = await getDoc(doc(db, 'accounts', parentId));
+        const current = accountDoc.exists() && Array.isArray(accountDoc.data().pickupTimes) ? accountDoc.data().pickupTimes : [];
+        const pickupTimes = Array.from(new Set([...current, value])).sort();
+        await setDoc(doc(db, 'accounts', parentId), { pickupTimes }, { merge: true });
+      } else if (homeScheduleInputKind === 'lesson') {
+        const currentLessons = todayPlan.lessons.map(item => {
+          const match = item.match(/^(\d{1,2}:\d{2})\s+(.*)$/);
+          return match ? { time: match[1], name: match[2] } : { time: '', name: item };
+        });
+        currentLessons.push({ time: '', name: value });
+        await saveHomeScheduleData({ lessons: currentLessons });
+        setTodayPlan(prev => ({ ...prev, lessons: [...prev.lessons, value] }));
+      }
+      setHomeScheduleInputKind(null);
+      setHomeScheduleInputValue('');
+    } catch {
+      showAppAlert('保存エラー', '予定を保存できませんでした。');
+    } finally {
+      setHomeScheduleSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (role !== 'user') return;
     const unsub = onSnapshot(collection(db, 'events'), snap => {
@@ -1656,17 +1757,20 @@ export default function MenuScreen() {
     ? '読み込み中...'
     : todayPlan.pickupTimes.length > 0
       ? todayPlan.pickupTimes.join(' / ')
-      : '今日はお迎え予定はありません';
+      : '予定はありません';
   const lessonSummary = todayPlanLoading
     ? '読み込み中...'
     : todayPlan.lessons.length > 0
       ? todayPlan.lessons.join(' / ')
-      : '今日は習い事の予定はありません';
+      : '予定はありません';
   const memoSummary = todayPlanLoading
     ? '読み込み中...'
     : todayPlan.memos.length > 0
       ? todayPlan.memos.join(' / ')
-      : '新しい連絡はありません';
+      : '連絡はありません';
+  const isCombinedPlanWide = false;
+  const getPlanTime = (value: string) => value.match(/^\d{1,2}:\d{2}/)?.[0] || '';
+  const getPlanLabel = (value: string) => value.replace(/^\d{1,2}:\d{2}\s*/, '');
   const todayStr = makeDateStr(new Date());
   const visibleMenuEvents = menuEvents
     .filter(event => !event.hidden && event.dateStr >= todayStr)
@@ -3073,51 +3177,56 @@ export default function MenuScreen() {
               </View>
             </View>
 
-            <AnimatedTouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanPickupCard, todayPlanItemAnimatedStyle(0)]}
-              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
-              activeOpacity={0.84}
-            >
-              <Image source={TODAY_PLAN_IMAGES.pickup} style={styles.todayPlanIllust} resizeMode="contain" />
-              <View style={styles.todayPlanTextBox}>
-                <Text style={styles.todayPlanCardTitle}>おむかえ</Text>
-                <View style={styles.todayPlanDivider} />
-                <Text style={styles.todayPlanCardText} numberOfLines={2}>{pickupSummary}</Text>
+            <View style={styles.todayPlanExternalHeader}>
+              <View style={styles.todayPlanExternalTitleWrap}>
+                <View style={styles.todayPlanExternalTitleBar} />
+                <Text style={styles.todayPlanExternalTitle}>本日の予定</Text>
               </View>
-              <View style={styles.todayPlanChevron}>
-                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
-              </View>
-            </AnimatedTouchableOpacity>
+              <TouchableOpacity
+                style={styles.todayPlanOpenSchedule}
+                onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate) } } as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.todayPlanOpenScheduleText}>スケジュールを開く</Text>
+                <Ionicons name="chevron-forward" size={18} color="#E85A7A" />
+              </TouchableOpacity>
+            </View>
 
             <AnimatedTouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanLessonCard, todayPlanItemAnimatedStyle(1)]}
-              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
+              style={[styles.todayPlanCombinedCard, todayPlanItemAnimatedStyle(0)]}
+              onPress={openHomeSchedulePopup}
               activeOpacity={0.84}
             >
-              <Image source={TODAY_PLAN_IMAGES.lesson} style={styles.todayPlanIllust} resizeMode="contain" />
-              <View style={styles.todayPlanTextBox}>
-                <Text style={styles.todayPlanCardTitle}>習い事</Text>
-                <View style={[styles.todayPlanDivider, styles.todayPlanLessonDivider]} />
-                <Text style={styles.todayPlanCardText} numberOfLines={2}>{lessonSummary}</Text>
-              </View>
-              <View style={styles.todayPlanChevron}>
-                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
-              </View>
-            </AnimatedTouchableOpacity>
-
-            <AnimatedTouchableOpacity
-              style={[styles.todayPlanCard, styles.todayPlanMemoCard, todayPlanItemAnimatedStyle(2)]}
-              onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}
-              activeOpacity={0.84}
-            >
-              <Image source={TODAY_PLAN_IMAGES.memo} style={styles.todayPlanIllust} resizeMode="contain" />
-              <View style={styles.todayPlanTextBox}>
-                <Text style={styles.todayPlanCardTitle}>連絡</Text>
-                <View style={[styles.todayPlanDivider, styles.todayPlanMemoDivider]} />
-                <Text style={styles.todayPlanCardText} numberOfLines={2}>{memoSummary}</Text>
-              </View>
-              <View style={styles.todayPlanChevron}>
-                <Ionicons name="chevron-forward" size={20} color="#7A6254" />
+                <View style={[styles.todayPlanCombinedRows, isCombinedPlanWide && styles.todayPlanCombinedRowsWide]}>
+                  <View style={styles.todayPlanTopPair}>
+                    <View style={[styles.todayPlanCombinedRow, styles.todayPlanCombinedPickupRow, styles.todayPlanPairItem]}>
+                      <Image source={TODAY_PLAN_IMAGES.pickup} style={[styles.todayPlanCombinedRowImage, styles.todayPlanPairImage]} resizeMode="contain" />
+                      <View style={styles.todayPlanPairText}>
+                        <Text style={[styles.todayPlanCombinedTitle, styles.todayPlanPickupTitle]}>おむかえ</Text>
+                        <View style={styles.todayPlanPickupDottedLine} />
+                        <Text style={styles.todayPlanCombinedText} numberOfLines={2}>{getPlanLabel(pickupSummary)}</Text>
+                        {!!getPlanTime(pickupSummary) && <Text style={styles.todayPlanPairTime}>{getPlanTime(pickupSummary)}</Text>}
+                      </View>
+                    </View>
+                    <View style={[styles.todayPlanCombinedRow, styles.todayPlanCombinedLessonRow, styles.todayPlanPairItem]}>
+                      <Image source={TODAY_PLAN_IMAGES.lesson} style={[styles.todayPlanCombinedRowImage, styles.todayPlanPairImage]} resizeMode="contain" />
+                      <View style={styles.todayPlanPairText}>
+                        <Text style={[styles.todayPlanCombinedTitle, styles.todayPlanLessonTitle]}>習い事</Text>
+                        <View style={styles.todayPlanLessonDottedLine} />
+                        <Text style={styles.todayPlanCombinedText} numberOfLines={2}>{getPlanLabel(lessonSummary)}</Text>
+                        {!!getPlanTime(lessonSummary) && <Text style={styles.todayPlanPairTime}>{getPlanTime(lessonSummary)}</Text>}
+                      </View>
+                    </View>
+                  </View>
+                {todayPlanLoading || todayPlan.memos.length > 0 ? (
+                  <View style={[styles.todayPlanCombinedRow, styles.todayPlanCombinedMemoRow, isCombinedPlanWide && styles.todayPlanCombinedRowWide]}>
+                    <Image source={TODAY_PLAN_IMAGES.memo} style={[styles.todayPlanCombinedRowImage, isCombinedPlanWide && styles.todayPlanCombinedRowImageWide]} resizeMode="contain" />
+                    <View style={[styles.todayPlanCombinedRowText, isCombinedPlanWide && styles.todayPlanCombinedRowTextWide]}>
+                      <Text style={styles.todayPlanCombinedTitle}>連絡</Text>
+                      <Text style={styles.todayPlanCombinedText} numberOfLines={isCombinedPlanWide ? 2 : 1}>{memoSummary}</Text>
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </AnimatedTouchableOpacity>
           </View>
@@ -3163,7 +3272,7 @@ export default function MenuScreen() {
                         <Ionicons name="calendar-outline" size={44} color="#F7C46C" />
                       </View>
                     )}
-                    <View style={styles.eventPlanOverlay} />
+                    <View style={styles.eventPlanOverlayGradient} />
                     <View style={styles.eventPlanContent}>
                       <View style={styles.eventPlanDateBadge}>
                         <Text style={styles.eventPlanDateText}>{formatEventDateLabel(event.dateStr)}</Text>
@@ -3194,11 +3303,6 @@ export default function MenuScreen() {
                           onPress={() => toggleMenuEventParticipation(event)}
                           activeOpacity={0.82}
                         >
-                          <Ionicons
-                            name={menuEventParticipations[event.id] === '参加' ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                            size={15}
-                            color={menuEventParticipations[event.id] === '参加' ? '#246B43' : '#8B3F64'}
-                          />
                           <Text style={[styles.eventPlanRegisterText, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredText]}>
                             {menuEventParticipations[event.id] === '参加' ? '登録済み' : '参加登録'}
                           </Text>
@@ -3411,8 +3515,8 @@ export default function MenuScreen() {
                 onPress={() => router.push({ pathname: '/event-list', params: { name: name || '' } } as any)}
                 activeOpacity={0.82}
               >
-                <Text style={styles.eventPlanJoinText}>イベント表を見る</Text>
-                <Ionicons name="chevron-forward" size={15} color="#fff" />
+                <Text style={styles.eventPlanJoinText}>イベント一覧を見る</Text>
+                <Ionicons name="chevron-forward" size={18} color="#F07A22" />
               </TouchableOpacity>
             </View>
 
@@ -3421,22 +3525,27 @@ export default function MenuScreen() {
                 <ScrollView
                   horizontal
                   pagingEnabled
-                  snapToInterval={width - 24}
+                  snapToInterval={EVENT_PLAN_CARD_WIDTH}
                   decelerationRate="fast"
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.eventPlanScrollInner}
                   scrollEventThrottle={16}
                   onScroll={(e: any) => {
-                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / EVENT_PLAN_CARD_WIDTH);
                     setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
                   }}
                   onMomentumScrollEnd={(e: any) => {
-                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 24));
+                    const nextIndex = Math.round(e.nativeEvent.contentOffset.x / EVENT_PLAN_CARD_WIDTH);
                     setMenuEventIndex(Math.max(0, Math.min(nextIndex, visibleMenuEvents.length - 1)));
                   }}
                 >
                   {visibleMenuEvents.map((event) => (
-                    <View key={event.id} style={styles.eventPlanCard}>
+                    <TouchableOpacity
+                      key={event.id}
+                      style={styles.eventPlanCard}
+                      onPress={() => setMenuEventPopup(event)}
+                      activeOpacity={0.94}
+                    >
                       {event.coverImage ? (
                         <Image source={{ uri: event.coverImage }} style={styles.eventPlanImageFull} resizeMode="cover" />
                       ) : (
@@ -3444,15 +3553,17 @@ export default function MenuScreen() {
                           <Ionicons name="calendar-outline" size={44} color="#F7C46C" />
                         </View>
                       )}
-                      <View style={styles.eventPlanOverlay} />
+                      <View style={[styles.eventPlanOverlayGradient, Platform.OS === 'web' && ({ backgroundImage: 'linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(0,0,0,0.14) 74%, rgba(0,0,0,0.4) 100%)' } as any)]} />
                       <View style={styles.eventPlanContent}>
-                        <View style={styles.eventPlanDateBadge}>
-                          <Text style={styles.eventPlanDateText}>{formatEventDateLabel(event.dateStr)}</Text>
-                        </View>
                         <View style={styles.eventPlanTextArea}>
-                          <View style={styles.eventPlanDeadlineBadge}>
-                            <Ionicons name="time-outline" size={13} color="#7A4A00" />
-                            <Text style={styles.eventPlanDeadlineText}>{formatDeadlineLabel(event.deadlineDate)}</Text>
+                          <View style={styles.eventPlanMetaGlass}>
+                            <View style={styles.eventPlanMetaRow}>
+                              <Ionicons name="calendar-outline" size={15} color="#FFFFFF" />
+                              <Text style={styles.eventPlanMetaText}>{formatEventDateLabel(event.dateStr)}</Text>
+                              <Text style={styles.eventPlanMetaSeparator}>｜</Text>
+                              <Ionicons name="time-outline" size={15} color="#FFFFFF" />
+                              <Text style={styles.eventPlanMetaText}>{formatDeadlineLabel(event.deadlineDate)}</Text>
+                            </View>
                           </View>
                           <Text style={styles.eventPlanCardTitle} numberOfLines={2}>{event.title}</Text>
                           {!!event.description && (
@@ -3463,10 +3574,10 @@ export default function MenuScreen() {
                           {menuEventDetails[event.id] && (
                             <TouchableOpacity
                               style={styles.eventPlanDetailButton}
-                              onPress={() => router.push({ pathname: '/event-list', params: { name: name || '', eventId: event.id, openDetail: '1' } } as any)}
+                              onPress={() => setMenuEventPopup(event)}
                               activeOpacity={0.82}
                             >
-                              <Ionicons name="document-text-outline" size={15} color="#275E63" />
+                              <Ionicons name="document-text-outline" size={15} color="#FFFFFF" />
                               <Text style={styles.eventPlanActionText}>詳細を見る</Text>
                             </TouchableOpacity>
                           )}
@@ -3475,18 +3586,14 @@ export default function MenuScreen() {
                             onPress={() => toggleMenuEventParticipation(event)}
                             activeOpacity={0.82}
                           >
-                            <Ionicons
-                              name={menuEventParticipations[event.id] === '参加' ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                              size={15}
-                              color={menuEventParticipations[event.id] === '参加' ? '#246B43' : '#8B3F64'}
-                            />
                             <Text style={[styles.eventPlanRegisterText, menuEventParticipations[event.id] === '参加' && styles.eventPlanRegisteredText]}>
-                              {menuEventParticipations[event.id] === '参加' ? '登録済み' : '参加登録'}
+                              {menuEventParticipations[event.id] === '参加' ? '登録済み' : '参加する'}
                             </Text>
+                            <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </ScrollView>
                 <View style={styles.eventPlanPager}>
@@ -4894,6 +5001,90 @@ export default function MenuScreen() {
           </View>
         </View>
       </Modal>
+
+      <EventDetailPopup
+        event={menuEventPopup}
+        visible={!!menuEventPopup}
+        accountId={accountId}
+        accountName={name || ''}
+        onClose={() => setMenuEventPopup(null)}
+      />
+
+      <Modal visible={homeSchedulePopupVisible} transparent animationType="fade" onRequestClose={() => setHomeSchedulePopupVisible(false)}>
+        <View style={styles.homeSchedulePopupBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setHomeSchedulePopupVisible(false)} />
+          <View style={styles.homeSchedulePopupCard}>
+            <View style={styles.homeSchedulePopupHeader}>
+              <TouchableOpacity style={styles.homeSchedulePopupArrow} onPress={() => setScheduleDate(prev => addDays(prev, -1))}>
+                <Ionicons name="chevron-back" size={24} color="#64748B" />
+              </TouchableOpacity>
+              <Text style={styles.homeSchedulePopupTitle}>{formatMenuDateLabel(scheduleDate)}</Text>
+              <TouchableOpacity style={styles.homeSchedulePopupArrow} onPress={() => setScheduleDate(prev => addDays(prev, 1))}>
+                <Ionicons name="chevron-forward" size={24} color="#64748B" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.homeSchedulePopupClose} onPress={() => setHomeSchedulePopupVisible(false)}>
+                <Ionicons name="close" size={25} color="#4A3C35" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.homeSchedulePopupPickup}>
+              <View style={styles.homeSchedulePopupSectionHeader}>
+                <Text style={styles.homeSchedulePopupPickupTitle}>🚘 学校へのお迎え・利用開始時刻</Text>
+                <TouchableOpacity style={styles.homeSchedulePopupEditButton} onPress={() => router.push({ pathname: '/schedule', params: { name, dateStr: makeDateStr(scheduleDate), openEdit: '1' } } as any)}>
+                  <Text style={styles.homeSchedulePopupEditText}>編集</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.homeSchedulePopupMainRow} onPress={() => { setHomeScheduleInputValue(todayPlan.pickupTimes[0] || ''); setHomeScheduleInputKind('pickupTime'); }} activeOpacity={0.82}>
+                <Text style={styles.homeSchedulePopupMainText}>{todayPlan.pickupTimes[0] || '利用なし'}</Text>
+                {!!todayPlan.pickupTimes[0] && <TouchableOpacity onPress={async () => { await saveHomeScheduleData({ pickupTime: null }); setTodayPlan(prev => ({ ...prev, pickupTimes: [] })); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={22} color="#CBD5E1" /></TouchableOpacity>}
+              </TouchableOpacity>
+              <View style={styles.homeSchedulePopupChipRow}>
+                <View style={styles.homeSchedulePopupChip}><Text style={styles.homeSchedulePopupChipText}>{todayPlan.pickupTimes[0] || '利用なし'}　×</Text></View>
+                <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={() => setHomeScheduleInputKind('pickupCandidate')} activeOpacity={0.8}>
+                  <Text style={styles.homeSchedulePopupDashedText}>⊕ 候補追加</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.homeSchedulePopupDashedChip} onPress={() => todayPlan.pickupTimes[0] && saveHomeScheduleData({ pickupTime: todayPlan.pickupTimes[0] }).catch(() => showAppAlert('保存エラー', 'この時刻を保存できませんでした。'))} activeOpacity={0.8}>
+                  <Text style={styles.homeSchedulePopupDashedText}>＋ この時刻を保存</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.homeSchedulePopupSimpleSection}>
+              <View style={styles.homeSchedulePopupSectionHeader}>
+                <Text style={styles.homeSchedulePopupSectionTitle}>習い事</Text>
+                <TouchableOpacity onPress={() => setHomeScheduleInputKind('lesson')} activeOpacity={0.8}>
+                  <Text style={styles.homeSchedulePopupAddText}>＋ 習い事を追加</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.homeSchedulePopupEmptyBox}><Text style={styles.homeSchedulePopupText}>{todayPlan.lessons.join('、') || '習い事はありません'}</Text></View>
+            </View>
+            <View style={styles.homeSchedulePopupSimpleSection}>
+              <View style={styles.homeSchedulePopupSectionHeader}>
+                <Text style={styles.homeSchedulePopupSectionTitle}>メモ</Text>
+                <TouchableOpacity onPress={() => saveHomeMemo(false)} activeOpacity={0.8}>
+                  <Text style={styles.homeSchedulePopupAddText}>{homeScheduleSaving ? '保存中...' : '＋ 保存'}</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput style={styles.homeSchedulePopupMemoInput} placeholder="この日のメモを入力..." placeholderTextColor="#9AAAC0" value={homeScheduleMemoDraft} onChangeText={setHomeScheduleMemoDraft} multiline />
+            </View>
+            <TouchableOpacity style={styles.homeSchedulePopupContinue} onPress={() => saveHomeMemo(false)} activeOpacity={0.82}><Text style={styles.homeSchedulePopupContinueText}>✓　保存して続ける</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.homeSchedulePopupSave} onPress={() => saveHomeMemo(true)} activeOpacity={0.82}><Text style={styles.homeSchedulePopupSaveText}>✓　保存して閉じる</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={homeScheduleInputKind !== null} transparent animationType="fade" onRequestClose={() => setHomeScheduleInputKind(null)}>
+        <View style={styles.homeScheduleInputBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setHomeScheduleInputKind(null)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+          <View style={styles.homeScheduleInputCard}>
+            <Text style={styles.homeScheduleInputTitle}>{homeScheduleInputKind === 'lesson' ? '習い事を追加' : homeScheduleInputKind === 'pickupTime' ? 'お迎え時間を変更' : '候補時刻を追加'}</Text>
+            <TextInput style={styles.homeScheduleInput} autoFocus placeholder={homeScheduleInputKind === 'lesson' ? '習い事名を入力' : '19:20'} placeholderTextColor="#94A3B8" value={homeScheduleInputValue} onChangeText={setHomeScheduleInputValue} />
+            <View style={styles.homeScheduleInputActions}>
+              <TouchableOpacity onPress={() => setHomeScheduleInputKind(null)} style={styles.homeScheduleInputCancel}><Text style={styles.homeScheduleInputCancelText}>キャンセル</Text></TouchableOpacity>
+              <TouchableOpacity onPress={submitHomeScheduleInput} style={styles.homeScheduleInputSubmit}><Text style={styles.homeScheduleInputSubmitText}>追加する</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -5167,7 +5358,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#DED8D3',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F4F7FA',
   },
   segmentButtonSelectedOn: {
     borderColor: '#08AEB8',
@@ -5310,7 +5501,7 @@ const styles = StyleSheet.create({
   },
   userSettingsOverlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#F3F6F8',
   },
   userSettingsSurface: {
     position: 'absolute',
@@ -5874,7 +6065,7 @@ const styles = StyleSheet.create({
   },
   quickReorderCard: {
     width: '31.7%',
-    minHeight: 142,
+    minHeight: 198,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E8DDD2',
@@ -6570,6 +6761,60 @@ const styles = StyleSheet.create({
     elevation: 3,
     overflow: 'hidden',
   },
+  todayPlanCombinedCard: {
+    width: 'auto',
+    minHeight: 198,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginHorizontal: -12,
+    marginBottom: 16,
+    flexDirection: 'column',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F2D7A7',
+    backgroundColor: '#FFF7E8',
+    shadowColor: '#6B7280',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
+    overflow: 'hidden',
+  },
+  todayPlanExternalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  todayPlanExternalTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  todayPlanExternalTitleBar: { width: 4, height: 28, borderRadius: 2, backgroundColor: '#A8D65C' },
+  todayPlanExternalTitle: { fontSize: 24, fontWeight: '900', color: '#333333', fontStyle: 'italic' },
+  todayPlanCombinedHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  todayPlanCombinedHeaderTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  todayPlanCombinedHeaderText: { fontSize: 24, fontWeight: '900', color: '#172033' },
+  todayPlanCombinedRows: { alignSelf: 'stretch', flex: 1, minWidth: 0, gap: 5 },
+  todayPlanCombinedRowsWide: { flexDirection: 'row', alignItems: 'stretch', gap: 8, flexWrap: 'wrap' },
+  todayPlanTopPair: { width: '100%', flexDirection: 'row', gap: 8 },
+  todayPlanCombinedRow: { flexDirection: 'row', alignItems: 'center', minHeight: 46, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: '#FFFFFF' },
+  todayPlanPairItem: { flex: 1, minWidth: 0, minHeight: 126, flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', paddingVertical: 12 },
+  todayPlanCombinedRowWide: { flex: 1, minWidth: 0, minHeight: 112, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', paddingVertical: 9 },
+  todayPlanCombinedPickupRow: { backgroundColor: '#FFF0F4' },
+  todayPlanCombinedLessonRow: { backgroundColor: '#EEF8FF' },
+  todayPlanCombinedMemoRow: {},
+  todayPlanCombinedRowImage: { width: 42, height: 42, marginRight: 10 },
+  todayPlanCombinedRowImageWide: { width: 50, height: 50, marginRight: 0, marginBottom: 5 },
+  todayPlanCombinedRowText: { flex: 1, minWidth: 0 },
+  todayPlanPairImage: { width: 54, height: 54, marginRight: 10, marginBottom: 0 },
+  todayPlanPairDivider: { height: 54, borderLeftWidth: 1, borderStyle: 'dashed', borderColor: '#D8DEE3', marginRight: 10 },
+  todayPlanPairTimeDivider: { height: 54, borderLeftWidth: 1, borderStyle: 'dashed', marginHorizontal: 8 },
+  todayPlanPairTime: { fontSize: 22, lineHeight: 28, fontWeight: '900', color: '#263238', marginTop: 2 },
+  todayPlanPairText: { flex: 1, minWidth: 0, alignItems: 'center' },
+  todayPlanPickupDottedLine: { width: '72%', borderTopWidth: 2, borderStyle: 'dashed', borderColor: '#E98AA1', marginVertical: 5 },
+  todayPlanLessonDottedLine: { width: '72%', borderTopWidth: 2, borderStyle: 'dashed', borderColor: '#8BC7F2', marginVertical: 5 },
+  todayPlanCombinedRowTextWide: { flex: 0, width: '100%', alignItems: 'center' },
+  todayPlanCombinedTitle: { fontSize: 17, fontWeight: '900', color: '#3F302B', marginBottom: 3 },
+  todayPlanPickupTitle: { color: '#D95778' },
+  todayPlanLessonTitle: { color: '#2D7FE8' },
+  todayPlanCombinedText: { fontSize: 14, fontWeight: '700', color: '#6F5A50' },
+  todayPlanOpenSchedule: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5, paddingTop: 10, paddingRight: 4 },
+  todayPlanOpenScheduleText: { fontSize: 14, fontWeight: '900', color: '#E85A7A' },
+  todayPlanOpenScheduleWide: { width: '100%' },
   todayPlanPickupCard: {
     backgroundColor: '#FFF8E9',
     borderColor: '#FFBE68',
@@ -6742,19 +6987,13 @@ const styles = StyleSheet.create({
   eventPlanJoinButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FFA83D',
-    borderRadius: 18,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    shadowColor: '#FFA83D',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    gap: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
   },
   eventPlanJoinText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+    color: '#F07A22',
+    fontSize: 13,
     fontWeight: '900',
   },
   eventPlanScrollInner: {
@@ -6762,7 +7001,8 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   eventPlanCard: {
-    width: width - 24,
+    position: 'relative',
+    width: EVENT_PLAN_CARD_WIDTH,
     height: EVENT_PLAN_CARD_HEIGHT,
     borderRadius: 20,
     backgroundColor: '#EAFBFC',
@@ -6835,21 +7075,27 @@ const styles = StyleSheet.create({
     fontSize: 26,
     opacity: 0.55,
   },
-  eventPlanOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(40, 25, 12, 0.34)',
-    zIndex: 1,
-  },
+  eventPlanOverlayGradient: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: Platform.OS === 'web' ? 'transparent' : 'rgba(0,0,0,0.16)', zIndex: 1 },
   eventPlanContent: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     zIndex: 2,
     padding: 14,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
   eventPlanTextArea: {
-    marginTop: 'auto',
-    marginBottom: 10,
+    position: 'absolute',
+    left: 14,
+    right: 142,
+    bottom: 16,
   },
+  eventPlanMetaGlass: { alignSelf: 'flex-start', maxWidth: '100%', paddingHorizontal: 10, paddingVertical: 6, minHeight: 32, marginBottom: 7, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.16)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)' },
+  eventPlanMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 4 },
+  eventPlanMetaText: { color: '#FFFFFF', fontSize: 12, lineHeight: 16, fontWeight: '800', flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.42)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  eventPlanMetaSeparator: { color: 'rgba(255,255,255,0.8)', fontSize: 12, lineHeight: 16, fontWeight: '700' },
   eventPlanDeadlineBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -6887,49 +7133,61 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   eventPlanActionRow: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 14,
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: 8,
   },
   eventPlanDetailButton: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 19,
+    minHeight: 34,
+    paddingHorizontal: 8,
+    borderRadius: 17,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#A8DADC',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
-    borderColor: '#D9F3F4',
+    borderColor: 'rgba(255,255,255,0.42)',
   },
   eventPlanRegisterButton: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 19,
+    minHeight: 42,
+    minWidth: 116,
+    paddingHorizontal: 14,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#FFD6E8',
+    backgroundColor: 'rgba(255,255,255,0.32)',
     borderWidth: 1,
-    borderColor: '#FFF0F6',
+    borderColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 4,
   },
   eventPlanRegisteredButton: {
-    backgroundColor: '#8BD3A7',
-    borderColor: '#DDF6E6',
+    backgroundColor: 'rgba(255,255,255,0.38)',
+    borderColor: 'rgba(255,255,255,0.96)',
   },
   eventPlanActionText: {
-    color: '#275E63',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
   },
   eventPlanRegisterText: {
-    color: '#8B3F64',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '900',
   },
   eventPlanRegisteredText: {
-    color: '#246B43',
+    color: '#FFFFFF',
   },
   eventPlanPager: {
     flexDirection: 'row',
@@ -7086,6 +7344,45 @@ const styles = StyleSheet.create({
 
   // ── モーダル ──
   modalOverlay: { flex: 1, backgroundColor: 'rgba(45,42,34,0.55)', justifyContent: 'center', padding: 20 },
+  homeSchedulePopupBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: 'rgba(35,29,24,0.42)' },
+  homeSchedulePopupCard: { width: '100%', maxWidth: 680, borderRadius: 20, padding: 16, backgroundColor: '#FFFDF9', overflow: 'hidden' },
+  homeSchedulePopupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingBottom: 12 },
+  homeSchedulePopupArrow: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8E4F4' },
+  homeSchedulePopupClose: { position: 'absolute', top: 4, right: 4, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  homeSchedulePopupTitle: { minWidth: 160, textAlign: 'center', fontSize: 20, fontWeight: '900', color: '#172033' },
+  homeSchedulePopupPickup: { padding: 14, borderRadius: 18, backgroundColor: '#FFF7E7', borderWidth: 1, borderColor: '#F8C76A', marginBottom: 12 },
+  homeSchedulePopupSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  homeSchedulePopupPickupTitle: { fontSize: 16, fontWeight: '900', color: '#7A4A00' },
+  homeSchedulePopupEditButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: '#F59E0B', backgroundColor: '#FFFDF9' },
+  homeSchedulePopupEditText: { color: '#F59E0B', fontWeight: '900' },
+  homeSchedulePopupMainRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, backgroundColor: '#FFFFFF' },
+  homeSchedulePopupMainText: { fontSize: 20, fontWeight: '900', color: '#172033' },
+  homeSchedulePopupChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  homeSchedulePopupChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F8C76A' },
+  homeSchedulePopupChipText: { color: '#8A5200', fontWeight: '900' },
+  homeSchedulePopupDashedChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: '#F8C76A' },
+  homeSchedulePopupDashedText: { color: '#9A5C00', fontWeight: '800' },
+  homeSchedulePopupSimpleSection: { marginTop: 8, marginBottom: 10 },
+  homeSchedulePopupSectionTitle: { fontSize: 18, fontWeight: '900', color: '#172033' },
+  homeSchedulePopupAddText: { color: '#2D7FE8', fontWeight: '900', fontSize: 15 },
+  homeSchedulePopupEmptyBox: { minHeight: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: '#B9D5FF', backgroundColor: '#F2F7FF' },
+  homeSchedulePopupMemoBox: { minHeight: 82, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 16, borderWidth: 1, borderColor: '#C7DDFF', backgroundColor: '#FFFFFF' },
+  homeSchedulePopupMemoInput: { minHeight: 82, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: '#C7DDFF', backgroundColor: '#FFFFFF', color: '#172033', fontSize: 16, textAlignVertical: 'top' },
+  homeSchedulePopupPlaceholder: { fontSize: 16, color: '#9AAAC0' },
+  homeSchedulePopupText: { fontSize: 15, lineHeight: 23, color: '#6D625B' },
+  homeSchedulePopupContinue: { alignItems: 'center', paddingVertical: 14, borderRadius: 20, borderWidth: 1, borderColor: '#9BC9FF', backgroundColor: '#EDF6FF', marginTop: 8 },
+  homeSchedulePopupContinueText: { color: '#2D7FE8', fontSize: 17, fontWeight: '900' },
+  homeSchedulePopupSave: { alignItems: 'center', paddingVertical: 15, borderRadius: 20, backgroundColor: '#2F80ED', marginTop: 10 },
+  homeSchedulePopupSaveText: { color: '#FFFFFF', fontSize: 17, fontWeight: '900' },
+  homeScheduleInputBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(35,29,24,0.42)' },
+  homeScheduleInputCard: { width: '100%', maxWidth: 420, padding: 20, borderRadius: 20, backgroundColor: '#FFFDF9' },
+  homeScheduleInputTitle: { marginBottom: 12, fontSize: 20, fontWeight: '900', color: '#172033' },
+  homeScheduleInput: { height: 48, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#C7DDFF', backgroundColor: '#FFFFFF', color: '#172033', fontSize: 16 },
+  homeScheduleInputActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
+  homeScheduleInputCancel: { paddingHorizontal: 14, paddingVertical: 11 },
+  homeScheduleInputCancelText: { color: '#64748B', fontWeight: '800' },
+  homeScheduleInputSubmit: { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 14, backgroundColor: '#2F80ED' },
+  homeScheduleInputSubmitText: { color: '#FFFFFF', fontWeight: '900' },
   passwordKeyboardAvoiding: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   modalContent: { backgroundColor: '#FFF8F0', padding: 24, borderRadius: 24 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#5D4037' },
