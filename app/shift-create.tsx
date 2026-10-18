@@ -1486,9 +1486,25 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             <View style={styles.submissionStatusHeader}>
               <View>
                 <Text style={styles.submissionStatusTitle}>シフト提出状況</Text>
-                <Text style={styles.submissionStatusMonth}>
-                  {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
-                </Text>
+                <View style={styles.submissionStatusMonthRow}>
+                  <TouchableOpacity
+                    style={styles.submissionStatusMonthArrow}
+                    onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
+                    accessibilityLabel="前の月"
+                  >
+                    <Ionicons name="chevron-back" size={17} color="#7A5A2A" />
+                  </TouchableOpacity>
+                  <Text style={styles.submissionStatusMonth}>
+                    {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.submissionStatusMonthArrow}
+                    onPress={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
+                    accessibilityLabel="次の月"
+                  >
+                    <Ionicons name="chevron-forward" size={17} color="#7A5A2A" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                 <TouchableOpacity style={styles.submissionStatusDeadlineButton} onPress={openDeadlineSettings}>
@@ -2655,6 +2671,8 @@ const styles = StyleSheet.create({
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
   submissionStatusTitle: { fontSize: 18, fontWeight: '900', color: '#3B302B' },
   submissionStatusMonth: { marginTop: 3, fontSize: 13, fontWeight: '800', color: '#76665E' },
+  submissionStatusMonthRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  submissionStatusMonthArrow: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#FFF0D8' },
   submissionStatusDeadlineButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, borderRadius: 9, backgroundColor: '#D49A25' },
   submissionStatusDeadlineText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   submissionStatusClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0E2' },

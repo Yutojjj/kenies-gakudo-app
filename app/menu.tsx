@@ -1382,7 +1382,7 @@ export default function MenuScreen() {
     const unsub = onSnapshot(collection(db, 'events'), snap => {
       const items = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as MenuEventItem))
-        .filter(item => !!item.dateStr && !!item.title)
+        .filter(item => !!(item.dateStr || item.id) && !!item.title)
         .sort((a, b) => {
           const dateCompare = String(a.dateStr).localeCompare(String(b.dateStr));
           if (dateCompare !== 0) return dateCompare;
@@ -1878,7 +1878,7 @@ export default function MenuScreen() {
     .slice(0, 5);
   const menuEventDate = role === 'user' ? scheduleDate : staffPlanDate;
   const todayMenuEvents = menuEvents
-    .filter(event => !event.hidden && event.dateStr === makeDateStr(menuEventDate))
+    .filter(event => (role !== 'user' || !event.hidden) && String(event.dateStr || event.id || '') === makeDateStr(menuEventDate))
     .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ja'));
 
   const toggleMenuEventParticipation = (event: MenuEventItem) => {
@@ -2628,21 +2628,6 @@ export default function MenuScreen() {
       <DecoBackground />
       <ScrollView contentContainerStyle={[styles.scrollContent, role === 'admin' && styles.adminScrollContent]} showsVerticalScrollIndicator={false}>
 
-        {(role === 'admin' || role === 'staff') && todayMenuEvents.length > 0 && (
-          <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 10, padding: 14, borderRadius: 14, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Ionicons name="calendar-outline" size={19} color="#B7791F" />
-              <Text style={{ marginLeft: 7, fontSize: 16, fontWeight: '900', color: '#7A4A00' }}>今日のイベント</Text>
-            </View>
-            {todayMenuEvents.map(event => (
-              <View key={event.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
-                <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
-                {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* ── 通知許可バナー ── */}
         {Platform.OS === 'web' && pushState === 'default' && (
           <TouchableOpacity
@@ -3138,6 +3123,20 @@ export default function MenuScreen() {
                   </Text>
                   <Ionicons name="chevron-forward" size={17} color={pickupEntryStatus === 'partial' ? '#7A5A00' : '#A63F58'} />
                 </TouchableOpacity>
+              )}
+              {todayMenuEvents.length > 0 && (
+                <View style={{ marginTop: 8, marginBottom: 8, padding: 12, borderRadius: 12, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Ionicons name="calendar-outline" size={18} color="#B7791F" />
+                    <Text style={{ marginLeft: 6, fontSize: 14, fontWeight: '900', color: '#7A4A00' }}>イベント</Text>
+                  </View>
+                  {todayMenuEvents.map(event => (
+                    <View key={event.id} style={{ paddingVertical: 5, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
+                      <Text style={{ fontSize: 14, lineHeight: 21, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
+                      {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
+                    </View>
+                  ))}
+                </View>
               )}
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
               <TouchableOpacity
