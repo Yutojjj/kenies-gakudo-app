@@ -11,6 +11,7 @@ service cloud.firestore {
     match /scheduleChanges/{docId} { allow read, write: if true; }
     match /school_times/{docId} { allow read, write: if true; }
     match /events/{docId} { allow read, write: if true; }
+    match /event_templates/{docId} { allow read, write: if true; }
     match /event_participants/{docId} { allow read, write: if true; }
     match /event_past_photos/{docId} { allow read, write: if true; }
     match /year_event_details/{docId} { allow read, write: if true; }

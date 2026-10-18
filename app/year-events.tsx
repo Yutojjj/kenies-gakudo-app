@@ -1089,27 +1089,32 @@ export default function YearEventsScreen() {
   };
   const saveCurrentAsEventTemplate = async () => {
     if (!mgmtTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
-    const ev = findMgmtEvent(mgmtSelectedDate) as any;
-    const det = ev ? details[ev.id] : undefined;
-    const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({
-      uri: p.uri,
-      fiscalYear: p.fiscalYear,
-      mediaType: p.mediaType,
-      mimeType: p.mimeType,
-    })) : [];
-    const docId = `tpl_${Date.now()}`;
-    await setDoc(doc(db, 'event_templates', docId), {
-      id: docId,
-      title: mgmtTitle.trim(),
-      description: mgmtDesc.trim(),
-      deadlineDate: mgmtDeadlineDate.trim(),
-      detailDescription: richDocToFirestore(det?.description || EMPTY_RICH),
-      detailItems: richDocToFirestore(det?.items || EMPTY_RICH),
-      coverImage: ev?.coverImage || null,
-      photos: photosForTemplate,
-      updatedAt: new Date(),
-    }, { merge: true });
-    customAlert('保存完了', '固定イベントとして保存しました。次回から選んで使えます。');
+    try {
+      const ev = findMgmtEvent(mgmtSelectedDate) as any;
+      const det = ev ? details[ev.id] : undefined;
+      const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({
+        uri: p.uri,
+        fiscalYear: p.fiscalYear,
+        mediaType: p.mediaType,
+        mimeType: p.mimeType,
+      })) : [];
+      const docId = `tpl_${Date.now()}`;
+      await setDoc(doc(db, 'event_templates', docId), {
+        id: docId,
+        title: mgmtTitle.trim(),
+        description: mgmtDesc.trim(),
+        deadlineDate: mgmtDeadlineDate.trim(),
+        detailDescription: richDocToFirestore(det?.description || EMPTY_RICH),
+        detailItems: richDocToFirestore(det?.items || EMPTY_RICH),
+        coverImage: ev?.coverImage || null,
+        photos: photosForTemplate,
+        updatedAt: new Date(),
+      }, { merge: true });
+      customAlert('保存完了', '固定イベントとして保存しました。次回から選んで使えます。');
+    } catch (error) {
+      console.error('event template save error:', error);
+      customAlert('保存できませんでした', '固定イベントの保存に失敗しました。もう一度お試しください。');
+    }
   };
   const mgmtDeleteEvent = async () => {
     const ev = findMgmtEvent(mgmtSelectedDate);
