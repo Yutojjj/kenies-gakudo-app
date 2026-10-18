@@ -639,6 +639,16 @@ export default function YearEventsScreen() {
   const [mgmtFilterGrade, setMgmtFilterGrade] = useState('');
   const [eventTemplates, setEventTemplates] = useState<EventTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateEditorVisible, setTemplateEditorVisible] = useState(false);
+  const [templateEditingId, setTemplateEditingId] = useState<string | null>(null);
+  const [templateTitle, setTemplateTitle] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateDeadlineDate, setTemplateDeadlineDate] = useState('');
+  const [templateDetailDescription, setTemplateDetailDescription] = useState<RichDoc>(EMPTY_RICH);
+  const [templateDetailItems, setTemplateDetailItems] = useState<RichDoc>(EMPTY_RICH);
+  const [templateCoverImage, setTemplateCoverImage] = useState<string | null>(null);
+  const [templatePhotos, setTemplatePhotos] = useState<EventTemplate['photos']>([]);
+  const [templatePhotoUploading, setTemplatePhotoUploading] = useState(false);
 
   // Firestore data
   const [events, setEvents] = useState<Record<string, any[]>>({});   // key: "YYYY-MM"→配列 (events collection)
@@ -1081,41 +1091,115 @@ export default function YearEventsScreen() {
     }
     setMgmtModalVisible(false);
   };
+  const openTemplateEditor = (template?: EventTemplate) => {
+    const ev = findMgmtEvent(mgmtSelectedDate) as any;
+    const det = ev ? details[ev.id] : undefined;
+    setTemplateEditingId(template?.id || null);
+    setTemplateTitle(template?.title || mgmtTitle || '');
+    setTemplateDescription(template?.description || mgmtDesc || '');
+    setTemplateDeadlineDate(template?.deadlineDate || mgmtDeadlineDate || '');
+    setTemplateDetailDescription(template?.detailDescription || det?.description || EMPTY_RICH);
+    setTemplateDetailItems(template?.detailItems || det?.items || EMPTY_RICH);
+    setTemplateCoverImage(template?.coverImage || ev?.coverImage || null);
+    setTemplatePhotos(template?.photos || (ev ? (pastPhotos[ev.id] || []).map(p => ({
+      uri: p.uri, fiscalYear: p.fiscalYear, mediaType: p.mediaType, mimeType: p.mimeType,
+    })) : []));
+    setTemplateEditorVisible(true);
+  };
   const applyEventTemplate = (template: EventTemplate) => {
+    if (selectedTemplateId === template.id) {
+      setSelectedTemplateId('');
+      setMgmtTitle('');
+      setMgmtDesc('');
+      setMgmtDeadlineDate('');
+      return;
+    }
     setSelectedTemplateId(template.id);
     setMgmtTitle(template.title || '');
     setMgmtDesc(template.description || '');
     setMgmtDeadlineDate(template.deadlineDate || '');
   };
-  const saveCurrentAsEventTemplate = async () => {
-    if (!mgmtTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
+  const saveTemplatePhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { customAlert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'] as any, allowsMultipleSelection: true, quality: 0.8 });
+    if (result.canceled) return;
+    setTemplatePhotoUploading(true);
+    const uploaded: NonNullable<EventTemplate['photos']> = [];
     try {
-      const ev = findMgmtEvent(mgmtSelectedDate) as any;
-      const det = ev ? details[ev.id] : undefined;
-      const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({
-        uri: p.uri,
-        fiscalYear: p.fiscalYear,
-        mediaType: p.mediaType,
-        mimeType: p.mimeType,
-      })) : [];
-      const docId = `tpl_${Date.now()}`;
+      for (const asset of result.assets) {
+        const mediaType: 'image' | 'video' = asset.type === 'video' || asset.mimeType?.startsWith('video/') ? 'video' : 'image';
+        const ext = asset.fileName?.split('.').pop()?.toLowerCase() || asset.mimeType?.split('/').pop() || (mediaType === 'video' ? 'mp4' : 'jpg');
+        const filename = `albums/event_template_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const sref = storageRef(storage, filename);
+        const blob = await (await fetch(asset.uri)).blob();
+        await uploadBytes(sref, blob, asset.mimeType ? { contentType: asset.mimeType } : undefined);
+        uploaded.push({ uri: await getDownloadURL(sref), mediaType, mimeType: asset.mimeType || undefined });
+      }
+      setTemplatePhotos(current => [...(current || []), ...uploaded]);
+    } catch (error: any) {
+      console.error('template photo upload error:', error);
+      customAlert('アップロード失敗', error?.message || '写真を追加できませんでした');
+    } finally {
+      setTemplatePhotoUploading(false);
+    }
+  };
+  const pickTemplateCover = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { customAlert('権限エラー', '写真ライブラリへのアクセスを許可してください'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] as any, quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    setTemplatePhotoUploading(true);
+    try {
+      const asset = result.assets[0];
+      const filename = `albums/event_template_cover_${Date.now()}.jpg`;
+      const sref = storageRef(storage, filename);
+      await uploadBytes(sref, await (await fetch(asset.uri)).blob(), { contentType: asset.mimeType || 'image/jpeg' });
+      setTemplateCoverImage(await getDownloadURL(sref));
+    } catch (error: any) {
+      customAlert('アップロード失敗', error?.message || '表紙写真を設定できませんでした');
+    } finally {
+      setTemplatePhotoUploading(false);
+    }
+  };
+  const saveEventTemplate = async () => {
+    if (!templateTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
+    try {
+      const docId = templateEditingId || `tpl_${Date.now()}`;
       await setDoc(doc(db, 'event_templates', docId), {
         id: docId,
-        title: mgmtTitle.trim(),
-        description: mgmtDesc.trim(),
-        deadlineDate: mgmtDeadlineDate.trim(),
-        detailDescription: richDocToFirestore(det?.description || EMPTY_RICH),
-        detailItems: richDocToFirestore(det?.items || EMPTY_RICH),
-        coverImage: ev?.coverImage || null,
-        photos: photosForTemplate,
+        title: templateTitle.trim(),
+        description: templateDescription.trim(),
+        deadlineDate: templateDeadlineDate.trim(),
+        detailDescription: richDocToFirestore(templateDetailDescription),
+        detailItems: richDocToFirestore(templateDetailItems),
+        coverImage: templateCoverImage || null,
+        photos: templatePhotos || [],
         updatedAt: new Date(),
       }, { merge: true });
+      setTemplateEditorVisible(false);
       customAlert('保存完了', '固定イベントとして保存しました。次回から選んで使えます。');
     } catch (error) {
       console.error('event template save error:', error);
       customAlert('保存できませんでした', '固定イベントの保存に失敗しました。もう一度お試しください。');
     }
   };
+  const deleteEventTemplate = (template: EventTemplate) => {
+    customConfirm('固定イベントを削除', `「${template.title}」を削除しますか？`, async () => {
+      try {
+        await deleteDoc(doc(db, 'event_templates', template.id));
+        if (selectedTemplateId === template.id) {
+          setSelectedTemplateId('');
+          setMgmtTitle('');
+          setMgmtDesc('');
+          setMgmtDeadlineDate('');
+        }
+      } catch (error: any) {
+        customAlert('削除できませんでした', error?.message || '固定イベントの削除に失敗しました');
+      }
+    });
+  };
+  const saveCurrentAsEventTemplate = () => openTemplateEditor();
   const mgmtDeleteEvent = async () => {
     const ev = findMgmtEvent(mgmtSelectedDate);
     if (!ev) return;
@@ -1973,21 +2057,40 @@ export default function YearEventsScreen() {
                   return (
                     <ScrollView style={{ flex: 1, padding: 16 }}>
                       {/* イベント編集フォーム */}
-                      <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>固定イベントから選ぶ</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555' }}>固定イベントから選ぶ</Text>
+                        {canEditEventDetail && (
+                          <TouchableOpacity onPress={() => openTemplateEditor()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="settings-outline" size={15} color={COLORS.primary} />
+                            <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '800' }}>追加・管理</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
                         {eventTemplates.length === 0 ? (
                           <View style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16, backgroundColor: '#F7F7F7', borderWidth: 1, borderColor: '#EEE' }}>
                             <Text style={{ fontSize: 12, color: '#999', fontWeight: 'bold' }}>まだ固定イベントはありません</Text>
                           </View>
                         ) : eventTemplates.map(tpl => (
-                          <TouchableOpacity
-                            key={tpl.id}
-                            style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 16, backgroundColor: selectedTemplateId === tpl.id ? '#FFD98A' : '#FFF8E1', borderWidth: 1, borderColor: '#FFD98A' }}
-                            onPress={() => applyEventTemplate(tpl)}
-                            activeOpacity={0.82}
-                          >
-                            <Text style={{ fontSize: 12, color: '#8A5A00', fontWeight: '900' }}>{tpl.title}</Text>
-                          </TouchableOpacity>
+                          <View key={tpl.id} style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 16, backgroundColor: selectedTemplateId === tpl.id ? '#FFD98A' : '#FFF8E1', borderWidth: 1, borderColor: '#FFD98A', overflow: 'hidden' }}>
+                            <TouchableOpacity
+                              style={{ paddingLeft: 12, paddingVertical: 9, paddingRight: 8 }}
+                              onPress={() => applyEventTemplate(tpl)}
+                              activeOpacity={0.82}
+                            >
+                              <Text style={{ fontSize: 12, color: '#8A5A00', fontWeight: '900' }}>{tpl.title}</Text>
+                            </TouchableOpacity>
+                            {canEditEventDetail && (
+                              <>
+                                <TouchableOpacity onPress={() => openTemplateEditor(tpl)} style={{ padding: 7 }} accessibilityLabel={`${tpl.title}を編集`}>
+                                  <Ionicons name="pencil-outline" size={14} color="#8A5A00" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => deleteEventTemplate(tpl)} style={{ padding: 7 }} accessibilityLabel={`${tpl.title}を削除`}>
+                                  <Ionicons name="trash-outline" size={14} color="#B44A4A" />
+                                </TouchableOpacity>
+                              </>
+                            )}
+                          </View>
                         ))}
                       </ScrollView>
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>イベント名</Text>
@@ -2010,13 +2113,15 @@ export default function YearEventsScreen() {
                       <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#555', marginBottom: 6 }}>説明</Text>
                       <TextInput style={{ borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14, height: 70 }}
                         value={mgmtDesc} onChangeText={setMgmtDesc} placeholder="説明（任意）" placeholderTextColor="#C0C0C0" multiline />
-                      <TouchableOpacity
-                        style={{ padding: 11, backgroundColor: '#EAF7FF', borderRadius: 10, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#BFE7FF' }}
-                        onPress={saveCurrentAsEventTemplate}
-                        activeOpacity={0.82}
-                      >
-                        <Text style={{ color: '#2878A8', fontWeight: 'bold', fontSize: 13 }}>この内容・詳細・写真を固定イベントとして保存</Text>
-                      </TouchableOpacity>
+                      {canEditEventDetail && (
+                        <TouchableOpacity
+                          style={{ padding: 11, backgroundColor: '#EAF7FF', borderRadius: 10, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#BFE7FF' }}
+                          onPress={saveCurrentAsEventTemplate}
+                          activeOpacity={0.82}
+                        >
+                          <Text style={{ color: '#2878A8', fontWeight: 'bold', fontSize: 13 }}>この内容・詳細・写真を固定イベントとして保存</Text>
+                        </TouchableOpacity>
+                      )}
                       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
                         {ev && (
                           <TouchableOpacity style={{ flex: 1, padding: 11, backgroundColor: '#FFEBEE', borderRadius: 10, alignItems: 'center' }} onPress={mgmtDeleteEvent}>
@@ -2342,6 +2447,71 @@ export default function YearEventsScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* 固定イベント編集モーダル */}
+      <Modal visible={templateEditorVisible} animationType="slide" transparent onRequestClose={() => setTemplateEditorVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ height: '94%', backgroundColor: '#FFFDF9', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderColor: '#EEE', backgroundColor: '#FFF' }}>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#333' }}>固定イベントの内容</Text>
+                <Text style={{ fontSize: 12, color: '#888', marginTop: 3 }}>繰り返し使う内容を保存できます</Text>
+              </View>
+              <TouchableOpacity onPress={() => setTemplateEditorVisible(false)} style={{ padding: 5 }}>
+                <Ionicons name="close" size={28} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
+              <Text style={{ fontSize: 13, fontWeight: '900', color: '#555', marginBottom: 6 }}>固定イベント名</Text>
+              <TextInput value={templateTitle} onChangeText={setTemplateTitle} placeholder="例：手作りおやつ" placeholderTextColor="#AAA" style={{ borderWidth: 1, borderColor: '#DDD', borderRadius: 9, padding: 11, fontSize: 15, backgroundColor: '#FFF', marginBottom: 12 }} />
+              <Text style={{ fontSize: 13, fontWeight: '900', color: '#555', marginBottom: 6 }}>概要</Text>
+              <TextInput value={templateDescription} onChangeText={setTemplateDescription} placeholder="イベントの概要" placeholderTextColor="#AAA" multiline style={{ minHeight: 76, borderWidth: 1, borderColor: '#DDD', borderRadius: 9, padding: 11, fontSize: 14, backgroundColor: '#FFF', marginBottom: 12, textAlignVertical: 'top' }} />
+              <Text style={{ fontSize: 13, fontWeight: '900', color: '#555', marginBottom: 6 }}>参加締め切り日</Text>
+              <TextInput value={templateDeadlineDate} onChangeText={setTemplateDeadlineDate} placeholder="YYYY-MM-DD（任意）" placeholderTextColor="#AAA" style={{ borderWidth: 1, borderColor: '#DDD', borderRadius: 9, padding: 11, fontSize: 14, backgroundColor: '#FFF', marginBottom: 14 }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#555' }}>説明・日時</Text>
+              </View>
+              <RichEditor value={templateDetailDescription} onChange={setTemplateDetailDescription} />
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#555', marginTop: 16, marginBottom: 7 }}>持ち込み・参加費等</Text>
+              <RichEditor value={templateDetailItems} onChange={setTemplateDetailItems} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#555' }}>表紙写真</Text>
+                <TouchableOpacity onPress={pickTemplateCover} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Ionicons name="image-outline" size={17} color={COLORS.primary} />
+                  <Text style={{ color: COLORS.primary, fontWeight: '800', fontSize: 12 }}>{templateCoverImage ? '変更する' : '設定する'}</Text>
+                </TouchableOpacity>
+              </View>
+              {templateCoverImage ? <Image source={{ uri: templateCoverImage }} style={{ width: '100%', height: 150, borderRadius: 10, backgroundColor: '#EEE' }} resizeMode="cover" /> : <Text style={{ color: '#AAA', paddingVertical: 12 }}>表紙写真は未設定です</Text>}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#555' }}>イベントの写真・動画</Text>
+                <TouchableOpacity onPress={saveTemplatePhoto} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }} disabled={templatePhotoUploading}>
+                  {templatePhotoUploading ? <ActivityIndicator size="small" color={COLORS.primary} /> : <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />}
+                  <Text style={{ color: COLORS.primary, fontWeight: '800', fontSize: 12 }}>追加する</Text>
+                </TouchableOpacity>
+              </View>
+              {templatePhotos && templatePhotos.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {templatePhotos.map((photo, index) => (
+                    <View key={`${photo.uri}-${index}`} style={{ width: '31%', aspectRatio: 1, position: 'relative' }}>
+                      <Image source={{ uri: photo.uri }} style={{ width: '100%', height: '100%', borderRadius: 8, backgroundColor: '#EEE' }} resizeMode="cover" />
+                      <TouchableOpacity onPress={() => setTemplatePhotos(current => (current || []).filter((_, i) => i !== index))} style={{ position: 'absolute', top: 3, right: 3, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="close" size={15} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : <Text style={{ color: '#AAA', paddingVertical: 12 }}>写真・動画は未設定です</Text>}
+
+              <TouchableOpacity onPress={saveEventTemplate} disabled={templatePhotoUploading} style={{ minHeight: 48, borderRadius: 10, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }}>
+                <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 15 }}>{templateEditingId ? '固定イベントを更新' : '固定イベントとして保存'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
       </Modal>
 
       {/* 詳細モーダル */}
