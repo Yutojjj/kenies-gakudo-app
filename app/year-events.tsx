@@ -703,18 +703,6 @@ export default function YearEventsScreen() {
     }, handlePermissionError);
   }, [userInfo]);
 
-  useEffect(() => {
-    if (!eventPermissionLoaded || canEditEvents) return;
-    if (mainTab === 'management') {
-      setMainTab('year');
-    }
-    setMgmtModalVisible(false);
-    setPhotoSourceModalVisible(false);
-    setAlbumPickerVisible(false);
-    setEditDesc(false);
-    setEditItems(false);
-  }, [canEditEvents, eventPermissionLoaded, mainTab]);
-
   // チラシプレビュー
   const [flyerPreview, setFlyerPreview] = useState<VacationFlyer | null>(null);
 
@@ -1731,9 +1719,7 @@ export default function YearEventsScreen() {
   );
 
   // ─── メインレンダリング ───────────────────────────────────
-  const eventMainTabs: MainTab[] = canEditEvents
-    ? ['year', 'management']
-    : ['year'];
+  const eventMainTabs: MainTab[] = ['year', 'management'];
   const contentModeLabels: Record<ContentMode, string> = {
     year: '年行事',
     summer: '夏休み',
@@ -1853,7 +1839,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── イベント管理タブ ── */}
-      {currentTab === 'management' && canEditEvents && (
+      {currentTab === 'management' && (
         <View style={{ flex: 1 }}>
           {/* 月ナビ */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
@@ -1943,6 +1929,24 @@ export default function YearEventsScreen() {
                   const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
                   const attending = parts.filter((p: any) => p.status === '参加');
                   const extParts = (ev as any)?.externalParticipants || [];
+                  if (!canEditEvents) {
+                    return (
+                      <ScrollView style={{ flex: 1, padding: 16 }}>
+                        {ev ? (
+                          <>
+                            <Text style={{ fontSize: 20, fontWeight: '900', color: '#333', marginBottom: 8 }}>{ev.title}</Text>
+                            {!!ev.description && <Text style={{ fontSize: 15, lineHeight: 24, color: '#555', marginBottom: 18 }}>{ev.description}</Text>}
+                            <Text style={{ fontSize: 15, fontWeight: '900', color: '#333', marginBottom: 10 }}>参加者（{attending.length + extParts.length}名）</Text>
+                            {attending.map((p: any) => <Text key={p.id} style={{ fontSize: 14, color: '#555', paddingVertical: 7, borderBottomWidth: 1, borderColor: '#F1F1F1' }}>{p.childName}</Text>)}
+                            {extParts.map((p: any) => <Text key={p.id} style={{ fontSize: 14, color: '#555', paddingVertical: 7, borderBottomWidth: 1, borderColor: '#F1F1F1' }}>{p.name}</Text>)}
+                            {attending.length + extParts.length === 0 && <Text style={{ color: '#AAA' }}>まだ登録がありません</Text>}
+                          </>
+                        ) : (
+                          <Text style={{ color: '#AAA', textAlign: 'center', paddingVertical: 24 }}>この日のイベントはありません</Text>
+                        )}
+                      </ScrollView>
+                    );
+                  }
                   return (
                     <ScrollView style={{ flex: 1, padding: 16 }}>
                       {/* イベント編集フォーム */}
