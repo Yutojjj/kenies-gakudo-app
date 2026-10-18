@@ -3116,10 +3116,16 @@ export default function MenuScreen() {
                   <Ionicons name="calendar-outline" size={18} color="#9A6500" />
                   <View style={{ flex: 1 }}>
                     {todayMenuEvents.map(event => (
-                      <View key={event.id}>
+                      <TouchableOpacity
+                        key={event.id}
+                        onPress={() => router.push({ pathname: '/event-list', params: { name: name || '', eventId: event.id, openDetail: '1' } } as any)}
+                        activeOpacity={0.72}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${event.title}のイベント詳細を開く`}
+                      >
                         <Text style={styles.pickupEntryEventTitle}>{event.title}</Text>
                         {!!event.description && <Text style={styles.pickupEntryEventDescription}>{event.description}</Text>}
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 </View>
