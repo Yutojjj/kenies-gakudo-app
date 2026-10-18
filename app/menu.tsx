@@ -2627,6 +2627,21 @@ export default function MenuScreen() {
       <DecoBackground />
       <ScrollView contentContainerStyle={[styles.scrollContent, role === 'admin' && styles.adminScrollContent]} showsVerticalScrollIndicator={false}>
 
+        {(role === 'admin' || role === 'staff') && todayMenuEvents.length > 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 10, padding: 14, borderRadius: 14, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="calendar-outline" size={19} color="#B7791F" />
+              <Text style={{ marginLeft: 7, fontSize: 16, fontWeight: '900', color: '#7A4A00' }}>今日のイベント</Text>
+            </View>
+            {todayMenuEvents.map(event => (
+              <View key={event.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
+                <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
+                {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ── 通知許可バナー ── */}
         {Platform.OS === 'web' && pushState === 'default' && (
           <TouchableOpacity
@@ -3327,23 +3342,6 @@ export default function MenuScreen() {
               </View>
             </AnimatedTouchableOpacity>
 
-          </View>
-        )}
-
-        {(role === 'admin' || role === 'staff') && (
-          <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 10, padding: 14, borderRadius: 14, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Ionicons name="calendar-outline" size={19} color="#B7791F" />
-              <Text style={{ marginLeft: 7, fontSize: 16, fontWeight: '900', color: '#7A4A00' }}>今日のイベント</Text>
-            </View>
-            {todayMenuEvents.length > 0 ? todayMenuEvents.map(event => (
-              <View key={event.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
-                <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
-                {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
-              </View>
-            )) : (
-              <Text style={{ fontSize: 13, color: '#9A7A42' }}>本日のイベントはありません</Text>
-            )}
           </View>
         )}
 
