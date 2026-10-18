@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
@@ -25,6 +25,7 @@ type ShiftScreenProps = {
 
 export default function ShiftScreen({ embedded = false, onClose, staffName: staffNameProp, initialDate }: ShiftScreenProps = {}) {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const { name: nameParam } = useLocalSearchParams<{ name: string }>();
   const [staffName, setStaffNameRaw] = useState((staffNameProp || nameParam || '').trim());
   // staffNameは必ずトリムして保持（保存・読込・キーの不一致を防ぐ）
@@ -69,6 +70,7 @@ export default function ShiftScreen({ embedded = false, onClose, staffName: staf
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({}); // ⑨ イベント
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
+  const calendarCellHeight = Math.max(72, Math.min(126, ((windowWidth - 24) / 7) * 0.8));
 
   useEffect(() => {
     if (!staffName) return;
@@ -433,7 +435,7 @@ export default function ShiftScreen({ embedded = false, onClose, staffName: staf
           
           <View style={styles.calGrid}>
             {days.map((item, index) => {
-              if (!item) return <View key={`empty-${index}`} style={styles.calCellEmpty} />;
+              if (!item) return <View key={`empty-${index}`} style={[styles.calCellEmpty, { minHeight: calendarCellHeight }]} />;
               
               const dayOfWeek = new Date(item.dateStr).getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -446,6 +448,7 @@ export default function ShiftScreen({ embedded = false, onClose, staffName: staf
                   key={item.dateStr} 
                   style={[
                     styles.calCell,
+                    { minHeight: calendarCellHeight + (eventsData[item.dateStr]?.length ? 18 : 0) },
                     (dayOfWeek === 0 || isPublicHoliday) && styles.calCellHoliday,
                     dayOfWeek === 6 && styles.calCellSaturday,
                     cellStamp && styles.calCellActive,
@@ -688,8 +691,8 @@ const styles = StyleSheet.create({
   calHeaderRow: { flexDirection: 'row', marginBottom: 12 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCellEmpty: { width: '14.28%', minHeight: 126 },
-  calCell: { width: '14.28%', minHeight: 126, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  calCellEmpty: { width: '14.28%' },
+  calCell: { width: '14.28%', borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
   calCellHoliday: { backgroundColor: '#FFF1F1' },
   calCellSaturday: { backgroundColor: '#F0F8FF' },
   calCellActive: { backgroundColor: '#FAFAFA' },
