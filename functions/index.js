@@ -736,3 +736,58 @@ exports.sendStaffShiftReminders = onSchedule(
     }));
   }
 );
+
+// シフト提出期限の5日前に、未提出のスタッフへ一度だけ通知する。
+exports.sendShiftDeadlineReminders = onSchedule(
+  {
+    schedule: "every day 09:00",
+    timeZone: "Asia/Tokyo",
+    region: "asia-northeast1",
+  },
+  async () => {
+    const db = getFirestore();
+    const todayKey = tokyoDateKey(new Date());
+    const targetMonth = todayKey.slice(0, 7);
+    const deadlineSettings = await db.collection("settings").doc("shift_period").get();
+    if (!deadlineSettings.exists) return;
+    const setting = deadlineSettings.data() || {};
+    const deadlineDay = Number(setting.deadlines?.[targetMonth] || setting.end || 0);
+    if (!deadlineDay) return;
+    const [year, month] = targetMonth.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const deadlineKey = `${targetMonth}-${String(Math.min(deadlineDay, lastDay)).padStart(2, "0")}`;
+    if (addDaysToDateKey(todayKey, 5) !== deadlineKey) return;
+
+    const reminderRef = db.collection("shift_deadline_reminder_logs").doc(targetMonth);
+    const claimed = await db.runTransaction(async transaction => {
+      const fresh = await transaction.get(reminderRef);
+      if (fresh.exists) return false;
+      transaction.set(reminderRef, { month: targetMonth, deadlineKey, sentAt: new Date() });
+      return true;
+    });
+    if (!claimed) return;
+
+    const [staffSnap, shiftSnap] = await Promise.all([
+      db.collection("accounts").where("role", "==", "staff").get(),
+      db.collection("shifts2").get(),
+    ]);
+    const submittedNames = new Set(
+      shiftSnap.docs
+        .filter(item => String(item.data().dateStr || "").startsWith(`${targetMonth}-`))
+        .map(item => normalizeStaffName(item.data().staffName))
+        .filter(Boolean)
+    );
+    const targetStaffIds = staffSnap.docs
+      .filter(item => !submittedNames.has(normalizeStaffName(item.data().name)))
+      .map(item => item.id);
+    const result = await sendAnnouncementPush(
+      targetStaffIds,
+      "シフト提出期限のお知らせ",
+      `${targetMonth.replace("-", "年")}月分のシフト提出締切まであと5日です。未提出の場合はシフトを提出してください。`,
+      "/shift-view",
+      "shift_deadline"
+    );
+    await reminderRef.update({ sent: result.sent, total: result.total, errors: result.errors || [] });
+    console.log(`[shift-deadline] ${targetMonth}`, JSON.stringify({ deadlineKey, targetStaffIds: targetStaffIds.length, ...result }));
+  }
+);

@@ -509,7 +509,10 @@ export default function ScheduleScreen() {
           const eData: Record<string, any> = {};
           snap.forEach(d => {
             const event: any = { id: d.id, ...d.data() };
-            if (event.dateStr) eData[event.dateStr] = event;
+            // 利用者にはイベント内容の「非表示」設定を反映する。
+            if (event.dateStr && (storedUser?.role !== 'user' || event.hidden !== true)) {
+              eData[event.dateStr] = event;
+            }
           });
           setEventsData(eData);
         }));

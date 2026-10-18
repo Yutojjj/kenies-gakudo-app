@@ -21,6 +21,7 @@ import { db, storage } from '../firebase';
 import { loadTransportOverview, TransportOverviewData } from '../utils/loadTransportOverview';
 import { getTransportEntryStatus, TransportEntryStatus } from '../utils/transportEntryStatus';
 import { disablePushSubscription, getNotificationState, loadPickupNotificationPreference, savePickupNotificationPreference, setupPushToken } from '../utils/setupPushToken';
+import { sendPushNotification } from '../utils/sendPushNotification';
 const ANIMALS = {
   bear:    require('../assets/animals/bear.png'),
   cat:     require('../assets/animals/cat.png'),
@@ -1377,7 +1378,7 @@ export default function MenuScreen() {
   };
 
   useEffect(() => {
-    if (role !== 'user') return;
+    if (!role) return;
     const unsub = onSnapshot(collection(db, 'events'), snap => {
       const items = snap.docs
         .map(d => ({ id: d.id, ...d.data() } as MenuEventItem))
@@ -1745,13 +1746,61 @@ export default function MenuScreen() {
 
   const saveShiftPeriod = async () => {
     try {
-      await setDoc(doc(db, 'settings', 'shift_period'), { start: startDay, end: endDay });
-      showAppAlert('保存完了', `毎月 ${startDay}日 〜 ${endDay}日 を提出期間に設定しました。`);
+      const deadlineDate = endDate || startDate;
+      if (!deadlineDate) {
+        showAppAlert('入力を確認してください', 'カレンダーから締切日を選択してください。');
+        return;
+      }
+      const settingsRef = doc(db, 'settings', 'shift_period');
+      const existing = await getDoc(settingsRef);
+      const current = existing.exists() ? existing.data() : {};
+      const deadlines = { ...(current.deadlines || {}), [deadlineDate.slice(0, 7)]: deadlineDate.slice(8, 10).replace(/^0/, '') };
+      await setDoc(settingsRef, { start: '1', end: deadlines[deadlineDate.slice(0, 7)], deadlines, updatedAt: new Date(), updatedBy: name }, { merge: true });
+      const staffSnap = await getDocs(query(collection(db, 'accounts'), where('role', '==', 'staff')));
+      await sendPushNotification({
+        accountIds: staffSnap.docs.map(item => item.id),
+        title: 'シフト提出期限のお知らせ',
+        body: `${deadlineDate.slice(0, 7).replace('-', '年')}月分のシフト提出期限は${deadlines[deadlineDate.slice(0, 7)]}日です。`,
+        url: '/shift-view',
+      });
+      showAppAlert('保存完了', `${deadlineDate.slice(0, 7)}の提出期限を${deadlines[deadlineDate.slice(0, 7)]}日に設定しました。スタッフへ通知しました。`);
       setPeriodModal(false);
     } catch (e) {
       showAppAlert('エラー', '保存に失敗しました');
     }
   };
+
+  useEffect(() => {
+    if (role !== 'staff' || !name || !authChecked) return;
+    let cancelled = false;
+    const checkShiftDeadline = async () => {
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      try {
+        const settingSnap = await getDoc(doc(db, 'settings', 'shift_period'));
+        if (!settingSnap.exists() || cancelled) return;
+        const setting = settingSnap.data();
+        const deadlineDay = Number(setting.deadlines?.[monthKey] || setting.end || 0);
+        if (!deadlineDay) return;
+        const deadline = new Date(now.getFullYear(), now.getMonth(), Math.min(deadlineDay, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
+        const daysUntilDeadline = Math.round((deadline.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+        if (daysUntilDeadline !== 5) return;
+        const shiftsSnap = await getDocs(query(collection(db, 'shifts2'), where('staffName', '==', name)));
+        const submitted = shiftsSnap.docs.some(item => String(item.data().dateStr || '').startsWith(`${monthKey}-`));
+        if (submitted || cancelled) return;
+        const popupKey = `shiftDeadlinePopup:${name}:${monthKey}`;
+        const shownDate = await AsyncStorage.getItem(popupKey);
+        const todayKey = makeDateStr(now);
+        if (shownDate === todayKey) return;
+        await AsyncStorage.setItem(popupKey, todayKey);
+        if (!cancelled) showAppAlert('締切のお知らせ', `${monthKey.replace('-', '年')}月分のシフト提出締切まであと5日です。未提出の場合はシフトを提出してください。`);
+      } catch (error) {
+        console.warn('[shift deadline popup] failed', error);
+      }
+    };
+    checkShiftDeadline();
+    return () => { cancelled = true; };
+  }, [role, name, authChecked]);
 
   const openPasswordModal = async () => {
     if (!userDocIdRef.current && name) {
@@ -1827,6 +1876,9 @@ export default function MenuScreen() {
       return String(a.id).localeCompare(String(b.id));
     })
     .slice(0, 5);
+  const todayMenuEvents = menuEvents
+    .filter(event => !event.hidden && event.dateStr === makeDateStr(scheduleDate))
+    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ja'));
 
   const toggleMenuEventParticipation = (event: MenuEventItem) => {
     if (!accountId) {
@@ -3274,6 +3326,24 @@ export default function MenuScreen() {
                 ) : null}
               </View>
             </AnimatedTouchableOpacity>
+
+          </View>
+        )}
+
+        {(role === 'admin' || role === 'staff') && (
+          <View style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 10, padding: 14, borderRadius: 14, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="calendar-outline" size={19} color="#B7791F" />
+              <Text style={{ marginLeft: 7, fontSize: 16, fontWeight: '900', color: '#7A4A00' }}>今日のイベント</Text>
+            </View>
+            {todayMenuEvents.length > 0 ? todayMenuEvents.map(event => (
+              <View key={event.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
+                <Text style={{ fontSize: 15, lineHeight: 22, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
+                {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
+              </View>
+            )) : (
+              <Text style={{ fontSize: 13, color: '#9A7A42' }}>本日のイベントはありません</Text>
+            )}
           </View>
         )}
 
@@ -4793,25 +4863,25 @@ export default function MenuScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* 選択中の期間表示 */}
+            {/* 月ごとの締切表示 */}
             <View style={{ flexDirection:'row', justifyContent:'center', alignItems:'center', gap:12, padding:14, backgroundColor:'#FFF8F0' }}>
               <TouchableOpacity
-                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor: calendarTarget==='start' ? '#D4AF37' : '#F5F5F5', borderRadius:12, minWidth:100, alignItems:'center' }}
-                onPress={() => setCalendarTarget('start')}
-              >
-                <Text style={{ fontSize:11, color: calendarTarget==='start' ? '#fff' : '#888' }}>開始日</Text>
-                <Text style={{ fontSize:16, fontWeight:'bold', color: calendarTarget==='start' ? '#fff' : '#333' }}>
-                  {startDate || '未選択'}
-                </Text>
-              </TouchableOpacity>
-              <Text style={{ fontSize:18, color:'#888' }}>〜</Text>
-              <TouchableOpacity
-                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor: calendarTarget==='end' ? '#D4AF37' : '#F5F5F5', borderRadius:12, minWidth:100, alignItems:'center' }}
+                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor:'#D4AF37', borderRadius:12, minWidth:100, alignItems:'center' }}
                 onPress={() => setCalendarTarget('end')}
               >
-                <Text style={{ fontSize:11, color: calendarTarget==='end' ? '#fff' : '#888' }}>終了日</Text>
-                <Text style={{ fontSize:16, fontWeight:'bold', color: calendarTarget==='end' ? '#fff' : '#333' }}>
-                  {endDate || '未選択'}
+                <Text style={{ fontSize:11, color:'#fff' }}>対象月</Text>
+                <Text style={{ fontSize:16, fontWeight:'bold', color:'#fff' }}>
+                  {endDate ? endDate.slice(0, 7) : `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`}
+                </Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize:18, color:'#888' }}>まで</Text>
+              <TouchableOpacity
+                style={{ paddingHorizontal:16, paddingVertical:10, backgroundColor: '#F5F5F5', borderRadius:12, minWidth:100, alignItems:'center' }}
+                onPress={() => setCalendarTarget('end')}
+              >
+                <Text style={{ fontSize:11, color:'#888' }}>締切日</Text>
+                <Text style={{ fontSize:16, fontWeight:'bold', color:'#333' }}>
+                  {endDate ? `${Number(endDate.slice(8, 10))}日` : '未選択'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -4858,22 +4928,19 @@ export default function MenuScreen() {
                     {week.map((day, di) => {
                       if (!day) return <View key={di} style={{ flex:1, height:36 }} />;
                       const dateStr = `${calendarYear}-${String(calendarMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                      const isStart = dateStr === startDate;
                       const isEnd = dateStr === endDate;
-                      const inRange = startDate && endDate && dateStr > startDate && dateStr < endDate;
                       const isSun = di===0, isSat = di===6;
                       return (
                         <TouchableOpacity
                           key={di}
                           style={{ flex:1, height:36, alignItems:'center', justifyContent:'center', borderRadius:18,
-                            backgroundColor: (isStart||isEnd) ? '#D4AF37' : inRange ? '#FFF3CD' : 'transparent' }}
+                            backgroundColor: isEnd ? '#D4AF37' : 'transparent' }}
                           onPress={() => {
-                            if (calendarTarget === 'start') { setStartDate(dateStr); setCalendarTarget('end'); }
-                            else { setEndDate(dateStr); }
+                            setEndDate(dateStr);
                           }}
                         >
-                          <Text style={{ fontSize:14, fontWeight:(isStart||isEnd)?'bold':'normal',
-                            color:(isStart||isEnd)?'#fff':isSun?'#CC0000':isSat?'#0055CC':'#333' }}>{day}</Text>
+                          <Text style={{ fontSize:14, fontWeight:isEnd?'bold':'normal',
+                            color:isEnd?'#fff':isSun?'#CC0000':isSat?'#0055CC':'#333' }}>{day}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -4887,9 +4954,9 @@ export default function MenuScreen() {
                 <Text style={{ color:'#666', fontWeight:'bold' }}>キャンセル</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor: startDate&&endDate ? '#D4AF37' : '#ccc', alignItems:'center' }}
+                style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor: endDate ? '#D4AF37' : '#ccc', alignItems:'center' }}
                 onPress={saveShiftPeriod}
-                disabled={!startDate || !endDate}
+                disabled={!endDate}
               >
                 <Text style={{ color:'#fff', fontWeight:'bold' }}>保存</Text>
               </TouchableOpacity>

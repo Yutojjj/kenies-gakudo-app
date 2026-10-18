@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'crypto-js';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import AdminBottomNav from '../components/AdminBottomNav';
 import { COLORS } from '../constants/theme';
 import { db } from '../firebase';
 import { disablePushSubscription } from '../utils/setupPushToken';
+import { sendPushNotification } from '../utils/sendPushNotification';
 import { clearNavigationReturnDestination, setNavigationReturnDestination } from '../utils/navigationHome';
 import { useRequireRole } from '../hooks/useRequireRole';
 
@@ -97,6 +98,14 @@ export default function AdminMoreScreen() {
   const [periodVisible, setPeriodVisible] = useState(false);
   const [periodStart, setPeriodStart] = useState('1');
   const [periodEnd, setPeriodEnd] = useState('15');
+  const [periodMonth, setPeriodMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [periodCalendar, setPeriodCalendar] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [gradeChoiceVisible, setGradeChoiceVisible] = useState(false);
   const [gradePreviewVisible, setGradePreviewVisible] = useState(false);
   const [gradeDirection, setGradeDirection] = useState<'up' | 'down'>('up');
@@ -114,6 +123,20 @@ export default function AdminMoreScreen() {
       } catch {}
     });
   }, []);
+
+  useEffect(() => {
+    if (!periodVisible) return;
+    getDoc(doc(db, 'settings', 'shift_period')).then(snapshot => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      const now = new Date();
+      const month = periodMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      setPeriodMonth(month);
+      const [year, monthNumber] = month.split('-').map(Number);
+      if (year && monthNumber) setPeriodCalendar(new Date(year, monthNumber - 1, 1));
+      setPeriodEnd(String(data.deadlines?.[month] || data.end || '15'));
+    }).catch(() => {});
+  }, [periodVisible]);
 
   const showAlert = (title: string, message?: string) => {
     setDialog({ visible: true, title, message });
@@ -138,17 +161,26 @@ export default function AdminMoreScreen() {
   };
 
   const saveShiftPeriod = async () => {
-    const start = normalizeDay(periodStart);
     const end = normalizeDay(periodEnd);
-    if (!start || !end) {
-      showAlert('入力を確認してください', '1〜31の日付を入力してください。');
+    if (!/^\d{4}-\d{2}$/.test(periodMonth) || !end) {
+      showAlert('入力を確認してください', '対象月はYYYY-MM、締切日は1〜31で入力してください。');
       return;
     }
-    await setDoc(doc(db, 'settings', 'shift_period'), { start, end }, { merge: true });
-    setPeriodStart(start);
+    const settingsRef = doc(db, 'settings', 'shift_period');
+    const current = await getDocs(collection(db, 'accounts'));
+    const existing = await getDoc(settingsRef);
+    const deadlines = { ...(existing.exists() ? existing.data().deadlines || {} : {}), [periodMonth]: end };
+    await setDoc(settingsRef, { start: '1', end, deadlines, updatedAt: new Date(), updatedBy: adminName || accountId }, { merge: true });
     setPeriodEnd(end);
     setPeriodVisible(false);
-    showAlert('保存しました', `毎月 ${start}日 〜 ${end}日 を提出期間に設定しました。`);
+    const staffIds = current.docs.filter(item => item.data().role === 'staff').map(item => item.id);
+    await sendPushNotification({
+      accountIds: staffIds,
+      title: 'シフト提出期限のお知らせ',
+      body: `${periodMonth.replace('-', '年')}月分のシフト提出期限は${end}日です。`,
+      url: '/shift-view',
+    });
+    showAlert('保存しました', `${periodMonth}の提出期限を${end}日に設定しました。スタッフへ通知しました。`);
   };
 
   const savePassword = async () => {
@@ -352,17 +384,53 @@ export default function AdminMoreScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>シフト入力期間</Text>
-            <Text style={styles.modalSub}>毎月の提出できる日付を設定します</Text>
-            <View style={styles.periodRow}>
-              <View style={styles.periodInputWrap}>
-                <Text style={styles.inputLabel}>開始日</Text>
-                <TextInput style={styles.periodInput} value={periodStart} onChangeText={setPeriodStart} keyboardType="number-pad" />
+            <Text style={styles.modalSub}>月ごとのシフト提出期限を設定します</Text>
+            <View style={{ padding: 12, backgroundColor: '#FFF8F0', borderRadius: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <TouchableOpacity onPress={() => setPeriodCalendar(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
+                  <Ionicons name="chevron-back" size={22} color="#5D4037" />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#5D4037' }}>
+                  {periodCalendar.getFullYear()}年 {periodCalendar.getMonth() + 1}月
+                </Text>
+                <TouchableOpacity onPress={() => setPeriodCalendar(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
+                  <Ionicons name="chevron-forward" size={22} color="#5D4037" />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.periodWave}>〜</Text>
-              <View style={styles.periodInputWrap}>
-                <Text style={styles.inputLabel}>終了日</Text>
-                <TextInput style={styles.periodInput} value={periodEnd} onChangeText={setPeriodEnd} keyboardType="number-pad" />
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                  <Text key={day} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '800', color: index === 0 ? '#C62828' : index === 6 ? '#1565C0' : '#777' }}>{day}</Text>
+                ))}
               </View>
+              {(() => {
+                const firstDay = new Date(periodCalendar.getFullYear(), periodCalendar.getMonth(), 1).getDay();
+                const daysInMonth = new Date(periodCalendar.getFullYear(), periodCalendar.getMonth() + 1, 0).getDate();
+                const cells: (number | null)[] = Array(firstDay).fill(null);
+                for (let day = 1; day <= daysInMonth; day++) cells.push(day);
+                while (cells.length % 7 !== 0) cells.push(null);
+                return Array.from({ length: cells.length / 7 }, (_, weekIndex) => (
+                  <View key={weekIndex} style={{ flexDirection: 'row' }}>
+                    {cells.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, dayIndex) => {
+                      const selected = day !== null && periodMonth === `${periodCalendar.getFullYear()}-${String(periodCalendar.getMonth() + 1).padStart(2, '0')}` && periodEnd === String(day);
+                      return day === null ? <View key={dayIndex} style={{ flex: 1, height: 38 }} /> : (
+                        <TouchableOpacity
+                          key={dayIndex}
+                          style={{ flex: 1, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: selected ? '#D4AF37' : 'transparent' }}
+                          onPress={() => {
+                            setPeriodMonth(`${periodCalendar.getFullYear()}-${String(periodCalendar.getMonth() + 1).padStart(2, '0')}`);
+                            setPeriodEnd(String(day));
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: selected ? '900' : '600', color: selected ? '#FFFFFF' : dayIndex === 0 ? '#C62828' : dayIndex === 6 ? '#1565C0' : '#333' }}>{day}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ));
+              })()}
+              <Text style={{ marginTop: 8, textAlign: 'center', fontSize: 13, fontWeight: '800', color: '#7A5A2A' }}>
+                {periodMonth} の締切日: {periodEnd}日
+              </Text>
             </View>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setPeriodVisible(false)}>

@@ -355,9 +355,11 @@ export default function ShiftViewScreen() {
 
                 {isEventDay && (
                   <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      {eventsData[item.dateStr].join('・')}
-                    </Text>
+                    {eventsData[item.dateStr].map((title, eventIndex) => (
+                      <Text key={`${item.dateStr}-event-${eventIndex}`} style={styles.eventBadgeText}>
+                        {title}
+                      </Text>
+                    ))}
                   </View>
                 )}
 

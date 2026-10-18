@@ -5,7 +5,7 @@ import * as Print from 'expo-print';
 import { useRequireRole } from '../hooks/useRequireRole';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { addDoc, collection, deleteDoc, doc, enableNetwork, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, enableNetwork, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -19,6 +19,7 @@ import { navigateHome } from '../utils/navigationHome';
 import { promptMonth } from '../utils/promptMonth';
 import MonthPickerModal from '../components/MonthPickerModal';
 import { downloadCalendarImage, downloadHtmlAsPng } from '../utils/downloadCalendarImage';
+import { sendPushNotification } from '../utils/sendPushNotification';
 
 const WebScrollView = ScrollView as any;
 
@@ -297,6 +298,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [unavailableStaff, setUnavailableStaff] = useState<{name: string, type: string}[]>([]);
   const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
   const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
+  const [deadlineVisible, setDeadlineVisible] = useState(false);
+  const [deadlineDay, setDeadlineDay] = useState('');
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
   const [workSummaryDate, setWorkSummaryDate] = useState(currentDate);
   const [workHoursVisible, setWorkHoursVisible] = useState(false);
@@ -325,6 +328,32 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return { ...staff, submitted };
   });
   const submittedCount = submissionStatusRows.filter((staff) => staff.submitted).length;
+
+  const openDeadlineSettings = async () => {
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const snapshot = await getDoc(doc(db, 'settings', 'shift_period'));
+    const data = snapshot.exists() ? snapshot.data() : {};
+    setDeadlineDay(String(data.deadlines?.[monthKey] || data.end || ''));
+    setDeadlineVisible(true);
+  };
+
+  const saveDeadlineSettings = async () => {
+    if (!deadlineDay) return;
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const settingsRef = doc(db, 'settings', 'shift_period');
+    const snapshot = await getDoc(settingsRef);
+    const current = snapshot.exists() ? snapshot.data() : {};
+    const deadlines = { ...(current.deadlines || {}), [monthKey]: String(Number(deadlineDay)) };
+    await setDoc(settingsRef, { start: '1', end: String(Number(deadlineDay)), deadlines, updatedAt: new Date() }, { merge: true });
+    await sendPushNotification({
+      accountIds: allStaff.map(staff => staff.id),
+      title: 'シフト提出期限のお知らせ',
+      body: `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月分のシフト提出期限は${Number(deadlineDay)}日です。`,
+      url: '/shift-view',
+    });
+    setDeadlineVisible(false);
+    Alert.alert('保存完了', `${monthKey}の締切日を${Number(deadlineDay)}日に設定しました。`);
+  };
 
   useEffect(() => {
     let staffList: Staff[] = [];
@@ -1275,9 +1304,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
                 {isEventDay && (
                   <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText} numberOfLines={2}>
-                      {eventsData[item.dateStr].join('・')}
-                    </Text>
+                    {eventsData[item.dateStr].map((title, eventIndex) => (
+                      <Text key={`${item.dateStr}-event-${eventIndex}`} style={styles.eventBadgeText}>
+                        {title}
+                      </Text>
+                    ))}
                   </View>
                 )}
 
@@ -1457,12 +1488,18 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.submissionStatusClose}
-                onPress={() => setSubmissionStatusVisible(false)}
-              >
-                <Ionicons name="close" size={24} color="#5D4037" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <TouchableOpacity style={styles.submissionStatusDeadlineButton} onPress={openDeadlineSettings}>
+                  <Ionicons name="calendar-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.submissionStatusDeadlineText}>締切日設定</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.submissionStatusClose}
+                  onPress={() => setSubmissionStatusVisible(false)}
+                >
+                  <Ionicons name="close" size={24} color="#5D4037" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.submissionStatusSummary}>
@@ -1500,6 +1537,53 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <Text style={styles.submissionStatusEmpty}>スタッフ情報を読み込み中です</Text>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={deadlineVisible} transparent animationType="fade" onRequestClose={() => setDeadlineVisible(false)}>
+        <View style={styles.submissionStatusOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setDeadlineVisible(false)} accessible={false} focusable={false} />
+          <View style={[styles.deadlineSettingsPanel, { zIndex: 1 }]}>
+            <View style={styles.submissionStatusHeader}>
+              <View>
+                <Text style={styles.submissionStatusTitle}>締切日設定</Text>
+                <Text style={styles.submissionStatusMonth}>{currentDate.getFullYear()}年{currentDate.getMonth() + 1}月</Text>
+              </View>
+              <TouchableOpacity style={styles.submissionStatusClose} onPress={() => setDeadlineVisible(false)}>
+                <Ionicons name="close" size={24} color="#5D4037" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.deadlineCalendarBox}>
+              <View style={styles.deadlineWeekRow}>
+                {['日', '月', '火', '水', '木', '金', '土'].map((label, index) => (
+                  <Text key={label} style={[styles.deadlineWeekText, index === 0 && { color: '#C62828' }, index === 6 && { color: '#1565C0' }]}>{label}</Text>
+                ))}
+              </View>
+              {(() => {
+                const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+                const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+                const cells: (number | null)[] = Array(firstDay).fill(null);
+                for (let day = 1; day <= daysInMonth; day++) cells.push(day);
+                while (cells.length % 7 !== 0) cells.push(null);
+                return Array.from({ length: cells.length / 7 }, (_, weekIndex) => (
+                  <View key={weekIndex} style={{ flexDirection: 'row' }}>
+                    {cells.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, dayIndex) => day === null ? (
+                      <View key={dayIndex} style={styles.deadlineDayCell} />
+                    ) : (
+                      <TouchableOpacity key={dayIndex} style={[styles.deadlineDayCell, deadlineDay === String(day) && styles.deadlineDayCellSelected]} onPress={() => setDeadlineDay(String(day))}>
+                        <Text style={[styles.deadlineDayText, deadlineDay === String(day) && styles.deadlineDayTextSelected]}>{day}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ));
+              })()}
+              <Text style={styles.deadlineSelectedText}>{deadlineDay ? `${deadlineDay}日を締切日に設定` : '日付をタップしてください'}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, padding: 16 }}>
+              <TouchableOpacity style={styles.deadlineCancelButton} onPress={() => setDeadlineVisible(false)}><Text style={styles.deadlineCancelText}>キャンセル</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.deadlineSaveButton, !deadlineDay && { opacity: 0.5 }]} disabled={!deadlineDay} onPress={saveDeadlineSettings}><Text style={styles.deadlineSaveText}>保存</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -2543,6 +2627,8 @@ const styles = StyleSheet.create({
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
   submissionStatusTitle: { fontSize: 18, fontWeight: '900', color: '#3B302B' },
   submissionStatusMonth: { marginTop: 3, fontSize: 13, fontWeight: '800', color: '#76665E' },
+  submissionStatusDeadlineButton: { minHeight: 36, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, borderRadius: 9, backgroundColor: '#D49A25' },
+  submissionStatusDeadlineText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   submissionStatusClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0E2' },
   submissionStatusSummary: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#FAFCFC', borderBottomWidth: 1, borderBottomColor: '#E8EEEE' },
   submissionStatusSummaryText: { fontSize: 13, fontWeight: '900', color: '#4B5A5D' },
@@ -2557,6 +2643,19 @@ const styles = StyleSheet.create({
   submissionStatusSubmittedText: { color: '#278A4A' },
   submissionStatusMissingText: { color: '#B06A33' },
   submissionStatusEmpty: { padding: 24, textAlign: 'center', color: '#8A9698', fontWeight: '700' },
+  deadlineSettingsPanel: { width: '100%', maxWidth: 430, borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
+  deadlineCalendarBox: { padding: 16, backgroundColor: '#FFFDF9' },
+  deadlineWeekRow: { flexDirection: 'row', marginBottom: 5 },
+  deadlineWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '900', color: '#777' },
+  deadlineDayCell: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  deadlineDayCellSelected: { backgroundColor: '#D49A25' },
+  deadlineDayText: { fontSize: 15, fontWeight: '700', color: '#333' },
+  deadlineDayTextSelected: { color: '#FFFFFF', fontWeight: '900' },
+  deadlineSelectedText: { marginTop: 12, textAlign: 'center', fontSize: 13, fontWeight: '800', color: '#7A5A2A' },
+  deadlineCancelButton: { flex: 1, paddingVertical: 13, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#D7D7D7' },
+  deadlineCancelText: { fontWeight: '800', color: '#666' },
+  deadlineSaveButton: { flex: 1, paddingVertical: 13, alignItems: 'center', borderRadius: 12, backgroundColor: '#D49A25' },
+  deadlineSaveText: { fontWeight: '900', color: '#FFFFFF' },
   workSummaryControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFFDFB', borderBottomWidth: 1, borderColor: '#EEE7E3' },
   workSummaryTabs: { flexDirection: 'row', alignSelf: 'center', width: '100%', maxWidth: 320, padding: 4, borderRadius: 12, backgroundColor: '#F0ECE9' },
   workSummaryTab: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },

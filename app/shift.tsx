@@ -64,7 +64,7 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
   const [allRequests, setAllRequests] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
-  const [eventsData, setEventsData] = useState<Record<string, string>>({}); // ⑨ イベント
+  const [eventsData, setEventsData] = useState<Record<string, string[]>>({}); // ⑨ イベント
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
   useEffect(() => {
@@ -166,10 +166,14 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
         // ⑨ イベントデータをロード（正常処理内）
         try {
           const eventsSnap = await getDocs(collection(db, 'events'));
-          const eventsMap: Record<string, string> = {};
+          const eventsMap: Record<string, string[]> = {};
           eventsSnap.forEach(d => {
             const data = d.data();
-            if (data.title) eventsMap[d.id] = data.title;
+            const dateStr = String(data.dateStr || data.dateKey || '').trim();
+            const title = String(data.title || '').trim();
+            if (!dateStr || !title) return;
+            if (!eventsMap[dateStr]) eventsMap[dateStr] = [];
+            if (!eventsMap[dateStr].includes(title)) eventsMap[dateStr].push(title);
           });
           setEventsData(eventsMap);
         } catch(e) { console.warn('eventsロード失敗', e); }
@@ -473,11 +477,11 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
                         <Text style={styles.stampText}>{cellStamp}</Text>
                       </View>
                     )}
-                    {eventsData[item.dateStr] && (
-                      <Text style={{ fontSize: 7, color: '#7B1FA2', fontWeight: 'bold', textAlign: 'center', marginTop: 2 }} numberOfLines={1}>
-                        {eventsData[item.dateStr]}
+                    {eventsData[item.dateStr]?.map((title, eventIndex) => (
+                      <Text key={`${item.dateStr}-event-${eventIndex}`} style={{ fontSize: 7, lineHeight: 10, color: '#7B1FA2', fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>
+                        {title}
                       </Text>
-                    )}
+                    ))}
                   </View>
                 </TouchableOpacity>
               );
