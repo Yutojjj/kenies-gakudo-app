@@ -174,6 +174,13 @@ type MenuEventItem = {
   coverImage?: string | null;
 };
 
+const normalizeMenuEventDate = (event: any) => {
+  const raw = event?.dateStr || event?.dateKey || event?.date || event?.id || '';
+  if (raw?.toDate) return makeDateStr(raw.toDate());
+  const value = String(raw);
+  return value.match(/\d{4}-\d{2}-\d{2}/)?.[0] || value.slice(0, 10);
+};
+
 type MenuAnnouncement = {
   id: string;
   subject: string;
@@ -1381,7 +1388,15 @@ export default function MenuScreen() {
     if (!role) return;
     const unsub = onSnapshot(collection(db, 'events'), snap => {
       const items = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as MenuEventItem))
+        .map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            dateStr: normalizeMenuEventDate({ ...data, id: d.id }),
+            title: String(data.title || data.name || '').trim(),
+          } as MenuEventItem;
+        })
         .filter(item => !!(item.dateStr || item.id) && !!item.title)
         .sort((a, b) => {
           const dateCompare = String(a.dateStr).localeCompare(String(b.dateStr));
@@ -3096,6 +3111,19 @@ export default function MenuScreen() {
                   <Text style={styles.pickupExpandToggleText}>折りたたむ</Text>
                 </TouchableOpacity>
               )}
+              {todayMenuEvents.length > 0 && (
+                <View style={[styles.pickupEntryWarning, styles.pickupEntryEvent]}>
+                  <Ionicons name="calendar-outline" size={18} color="#9A6500" />
+                  <View style={{ flex: 1 }}>
+                    {todayMenuEvents.map(event => (
+                      <View key={event.id}>
+                        <Text style={styles.pickupEntryEventTitle}>{event.title}</Text>
+                        {!!event.description && <Text style={styles.pickupEntryEventDescription}>{event.description}</Text>}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
               {(pickupEntryStatus === 'partial' || pickupEntryStatus === 'empty') && (
                 <TouchableOpacity
                   style={[
@@ -3123,20 +3151,6 @@ export default function MenuScreen() {
                   </Text>
                   <Ionicons name="chevron-forward" size={17} color={pickupEntryStatus === 'partial' ? '#7A5A00' : '#A63F58'} />
                 </TouchableOpacity>
-              )}
-              {todayMenuEvents.length > 0 && (
-                <View style={{ marginTop: 8, marginBottom: 8, padding: 12, borderRadius: 12, backgroundColor: '#FFF9E8', borderWidth: 1, borderColor: '#F3D58A' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                    <Ionicons name="calendar-outline" size={18} color="#B7791F" />
-                    <Text style={{ marginLeft: 6, fontSize: 14, fontWeight: '900', color: '#7A4A00' }}>イベント</Text>
-                  </View>
-                  {todayMenuEvents.map(event => (
-                    <View key={event.id} style={{ paddingVertical: 5, borderTopWidth: 1, borderTopColor: '#F1DEB0' }}>
-                      <Text style={{ fontSize: 14, lineHeight: 21, fontWeight: '800', color: '#5B3A00' }}>{event.title}</Text>
-                      {!!event.description && <Text style={{ marginTop: 2, fontSize: 12, lineHeight: 18, color: '#7A5A2A' }}>{event.description}</Text>}
-                    </View>
-                  ))}
-                </View>
               )}
               {renderPickupEntryCards(parseTodayPickupEntries(), showAllPickup)}
               <TouchableOpacity
@@ -6571,6 +6585,9 @@ const styles = StyleSheet.create({
   pickupEntryWarningPartial: { backgroundColor: '#FFF2B8' },
   pickupEntryWarningEmpty: { backgroundColor: '#FFDCE4' },
   pickupEntryWarningText: { flex: 1, fontSize: 13, fontWeight: '800' },
+  pickupEntryEvent: { backgroundColor: '#FFF1C9', borderWidth: 1, borderColor: '#F2D27A' },
+  pickupEntryEventTitle: { fontSize: 14, lineHeight: 20, fontWeight: '900', color: '#6F4700' },
+  pickupEntryEventDescription: { marginTop: 1, fontSize: 12, lineHeight: 18, color: '#815E20' },
   staffPickupTopActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   staffSectionPrintBtn: {
     flexDirection: 'row',
