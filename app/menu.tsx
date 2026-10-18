@@ -3118,7 +3118,7 @@ export default function MenuScreen() {
                     {todayMenuEvents.map(event => (
                       <TouchableOpacity
                         key={event.id}
-                        onPress={() => router.push({ pathname: '/year-events', params: { role: role || 'staff', tab: 'management' } } as any)}
+                        onPress={() => router.push({ pathname: '/year-events', params: { role: role || 'staff', tab: 'management', dateStr: event.dateStr } } as any)}
                         activeOpacity={0.72}
                         accessibilityRole="button"
                         accessibilityLabel={`${event.title}のイベント詳細を開く`}

@@ -588,7 +588,7 @@ export default function YearEventsScreen() {
   const { verified, checking, userInfo } = useRequireRole(['admin', 'user', 'staff']);
 
   const router = useRouter();
-  const { role, name, tab } = useLocalSearchParams<{ role?: string; name?: string; tab?: string }>();
+  const { role, name, tab, dateStr } = useLocalSearchParams<{ role?: string; name?: string; tab?: string; dateStr?: string }>();
   const loggedInRole = userInfo?.role || role;
   const isAdmin = loggedInRole === 'admin';
   const isStaff = loggedInRole === 'staff';
@@ -608,7 +608,13 @@ export default function YearEventsScreen() {
   const vacTab: VacTab = contentMode === 'year' ? 'summer' : contentMode;
 
   // ── イベント管理タブ用state ──
-  const [mgmtDate, setMgmtDate] = useState(new Date());
+  const [mgmtDate, setMgmtDate] = useState(() => {
+    if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, 1);
+    }
+    return new Date();
+  });
   const [mgmtEventsMap, setMgmtEventsMap] = useState<Record<string, any>>({});
   const [mgmtParticipants, setMgmtParticipants] = useState<Record<string, any[]>>({});
   const [mgmtSelectedDate, setMgmtSelectedDate] = useState('');
@@ -1025,6 +1031,14 @@ export default function YearEventsScreen() {
     setMgmtMemberSearch(''); setMgmtFilterSchool(''); setMgmtFilterGrade('');
     setMgmtModalVisible(true);
   };
+  useEffect(() => {
+    if (tab !== 'management' || !dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || Object.keys(mgmtEventsMap).length === 0) return;
+    setMgmtDate(current => {
+      const [year, month] = dateStr.split('-').map(Number);
+      return current.getFullYear() === year && current.getMonth() === month - 1 ? current : new Date(year, month - 1, 1);
+    });
+    if (!mgmtModalVisible) mgmtOpenModal(dateStr);
+  }, [tab, dateStr, mgmtEventsMap, mgmtModalVisible]);
   const mgmtSaveEvent = async () => {
     if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
     const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
