@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
@@ -25,7 +25,6 @@ type ShiftScreenProps = {
 
 export default function ShiftScreen({ embedded = false, onClose, staffName: staffNameProp, initialDate }: ShiftScreenProps = {}) {
   const router = useRouter();
-  const { width: windowWidth } = useWindowDimensions();
   const { name: nameParam } = useLocalSearchParams<{ name: string }>();
   const [staffName, setStaffNameRaw] = useState((staffNameProp || nameParam || '').trim());
   // staffNameは必ずトリムして保持（保存・読込・キーの不一致を防ぐ）
@@ -425,13 +424,7 @@ export default function ShiftScreen({ embedded = false, onClose, staffName: staf
           </View>
         )}
 
-        {!loading && !fetchError && <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator
-          nestedScrollEnabled
-          contentContainerStyle={{ minWidth: Math.max(windowWidth - 24, 620) }}
-        >
-          <View style={[styles.calendarContainer, { width: Math.max(windowWidth - 24, 620) }]}>
+        {!loading && !fetchError && <View style={styles.calendarContainer}>
           <View style={styles.calHeaderRow}>
             {weeks.map((w, i) => (
               <Text key={i} style={[styles.calWeekText, i === 0 && {color: '#E74C3C'}, i === 6 && {color: '#3498DB'}]}>{w}</Text>
@@ -497,8 +490,7 @@ export default function ShiftScreen({ embedded = false, onClose, staffName: staf
               );
             })}
           </View>
-          </View>
-        </ScrollView>}
+        </View>}
 
       </ScrollView>
 
@@ -696,8 +688,8 @@ const styles = StyleSheet.create({
   calHeaderRow: { flexDirection: 'row', marginBottom: 12 },
   calWeekText: { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 'bold', color: COLORS.textLight },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCellEmpty: { width: '14.28%', aspectRatio: 0.8 },
-  calCell: { width: '14.28%', aspectRatio: 0.8, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
+  calCellEmpty: { width: '14.28%', minHeight: 126 },
+  calCell: { width: '14.28%', minHeight: 126, borderWidth: 0.5, borderColor: COLORS.border, padding: 4, backgroundColor: COLORS.white },
   calCellHoliday: { backgroundColor: '#FFF1F1' },
   calCellSaturday: { backgroundColor: '#F0F8FF' },
   calCellActive: { backgroundColor: '#FAFAFA' },
