@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import AdminShiftTabs from '../components/AdminShiftTabs';
 import { COLORS } from '../constants/theme';
@@ -19,12 +19,15 @@ type AssignedStaff = { name: string, start: string, end: string };
 type ShiftScreenProps = {
   embedded?: boolean;
   onClose?: () => void;
+  staffName?: string;
+  initialDate?: Date;
 };
 
-export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenProps = {}) {
+export default function ShiftScreen({ embedded = false, onClose, staffName: staffNameProp, initialDate }: ShiftScreenProps = {}) {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const { name: nameParam } = useLocalSearchParams<{ name: string }>();
-  const [staffName, setStaffNameRaw] = useState((nameParam || '').trim());
+  const [staffName, setStaffNameRaw] = useState((staffNameProp || nameParam || '').trim());
   // staffNameは必ずトリムして保持（保存・読込・キーの不一致を防ぐ）
   const setStaffName = (n: string) => setStaffNameRaw((n || '').trim());
 
@@ -38,11 +41,12 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
         }
       } catch {}
     };
-    if (!nameParam) loadName();
+    if (staffNameProp) setStaffName(staffNameProp);
+    else if (!nameParam) loadName();
     else setStaffName(nameParam);
-  }, [nameParam]);
+  }, [nameParam, staffNameProp]);
 
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(initialDate || new Date());
   const [monthPickerTarget, setMonthPickerTarget] = useState<'year' | 'month' | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
@@ -421,7 +425,13 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
           </View>
         )}
 
-        {!loading && !fetchError && <View style={styles.calendarContainer}>
+        {!loading && !fetchError && <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          nestedScrollEnabled
+          contentContainerStyle={{ minWidth: Math.max(windowWidth - 24, 620) }}
+        >
+          <View style={[styles.calendarContainer, { width: Math.max(windowWidth - 24, 620) }]}>
           <View style={styles.calHeaderRow}>
             {weeks.map((w, i) => (
               <Text key={i} style={[styles.calWeekText, i === 0 && {color: '#E74C3C'}, i === 6 && {color: '#3498DB'}]}>{w}</Text>
@@ -487,7 +497,8 @@ export default function ShiftScreen({ embedded = false, onClose }: ShiftScreenPr
               );
             })}
           </View>
-        </View>}
+          </View>
+        </ScrollView>}
 
       </ScrollView>
 

@@ -1876,8 +1876,9 @@ export default function MenuScreen() {
       return String(a.id).localeCompare(String(b.id));
     })
     .slice(0, 5);
+  const menuEventDate = role === 'user' ? scheduleDate : staffPlanDate;
   const todayMenuEvents = menuEvents
-    .filter(event => !event.hidden && event.dateStr === makeDateStr(scheduleDate))
+    .filter(event => !event.hidden && event.dateStr === makeDateStr(menuEventDate))
     .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ja'));
 
   const toggleMenuEventParticipation = (event: MenuEventItem) => {

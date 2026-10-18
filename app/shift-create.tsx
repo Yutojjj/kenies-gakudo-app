@@ -20,6 +20,7 @@ import { promptMonth } from '../utils/promptMonth';
 import MonthPickerModal from '../components/MonthPickerModal';
 import { downloadCalendarImage, downloadHtmlAsPng } from '../utils/downloadCalendarImage';
 import { sendPushNotification } from '../utils/sendPushNotification';
+import ShiftScreen from './shift';
 
 const WebScrollView = ScrollView as any;
 
@@ -298,6 +299,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [unavailableStaff, setUnavailableStaff] = useState<{name: string, type: string}[]>([]);
   const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
   const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
+  const [submissionStaffName, setSubmissionStaffName] = useState<string | null>(null);
   const [deadlineVisible, setDeadlineVisible] = useState(false);
   const [deadlineDay, setDeadlineDay] = useState('');
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
@@ -1513,7 +1515,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               showsVerticalScrollIndicator={false}
             >
               {submissionStatusRows.map((staff) => (
-                <View key={staff.id} style={styles.submissionStatusRow}>
+                <TouchableOpacity
+                  key={staff.id}
+                  style={styles.submissionStatusRow}
+                  onPress={() => {
+                    setSubmissionStatusVisible(false);
+                    setSubmissionStaffName(staff.name);
+                  }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${staff.name}のシフト提出画面を開く`}
+                >
                   <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
                   <View style={[
                     styles.submissionStatusBadge,
@@ -1531,12 +1543,26 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                       {staff.submitted ? '提出済み' : '未提出'}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
               {submissionStatusRows.length === 0 && (
                 <Text style={styles.submissionStatusEmpty}>スタッフ情報を読み込み中です</Text>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={submissionStaffName !== null} transparent animationType="fade" onRequestClose={() => setSubmissionStaffName(null)}>
+        <View style={styles.staffSubmissionOverlay}>
+          <View style={styles.staffSubmissionPanel}>
+            <ShiftScreen
+              key={`${submissionStaffName || ''}-${currentDate.getFullYear()}-${currentDate.getMonth()}`}
+              embedded
+              staffName={submissionStaffName || ''}
+              initialDate={currentDate}
+              onClose={() => setSubmissionStaffName(null)}
+            />
           </View>
         </View>
       </Modal>
@@ -2623,6 +2649,8 @@ const styles = StyleSheet.create({
   photoManagerAddPlus: { color: '#00AEB8', fontSize: 27, fontWeight: '400', lineHeight: 29 },
   photoManagerAddText: { marginTop: 3, color: '#16878E', fontSize: 10, fontWeight: '900' },
   submissionStatusOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  staffSubmissionOverlay: { flex: 1, backgroundColor: 'rgba(35, 28, 24, 0.48)', alignItems: 'center', justifyContent: 'center', padding: 8 },
+  staffSubmissionPanel: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background },
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12, zIndex: 1 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
   submissionStatusTitle: { fontSize: 18, fontWeight: '900', color: '#3B302B' },
