@@ -619,6 +619,7 @@ export default function YearEventsScreen() {
   const [mgmtParticipants, setMgmtParticipants] = useState<Record<string, any[]>>({});
   const [mgmtSelectedDate, setMgmtSelectedDate] = useState('');
   const [mgmtModalVisible, setMgmtModalVisible] = useState(false);
+  const autoOpenedEventRef = useRef<string | null>(null);
   const [mgmtTitle, setMgmtTitle] = useState('');
   const [mgmtDesc, setMgmtDesc] = useState('');
   const [mgmtDeadlineDate, setMgmtDeadlineDate] = useState('');
@@ -1034,12 +1035,14 @@ export default function YearEventsScreen() {
   };
   useEffect(() => {
     if (tab !== 'management' || !dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || Object.keys(mgmtEventsMap).length === 0) return;
+    if (autoOpenedEventRef.current === dateStr) return;
+    autoOpenedEventRef.current = dateStr;
     setMgmtDate(current => {
       const [year, month] = dateStr.split('-').map(Number);
       return current.getFullYear() === year && current.getMonth() === month - 1 ? current : new Date(year, month - 1, 1);
     });
-    if (!mgmtModalVisible) mgmtOpenModal(dateStr);
-  }, [tab, dateStr, mgmtEventsMap, mgmtModalVisible]);
+    mgmtOpenModal(dateStr);
+  }, [tab, dateStr, mgmtEventsMap]);
   const mgmtSaveEvent = async () => {
     if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
     const ev = findMgmtEvent(mgmtSelectedDate);
