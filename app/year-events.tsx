@@ -595,8 +595,8 @@ export default function YearEventsScreen() {
   const isUser = loggedInRole === 'user';
   const [staffCanEditEvents, setStaffCanEditEvents] = useState(false);
   const [eventPermissionLoaded, setEventPermissionLoaded] = useState(false);
-  const canEditEvents = isAdmin || (isStaff && staffCanEditEvents);
-  const canEditEventDetail = canEditEvents;
+  const canEditCalendar = isAdmin || isStaff;
+  const canEditEventDetail = isAdmin || (isStaff && staffCanEditEvents);
 
   // 参加状態 key: eventId → '参加' | undefined
   const [myParticipations, setMyParticipations] = useState<Record<string, string>>({});
@@ -1018,9 +1018,10 @@ export default function YearEventsScreen() {
     setDeadlineCalendarDate(base);
     setDeadlineCalendarVisible(true);
   };
+  const findMgmtEvent = (date: string) => Object.values(mgmtEventsMap).find((e: any) => e.dateStr === date);
   const mgmtOpenModal = (dateStr: string) => {
     setMgmtSelectedDate(dateStr);
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === dateStr);
+    const ev = findMgmtEvent(dateStr);
     setMgmtTitle(ev?.title || '');
     setMgmtDesc(ev?.description || '');
     setMgmtDeadlineDate(ev?.deadlineDate || '');
@@ -1041,7 +1042,7 @@ export default function YearEventsScreen() {
   }, [tab, dateStr, mgmtEventsMap, mgmtModalVisible]);
   const mgmtSaveEvent = async () => {
     if (!mgmtTitle.trim()) { customAlert('エラー', 'タイトルを入力してください'); return; }
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const ev = findMgmtEvent(mgmtSelectedDate);
     const docId = ev?.id || `${mgmtSelectedDate}_${Date.now()}`;
     const template = selectedTemplateId ? eventTemplates.find(t => t.id === selectedTemplateId) : undefined;
     await setDoc(doc(db, 'events', docId), {
@@ -1085,7 +1086,7 @@ export default function YearEventsScreen() {
   };
   const saveCurrentAsEventTemplate = async () => {
     if (!mgmtTitle.trim()) { customAlert('エラー', '固定イベント名を入力してください'); return; }
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate) as any;
+    const ev = findMgmtEvent(mgmtSelectedDate) as any;
     const det = ev ? details[ev.id] : undefined;
     const photosForTemplate = ev ? (pastPhotos[ev.id] || []).map(p => ({
       uri: p.uri,
@@ -1108,7 +1109,7 @@ export default function YearEventsScreen() {
     customAlert('保存完了', '固定イベントとして保存しました。次回から選んで使えます。');
   };
   const mgmtDeleteEvent = async () => {
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const ev = findMgmtEvent(mgmtSelectedDate);
     if (!ev) return;
     customConfirm('削除', 'このイベントを削除しますか？', async () => {
       await deleteDoc(doc(db, 'events', ev.id));
@@ -1117,21 +1118,21 @@ export default function YearEventsScreen() {
   };
   const mgmtAddExternal = async () => {
     if (!mgmtExtName.trim()) return;
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const ev = findMgmtEvent(mgmtSelectedDate);
     if (!ev) { customAlert('エラー', '先にイベントを保存してください'); return; }
     const ext = [...(ev.externalParticipants || []), { id: `ext_${Date.now()}`, name: mgmtExtName, school: mgmtExtSchool, grade: mgmtExtGrade }];
     await setDoc(doc(db, 'events', ev.id), { externalParticipants: ext }, { merge: true });
     setMgmtExtName(''); setMgmtExtSchool(''); setMgmtExtGrade('');
   };
   const mgmtRemoveExternal = async (extId: string) => {
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const ev = findMgmtEvent(mgmtSelectedDate);
     if (!ev) return;
     const ext = (ev.externalParticipants || []).filter((e: any) => e.id !== extId);
     await setDoc(doc(db, 'events', ev.id), { externalParticipants: ext }, { merge: true });
   };
 
   const mgmtAddMember = async (member: {id:string;name:string;school?:string;grade?:string}) => {
-    const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+    const ev = findMgmtEvent(mgmtSelectedDate);
     if (!ev) return;
     try {
       await setDoc(doc(db, 'event_participants', `${ev.id}_${member.id}`), {
@@ -1442,7 +1443,7 @@ export default function YearEventsScreen() {
               // 年度内のその月のデータ取得（1〜3月は翌年、4〜12月は年度開始年）
               const dataYear = m >= 4 ? currentFY : currentFY + 1;
               const evs = eventsForMonth(dataYear, m)
-                .filter(ev => (canEditEvents || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
+                .filter(ev => (canEditEventDetail || !ev.hidden) && !isInAnyHoliday(ev.dateStr) && isCurrentFiscalYear(ev.dateStr));
               return (
                 <View key={m} style={[styles.monthCard, { flex: 1 }]}>
                   <Text style={[styles.monthCardLabel, { color: MONTH_ACCENT_COLORS[m] }]}>{m}月</Text>
@@ -1512,7 +1513,7 @@ export default function YearEventsScreen() {
     const vc = VAC_COLORS[vac];
     const monthFlyers = flyers.filter(f => f.vacation === vac && f.month === month);
     const vacLabel = vc.label;
-    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => (canEditEvents || !ev.hidden) && isCurrentFiscalYear(ev.dateStr));
+    const vacEvents = eventsForVacMonth(vacLabel, month).filter(ev => (canEditEventDetail || !ev.hidden) && isCurrentFiscalYear(ev.dateStr));
     return (
       <View
         onLayout={e => { vacMonthRefs.current[`${vac}_${month}`] = e.nativeEvent.layout.y; }}
@@ -1527,7 +1528,7 @@ export default function YearEventsScreen() {
                 <Ionicons name="document-text-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
                 <Text style={styles.flyerDetailBtnText}>詳細</Text>
               </TouchableOpacity>
-              {canEditEvents && (
+              {canEditEventDetail && (
                 <>
                   <TouchableOpacity style={[styles.flyerDeleteBtn, { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 6 }]} onPress={() => replaceFlyer(flyer)}>
                     <Ionicons name="camera-outline" size={15} color="#1565C0" />
@@ -1559,7 +1560,7 @@ export default function YearEventsScreen() {
           <Text style={styles.noEventText}>イベント・チラシなし</Text>
         )}
 
-        {canEditEvents && (
+        {canEditEventDetail && (
           <TouchableOpacity style={styles.uploadFlyerBtn} onPress={() => uploadFlyer(vac, month)}>
             <Ionicons name="cloud-upload-outline" size={18} color={vc.text} />
             <Text style={[styles.uploadFlyerBtnText, { color: vc.text }]}>チラシをアップロード</Text>
@@ -1587,7 +1588,7 @@ export default function YearEventsScreen() {
               <Ionicons name="chevron-back" size={24} color="#5D4037" />
             </TouchableOpacity>
             <Text style={styles.detailTitle} numberOfLines={1}>{detailEvent.title}</Text>
-            {canEditEvents && (
+            {canEditEventDetail && (
               <TouchableOpacity
                 style={[styles.hiddenToggleBtn, detailEvent.hidden ? styles.hiddenToggleBtnHidden : styles.hiddenToggleBtnVisible]}
                 onPress={() => toggleHidden(detailEvent)}
@@ -1733,7 +1734,7 @@ export default function YearEventsScreen() {
   );
 
   // ─── メインレンダリング ───────────────────────────────────
-  const eventMainTabs: MainTab[] = ['year', 'management'];
+  const eventMainTabs: MainTab[] = canEditCalendar ? ['year', 'management'] : ['year'];
   const contentModeLabels: Record<ContentMode, string> = {
     year: '年行事',
     summer: '夏休み',
@@ -1758,7 +1759,7 @@ export default function YearEventsScreen() {
         <TouchableOpacity style={[styles.mainTab, mainTab === 'year' && styles.mainTabActive]} onPress={() => setMainTab('year')}>
           <Text style={[styles.mainTabText, mainTab === 'year' && styles.mainTabTextActive]}>イベント内容</Text>
         </TouchableOpacity>
-        {canEditEvents && (
+        {canEditCalendar && (
           <TouchableOpacity style={[styles.mainTab, mainTab === 'management' && styles.mainTabActive]} onPress={() => setMainTab('management')}>
             <Text style={[styles.mainTabText, mainTab === 'management' && styles.mainTabTextActive]}>カレンダー</Text>
           </TouchableOpacity>
@@ -1853,7 +1854,7 @@ export default function YearEventsScreen() {
       )}
 
       {/* ── イベント管理タブ ── */}
-      {currentTab === 'management' && (
+      {currentTab === 'management' && canEditCalendar && (
         <View style={{ flex: 1 }}>
           {/* 月ナビ */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#EEE', gap: 16 }}>
@@ -1876,7 +1877,7 @@ export default function YearEventsScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 {mgmtGenerateDays().map((item, idx) => {
                   if (!item) return <View key={`e${idx}`} style={{ width: '14.28%', aspectRatio: 1, padding: 2 }} />;
-                  const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === item.dateStr);
+                  const ev = findMgmtEvent(item.dateStr);
                   const dow = new Date(item.dateStr).getDay();
                   const isHol = !!mgmtPublicHolidays[item.dateStr];
                   const color = (dow === 0 || isHol) ? '#E53935' : dow === 6 ? '#1E88E5' : '#333';
@@ -1928,7 +1929,7 @@ export default function YearEventsScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20, borderBottomWidth: 1, borderColor: '#EEE' }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#333' }}>
-                      {(() => { const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate); return ev ? (ev as any).title : mgmtSelectedDate; })()}
+                      {(() => { const ev = findMgmtEvent(mgmtSelectedDate); return ev ? (ev as any).title : mgmtSelectedDate; })()}
                     </Text>
                     <Text style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{mgmtSelectedDate}</Text>
                   </View>
@@ -1939,11 +1940,11 @@ export default function YearEventsScreen() {
 
                 {/* ── イベント内容・参加者一覧 ── */}
                 {(() => {
-                  const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+                  const ev = findMgmtEvent(mgmtSelectedDate);
                   const parts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
                   const attending = parts.filter((p: any) => p.status === '参加');
                   const extParts = (ev as any)?.externalParticipants || [];
-                  if (!canEditEvents) {
+                  if (!canEditCalendar) {
                     return (
                       <ScrollView style={{ flex: 1, padding: 16 }}>
                         {ev ? (
@@ -2108,7 +2109,7 @@ export default function YearEventsScreen() {
 
                     {/* 利用者から追加 */}
                     {mgmtAddSubTab === 'user' && (() => {
-                      const ev = Object.values(mgmtEventsMap).find((e: any) => e.dateStr === mgmtSelectedDate);
+                      const ev = findMgmtEvent(mgmtSelectedDate);
                       const currentParts = ev ? (mgmtParticipants[(ev as any).id] || []) : [];
                       const filtered = mgmtAllMembers.filter(m => {
                         const q = mgmtMemberSearch.trim();
