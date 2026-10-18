@@ -59,8 +59,19 @@ export default function Root({ children }: PropsWithChildren) {
         <script dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {
+              var refreshing = false;
+              navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+              });
               window.addEventListener('load', function () {
-                navigator.serviceWorker.register('/sw.js');
+                navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function (registration) {
+                  registration.update();
+                  if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }).catch(function (error) {
+                  console.warn('[SW] registration failed:', error);
+                });
               });
             }
           `

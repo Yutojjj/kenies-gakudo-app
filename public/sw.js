@@ -1,7 +1,7 @@
 // ケーニーズ学童クラブ Service Worker
 // キャッシュ + Web Push を1ファイルに統合
 
-const CACHE_NAME = 'kenies-gakudo-v3';
+const CACHE_NAME = 'kenies-gakudo-v4';
 
 const PRECACHE = [
   '/',
