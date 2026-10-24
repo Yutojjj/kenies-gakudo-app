@@ -106,6 +106,20 @@ const getMonthTitleColor = (month: number) => {
 const getStaffShiftColor = (name: string, index: number, palette: string[]) =>
   name === '北条' ? '#B45AA7' : palette[index % palette.length];
 
+const stripUndefinedFields = <T,>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map(item => item === undefined ? null : stripUndefinedFields(item)) as T;
+  }
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, stripUndefinedFields(item)]),
+    ) as T;
+  }
+  return value;
+};
+
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 const SHIFT_WHEEL_ITEM_HEIGHT = 40;
@@ -291,6 +305,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [staffListLoaded, setStaffListLoaded] = useState(false);
   const [assignedShiftsLoaded, setAssignedShiftsLoaded] = useState(false);
   const [requests, setRequests] = useState<Record<string, string>>({});
+  const [requestSubmittedAt, setRequestSubmittedAt] = useState<Record<string, Date>>({});
+  const [statusDeadlineDay, setStatusDeadlineDay] = useState('');
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   
   const [masterTimes, setMasterTimes] = useState<string[]>([]);
@@ -317,6 +333,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
   const [subscriptionKey, setSubscriptionKey] = useState(0);
+
+  useEffect(() => {
+    const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    return onSnapshot(doc(db, 'settings', 'shift_period'), snapshot => {
+      const data = snapshot.exists() ? snapshot.data() : {};
+      setStatusDeadlineDay(String(data.deadlines?.[monthKey] || data.end || ''));
+    }, error => {
+      console.warn('シフト提出締切日の取得に失敗しました', error);
+      setStatusDeadlineDay('');
+    });
+  }, [currentDate.getFullYear(), currentDate.getMonth()]);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'shift_print_photos'), snapshot => {
@@ -368,11 +395,19 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     : autoFillSettings.staffSettings.slice().sort((a, b) => a.priority - b.priority).map(staff => staff.name);
   const submissionStatusRows = allStaff.map((staff) => {
     const monthPrefix = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-`;
-    const submitted = Object.keys(requests).some((key) => {
-      const prefix = `${staff.name}_`;
-      return key.startsWith(prefix) && key.slice(prefix.length).startsWith(monthPrefix);
-    });
-    return { ...staff, submitted };
+    const prefix = `${staff.name}_`;
+    const submittedKeys = Object.keys(requests).filter(key =>
+      key.startsWith(prefix) && key.slice(prefix.length).startsWith(monthPrefix),
+    );
+    const submittedAt = submittedKeys
+      .map(key => requestSubmittedAt[key])
+      .filter((date): date is Date => date instanceof Date && Number.isFinite(date.getTime()))
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    return {
+      ...staff,
+      submitted: submittedKeys.length > 0,
+      submittedOn: submittedAt ? `${submittedAt.getMonth() + 1}/${submittedAt.getDate()}` : '',
+    };
   }).sort((a, b) => {
     const aIndex = submissionOrder.indexOf(a.name);
     const bIndex = submissionOrder.indexOf(b.name);
@@ -425,7 +460,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: found.end || '18:15',
                 priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
                 enabled: found.enabled !== false,
-                color: found.color || undefined,
+                ...(found.color ? { color: found.color } : {}),
               }
             : {
                 name: staff.name,
@@ -433,7 +468,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: staff.name === '稲熊' ? '20:00' : '18:15',
                 priority: savedStaff.length + index + 1,
                 enabled: true,
-                color: undefined,
               };
         })
         .sort((a, b) => a.priority - b.priority)
@@ -481,12 +515,17 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
     const shiftsUnsub = onSnapshot(collection(db, 'shifts2'), (snap) => {
       const reqData: Record<string, string> = {};
+      const submittedAtData: Record<string, Date> = {};
       snap.forEach(d => {
         const data = d.data();
         if (!data.staffName || !data.dateStr || !data.type) return;
-        reqData[`${String(data.staffName).trim()}_${data.dateStr}`] = data.type;
+        const key = `${String(data.staffName).trim()}_${data.dateStr}`;
+        reqData[key] = data.type;
+        const timestamp = data.updatedAt?.toDate?.() || (data.updatedAt instanceof Date ? data.updatedAt : null);
+        if (timestamp instanceof Date && Number.isFinite(timestamp.getTime())) submittedAtData[key] = timestamp;
       });
       setRequests(reqData);
+      setRequestSubmittedAt(submittedAtData);
     });
 
     const asUnsub = onSnapshot(collection(db, 'assigned_shifts'), (s) => {
@@ -1157,7 +1196,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const saveAutoFillSettings = async (settings: typeof autoFillSettings) => {
     setAutoFillSettings(settings);
     if (settings.pdfOrder) setPdfOrder(settings.pdfOrder);
-    await setDoc(doc(db, 'settings', 'autoFillSettings'), { ...settings, updatedAt: new Date() }, { merge: true });
+    await setDoc(doc(db, 'settings', 'autoFillSettings'), stripUndefinedFields({ ...settings, updatedAt: new Date() }), { merge: true });
   };
 
   const saveStaffColor = async (staffName: string, color: string) => {
@@ -1180,7 +1219,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           enabled: true,
           color,
         }];
-      await setDoc(settingsRef, { ...latestSettings, staffSettings, updatedAt: new Date() }, { merge: true });
+      await setDoc(settingsRef, stripUndefinedFields({ ...latestSettings, staffSettings, updatedAt: new Date() }), { merge: true });
       setAutoFillSettings(current => ({ ...current, staffSettings }));
       setColorPickerStaffName(null);
     } catch (error: any) {
@@ -1614,6 +1653,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                     <Ionicons name="chevron-forward" size={17} color="#7A5A2A" />
                   </TouchableOpacity>
                 </View>
+                <Text style={styles.submissionStatusDeadlineCaption}>
+                  提出締切: {statusDeadlineDay ? `${currentDate.getMonth() + 1}月${Number(statusDeadlineDay)}日` : '未設定'}
+                </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                 <TouchableOpacity style={styles.submissionStatusDeadlineButton} onPress={openDeadlineSettings}>
@@ -1654,7 +1696,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         accessibilityRole="button"
                         accessibilityLabel={`${staff.name}のシフト提出画面を開く`}
                       >
-                        <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
+                        <View>
+                          <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
+                          {staff.submittedOn ? (
+                            <Text style={styles.submissionStatusSubmittedDate}>提出日 {staff.submittedOn}</Text>
+                          ) : null}
+                        </View>
                       </TouchableOpacity>
                       <View style={[
                         styles.submissionStatusBadge,
@@ -2899,6 +2946,7 @@ const styles = StyleSheet.create({
   submissionStatusPanel: { width: '100%', maxWidth: 430, maxHeight: '82%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12, zIndex: 1 },
   submissionStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 15, backgroundColor: '#FFF8F0', borderBottomWidth: 1, borderBottomColor: '#E9DDD5' },
   submissionStatusTitle: { fontSize: 15, fontWeight: '800', color: '#3B302B' },
+  submissionStatusDeadlineCaption: { marginTop: 3, fontSize: 11, fontWeight: '800', color: '#9A7140' },
   submissionStatusMonth: { marginTop: 3, fontSize: 18, fontWeight: '900', color: '#59463D' },
   submissionStatusMonthRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   submissionStatusMonthArrow: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#FFF0D8' },
@@ -2913,6 +2961,7 @@ const styles = StyleSheet.create({
   submissionStatusRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
   submissionStatusMemberButton: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center', minHeight: 54 },
   submissionStatusStaffName: { fontSize: 16, fontWeight: '800', color: '#252525' },
+  submissionStatusSubmittedDate: { marginTop: 2, fontSize: 11, fontWeight: '700', color: '#758184' },
   submissionStatusColorButton: { width: 28, height: 28, marginLeft: 8, borderRadius: 4, borderWidth: 1, borderColor: '#778184' },
   submissionStatusBadge: { minWidth: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   submissionStatusSubmitted: { backgroundColor: '#E7F6EA' },
