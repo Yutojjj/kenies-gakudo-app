@@ -386,7 +386,8 @@ export default function ShiftViewScreen() {
                     const assigned = assignedList.find(s => s.name === staff.name);
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
-                    const staffIndex = Math.max(0, orderedAllStaff.findIndex(item => item.id === staff.id));
+                    // 色は表示順ではなく、シフト作成画面と同じ元のスタッフ一覧順で決める。
+                    const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
                     const staffName = staff.name.trim();
                     const staffBackground = staffColors[staffName] || getStaffShiftColor(staffName, staffIndex);
                     return (
