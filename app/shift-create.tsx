@@ -1161,20 +1161,27 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   };
 
   const saveStaffColor = async (staffName: string, color: string) => {
-    const existing = autoFillSettings.staffSettings.find(staff => staff.name === staffName);
-    const staffSettings = existing
-      ? autoFillSettings.staffSettings.map(staff => staff.name === staffName ? { ...staff, color } : staff)
-      : [...autoFillSettings.staffSettings, {
-        name: staffName,
-        start: '14:00',
-        end: '18:30',
-        priority: autoFillSettings.staffSettings.length,
-        enabled: true,
-        color,
-      }];
     setSavingStaffColor(true);
     try {
-      await saveAutoFillSettings({ ...autoFillSettings, staffSettings });
+      const settingsRef = doc(db, 'settings', 'autoFillSettings');
+      const latestSnapshot = await getDoc(settingsRef);
+      const latestSettings = latestSnapshot.exists() ? latestSnapshot.data() : {};
+      const latestStaffSettings = Array.isArray(latestSettings.staffSettings)
+        ? latestSettings.staffSettings
+        : autoFillSettings.staffSettings;
+      const existing = latestStaffSettings.find((staff: any) => staff.name === staffName);
+      const staffSettings = existing
+        ? latestStaffSettings.map((staff: any) => staff.name === staffName ? { ...staff, color } : staff)
+        : [...latestStaffSettings, {
+          name: staffName,
+          start: staffName === '稲熊' ? '11:00' : '14:00',
+          end: staffName === '稲熊' ? '20:00' : '18:15',
+          priority: latestStaffSettings.length + 1,
+          enabled: true,
+          color,
+        }];
+      await setDoc(settingsRef, { ...latestSettings, staffSettings, updatedAt: new Date() }, { merge: true });
+      setAutoFillSettings(current => ({ ...current, staffSettings }));
       setColorPickerStaffName(null);
     } catch (error: any) {
       Alert.alert('保存できませんでした', error?.message || '通信状態を確認して、もう一度お試しください。');
@@ -1653,11 +1660,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         styles.submissionStatusBadge,
                         staff.submitted ? styles.submissionStatusSubmitted : styles.submissionStatusMissing,
                       ]}>
-                        <Ionicons
-                          name={staff.submitted ? 'checkmark-circle' : 'ellipse-outline'}
-                          size={18}
-                          color={staff.submitted ? '#278A4A' : '#B06A33'}
-                        />
                         <Text style={[
                           styles.submissionStatusBadgeText,
                           staff.submitted ? styles.submissionStatusSubmittedText : styles.submissionStatusMissingText,
@@ -2909,8 +2911,8 @@ const styles = StyleSheet.create({
   submissionStatusScrollContent: { paddingHorizontal: 14, paddingVertical: 8 },
   submissionStatusMemberBlock: { borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
   submissionStatusRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
-  submissionStatusMemberButton: { flex: 1, minWidth: 0, justifyContent: 'center', minHeight: 54 },
-  submissionStatusStaffName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#252525' },
+  submissionStatusMemberButton: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center', minHeight: 54 },
+  submissionStatusStaffName: { fontSize: 16, fontWeight: '800', color: '#252525' },
   submissionStatusColorButton: { width: 28, height: 28, marginLeft: 8, borderRadius: 4, borderWidth: 1, borderColor: '#778184' },
   submissionStatusBadge: { minWidth: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   submissionStatusSubmitted: { backgroundColor: '#E7F6EA' },
