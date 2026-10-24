@@ -807,7 +807,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         dateColor: date.getDay() === 0 || publicHolidays[dateStr] ? '#D94747' : date.getDay() === 6 ? '#2874C6' : '#28343B',
         shifts: printType === 'shift' ? assigned.map(shift => ({
           ...shift,
-          color: getStaffShiftColor(shift.name, getStaffColorIndex(shift.name), PRINT_SHIFT_COLORS),
+          color: getStaffShiftColor(shift.name, Math.max(0, allStaff.findIndex(staff => staff.name === shift.name)), PRINT_SHIFT_COLORS),
         })) : [],
         note: printType === 'event' ? [...(eventsData[dateStr] || []), ...(publicHolidays[dateStr] ? [publicHolidays[dateStr]] : [])].join('・') : undefined,
       };
@@ -926,7 +926,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
-            const color = getStaffShiftColor(staff.name, getStaffColorIndex(staff.name), PRINT_SHIFT_COLORS);
+            const color = getStaffShiftColor(staff.name, Math.max(0, allStaff.findIndex(item => item.name === staff.name)), PRINT_SHIFT_COLORS);
             const compactTextLength = Array.from(`${staff.name}　${assigned.start}〜${assigned.end}`).length;
             const useStackedShift = staff.name.length >= 5 || compactTextLength > 14;
             return `<div class="calendar-shift" style="background-color:${color} !important;">
@@ -1115,12 +1115,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       .map(item => item.name);
     const configuredOrder = savedOrder.length > 0 ? savedOrder : priorityOrder;
     return [...configuredOrder, ...allStaff.map(item => item.name).filter(name => !configuredOrder.includes(name))];
-  };
-
-  // 画面表示と印刷で同じ並び順を使い、メンバーごとの色を固定する。
-  const getStaffColorIndex = (name: string) => {
-    const index = getStaffOrder().indexOf(name);
-    return index >= 0 ? index : Math.max(0, allStaff.findIndex(staff => staff.name === name));
   };
 
   const sortStaffByConfiguredOrder = <T extends { name: string }>(staff: T[]) => {
@@ -1327,7 +1321,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
                 <View style={{ flex: 1, marginTop: 3 }}>
                   {sortStaffByConfiguredOrder(assignedShifts[item.dateStr] || []).map((st, i) => {
-                    const staffIndex = getStaffColorIndex(st.name);
+                    const staffIndex = Math.max(0, allStaff.findIndex(staff => staff.name === st.name));
                     return (
                       <View
                         key={`${st.name}-${i}`}
