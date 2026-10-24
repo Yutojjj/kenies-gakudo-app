@@ -48,11 +48,42 @@ const PRINT_SHIFT_COLORS = [
   '#A8D2F0', '#BCD99B', '#F2D783', '#9ED9DE',
   '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
 ];
-const STAFF_COLOR_PALETTE = [
-  '#A9DFD1', '#F3B1C3', '#C9BEF2', '#F2BE9B', '#A8D2F0', '#BCD99B',
-  '#F2D783', '#9ED9DE', '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
-  '#F6C1D0', '#B7D7F0', '#D7C7F5', '#B9E3D0', '#F4D59A', '#C4D5A5',
-];
+const STAFF_COLOR_HUES = Array.from({ length: 12 }, (_, index) => index * 30);
+
+const hexToHsv = (hex: string) => {
+  const value = hex.replace('#', '');
+  const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16) / 255);
+  const [red, green, blue] = channels;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  let hue = 0;
+  if (delta !== 0) {
+    if (max === red) hue = ((green - blue) / delta) % 6;
+    else if (max === green) hue = (blue - red) / delta + 2;
+    else hue = (red - green) / delta + 4;
+    hue *= 60;
+    if (hue < 0) hue += 360;
+  }
+  return { h: hue, s: max === 0 ? 0 : delta / max * 100, v: max * 100 };
+};
+
+const hsvToHex = (hue: number, saturation: number, brightness: number) => {
+  const h = ((hue % 360) + 360) % 360;
+  const s = Math.max(0, Math.min(100, saturation)) / 100;
+  const v = Math.max(0, Math.min(100, brightness)) / 100;
+  const chroma = v * s;
+  const x = chroma * (1 - Math.abs((h / 60) % 2 - 1));
+  const match = v - chroma;
+  const sector = Math.floor(h / 60);
+  const rgb = sector === 0 ? [chroma, x, 0]
+    : sector === 1 ? [x, chroma, 0]
+      : sector === 2 ? [0, chroma, x]
+        : sector === 3 ? [0, x, chroma]
+          : sector === 4 ? [x, 0, chroma]
+            : [chroma, 0, x];
+  return `#${rgb.map(channel => Math.round((channel + match) * 255).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+};
 const ILLUSTRATION_COUNT = 114;
 
 const getMonthTitleColor = (month: number) => {
@@ -306,6 +337,10 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
   const [submissionStaffName, setSubmissionStaffName] = useState<string | null>(null);
   const [colorPickerStaffName, setColorPickerStaffName] = useState<string | null>(null);
+  const [colorPickerDraft, setColorPickerDraft] = useState('#A9DFD1');
+  const [colorPickerHexText, setColorPickerHexText] = useState('#A9DFD1');
+  const [colorPickerFieldSize, setColorPickerFieldSize] = useState({ width: 0, height: 0 });
+  const [colorPickerHueWidth, setColorPickerHueWidth] = useState(0);
   const [deadlineVisible, setDeadlineVisible] = useState(false);
   const [deadlineDay, setDeadlineDay] = useState('');
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
@@ -1123,6 +1158,24 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     setColorPickerStaffName(null);
   };
 
+  const getSubmissionStaffColor = (staffName: string) => getCalendarStaffColor(
+    staffName,
+    Math.max(0, allStaff.findIndex(item => item.name === staffName)),
+    SHIFT_CARD_COLORS,
+  );
+
+  const openStaffColorPicker = (staffName: string) => {
+    const color = getSubmissionStaffColor(staffName);
+    setColorPickerDraft(color);
+    setColorPickerHexText(color);
+    setColorPickerStaffName(staffName);
+  };
+
+  const updateColorPickerDraft = (color: string) => {
+    setColorPickerDraft(color);
+    setColorPickerHexText(color);
+  };
+
   const getStaffOrder = () => {
     const savedOrder = Array.isArray(autoFillSettings.pdfOrder) ? autoFillSettings.pdfOrder.filter(Boolean) : [];
     const priorityOrder = autoFillSettings.staffSettings
@@ -1555,7 +1608,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               showsVerticalScrollIndicator={false}
             >
               {submissionStatusRows.map((staff) => {
-                const staffColor = autoFillSettings.staffSettings.find(item => item.name === staff.name)?.color || '#FFFFFF';
+                const staffColor = getSubmissionStaffColor(staff.name);
                 return (
                   <View key={staff.id} style={styles.submissionStatusMemberBlock}>
                     <View style={styles.submissionStatusRow}>
@@ -1571,12 +1624,6 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                       >
                         <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.submissionStatusColorButton, { backgroundColor: staffColor }]}
-                        onPress={() => setColorPickerStaffName(current => current === staff.name ? null : staff.name)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${staff.name}の色を設定`}
-                      />
                       <View style={[
                         styles.submissionStatusBadge,
                         staff.submitted ? styles.submissionStatusSubmitted : styles.submissionStatusMissing,
@@ -1593,19 +1640,13 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                           {staff.submitted ? '提出済み' : '未提出'}
                         </Text>
                       </View>
+                      <TouchableOpacity
+                        style={[styles.submissionStatusColorButton, { backgroundColor: staffColor }]}
+                        onPress={() => openStaffColorPicker(staff.name)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${staff.name}の色を編集`}
+                      />
                     </View>
-                    {colorPickerStaffName === staff.name && (
-                      <View style={styles.submissionStatusPalette}>
-                        {STAFF_COLOR_PALETTE.map(color => (
-                          <TouchableOpacity
-                            key={color}
-                            style={[styles.submissionStatusPaletteColor, { backgroundColor: color }, staffColor === color && styles.submissionStatusPaletteColorSelected]}
-                            onPress={() => saveStaffColor(staff.name, color)}
-                            accessibilityLabel={`${staff.name}をこの色に設定`}
-                          />
-                        ))}
-                      </View>
-                    )}
                   </View>
                 );
               })}
@@ -1613,6 +1654,118 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <Text style={styles.submissionStatusEmpty}>スタッフ情報を読み込み中です</Text>
               )}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={colorPickerStaffName !== null} transparent animationType="fade" onRequestClose={() => setColorPickerStaffName(null)}>
+        <View style={styles.staffColorPickerOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setColorPickerStaffName(null)} accessible={false} focusable={false} />
+          <View style={styles.staffColorPickerPanel}>
+            <View style={styles.staffColorPickerHeader}>
+              <View>
+                <Text style={styles.staffColorPickerTitle}>{colorPickerStaffName}の色を設定</Text>
+              </View>
+              <TouchableOpacity style={styles.submissionStatusClose} onPress={() => setColorPickerStaffName(null)} accessibilityLabel="色編集を閉じる">
+                <Ionicons name="close" size={23} color="#5D4037" />
+              </TouchableOpacity>
+            </View>
+            <View
+              style={[
+                styles.staffColorSquare,
+                { backgroundColor: hsvToHex(hexToHsv(colorPickerDraft).h, 100, 100) },
+                { backgroundImage: 'linear-gradient(to top, #000000, transparent), linear-gradient(to right, #FFFFFF, transparent)' } as any,
+              ]}
+              onLayout={event => setColorPickerFieldSize({
+                width: event.nativeEvent.layout.width,
+                height: event.nativeEvent.layout.height,
+              })}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={event => {
+                const { h } = hexToHsv(colorPickerDraft);
+                const saturation = colorPickerFieldSize.width ? event.nativeEvent.locationX / colorPickerFieldSize.width * 100 : 0;
+                const brightness = colorPickerFieldSize.height ? (1 - event.nativeEvent.locationY / colorPickerFieldSize.height) * 100 : 100;
+                updateColorPickerDraft(hsvToHex(h, saturation, brightness));
+              }}
+              onResponderMove={event => {
+                const { h } = hexToHsv(colorPickerDraft);
+                const saturation = colorPickerFieldSize.width ? event.nativeEvent.locationX / colorPickerFieldSize.width * 100 : 0;
+                const brightness = colorPickerFieldSize.height ? (1 - event.nativeEvent.locationY / colorPickerFieldSize.height) * 100 : 100;
+                updateColorPickerDraft(hsvToHex(h, saturation, brightness));
+              }}
+              accessibilityRole="adjustable"
+              accessibilityLabel="彩度と明るさを選択"
+            >
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.staffColorSelectionMarker,
+                  {
+                    left: `${hexToHsv(colorPickerDraft).s}%`,
+                    top: `${100 - hexToHsv(colorPickerDraft).v}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View
+              style={styles.staffColorHueTrack}
+              onLayout={event => setColorPickerHueWidth(event.nativeEvent.layout.width)}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={event => {
+                const hue = colorPickerHueWidth ? event.nativeEvent.locationX / colorPickerHueWidth * 360 : 0;
+                const hsv = hexToHsv(colorPickerDraft);
+                updateColorPickerDraft(hsvToHex(hue, hsv.s || 100, hsv.v || 100));
+              }}
+              onResponderMove={event => {
+                const hue = colorPickerHueWidth ? event.nativeEvent.locationX / colorPickerHueWidth * 360 : 0;
+                const hsv = hexToHsv(colorPickerDraft);
+                updateColorPickerDraft(hsvToHex(hue, hsv.s || 100, hsv.v || 100));
+              }}
+              accessibilityRole="adjustable"
+              accessibilityLabel="色相を選択"
+            >
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.staffColorHueMarker,
+                  { left: `${hexToHsv(colorPickerDraft).h / 3.6}%` },
+                ]}
+              />
+            </View>
+            <View style={styles.staffColorValueRow}>
+              <View style={[styles.staffColorValueSwatch, { backgroundColor: colorPickerDraft }]} />
+              <TextInput
+                style={styles.staffColorHexInput}
+                value={colorPickerHexText}
+                onChangeText={value => {
+                  const normalized = value.startsWith('#') ? value.toUpperCase() : `#${value.toUpperCase()}`;
+                  if (/^#[0-9A-F]{0,6}$/.test(normalized)) {
+                    setColorPickerHexText(normalized);
+                    if (/^#[0-9A-F]{6}$/.test(normalized)) setColorPickerDraft(normalized);
+                  }
+                }}
+                onBlur={() => {
+                  if (!/^#[0-9A-F]{6}$/.test(colorPickerHexText)) setColorPickerHexText(colorPickerDraft);
+                }}
+                maxLength={7}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                accessibilityLabel="カラーコード"
+              />
+            </View>
+            <View style={styles.staffColorPickerActions}>
+              <TouchableOpacity style={styles.staffColorCancelButton} onPress={() => setColorPickerStaffName(null)}>
+                <Text style={styles.staffColorCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.staffColorSaveButton}
+                onPress={() => colorPickerStaffName && saveStaffColor(colorPickerStaffName, colorPickerDraft)}
+              >
+                <Text style={styles.staffColorSaveText}>この色に設定</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -2732,10 +2885,7 @@ const styles = StyleSheet.create({
   submissionStatusRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
   submissionStatusMemberButton: { flex: 1, minWidth: 0, justifyContent: 'center', minHeight: 54 },
   submissionStatusStaffName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#252525' },
-  submissionStatusColorButton: { width: 28, height: 28, marginRight: 8, borderRadius: 14, borderWidth: 2, borderColor: '#6E7778' },
-  submissionStatusPalette: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 8, paddingBottom: 10 },
-  submissionStatusPaletteColor: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: '#BFC8C9' },
-  submissionStatusPaletteColorSelected: { borderWidth: 3, borderColor: '#2F6268' },
+  submissionStatusColorButton: { width: 28, height: 28, marginLeft: 8, borderRadius: 4, borderWidth: 1, borderColor: '#778184' },
   submissionStatusBadge: { minWidth: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   submissionStatusSubmitted: { backgroundColor: '#E7F6EA' },
   submissionStatusMissing: { backgroundColor: '#FFF1E7' },
@@ -2743,6 +2893,22 @@ const styles = StyleSheet.create({
   submissionStatusSubmittedText: { color: '#278A4A' },
   submissionStatusMissingText: { color: '#B06A33' },
   submissionStatusEmpty: { padding: 24, textAlign: 'center', color: '#8A9698', fontWeight: '700' },
+  staffColorPickerOverlay: { flex: 1, backgroundColor: 'rgba(74, 57, 43, 0.24)', alignItems: 'center', justifyContent: 'center', padding: 12 },
+  staffColorPickerPanel: { width: '100%', maxWidth: 560, borderRadius: 12, padding: 14, backgroundColor: '#FFF8F0', borderWidth: 1, borderColor: '#EADCCE', shadowColor: '#5D4037', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 14, elevation: 16, zIndex: 1 },
+  staffColorPickerHeader: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  staffColorPickerTitle: { fontSize: 16, fontWeight: '800', color: '#4A342A' },
+  staffColorSquare: { width: '100%', aspectRatio: 1.64, position: 'relative', overflow: 'hidden', backgroundColor: '#315BCC' },
+  staffColorSelectionMarker: { position: 'absolute', width: 28, height: 28, marginLeft: -14, marginTop: -14, borderRadius: 14, borderWidth: 3, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.08)', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.7, shadowRadius: 2 },
+  staffColorHueTrack: { height: 36, position: 'relative', marginTop: 18, marginBottom: 18, backgroundColor: '#315BCC', backgroundImage: 'linear-gradient(to right, #FF0000 0%, #FFFF00 17%, #00FF00 33%, #00FFFF 50%, #0000FF 67%, #FF00FF 83%, #FF0000 100%)' } as any,
+  staffColorHueMarker: { position: 'absolute', top: -4, width: 20, height: 44, marginLeft: -10, borderRadius: 3, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(20,24,30,0.25)' },
+  staffColorValueRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12, minHeight: 72 },
+  staffColorValueSwatch: { width: 72, borderWidth: 1, borderColor: '#D9C8B7' },
+  staffColorHexInput: { flex: 1, minWidth: 0, paddingHorizontal: 14, borderWidth: 1, borderColor: '#E1D6CE', borderRadius: 4, backgroundColor: '#FFFFFF', color: '#40332D', fontSize: 20, fontWeight: '600' },
+  staffColorPickerActions: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  staffColorCancelButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E1D6CE', borderRadius: 8, backgroundColor: '#FFFFFF' },
+  staffColorCancelText: { fontSize: 15, fontWeight: '800', color: '#67564D' },
+  staffColorSaveButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#00AEB8' },
+  staffColorSaveText: { fontSize: 15, fontWeight: '900', color: '#FFFFFF' },
   deadlineSettingsPanel: { width: '100%', maxWidth: 430, borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   deadlineCalendarBox: { padding: 16, backgroundColor: '#FFFDF9' },
   deadlineWeekRow: { flexDirection: 'row', marginBottom: 5 },

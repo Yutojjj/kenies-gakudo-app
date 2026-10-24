@@ -83,10 +83,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       verifiedUserRef.current = user;
       validateUser(user);
     };
-    const fallbackTimer = setTimeout(() => setChecked(true), 4000);
     check();
-    return () => clearTimeout(fallbackTimer);
   }, [pathname, routeRole, router]);
+
+  if (PUBLIC_PATHS.includes(pathname)) {
+    return <>{children}</>;
+  }
 
   if (!checked) {
     return (
