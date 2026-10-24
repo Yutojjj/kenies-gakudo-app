@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AdminBottomNav from '../components/AdminBottomNav';
 import SwipeMonthPager from '../components/SwipeMonthPager';
 import { COLORS } from '../constants/theme';
@@ -15,6 +15,8 @@ import { setupPushToken } from '../utils/setupPushToken';
 import CenteredTimePickerModal from '../components/CenteredTimePickerModal';
 import ShiftScreen from './shift';
 import ShiftCreateScreen from './shift-create';
+import { buildCalendarPrintHtml } from '../utils/buildCalendarPrintHtml';
+import { downloadHtmlAsPng } from '../utils/downloadCalendarImage';
 
 type Staff = { id: string; name: string };
 type AssignedStaff = { name: string; start: string; end: string };
@@ -48,6 +50,9 @@ export default function ShiftViewScreen() {
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [staffOrder, setStaffOrder] = useState<string[]>([]);
   const [staffColors, setStaffColors] = useState<Record<string, string>>({});
+  const [pngSaving, setPngSaving] = useState(false);
+  const [pngConfirmVisible, setPngConfirmVisible] = useState(false);
+  const [exportSourcesLoaded, setExportSourcesLoaded] = useState({ staff: false, shifts: false, settings: false, events: false, holidays: false });
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
@@ -78,7 +83,8 @@ export default function ShiftViewScreen() {
     fetch('https://holidays-jp.github.io/api/v1/date.json')
       .then(r => r.json())
       .then(setPublicHolidays)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setExportSourcesLoaded(current => ({ ...current, holidays: true })));
 
     const onSubscriptionError = (name: string) => (error: unknown) => {
       console.warn(`[shift-view] ${name} の購読に失敗しました`, error);
@@ -89,12 +95,14 @@ export default function ShiftViewScreen() {
         .filter(d => d.data().showInShiftTable !== false)
         .map(d => ({ id: d.id, name: String(d.data().name || '').trim() }))
         .filter(staff => staff.name));
+      setExportSourcesLoaded(current => ({ ...current, staff: true }));
     }, onSubscriptionError('accounts'));
 
     const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), snap => {
       const data: Record<string, AssignedStaff[]> = {};
       snap.forEach(d => { data[d.id] = d.data().staff || []; });
       setAssignedShifts(data);
+      setExportSourcesLoaded(current => ({ ...current, shifts: true }));
     }, onSubscriptionError('assigned_shifts'));
 
     const unsubHolidays = onSnapshot(doc(db, 'settings', 'holidays_data'), snap => {
@@ -112,9 +120,11 @@ export default function ShiftViewScreen() {
         if (!eData[dateKey].includes(title)) eData[dateKey].push(title);
       });
       setEventsData(eData);
+      setExportSourcesLoaded(current => ({ ...current, events: true }));
     }, onSubscriptionError('events'));
 
     const unsubStaffOrder = onSnapshot(doc(db, 'settings', 'autoFillSettings'), snap => {
+      setExportSourcesLoaded(current => ({ ...current, settings: true }));
       if (!snap.exists()) return;
       const data = snap.data();
       const priorityNames = Array.isArray(data.staffSettings)
@@ -331,6 +341,31 @@ export default function ShiftViewScreen() {
   const displayStaff = showOnlyMine
     ? orderedAllStaff.filter(s => s.name === myName)
     : orderedAllStaff;
+
+  const downloadShiftPng = async () => {
+    if (pngSaving || !Object.values(exportSourcesLoaded).every(Boolean)) return;
+    setPngSaving(true);
+    try {
+      const html = buildCalendarPrintHtml({
+        currentDate,
+        printType: 'shift',
+        allStaff,
+        assignedShifts,
+        eventsData,
+        publicHolidays,
+        shiftPrintPhotos: [],
+        getStaffOrder: () => orderedAllStaff.map(staff => staff.name),
+        getCalendarStaffColor: (name, index) => staffColors[name.trim()] || getStaffShiftColor(name, index),
+      });
+      await downloadHtmlAsPng(html, `シフト_${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`);
+    } catch (error: any) {
+      const message = error?.message || '画像を保存できませんでした';
+      if (Platform.OS === 'web') window.alert(message);
+      else Alert.alert('エラー', message);
+    } finally {
+      setPngSaving(false);
+    }
+  };
   const renderMonthCalendar = (date: Date) => {
     const days = generateDays(date);
 
@@ -446,7 +481,7 @@ export default function ShiftViewScreen() {
         ) : identityLoaded ? (
           <View style={styles.staffHeaderActions}>
             <TouchableOpacity style={styles.submitHeaderBtn} onPress={() => setSubmissionVisible(true)}>
-              <Text style={styles.submitHeaderBtnText}>シフト提出画面へ</Text>
+              <Text style={styles.submitHeaderBtnText}>シフト提出する</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -477,6 +512,19 @@ export default function ShiftViewScreen() {
 
       {!isAdmin && identityLoaded && (
         <TouchableOpacity
+          style={[styles.floatingMineButton, styles.floatingDownloadButton, (pngSaving || !Object.values(exportSourcesLoaded).every(Boolean)) && { opacity: 0.6 }]}
+          onPress={() => setPngConfirmVisible(true)}
+          disabled={pngSaving || !Object.values(exportSourcesLoaded).every(Boolean)}
+          accessibilityRole="button"
+          accessibilityLabel="シフト表をPNGで保存"
+          accessibilityState={{ busy: pngSaving }}
+        >
+          {pngSaving ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="download-outline" size={25} color="#FFFFFF" />}
+        </TouchableOpacity>
+      )}
+
+      {!isAdmin && identityLoaded && (
+        <TouchableOpacity
           style={[styles.floatingMineButton, showOnlyMine && styles.floatingMineButtonActive]}
           onPress={() => setShowOnlyMine(!showOnlyMine)}
           accessibilityLabel={showOnlyMine ? '全体表示' : '自分のみ表示'}
@@ -485,10 +533,27 @@ export default function ShiftViewScreen() {
         </TouchableOpacity>
       )}
 
+      <Modal visible={pngConfirmVisible} transparent animationType="fade" onRequestClose={() => setPngConfirmVisible(false)}>
+        <View style={styles.imageConfirmOverlay}>
+          <View style={styles.imageConfirmModal}>
+            <Text style={styles.imageConfirmTitle}>シフト表を保存しますか？</Text>
+            <Text style={styles.imageConfirmText}>{currentDate.getFullYear()}年{currentDate.getMonth() + 1}月のシフト表</Text>
+            <View style={styles.imageConfirmActions}>
+              <TouchableOpacity style={styles.imageConfirmCancel} onPress={() => setPngConfirmVisible(false)} accessibilityRole="button">
+                <Text style={styles.imageConfirmCancelText}>いいえ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.imageConfirmDownload} onPress={() => { setPngConfirmVisible(false); downloadShiftPng(); }} accessibilityRole="button">
+                <Text style={styles.imageConfirmDownloadText}>はい</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={submissionVisible} transparent animationType="fade" onRequestClose={() => setSubmissionVisible(false)}>
         <View style={styles.submissionOverlay}>
           <View style={styles.submissionModal}>
-            <ShiftScreen embedded onClose={() => setSubmissionVisible(false)} />
+            <ShiftScreen embedded initialDate={currentDate} onClose={() => setSubmissionVisible(false)} />
           </View>
         </View>
       </Modal>
@@ -553,6 +618,7 @@ const styles = StyleSheet.create({
   cellStaffTimeMe: { fontWeight: '700' },
   floatingMineButton: { position: 'absolute', right: 18, bottom: 78, width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4B93E6', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 7, elevation: 7 },
   floatingMineButtonActive: { backgroundColor: '#168B91' },
+  floatingDownloadButton: { bottom: 148, backgroundColor: '#08AEB8' },
   notificationOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(35, 30, 27, 0.55)' },
   notificationModal: { width: '100%', maxWidth: 460, borderRadius: 20, padding: 20, backgroundColor: '#FFFDFC', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.24, shadowRadius: 18, elevation: 12 },
   notificationTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -577,7 +643,7 @@ const styles = StyleSheet.create({
   submissionModal: { width: '100%', maxWidth: 920, height: '92%', overflow: 'hidden', borderRadius: 18, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
   createOverlay: { flex: 1, backgroundColor: 'rgba(35, 30, 27, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 4 },
   createModal: { width: '100%', maxWidth: 1180, height: '96%', overflow: 'hidden', borderRadius: 16, backgroundColor: COLORS.background, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 18, elevation: 12 },
-  imageConfirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(35, 30, 27, 0.55)' },
+  imageConfirmOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(74, 57, 43, 0.24)' },
   imageConfirmModal: { width: '100%', maxWidth: 400, borderRadius: 18, padding: 22, backgroundColor: '#FFFDFC' },
   imageConfirmTitle: { color: '#3D2A24', fontSize: 19, fontWeight: '900', textAlign: 'center' },
   imageConfirmText: { marginTop: 10, color: '#657174', fontSize: 13, lineHeight: 20, fontWeight: '700', textAlign: 'center' },
