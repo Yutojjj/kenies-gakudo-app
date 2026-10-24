@@ -476,6 +476,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       const merged = staffList
         .map((staff, index) => {
           const found = savedStaff.find((item: any) => item.name === staff.name);
+          const savedColor = savedSettings.staffColors?.[staff.name] || found?.color;
           return found
             ? {
                 name: staff.name,
@@ -483,7 +484,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: found.end || '18:15',
                 priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
                 enabled: found.enabled !== false,
-                ...(found.color ? { color: found.color } : {}),
+                ...(savedColor ? { color: savedColor } : {}),
               }
             : {
                 name: staff.name,
@@ -491,6 +492,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: staff.name === '稲熊' ? '20:00' : '18:15',
                 priority: savedStaff.length + index + 1,
                 enabled: true,
+                ...(savedColor ? { color: savedColor } : {}),
               };
         })
         .sort((a, b) => a.priority - b.priority)
@@ -1242,7 +1244,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           enabled: true,
           color,
         }];
-      await setDoc(settingsRef, stripUndefinedFields({ ...latestSettings, staffSettings, updatedAt: new Date() }), { merge: true });
+      const staffColors = { ...(latestSettings.staffColors || {}), [staffName.trim()]: color };
+      await setDoc(settingsRef, stripUndefinedFields({ ...latestSettings, staffSettings, staffColors, updatedAt: new Date() }), { merge: true });
       setAutoFillSettings(current => ({ ...current, staffSettings }));
       setColorPickerStaffName(null);
     } catch (error: any) {

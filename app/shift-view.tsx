@@ -129,11 +129,18 @@ export default function ShiftViewScreen() {
         : [];
       setStaffOrder(savedPdfOrder.length > 0 ? savedPdfOrder : priorityNames);
       const colors: Record<string, string> = {};
+      if (data.staffColors && typeof data.staffColors === 'object' && !Array.isArray(data.staffColors)) {
+        Object.entries(data.staffColors).forEach(([rawName, rawColor]) => {
+          const name = rawName.trim();
+          const color = String(rawColor || '').trim();
+          if (name && /^#[0-9a-fA-F]{6}$/.test(color)) colors[name] = color.toUpperCase();
+        });
+      }
       if (Array.isArray(data.staffSettings)) {
         data.staffSettings.forEach((item: any) => {
           const name = String(item?.name || '').trim();
           const color = String(item?.color || '').trim();
-          if (name && /^#[0-9a-fA-F]{6}$/.test(color)) colors[name] = color.toUpperCase();
+          if (name && !colors[name] && /^#[0-9a-fA-F]{6}$/.test(color)) colors[name] = color.toUpperCase();
         });
       }
       setStaffColors(colors);
