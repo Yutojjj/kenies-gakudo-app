@@ -368,7 +368,7 @@ export default function ShiftViewScreen() {
                     const assigned = assignedList.find(s => s.name === staff.name);
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
-                    const staffIndex = Math.max(0, allStaff.findIndex(item => item.id === staff.id));
+                    const staffIndex = Math.max(0, orderedAllStaff.findIndex(item => item.id === staff.id));
                     const staffBackground = getStaffShiftColor(staff.name, staffIndex);
                     return (
                       <View
