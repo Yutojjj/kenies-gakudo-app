@@ -130,7 +130,9 @@ export default function ShiftViewScreen() {
       const colors: Record<string, string> = {};
       if (Array.isArray(data.staffSettings)) {
         data.staffSettings.forEach((item: any) => {
-          if (item?.name && item?.color) colors[String(item.name)] = String(item.color);
+          const name = String(item?.name || '').trim();
+          const color = String(item?.color || '').trim();
+          if (name && /^#[0-9a-fA-F]{6}$/.test(color)) colors[name] = color.toUpperCase();
         });
       }
       setStaffColors(colors);
