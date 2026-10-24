@@ -337,6 +337,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
   const [submissionStaffName, setSubmissionStaffName] = useState<string | null>(null);
   const [colorPickerStaffName, setColorPickerStaffName] = useState<string | null>(null);
+  const [savingStaffColor, setSavingStaffColor] = useState(false);
   const [colorPickerDraft, setColorPickerDraft] = useState('#A9DFD1');
   const [colorPickerHexText, setColorPickerHexText] = useState('#A9DFD1');
   const [colorPickerFieldSize, setColorPickerFieldSize] = useState({ width: 0, height: 0 });
@@ -362,6 +363,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
 
   const [spreadsheetVisible, setSpreadsheetVisible] = useState(false);
 
+  const submissionOrder = Array.isArray(autoFillSettings.pdfOrder) && autoFillSettings.pdfOrder.length > 0
+    ? autoFillSettings.pdfOrder
+    : autoFillSettings.staffSettings.slice().sort((a, b) => a.priority - b.priority).map(staff => staff.name);
   const submissionStatusRows = allStaff.map((staff) => {
     const monthPrefix = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-`;
     const submitted = Object.keys(requests).some((key) => {
@@ -369,6 +373,12 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
       return key.startsWith(prefix) && key.slice(prefix.length).startsWith(monthPrefix);
     });
     return { ...staff, submitted };
+  }).sort((a, b) => {
+    const aIndex = submissionOrder.indexOf(a.name);
+    const bIndex = submissionOrder.indexOf(b.name);
+    const resolvedAIndex = aIndex < 0 ? submissionOrder.length + allStaff.indexOf(a) : aIndex;
+    const resolvedBIndex = bIndex < 0 ? submissionOrder.length + allStaff.indexOf(b) : bIndex;
+    return resolvedAIndex - resolvedBIndex;
   });
   const submittedCount = submissionStatusRows.filter((staff) => staff.submitted).length;
 
@@ -1151,11 +1161,26 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   };
 
   const saveStaffColor = async (staffName: string, color: string) => {
-    const staffSettings = autoFillSettings.staffSettings.map(staff =>
-      staff.name === staffName ? { ...staff, color } : staff
-    );
-    await saveAutoFillSettings({ ...autoFillSettings, staffSettings });
-    setColorPickerStaffName(null);
+    const existing = autoFillSettings.staffSettings.find(staff => staff.name === staffName);
+    const staffSettings = existing
+      ? autoFillSettings.staffSettings.map(staff => staff.name === staffName ? { ...staff, color } : staff)
+      : [...autoFillSettings.staffSettings, {
+        name: staffName,
+        start: '14:00',
+        end: '18:30',
+        priority: autoFillSettings.staffSettings.length,
+        enabled: true,
+        color,
+      }];
+    setSavingStaffColor(true);
+    try {
+      await saveAutoFillSettings({ ...autoFillSettings, staffSettings });
+      setColorPickerStaffName(null);
+    } catch (error: any) {
+      Alert.alert('保存できませんでした', error?.message || '通信状態を確認して、もう一度お試しください。');
+    } finally {
+      setSavingStaffColor(false);
+    }
   };
 
   const getSubmissionStaffColor = (staffName: string) => getCalendarStaffColor(
@@ -1760,10 +1785,11 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <Text style={styles.staffColorCancelText}>キャンセル</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.staffColorSaveButton}
+                style={[styles.staffColorSaveButton, savingStaffColor && styles.staffColorSaveButtonDisabled]}
+                disabled={savingStaffColor}
                 onPress={() => colorPickerStaffName && saveStaffColor(colorPickerStaffName, colorPickerDraft)}
               >
-                <Text style={styles.staffColorSaveText}>この色に設定</Text>
+                <Text style={styles.staffColorSaveText}>{savingStaffColor ? '保存中...' : 'この色に設定'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2908,6 +2934,7 @@ const styles = StyleSheet.create({
   staffColorCancelButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E1D6CE', borderRadius: 8, backgroundColor: '#FFFFFF' },
   staffColorCancelText: { fontSize: 15, fontWeight: '800', color: '#67564D' },
   staffColorSaveButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#00AEB8' },
+  staffColorSaveButtonDisabled: { opacity: 0.65 },
   staffColorSaveText: { fontSize: 15, fontWeight: '900', color: '#FFFFFF' },
   deadlineSettingsPanel: { width: '100%', maxWidth: 430, borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   deadlineCalendarBox: { padding: 16, backgroundColor: '#FFFDF9' },
