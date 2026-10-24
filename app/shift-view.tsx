@@ -87,7 +87,8 @@ export default function ShiftViewScreen() {
     const unsubAccounts = onSnapshot(query(collection(db, 'accounts'), where('role', '==', 'staff')), snap => {
       setAllStaff(snap.docs
         .filter(d => d.data().showInShiftTable !== false)
-        .map(d => ({ id: d.id, name: d.data().name })));
+        .map(d => ({ id: d.id, name: String(d.data().name || '').trim() }))
+        .filter(staff => staff.name));
     }, onSubscriptionError('accounts'));
 
     const unsubShifts = onSnapshot(collection(db, 'assigned_shifts'), snap => {
@@ -379,13 +380,14 @@ export default function ShiftViewScreen() {
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
                     const staffIndex = Math.max(0, orderedAllStaff.findIndex(item => item.id === staff.id));
-                    const staffBackground = staffColors[staff.name] || getStaffShiftColor(staff.name, staffIndex);
+                    const staffName = staff.name.trim();
+                    const staffBackground = staffColors[staffName] || getStaffShiftColor(staffName, staffIndex);
                     return (
                       <View
                         key={staff.id}
                         style={[styles.cellStaffRow, { backgroundColor: staffBackground }]}
                       >
-                        <Text style={styles.cellStaffName} numberOfLines={1}>{staff.name}</Text>
+                        <Text style={styles.cellStaffName} numberOfLines={1}>{staffName}</Text>
                         <View style={styles.cellStaffTimeRow}>
                           <Text style={[styles.cellStaffTime, styles.cellStaffStartTime, isMe && styles.cellStaffTimeMe]}>{assigned.start}</Text>
                           <Text style={[styles.cellStaffTime, styles.cellStaffEndTime, isMe && styles.cellStaffTimeMe]}>{assigned.end}</Text>
