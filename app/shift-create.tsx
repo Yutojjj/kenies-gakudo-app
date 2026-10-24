@@ -406,7 +406,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     return {
       ...staff,
       submitted: submittedKeys.length > 0,
-      submittedOn: submittedAt ? `${submittedAt.getMonth() + 1}/${submittedAt.getDate()}` : '',
+      submittedOn: submittedAt
+        ? `${submittedAt.getMonth() + 1}/${submittedAt.getDate()}(${['日', '月', '火', '水', '木', '金', '土'][submittedAt.getDay()]})`
+        : '',
     };
   }).sort((a, b) => {
     const aIndex = submissionOrder.indexOf(a.name);
