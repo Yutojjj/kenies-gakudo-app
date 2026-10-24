@@ -120,6 +120,21 @@ const stripUndefinedFields = <T,>(value: T): T => {
   return value;
 };
 
+const resolveDeadlineDateKey = (value: unknown, targetMonthKey: string) => {
+  const raw = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const day = Number(raw);
+  if (!/^\d{4}-\d{2}$/.test(targetMonthKey) || !Number.isFinite(day) || day < 1 || day > 31) return '';
+  const [year, month] = targetMonthKey.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${targetMonthKey}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+};
+
+const formatDeadlineDateKey = (dateKey: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  return match ? `${Number(match[2])}月${Number(match[3])}日` : '';
+};
+
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); 
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); 
 const SHIFT_WHEEL_ITEM_HEIGHT = 40;
@@ -370,7 +385,8 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [colorPickerFieldSize, setColorPickerFieldSize] = useState({ width: 0, height: 0 });
   const [colorPickerHueWidth, setColorPickerHueWidth] = useState(0);
   const [deadlineVisible, setDeadlineVisible] = useState(false);
-  const [deadlineDay, setDeadlineDay] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineCalendarDate, setDeadlineCalendarDate] = useState(currentDate);
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
   const [workSummaryDate, setWorkSummaryDate] = useState(currentDate);
   const [workHoursVisible, setWorkHoursVisible] = useState(false);
@@ -423,26 +439,31 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const snapshot = await getDoc(doc(db, 'settings', 'shift_period'));
     const data = snapshot.exists() ? snapshot.data() : {};
-    setDeadlineDay(String(data.deadlines?.[monthKey] || ''));
+    const selectedDateKey = resolveDeadlineDateKey(data.deadlines?.[monthKey], monthKey);
+    setDeadlineDate(selectedDateKey);
+    const defaultCalendarDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    const initialCalendarDateKey = selectedDateKey || `${defaultCalendarDate.getFullYear()}-${String(defaultCalendarDate.getMonth() + 1).padStart(2, '0')}-01`;
+    const [year, month] = initialCalendarDateKey.split('-').map(Number);
+    setDeadlineCalendarDate(new Date(year, month - 1, 1));
     setDeadlineVisible(true);
   };
 
   const saveDeadlineSettings = async () => {
-    if (!deadlineDay) return;
+    if (!deadlineDate) return;
     const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const settingsRef = doc(db, 'settings', 'shift_period');
     const snapshot = await getDoc(settingsRef);
     const current = snapshot.exists() ? snapshot.data() : {};
-    const deadlines = { ...(current.deadlines || {}), [monthKey]: String(Number(deadlineDay)) };
-    await setDoc(settingsRef, { start: '1', end: String(Number(deadlineDay)), deadlines, updatedAt: new Date() }, { merge: true });
+    const deadlines = { ...(current.deadlines || {}), [monthKey]: deadlineDate };
+    await setDoc(settingsRef, { deadlines, updatedAt: new Date() }, { merge: true });
     await sendPushNotification({
       accountIds: allStaff.map(staff => staff.id),
       title: 'シフト提出期限のお知らせ',
-      body: `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月分のシフト提出期限は${Number(deadlineDay)}日です。`,
+      body: `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月分のシフト提出期限は${formatDeadlineDateKey(deadlineDate)}です。`,
       url: '/shift-view',
     });
     setDeadlineVisible(false);
-    Alert.alert('保存完了', `${monthKey}の締切日を${Number(deadlineDay)}日に設定しました。`);
+    Alert.alert('保存完了', `${monthKey}分の締切日を${formatDeadlineDateKey(deadlineDate)}に設定しました。`);
   };
 
   useEffect(() => {
@@ -1656,7 +1677,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.submissionStatusDeadlineCaption}>
-                  提出締切: {statusDeadlineDay ? `${currentDate.getMonth() + 1}月${Number(statusDeadlineDay)}日` : '未設定'}
+                  提出締切: {statusDeadlineDay
+                    ? formatDeadlineDateKey(resolveDeadlineDateKey(statusDeadlineDay, `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`))
+                    : '未設定'}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
@@ -1867,21 +1890,41 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             <View style={styles.submissionStatusHeader}>
               <View>
                 <Text style={styles.submissionStatusTitle}>締切日設定</Text>
-                <Text style={styles.submissionStatusMonth}>{currentDate.getFullYear()}年{currentDate.getMonth() + 1}月</Text>
+                <Text style={styles.submissionStatusMonth}>{currentDate.getFullYear()}年{currentDate.getMonth() + 1}月分</Text>
               </View>
               <TouchableOpacity style={styles.submissionStatusClose} onPress={() => setDeadlineVisible(false)}>
                 <Ionicons name="close" size={24} color="#5D4037" />
               </TouchableOpacity>
             </View>
             <View style={styles.deadlineCalendarBox}>
+              <View style={styles.deadlineCalendarMonthNav}>
+                <TouchableOpacity
+                  style={styles.deadlineCalendarMonthArrow}
+                  onPress={() => setDeadlineCalendarDate(date => new Date(date.getFullYear(), date.getMonth() - 1, 1))}
+                  accessibilityLabel="前の月"
+                >
+                  <Ionicons name="chevron-back" size={19} color="#7A5A2A" />
+                </TouchableOpacity>
+                <Text style={styles.deadlineCalendarMonthTitle}>
+                  {deadlineCalendarDate.getFullYear()}年{deadlineCalendarDate.getMonth() + 1}月
+                </Text>
+                <TouchableOpacity
+                  style={styles.deadlineCalendarMonthArrow}
+                  onPress={() => setDeadlineCalendarDate(date => new Date(date.getFullYear(), date.getMonth() + 1, 1))}
+                  accessibilityLabel="次の月"
+                >
+                  <Ionicons name="chevron-forward" size={19} color="#7A5A2A" />
+                </TouchableOpacity>
+              </View>
               <View style={styles.deadlineWeekRow}>
                 {['日', '月', '火', '水', '木', '金', '土'].map((label, index) => (
                   <Text key={label} style={[styles.deadlineWeekText, index === 0 && { color: '#C62828' }, index === 6 && { color: '#1565C0' }]}>{label}</Text>
                 ))}
               </View>
               {(() => {
-                const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-                const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+                const firstDay = new Date(deadlineCalendarDate.getFullYear(), deadlineCalendarDate.getMonth(), 1).getDay();
+                const daysInMonth = new Date(deadlineCalendarDate.getFullYear(), deadlineCalendarDate.getMonth() + 1, 0).getDate();
+                const calendarMonthKey = `${deadlineCalendarDate.getFullYear()}-${String(deadlineCalendarDate.getMonth() + 1).padStart(2, '0')}`;
                 const cells: (number | null)[] = Array(firstDay).fill(null);
                 for (let day = 1; day <= daysInMonth; day++) cells.push(day);
                 while (cells.length % 7 !== 0) cells.push(null);
@@ -1890,18 +1933,22 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                     {cells.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, dayIndex) => day === null ? (
                       <View key={dayIndex} style={styles.deadlineDayCell} />
                     ) : (
-                      <TouchableOpacity key={dayIndex} style={[styles.deadlineDayCell, deadlineDay === String(day) && styles.deadlineDayCellSelected]} onPress={() => setDeadlineDay(String(day))}>
-                        <Text style={[styles.deadlineDayText, deadlineDay === String(day) && styles.deadlineDayTextSelected]}>{day}</Text>
+                      <TouchableOpacity
+                        key={dayIndex}
+                        style={[styles.deadlineDayCell, deadlineDate === `${calendarMonthKey}-${String(day).padStart(2, '0')}` && styles.deadlineDayCellSelected]}
+                        onPress={() => setDeadlineDate(`${calendarMonthKey}-${String(day).padStart(2, '0')}`)}
+                      >
+                        <Text style={[styles.deadlineDayText, deadlineDate === `${calendarMonthKey}-${String(day).padStart(2, '0')}` && styles.deadlineDayTextSelected]}>{day}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 ));
               })()}
-              <Text style={styles.deadlineSelectedText}>{deadlineDay ? `${deadlineDay}日を締切日に設定` : '日付をタップしてください'}</Text>
+              <Text style={styles.deadlineSelectedText}>{deadlineDate ? `${formatDeadlineDateKey(deadlineDate)}を締切日に設定` : '日付をタップしてください'}</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 10, padding: 16 }}>
               <TouchableOpacity style={styles.deadlineCancelButton} onPress={() => setDeadlineVisible(false)}><Text style={styles.deadlineCancelText}>キャンセル</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.deadlineSaveButton, !deadlineDay && { opacity: 0.5 }]} disabled={!deadlineDay} onPress={saveDeadlineSettings}><Text style={styles.deadlineSaveText}>保存</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.deadlineSaveButton, !deadlineDate && { opacity: 0.5 }]} disabled={!deadlineDate} onPress={saveDeadlineSettings}><Text style={styles.deadlineSaveText}>保存</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -2990,6 +3037,9 @@ const styles = StyleSheet.create({
   staffColorSaveText: { fontSize: 15, fontWeight: '900', color: '#FFFFFF' },
   deadlineSettingsPanel: { width: '100%', maxWidth: 430, borderRadius: 18, overflow: 'hidden', backgroundColor: '#FFFFFF', shadowColor: '#000000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 12 },
   deadlineCalendarBox: { padding: 16, backgroundColor: '#FFFDF9' },
+  deadlineCalendarMonthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  deadlineCalendarMonthArrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#FFF0D8' },
+  deadlineCalendarMonthTitle: { fontSize: 16, fontWeight: '900', color: '#59463D' },
   deadlineWeekRow: { flexDirection: 'row', marginBottom: 5 },
   deadlineWeekText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '900', color: '#777' },
   deadlineDayCell: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },

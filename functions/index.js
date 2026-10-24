@@ -747,16 +747,22 @@ exports.sendShiftDeadlineReminders = onSchedule(
   async () => {
     const db = getFirestore();
     const todayKey = tokyoDateKey(new Date());
-    const targetMonth = todayKey.slice(0, 7);
     const deadlineSettings = await db.collection("settings").doc("shift_period").get();
     if (!deadlineSettings.exists) return;
     const setting = deadlineSettings.data() || {};
-    const deadlineDay = Number(setting.deadlines?.[targetMonth] || setting.end || 0);
-    if (!deadlineDay) return;
-    const [year, month] = targetMonth.split("-").map(Number);
-    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    const deadlineKey = `${targetMonth}-${String(Math.min(deadlineDay, lastDay)).padStart(2, "0")}`;
-    if (addDaysToDateKey(todayKey, 5) !== deadlineKey) return;
+    const reminderDateKey = addDaysToDateKey(todayKey, 5);
+    const deadlineEntry = Object.entries(setting.deadlines || {}).find(([monthKey, value]) => {
+      const raw = String(value || "");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw === reminderDateKey;
+      const day = Number(raw);
+      if (!/^\d{4}-\d{2}$/.test(monthKey) || !Number.isFinite(day) || day < 1 || day > 31) return false;
+      const [year, month] = monthKey.split("-").map(Number);
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      return `${monthKey}-${String(Math.min(day, lastDay)).padStart(2, "0")}` === reminderDateKey;
+    });
+    if (!deadlineEntry) return;
+    const [targetMonth] = deadlineEntry;
+    const deadlineKey = reminderDateKey;
 
     const reminderRef = db.collection("shift_deadline_reminder_logs").doc(targetMonth);
     const claimed = await db.runTransaction(async transaction => {

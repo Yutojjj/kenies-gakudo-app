@@ -1790,16 +1790,23 @@ export default function MenuScreen() {
     let cancelled = false;
     const checkShiftDeadline = async () => {
       const now = new Date();
-      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       try {
         const settingSnap = await getDoc(doc(db, 'settings', 'shift_period'));
         if (!settingSnap.exists() || cancelled) return;
         const setting = settingSnap.data();
-        const deadlineDay = Number(setting.deadlines?.[monthKey] || setting.end || 0);
-        if (!deadlineDay) return;
-        const deadline = new Date(now.getFullYear(), now.getMonth(), Math.min(deadlineDay, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()));
-        const daysUntilDeadline = Math.round((deadline.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
-        if (daysUntilDeadline !== 5) return;
+        const reminderDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 5);
+        const reminderDateKey = makeDateStr(reminderDate);
+        const deadlineEntry = Object.entries(setting.deadlines || {}).find(([monthKey, value]) => {
+          const raw = String(value || '');
+          if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw === reminderDateKey;
+          const day = Number(raw);
+          if (!/^\d{4}-\d{2}$/.test(monthKey) || !Number.isFinite(day) || day < 1 || day > 31) return false;
+          const [year, month] = monthKey.split('-').map(Number);
+          const lastDay = new Date(year, month, 0).getDate();
+          return `${monthKey}-${String(Math.min(day, lastDay)).padStart(2, '0')}` === reminderDateKey;
+        });
+        if (!deadlineEntry) return;
+        const [monthKey] = deadlineEntry;
         const shiftsSnap = await getDocs(query(collection(db, 'shifts2'), where('staffName', '==', name)));
         const submitted = shiftsSnap.docs.some(item => String(item.data().dateStr || '').startsWith(`${monthKey}-`));
         if (submitted || cancelled) return;
