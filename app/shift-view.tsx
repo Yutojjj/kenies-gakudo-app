@@ -47,6 +47,7 @@ export default function ShiftViewScreen() {
   const [identityLoaded, setIdentityLoaded] = useState(false);
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [staffOrder, setStaffOrder] = useState<string[]>([]);
+  const [staffColors, setStaffColors] = useState<Record<string, string>>({});
   const [assignedShifts, setAssignedShifts] = useState<Record<string, AssignedStaff[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
   const [holidayPeriods, setHolidayPeriods] = useState<any[]>([]);
@@ -126,6 +127,13 @@ export default function ShiftViewScreen() {
         ? data.pdfOrder.map((name: any) => String(name || '').trim()).filter(Boolean)
         : [];
       setStaffOrder(savedPdfOrder.length > 0 ? savedPdfOrder : priorityNames);
+      const colors: Record<string, string> = {};
+      if (Array.isArray(data.staffSettings)) {
+        data.staffSettings.forEach((item: any) => {
+          if (item?.name && item?.color) colors[String(item.name)] = String(item.color);
+        });
+      }
+      setStaffColors(colors);
     }, onSubscriptionError('staff order'));
 
     return () => { unsubAccounts(); unsubShifts(); unsubHolidays(); unsubEvents(); unsubStaffOrder(); };
@@ -369,7 +377,7 @@ export default function ShiftViewScreen() {
                     if (!assigned) return null;
                     const isMe = staff.name === myName;
                     const staffIndex = Math.max(0, orderedAllStaff.findIndex(item => item.id === staff.id));
-                    const staffBackground = getStaffShiftColor(staff.name, staffIndex);
+                    const staffBackground = staffColors[staff.name] || getStaffShiftColor(staff.name, staffIndex);
                     return (
                       <View
                         key={staff.id}

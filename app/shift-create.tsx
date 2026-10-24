@@ -48,6 +48,11 @@ const PRINT_SHIFT_COLORS = [
   '#A8D2F0', '#BCD99B', '#F2D783', '#9ED9DE',
   '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
 ];
+const STAFF_COLOR_PALETTE = [
+  '#A9DFD1', '#F3B1C3', '#C9BEF2', '#F2BE9B', '#A8D2F0', '#BCD99B',
+  '#F2D783', '#9ED9DE', '#D8ADD0', '#D2C4A7', '#B3C7E5', '#EAB2A7',
+  '#F6C1D0', '#B7D7F0', '#D7C7F5', '#B9E3D0', '#F4D59A', '#C4D5A5',
+];
 const ILLUSTRATION_COUNT = 114;
 
 const getMonthTitleColor = (month: number) => {
@@ -268,7 +273,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [settingTimeMinute, setSettingTimeMinute] = useState(0);
   // 自動入力設定（Firestoreに保存）
   const [autoFillSettings, setAutoFillSettings] = useState<{
-    staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean }[];
+    staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean; color?: string }[];
     dayMaxCount: { '月':number; '火':number; '水':number; '木':number; '金':number };
     lateStaffCount: number;
     pdfOrder?: string[];
@@ -300,6 +305,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [workSummaryVisible, setWorkSummaryVisible] = useState(false);
   const [submissionStatusVisible, setSubmissionStatusVisible] = useState(false);
   const [submissionStaffName, setSubmissionStaffName] = useState<string | null>(null);
+  const [colorPickerStaffName, setColorPickerStaffName] = useState<string | null>(null);
   const [deadlineVisible, setDeadlineVisible] = useState(false);
   const [deadlineDay, setDeadlineDay] = useState('');
   const [workSummaryPeriod, setWorkSummaryPeriod] = useState<'month' | 'year'>('month');
@@ -374,6 +380,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: found.end || '18:15',
                 priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
                 enabled: found.enabled !== false,
+                color: found.color || undefined,
               }
             : {
                 name: staff.name,
@@ -381,6 +388,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 end: staff.name === '稲熊' ? '20:00' : '18:15',
                 priority: savedStaff.length + index + 1,
                 enabled: true,
+                color: undefined,
               };
         })
         .sort((a, b) => a.priority - b.priority)
@@ -807,7 +815,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         dateColor: date.getDay() === 0 || publicHolidays[dateStr] ? '#D94747' : date.getDay() === 6 ? '#2874C6' : '#28343B',
         shifts: printType === 'shift' ? assigned.map(shift => ({
           ...shift,
-          color: getStaffShiftColor(shift.name, Math.max(0, allStaff.findIndex(staff => staff.name === shift.name)), PRINT_SHIFT_COLORS),
+          color: getCalendarStaffColor(shift.name, Math.max(0, allStaff.findIndex(staff => staff.name === shift.name)), PRINT_SHIFT_COLORS),
         })) : [],
         note: printType === 'event' ? [...(eventsData[dateStr] || []), ...(publicHolidays[dateStr] ? [publicHolidays[dateStr]] : [])].join('・') : undefined,
       };
@@ -926,7 +934,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const entries = printType === 'shift' ? orderedStaff.map((staff, staffIndex) => {
             const assigned = assignedShifts[cell.dateStr]?.find((s: any) => s.name === staff.name);
             if (!assigned) return '';
-            const color = getStaffShiftColor(staff.name, Math.max(0, allStaff.findIndex(item => item.name === staff.name)), PRINT_SHIFT_COLORS);
+            const color = getCalendarStaffColor(staff.name, Math.max(0, allStaff.findIndex(item => item.name === staff.name)), PRINT_SHIFT_COLORS);
             const compactTextLength = Array.from(`${staff.name}　${assigned.start}〜${assigned.end}`).length;
             const useStackedShift = staff.name.length >= 5 || compactTextLength > 14;
             return `<div class="calendar-shift" style="background-color:${color} !important;">
@@ -1107,6 +1115,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     await setDoc(doc(db, 'settings', 'autoFillSettings'), { ...settings, updatedAt: new Date() }, { merge: true });
   };
 
+  const saveStaffColor = async (staffName: string, color: string) => {
+    const staffSettings = autoFillSettings.staffSettings.map(staff =>
+      staff.name === staffName ? { ...staff, color } : staff
+    );
+    await saveAutoFillSettings({ ...autoFillSettings, staffSettings });
+    setColorPickerStaffName(null);
+  };
+
   const getStaffOrder = () => {
     const savedOrder = Array.isArray(autoFillSettings.pdfOrder) ? autoFillSettings.pdfOrder.filter(Boolean) : [];
     const priorityOrder = autoFillSettings.staffSettings
@@ -1116,6 +1132,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const configuredOrder = savedOrder.length > 0 ? savedOrder : priorityOrder;
     return [...configuredOrder, ...allStaff.map(item => item.name).filter(name => !configuredOrder.includes(name))];
   };
+
+  const getCalendarStaffColor = (name: string, index: number, palette: string[]) =>
+    autoFillSettings.staffSettings.find(staff => staff.name === name)?.color || getStaffShiftColor(name, index, palette);
 
   const sortStaffByConfiguredOrder = <T extends { name: string }>(staff: T[]) => {
     const order = getStaffOrder();
@@ -1328,7 +1347,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                         style={[
                           styles.cellStaffRow,
                           !showTimeInCalendar && styles.cellStaffRowCompact,
-                          { backgroundColor: getStaffShiftColor(st.name, staffIndex, SHIFT_CARD_COLORS) },
+                          { backgroundColor: getCalendarStaffColor(st.name, staffIndex, SHIFT_CARD_COLORS) },
                         ]}
                       >
                         <Text style={styles.cellStaffName} numberOfLines={1}>{st.name}</Text>
@@ -1535,37 +1554,61 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
               contentContainerStyle={styles.submissionStatusScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {submissionStatusRows.map((staff) => (
-                <TouchableOpacity
-                  key={staff.id}
-                  style={styles.submissionStatusRow}
-                  onPress={() => {
-                    setSubmissionStatusVisible(false);
-                    setSubmissionStaffName(staff.name);
-                  }}
-                  activeOpacity={0.75}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${staff.name}のシフト提出画面を開く`}
-                >
-                  <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
-                  <View style={[
-                    styles.submissionStatusBadge,
-                    staff.submitted ? styles.submissionStatusSubmitted : styles.submissionStatusMissing,
-                  ]}>
-                    <Ionicons
-                      name={staff.submitted ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={18}
-                      color={staff.submitted ? '#278A4A' : '#B06A33'}
-                    />
-                    <Text style={[
-                      styles.submissionStatusBadgeText,
-                      staff.submitted ? styles.submissionStatusSubmittedText : styles.submissionStatusMissingText,
-                    ]}>
-                      {staff.submitted ? '提出済み' : '未提出'}
-                    </Text>
+              {submissionStatusRows.map((staff) => {
+                const staffColor = autoFillSettings.staffSettings.find(item => item.name === staff.name)?.color || '#FFFFFF';
+                return (
+                  <View key={staff.id} style={styles.submissionStatusMemberBlock}>
+                    <View style={styles.submissionStatusRow}>
+                      <TouchableOpacity
+                        style={styles.submissionStatusMemberButton}
+                        onPress={() => {
+                          setSubmissionStatusVisible(false);
+                          setSubmissionStaffName(staff.name);
+                        }}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${staff.name}のシフト提出画面を開く`}
+                      >
+                        <Text style={styles.submissionStatusStaffName}>{staff.name}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.submissionStatusColorButton, { backgroundColor: staffColor }]}
+                        onPress={() => setColorPickerStaffName(current => current === staff.name ? null : staff.name)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${staff.name}の色を設定`}
+                      />
+                      <View style={[
+                        styles.submissionStatusBadge,
+                        staff.submitted ? styles.submissionStatusSubmitted : styles.submissionStatusMissing,
+                      ]}>
+                        <Ionicons
+                          name={staff.submitted ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={18}
+                          color={staff.submitted ? '#278A4A' : '#B06A33'}
+                        />
+                        <Text style={[
+                          styles.submissionStatusBadgeText,
+                          staff.submitted ? styles.submissionStatusSubmittedText : styles.submissionStatusMissingText,
+                        ]}>
+                          {staff.submitted ? '提出済み' : '未提出'}
+                        </Text>
+                      </View>
+                    </View>
+                    {colorPickerStaffName === staff.name && (
+                      <View style={styles.submissionStatusPalette}>
+                        {STAFF_COLOR_PALETTE.map(color => (
+                          <TouchableOpacity
+                            key={color}
+                            style={[styles.submissionStatusPaletteColor, { backgroundColor: color }, staffColor === color && styles.submissionStatusPaletteColorSelected]}
+                            onPress={() => saveStaffColor(staff.name, color)}
+                            accessibilityLabel={`${staff.name}をこの色に設定`}
+                          />
+                        ))}
+                      </View>
+                    )}
                   </View>
-                </TouchableOpacity>
-              ))}
+                );
+              })}
               {submissionStatusRows.length === 0 && (
                 <Text style={styles.submissionStatusEmpty}>スタッフ情報を読み込み中です</Text>
               )}
@@ -2685,8 +2728,14 @@ const styles = StyleSheet.create({
   submissionStatusSummaryText: { fontSize: 13, fontWeight: '900', color: '#4B5A5D' },
   submissionStatusScroll: { flexGrow: 0 },
   submissionStatusScrollContent: { paddingHorizontal: 14, paddingVertical: 8 },
+  submissionStatusMemberBlock: { borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
   submissionStatusRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
+  submissionStatusMemberButton: { flex: 1, minWidth: 0, justifyContent: 'center', minHeight: 54 },
   submissionStatusStaffName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#252525' },
+  submissionStatusColorButton: { width: 28, height: 28, marginRight: 8, borderRadius: 14, borderWidth: 2, borderColor: '#6E7778' },
+  submissionStatusPalette: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 8, paddingBottom: 10 },
+  submissionStatusPaletteColor: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: '#BFC8C9' },
+  submissionStatusPaletteColorSelected: { borderWidth: 3, borderColor: '#2F6268' },
   submissionStatusBadge: { minWidth: 94, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16 },
   submissionStatusSubmitted: { backgroundColor: '#E7F6EA' },
   submissionStatusMissing: { backgroundColor: '#FFF1E7' },

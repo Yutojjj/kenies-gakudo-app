@@ -27,6 +27,17 @@ const ROUTES_WITH_ROOT_NAV = new Set([
   '/user-list',
 ]);
 
+const getStoredUserWithTimeout = async () => {
+  try {
+    return await Promise.race<string | null>([
+      AsyncStorage.getItem('loggedInUser'),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
+    ]);
+  } catch {
+    return null;
+  }
+};
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +68,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       setChecked(false);
-      const raw = await AsyncStorage.getItem('loggedInUser');
+      const raw = await getStoredUserWithTimeout();
       if (!raw) {
         router.replace('/');
         return;
@@ -72,7 +83,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
       verifiedUserRef.current = user;
       validateUser(user);
     };
+    const fallbackTimer = setTimeout(() => setChecked(true), 4000);
     check();
+    return () => clearTimeout(fallbackTimer);
   }, [pathname, routeRole, router]);
 
   if (!checked) {

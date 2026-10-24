@@ -30,6 +30,17 @@ const customAlert = (title: string, message?: string) => {
 
 const hashPassword = (password: string) => Crypto.SHA256(password).toString();
 
+const getStoredUserWithTimeout = async () => {
+  try {
+    return await Promise.race<string | null>([
+      AsyncStorage.getItem('loggedInUser'),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
+    ]);
+  } catch {
+    return null;
+  }
+};
+
 const syncSavedStaffShiftNotification = async (user: any) => {
   if (user?.role !== 'staff' || !user?.accountId || !user?.name) return;
   const remoteRef = doc(db, 'staff_shift_notification_settings', user.accountId);
@@ -90,15 +101,16 @@ export default function LoginScreen() {
   }, [lockedUntil]);
 
   useEffect(() => {
+    const fallbackTimer = setTimeout(() => setLoading(false), 4000);
     const checkLoginStatus = async () => {
       try {
-        const savedUser = await AsyncStorage.getItem('loggedInUser');
+        const savedUser = await getStoredUserWithTimeout();
         if (savedUser) {
           const user = JSON.parse(savedUser);
           if (Platform.OS === 'web' && user.accountId) {
             refreshPushSubscription(user.accountId).catch(() => {});
           }
-          await syncSavedStaffShiftNotification(user).catch(error => {
+          syncSavedStaffShiftNotification(user).catch(error => {
             console.warn('[shift notification] startup sync failed', error);
           });
           router.replace('/menu');
@@ -110,6 +122,7 @@ export default function LoginScreen() {
       setLoading(false);
     };
     checkLoginStatus();
+    return () => clearTimeout(fallbackTimer);
   }, []);
 
   const handleLogin = async () => {
