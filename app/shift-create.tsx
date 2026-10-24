@@ -338,7 +338,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     return onSnapshot(doc(db, 'settings', 'shift_period'), snapshot => {
       const data = snapshot.exists() ? snapshot.data() : {};
-      setStatusDeadlineDay(String(data.deadlines?.[monthKey] || data.end || ''));
+      setStatusDeadlineDay(String(data.deadlines?.[monthKey] || ''));
     }, error => {
       console.warn('シフト提出締切日の取得に失敗しました', error);
       setStatusDeadlineDay('');
@@ -421,7 +421,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const snapshot = await getDoc(doc(db, 'settings', 'shift_period'));
     const data = snapshot.exists() ? snapshot.data() : {};
-    setDeadlineDay(String(data.deadlines?.[monthKey] || data.end || ''));
+    setDeadlineDay(String(data.deadlines?.[monthKey] || ''));
     setDeadlineVisible(true);
   };
 
@@ -1672,8 +1672,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             </View>
 
             <View style={styles.submissionStatusSummary}>
-              <Text style={styles.submissionStatusSummaryText}>提出済み {submittedCount}名</Text>
-              <Text style={styles.submissionStatusSummaryText}>未提出 {submissionStatusRows.length - submittedCount}名</Text>
+              <Text style={styles.submissionStatusSummaryText}>提出済み {submittedCount}/{submissionStatusRows.length}</Text>
             </View>
 
             <ScrollView
@@ -2954,7 +2953,7 @@ const styles = StyleSheet.create({
   submissionStatusDeadlineText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
   submissionStatusClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF0E2' },
   submissionStatusSummary: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, backgroundColor: '#FAFCFC', borderBottomWidth: 1, borderBottomColor: '#E8EEEE' },
-  submissionStatusSummaryText: { fontSize: 13, fontWeight: '900', color: '#4B5A5D' },
+  submissionStatusSummaryText: { fontSize: 13, fontWeight: '900', color: '#278A4A' },
   submissionStatusScroll: { flexGrow: 0 },
   submissionStatusScrollContent: { paddingHorizontal: 14, paddingVertical: 8 },
   submissionStatusMemberBlock: { borderBottomWidth: 1, borderBottomColor: '#EEF1F1' },
