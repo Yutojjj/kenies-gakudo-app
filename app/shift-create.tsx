@@ -274,7 +274,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const autoImageHandledRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [monthActionConfirm, setMonthActionConfirm] = useState<'autoFill' | 'delete' | null>(null);
-  const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff'>('staff');
+  const [autoReviewTab, setAutoReviewTab] = useState<'dow' | 'staff' | 'longHoliday'>('staff');
   const [printMenuVisible, setPrintMenuVisible] = useState(false);
   const [printMenuSection, setPrintMenuSection] = useState<'shift' | 'event' | null>(null);
   const [printMenuAction, setPrintMenuAction] = useState<string | null>(null);
@@ -312,7 +312,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   const [staffOrderDraft, setStaffOrderDraft] = useState<string[]>([]);
   const [settingsTab, setSettingsTab] = useState<'dow'|'staff'|'order'>('dow');
   const [pdfOrder, setPdfOrder] = useState<string[]>([]);
-  const [settingTimeTarget, setSettingTimeTarget] = useState<{ staffIndex: number; field: 'start' | 'end' } | null>(null);
+  const [settingTimeTarget, setSettingTimeTarget] = useState<
+    { staffIndex: number; field: 'start' | 'end' } | { longHolidayField: 'morningStart' | 'morningEnd' | 'afternoonStart' | 'afternoonEnd' } | null
+  >(null);
   const [settingTimeHour, setSettingTimeHour] = useState(14);
   const [settingTimeMinute, setSettingTimeMinute] = useState(0);
   // 自動入力設定（Firestoreに保存）
@@ -320,11 +322,19 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     staffSettings: { name: string; start: string; end: string; priority: number; enabled: boolean; color?: string }[];
     dayMaxCount: { '月':number; '火':number; '水':number; '木':number; '金':number };
     lateStaffCount: number;
+    longHolidaySettings: {
+      morningStart: string; morningEnd: string; afternoonStart: string; afternoonEnd: string;
+      morningCount: number; afternoonCount: number;
+    };
     pdfOrder?: string[];
   }>({
     staffSettings: [],
     dayMaxCount: { '月':3, '火':3, '水':3, '木':3, '金':3 },
     lateStaffCount: 1,
+    longHolidaySettings: {
+      morningStart: '08:00', morningEnd: '12:00', afternoonStart: '13:00', afternoonEnd: '18:00',
+      morningCount: 3, afternoonCount: 3,
+    },
   });
   const [eventsData, setEventsData] = useState<Record<string, string[]>>({});
   const [publicHolidays, setPublicHolidays] = useState<Record<string, string>>({});
@@ -463,7 +473,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             ? {
                 name: staff.name,
                 start: found.start || '14:00',
-                end: found.end || '18:15',
+                end: !found.end || found.end === '18:15' ? '18:00' : found.end,
                 priority: Number(found.priority) || savedStaff.indexOf(found) + 1,
                 enabled: found.enabled !== false,
                 ...(savedColor ? { color: savedColor } : {}),
@@ -471,7 +481,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             : {
                 name: staff.name,
                 start: staff.name === '稲熊' ? '11:00' : '14:00',
-                end: staff.name === '稲熊' ? '20:00' : '18:15',
+                end: staff.name === '稲熊' ? '20:00' : '18:00',
                 priority: savedStaff.length + index + 1,
                 enabled: true,
                 ...(savedColor ? { color: savedColor } : {}),
@@ -489,6 +499,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         staffSettings: merged,
         dayMaxCount: savedSettings.dayMaxCount || { '月':3, '火':3, '水':3, '木':3, '金':3 },
         lateStaffCount: Math.max(1, Math.min(5, Number(savedSettings.lateStaffCount) || 1)),
+        longHolidaySettings: {
+          morningStart: savedSettings.longHolidaySettings?.morningStart || '08:00',
+          morningEnd: savedSettings.longHolidaySettings?.morningEnd || '12:00',
+          afternoonStart: savedSettings.longHolidaySettings?.afternoonStart || '13:00',
+          afternoonEnd: savedSettings.longHolidaySettings?.afternoonEnd || '18:00',
+          morningCount: Math.max(1, Math.min(5, Number(savedSettings.longHolidaySettings?.morningCount) || 3)),
+          afternoonCount: Math.max(1, Math.min(5, Number(savedSettings.longHolidaySettings?.afternoonCount) || 3)),
+        },
         pdfOrder: normalizedPdfOrder,
       });
     };
@@ -1036,7 +1054,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         : [...latestStaffSettings, {
           name: staffName,
           start: staffName === '稲熊' ? '11:00' : '14:00',
-          end: staffName === '稲熊' ? '20:00' : '18:15',
+          end: staffName === '稲熊' ? '20:00' : '18:00',
           priority: latestStaffSettings.length + 1,
           enabled: true,
           color,
@@ -1109,7 +1127,7 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
     const order = staffOrderDraft;
     const currentByName = new Map(autoFillSettings.staffSettings.map(item => [item.name, item]));
     const staffSettings = order.map((name, index) => ({
-      ...(currentByName.get(name) || { name, start: '14:00', end: '18:15', enabled: true }),
+      ...(currentByName.get(name) || { name, start: '14:00', end: '18:00', enabled: true }),
       name,
       priority: index + 1,
     }));
@@ -1123,16 +1141,33 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
   });
 
   const openSettingTimePicker = (staffIndex: number, field: 'start' | 'end') => {
-    const value = autoFillSettings.staffSettings[staffIndex]?.[field] || (field === 'start' ? '14:00' : '18:15');
+    const value = autoFillSettings.staffSettings[staffIndex]?.[field] || (field === 'start' ? '14:00' : '18:00');
     const [hour, minute] = value.split(':').map(Number);
     setSettingTimeHour(Number.isFinite(hour) ? hour : 14);
     setSettingTimeMinute(Number.isFinite(minute) ? minute : 0);
     setSettingTimeTarget({ staffIndex, field });
   };
 
+  const openLongHolidayTimePicker = (field: 'morningStart' | 'morningEnd' | 'afternoonStart' | 'afternoonEnd') => {
+    const value = autoFillSettings.longHolidaySettings[field];
+    const [hour, minute] = value.split(':').map(Number);
+    setSettingTimeHour(Number.isFinite(hour) ? hour : 8);
+    setSettingTimeMinute(Number.isFinite(minute) ? minute : 0);
+    setSettingTimeTarget({ longHolidayField: field });
+  };
+
   const saveSettingTime = async () => {
     if (!settingTimeTarget) return;
     const value = `${String(settingTimeHour).padStart(2, '0')}:${String(settingTimeMinute).padStart(2, '0')}`;
+    if ('longHolidayField' in settingTimeTarget) {
+      const longHolidaySettings = {
+        ...autoFillSettings.longHolidaySettings,
+        [settingTimeTarget.longHolidayField]: value,
+      };
+      await saveAutoFillSettings({ ...autoFillSettings, longHolidaySettings });
+      setSettingTimeTarget(null);
+      return;
+    }
     const nextStaffSettings = autoFillSettings.staffSettings.map((staff, index) =>
       index === settingTimeTarget.staffIndex ? { ...staff, [settingTimeTarget.field]: value } : staff
     );
@@ -1171,11 +1206,71 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
         if (dow === 0 || dow === 6) continue;
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         if (publicHolidays[dateStr]) continue;
+        const longHolidayPeriod = holidayPeriods.find((period: any) => dateStr >= period.start && dateStr <= period.end);
         const already = assignedShifts[dateStr] || [];
         const assignedNames = [...already.map((s: any) => s.name)];
         const newEntries: { name: string; start: string; end: string }[] = [...already];
-        const autoAddedStaffNames: string[] = [];
-        const autoAddedConfiguredLateStaffNames: string[] = [];
+        if (longHolidayPeriod) {
+          const holidaySettings = autoFillSettings.longHolidaySettings;
+          const sortedHolidayStaff = [...autoFillSettings.staffSettings]
+            .filter(staff => staff.enabled)
+            .sort((a, b) => a.priority - b.priority);
+          const inaguma = sortedHolidayStaff.find(staff => staff.name === '稲熊');
+          const inagumaRequest = requests[`稲熊_${dateStr}`];
+          if (inaguma && !assignedNames.includes(inaguma.name) && (!inagumaRequest || inagumaRequest === '○')) {
+            newEntries.push({ name: inaguma.name, start: '7:30', end: inaguma.end });
+            assignedNames.push(inaguma.name);
+          }
+
+          const candidates = sortedHolidayStaff.filter(staff => {
+            if (staff.name === '稲熊' || assignedNames.includes(staff.name)) return false;
+            const request = requests[`${staff.name.trim()}_${dateStr}`];
+            return request !== '✕';
+          });
+          const morningOnly = candidates.filter(staff => requests[`${staff.name.trim()}_${dateStr}`] === '午後✕');
+          const afternoonOnly = candidates.filter(staff => requests[`${staff.name.trim()}_${dateStr}`] === '午前✕');
+          const flexible = candidates.filter(staff => {
+            const request = requests[`${staff.name.trim()}_${dateStr}`];
+            return request !== '午前✕' && request !== '午後✕';
+          });
+          const existingMorningCount = already.filter(staff => staff.name !== '稲熊'
+            && staff.start === holidaySettings.morningStart && staff.end === holidaySettings.morningEnd).length;
+          const existingAfternoonCount = already.filter(staff => staff.name !== '稲熊'
+            && staff.start === holidaySettings.afternoonStart && staff.end === holidaySettings.afternoonEnd).length;
+          const morningNeeded = Math.max(0, holidaySettings.morningCount - existingMorningCount);
+          const afternoonNeeded = Math.max(0, holidaySettings.afternoonCount - existingAfternoonCount);
+          const shuffledFlexible = [...flexible];
+          for (let index = shuffledFlexible.length - 1; index > 0; index--) {
+            const randomIndex = Math.floor(Math.random() * (index + 1));
+            [shuffledFlexible[index], shuffledFlexible[randomIndex]] = [shuffledFlexible[randomIndex], shuffledFlexible[index]];
+          }
+          const morningStaff = [
+            ...morningOnly.slice(0, morningNeeded),
+            ...shuffledFlexible.slice(0, Math.max(0, morningNeeded - morningOnly.length)),
+          ];
+          const morningNames = new Set(morningStaff.map(staff => staff.name));
+          const afternoonFlexible = shuffledFlexible.filter(staff => !morningNames.has(staff.name));
+          const afternoonStaff = [
+            ...afternoonOnly.slice(0, afternoonNeeded),
+            ...afternoonFlexible.slice(0, Math.max(0, afternoonNeeded - afternoonOnly.length)),
+          ];
+          morningStaff.forEach(staff => newEntries.push({
+            name: staff.name,
+            start: holidaySettings.morningStart,
+            end: holidaySettings.morningEnd,
+          }));
+          afternoonStaff.forEach(staff => newEntries.push({
+            name: staff.name,
+            start: holidaySettings.afternoonStart,
+            end: holidaySettings.afternoonEnd,
+          }));
+          if (newEntries.length === already.length) continue;
+          await setDoc(doc(db, 'assigned_shifts', dateStr), { staff: newEntries, updatedAt: new Date() }, { merge: true });
+          updatedCount++;
+          continue;
+        }
+        const autoAddedFixedLateStaffNames: string[] = [];
+        const autoAddedLateCandidates: string[] = [];
         const dowName = ['日','月','火','水','木','金','土'][date.getDay()] as '月'|'火'|'水'|'木'|'金';
         const maxCount = (autoFillSettings.dayMaxCount as any)[dowName] ?? 3;
         const sortedSettings = [...autoFillSettings.staffSettings]
@@ -1188,33 +1283,35 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
           const isInaguma = setting.name === '稲熊';
           const othersCount = newEntries.filter(s => s.name !== '稲熊').length;
           if (!isInaguma && othersCount >= maxCount) continue;
-          const end = isInaguma ? setting.end : setting.end === '18:30' ? '18:30' : '18:15';
+          const end = isInaguma ? setting.end : setting.end === '18:30' ? '18:30' : '18:00';
           newEntries.push({ name: setting.name, start: setting.start, end });
           if (!isInaguma) {
-            autoAddedStaffNames.push(setting.name);
-            if (setting.end === '18:30') autoAddedConfiguredLateStaffNames.push(setting.name);
+            if (setting.end === '18:30') autoAddedFixedLateStaffNames.push(setting.name);
+            else autoAddedLateCandidates.push(setting.name);
           }
           assignedNames.push(setting.name);
         }
         const targetLateStaffCount = Math.max(1, Math.min(5, Number(autoFillSettings.lateStaffCount) || 1));
-        const existingLateStaffNames = new Set(
+        const fixedLateStaffNames = new Set(
           already.filter(s => s.name !== '稲熊' && s.end === '18:30').map(s => s.name)
         );
-        const lateStaffNames = new Set(existingLateStaffNames);
-        autoAddedConfiguredLateStaffNames.forEach(name => lateStaffNames.add(name));
-        const candidates = [...new Set(autoAddedStaffNames)];
-        const rotationCandidates = candidates.filter(name => !lateStaffNames.has(name));
-        if (lateStaffNames.size < targetLateStaffCount && rotationCandidates.length > 0) {
-          const yearStart = new Date(year, 0, 1).getTime();
-          const dayIndex = Math.floor((date.getTime() - yearStart) / (24 * 60 * 60 * 1000));
-          for (let offset = 0; lateStaffNames.size < targetLateStaffCount && offset < rotationCandidates.length; offset++) {
-            lateStaffNames.add(rotationCandidates[(dayIndex + offset) % rotationCandidates.length]);
-          }
+        autoAddedFixedLateStaffNames.forEach(name => fixedLateStaffNames.add(name));
+        const lateStaffNames = new Set<string>();
+        const candidates = [...new Set(autoAddedLateCandidates)];
+        // 18:30設定のスタッフは固定し、残り必要な人数だけ当日の候補からランダムに選ぶ。
+        const randomLateCount = Math.max(0, targetLateStaffCount - fixedLateStaffNames.size);
+        for (let index = candidates.length - 1; index > 0; index--) {
+          const randomIndex = Math.floor(Math.random() * (index + 1));
+          [candidates[index], candidates[randomIndex]] = [candidates[randomIndex], candidates[index]];
         }
+        candidates.slice(0, randomLateCount).forEach(name => lateStaffNames.add(name));
         for (let index = already.length; index < newEntries.length; index++) {
           const entry = newEntries[index];
           if (entry.name !== '稲熊') {
-            newEntries[index] = { ...entry, end: lateStaffNames.has(entry.name) ? '18:30' : '18:15' };
+            newEntries[index] = {
+              ...entry,
+              end: fixedLateStaffNames.has(entry.name) || lateStaffNames.has(entry.name) ? '18:30' : '18:00',
+            };
           }
         }
         if (newEntries.length === already.length) continue;
@@ -2345,6 +2442,9 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                 <TouchableOpacity style={[styles.monthAutoReviewTab, autoReviewTab === 'staff' && styles.monthAutoReviewTabActive]} onPress={() => setAutoReviewTab('staff')}>
                   <Text style={[styles.monthAutoReviewTabText, autoReviewTab === 'staff' && styles.monthAutoReviewTabTextActive]}>スタッフ別時間設定</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={[styles.monthAutoReviewTab, autoReviewTab === 'longHoliday' && styles.monthAutoReviewTabActive]} onPress={() => setAutoReviewTab('longHoliday')}>
+                  <Text style={[styles.monthAutoReviewTabText, autoReviewTab === 'longHoliday' && styles.monthAutoReviewTabTextActive]}>長期休み設定</Text>
+                </TouchableOpacity>
               </View>
 
               {autoReviewTab === 'dow' && <>
@@ -2438,6 +2538,42 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
                   </View>
                 ))}
                 </View>
+              </>}
+
+              {autoReviewTab === 'longHoliday' && <>
+                <Text style={styles.monthAutoReviewSectionTitle}>長期休みの時間・人数</Text>
+                <Text style={styles.longHolidayHint}>長期休み設定の期間中に適用します。</Text>
+                {([
+                  { key: 'morning', title: '午前', start: 'morningStart', end: 'morningEnd', count: 'morningCount' },
+                  { key: 'afternoon', title: '午後', start: 'afternoonStart', end: 'afternoonEnd', count: 'afternoonCount' },
+                ] as const).map(period => (
+                  <View key={period.key} style={styles.monthAutoReviewSection}>
+                    <Text style={styles.longHolidayPeriodTitle}>{period.title}</Text>
+                    <View style={styles.longHolidayRow}>
+                      <TouchableOpacity style={[styles.settingTimeInput, styles.longHolidayTimeInput]} onPress={() => openLongHolidayTimePicker(period.start)}>
+                        <Text style={styles.settingTimeValue}>{autoFillSettings.longHolidaySettings[period.start]}</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.settingTimeLabel}>〜</Text>
+                      <TouchableOpacity style={[styles.settingTimeInput, styles.longHolidayTimeInput]} onPress={() => openLongHolidayTimePicker(period.end)}>
+                        <Text style={styles.settingTimeValue}>{autoFillSettings.longHolidaySettings[period.end]}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.longHolidayCountButtons}>
+                        {[1, 2, 3, 4, 5].map(count => (
+                          <TouchableOpacity
+                            key={count}
+                            style={[styles.settingNumBtn, styles.longHolidayCountButton, autoFillSettings.longHolidaySettings[period.count] === count && styles.settingNumBtnActive]}
+                            onPress={() => saveAutoFillSettings({
+                              ...autoFillSettings,
+                              longHolidaySettings: { ...autoFillSettings.longHolidaySettings, [period.count]: count },
+                            })}
+                          >
+                            <Text style={[styles.settingNumText, autoFillSettings.longHolidaySettings[period.count] === count && { color: '#fff' }]}>{count}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </>}
             </ScrollView>
             <View style={styles.monthAutoReviewFooter}>
@@ -2697,10 +2833,14 @@ export default function ShiftCreateScreen({ embedded = false, initialDate, onClo
             <View style={styles.settingTimePickerHeader}>
               <View>
                 <Text style={styles.settingTimePickerTitle}>
-                  {settingTimeTarget ? autoFillSettings.staffSettings[settingTimeTarget.staffIndex]?.name : ''}
+                  {settingTimeTarget && 'staffIndex' in settingTimeTarget
+                    ? autoFillSettings.staffSettings[settingTimeTarget.staffIndex]?.name
+                    : '長期休み'}
                 </Text>
                 <Text style={styles.settingTimePickerSub}>
-                  {settingTimeTarget?.field === 'start' ? '開始時間を選択' : '終了時間を選択'}
+                  {settingTimeTarget && 'longHolidayField' in settingTimeTarget
+                    ? settingTimeTarget.longHolidayField.endsWith('Start') ? '開始時間を選択' : '終了時間を選択'
+                    : settingTimeTarget && 'field' in settingTimeTarget && settingTimeTarget.field === 'start' ? '開始時間を選択' : '終了時間を選択'}
                 </Text>
               </View>
               <TouchableOpacity style={styles.settingTimePickerClose} onPress={() => setSettingTimeTarget(null)}>
@@ -2905,6 +3045,12 @@ const styles = StyleSheet.create({
   monthAutoReviewSectionTitle: { marginTop: 2, marginBottom: 8, fontSize: 15, fontWeight: '900', color: '#272727' },
   monthAutoReviewSectionNote: { marginTop: -3, marginBottom: 8, fontSize: 11, lineHeight: 17, fontWeight: '700', color: '#717A7C' },
   monthAutoReviewSection: { marginBottom: 16 },
+  longHolidayHint: { marginTop: -2, marginBottom: 12, fontSize: 12, lineHeight: 18, fontWeight: '700', color: '#657174' },
+  longHolidayPeriodTitle: { marginBottom: 8, fontSize: 14, fontWeight: '900', color: '#16818C' },
+  longHolidayRow: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 6, paddingHorizontal: 5, backgroundColor: '#F5F5F5', borderRadius: 8 },
+  longHolidayTimeInput: { width: 52 },
+  longHolidayCountButtons: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 3 },
+  longHolidayCountButton: { width: 28, height: 28, borderRadius: 14 },
   monthAutoReviewTabs: { flexDirection: 'row', gap: 8, marginBottom: 15 },
   monthAutoReviewTab: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: '#C9D8DA', backgroundColor: '#F4F7F7' },
   monthAutoReviewTabActive: { borderColor: '#36A9B5', backgroundColor: '#E1F5F6' },
